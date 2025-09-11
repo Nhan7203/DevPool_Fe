@@ -1,69 +1,49 @@
 # React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## 🚀 DevPool – Hệ thống cung cấp nhân sự CNTT theo dự án
 
-Currently, two official plugins are available:
+DevPool là nền tảng quản lý và kết nối các công ty có nhu cầu thuê nhân sự CNTT (developers, testers, designers, project managers, …) với các chuyên gia sẵn có.  
+Khác với những nền tảng tuyển dụng thông thường, DevPool tập trung vào **quản lý nhân sự theo dự án**, hỗ trợ xuyên suốt từ khâu đăng yêu cầu → ghép nối nhân sự → ký kết hợp đồng số → theo dõi tiến độ → thanh toán minh bạch.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 👥 Các nhóm người dùng
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 1. Company (Khách hàng / Doanh nghiệp)
+- Đăng ký và quản lý tài khoản công ty.  
+- Đăng dự án tuyển dụng: yêu cầu kỹ năng, ngân sách, thời gian.  
+- Quản lý hợp đồng và tiến độ dự án.  
+- Lựa chọn nhân sự CNTT phù hợp và ký hợp đồng số.  
+- Nhận gợi ý nhân sự từ hệ thống (AI-based).  
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 2. IT Professional (Nhân sự CNTT)
+- Đăng ký và quản lý hồ sơ cá nhân: thông tin, kỹ năng, kinh nghiệm.  
+- Cập nhật trạng thái sẵn sàng làm việc.  
+- Tìm kiếm và ứng tuyển vào các dự án phù hợp.  
+- Nhận lời mời từ công ty, có thể chấp nhận hoặc từ chối.  
+- Ký hợp đồng số và nhận thanh toán sau khi hoàn thành.  
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+### 3. Admin (Quản trị hệ thống)
+- Quản lý và xác minh tài khoản công ty/ứng viên.  
+- Theo dõi hoạt động hệ thống: dự án, ứng tuyển, hợp đồng, thanh toán.  
+- Quản lý phân quyền, báo cáo doanh thu và hiệu suất hệ thống.  
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🎯 Mục tiêu
+- Xây dựng hệ thống tập trung cho quản lý nhân sự CNTT theo dự án.  
+- Tối ưu hóa quá trình matching giữa doanh nghiệp và nhân sự.  
+- Đảm bảo minh bạch trong quản lý hợp đồng & thanh toán.  
+- Hỗ trợ nhân sự CNTT tìm dự án phù hợp với kỹ năng & thời gian rảnh.  
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## ⚙️ Công nghệ sử dụng (Frontend)
+- **Framework:** React + TypeScript + Vite  
+- **UI:** TailwindCSS  
+- **Quản lý trạng thái:** Context API / Redux (tùy chọn)  
+- **Routing:** React Router  
+- **API Communication:** RESTful API / Axios  
+- **Authentication:** JWT-based (tích hợp với backend)  
+
+---
