@@ -56,32 +56,37 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto p-8">
+    <div className="w-full max-w-md mx-auto p-8 animate-fade-in-up">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900">Đăng Nhập</h2>
-        <p className="text-gray-600 mt-2">Chào mừng bạn quay lại DevPool</p>
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-indigo-600 rounded-2xl mb-4 shadow-glow animate-float">
+          <span className="text-white font-bold text-2xl">D</span>
+        </div>
+        <h2 className="text-3xl font-bold leading-normal bg-gradient-to-r from-neutral-900 via-primary-700 to-indigo-700 bg-clip-text text-transparent">
+          Đăng Nhập
+        </h2>
+        <p className="text-neutral-600 mt-2">Chào mừng bạn quay lại DevPool</p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-          <span className="text-red-700 text-sm">{error}</span>
+        <div className="mb-6 p-4 bg-gradient-to-r from-error-50 to-error-100 border border-error-200 rounded-xl flex items-center space-x-3 animate-slide-down shadow-soft">
+          <AlertCircle className="w-5 h-5 text-error-500 flex-shrink-0 animate-pulse" />
+          <span className="text-error-700 text-sm font-medium">{error}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Email */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-neutral-700 mb-2">
             Email
           </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full pl-12 pr-4 py-3.5 border border-neutral-300 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft text-neutral-900 placeholder-neutral-500"
               placeholder="Nhập email của bạn"
               required
             />
@@ -90,23 +95,23 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
 
         {/* Password */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-neutral-700 mb-2">
             Mật khẩu
           </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full pl-12 pr-12 py-3.5 border border-neutral-300 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft text-neutral-900 placeholder-neutral-500"
               placeholder="Nhập mật khẩu"
               required
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-primary-600 transition-colors duration-300 p-1 rounded-lg hover:bg-primary-50"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
@@ -114,22 +119,22 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
         </div>
 
         {/* Remember Me & Forgot Password */}
-        <div className="flex items-center justify-between">
+        <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center">
             <input
               type="checkbox"
               id="remember"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-primary-600 bg-neutral-100 border-neutral-300 rounded focus:ring-primary-500 focus:ring-2 transition-all duration-300"
             />
-            <label htmlFor="remember" className="ml-2 text-sm text-gray-600">
+            <label htmlFor="remember" className="ml-3 text-sm text-neutral-600 font-medium">
               Ghi nhớ đăng nhập
             </label>
           </div>
           <Link
             to="/forgot-password"
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="relative z-10 text-sm text-primary-600 hover:text-primary-800 font-medium transition-colors duration-300 hover:underline"
           >
             Quên mật khẩu?
           </Link>
@@ -139,18 +144,25 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-gradient-to-r from-primary-600 to-indigo-600 text-white py-3.5 px-6 rounded-xl hover:from-primary-700 hover:to-indigo-700 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-lg transform hover:scale-102 active:scale-98 disabled:transform-none"
         >
-          {isLoading ? 'Đang xử lý...' : 'Đăng Nhập'}
+          {isLoading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <span>Đang xử lý...</span>
+            </div>
+          ) : (
+            'Đăng Nhập'
+          )}
         </button>
 
         {/* Divider */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
+            <div className="w-full border-t border-neutral-300" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">hoặc</span>
+            <span className="px-4 bg-white text-neutral-500 font-medium">hoặc</span>
           </div>
         </div>
 
@@ -158,43 +170,46 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
         <div className="space-y-3">
           <button
             type="button"
-            className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-center px-4 py-3.5 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft transform hover:scale-102 active:scale-98 group"
           >
             <img
               src="https://developers.google.com/identity/images/g-logo.png"
               alt="Google"
-              className="w-5 h-5 mr-3"
+              className="w-5 h-5 mr-3 transition-transform duration-300 group-hover:scale-110"
             />
-            <span className="text-gray-700 font-medium">Đăng nhập với Google</span>
+            <span className="text-neutral-700 font-semibold">Đăng nhập với Google</span>
           </button>
           
           <button
             type="button"
-            className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-center px-4 py-3.5 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft transform hover:scale-102 active:scale-98 group"
           >
-            <div className="w-5 h-5 bg-blue-600 rounded mr-3 flex items-center justify-center">
+            <div className="w-5 h-5 bg-blue-600 rounded mr-3 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
               <span className="text-white text-xs font-bold">f</span>
             </div>
-            <span className="text-gray-700 font-medium">Đăng nhập với Facebook</span>
+            <span className="text-neutral-700 font-semibold">Đăng nhập với Facebook</span>
           </button>
         </div>
       </form>
 
       {/* Switch to Register */}
-      <div className="mt-6 text-center">
-        <span className="text-gray-600">Chưa có tài khoản? </span>
-        <button
+      <div className="mt-8 text-center">
+        <span className="text-neutral-600">Chưa có tài khoản? </span>
+        <button 
           onClick={onToggleForm}
-          className="text-blue-600 hover:text-blue-800 font-medium"
+          className="relative z-10 text-primary-600 hover:text-primary-800 font-semibold transition-colors duration-300 hover:underline"
         >
           Đăng ký ngay
         </button>
       </div>
 
       {/* Demo Accounts */}
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-2">Tài khoản demo:</h4>
-        <div className="text-sm text-gray-600 space-y-1">
+      <div className="relative z-10 mt-8 p-6 bg-gradient-to-br from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 shadow-soft">
+        <h4 className="font-semibold text-neutral-900 mb-3 flex items-center">
+          <div className="w-2 h-2 bg-primary-500 rounded-full mr-2 animate-pulse"></div>
+          Tài khoản demo:
+        </h4>
+        <div className="text-sm text-neutral-600 space-y-2 font-medium">
           <div>Doanh nghiệp: company@demo.com / 123456</div>
           <div>Chuyên gia IT: dev@demo.com / 123456</div>
           <div>Admin: admin@demo.com / 123456</div>
