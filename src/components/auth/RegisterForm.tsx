@@ -97,53 +97,62 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
   const passwordRequirements = validatePassword(formData.password);
 
   return (
-    <div className="w-full max-w-md mx-auto p-8">
+    <div className="w-full max-w-md mx-auto p-8 animate-fade-in-up">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900">Đăng Ký</h2>
-        <p className="text-gray-600 mt-2">Tạo tài khoản DevPool của bạn</p>
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-secondary-500 to-primary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
+          <span className="text-white font-bold text-2xl">D</span>
+        </div>
+        <h2 className="text-3xl font-bold leading-normal bg-gradient-to-r from-neutral-900 via-secondary-700 to-primary-700 bg-clip-text text-transparent">
+          Đăng Ký
+        </h2>
+        <p className="text-neutral-600 mt-2">Tạo tài khoản DevPool của bạn</p>
       </div>
 
       {errors.general && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-          <span className="text-red-700 text-sm">{errors.general}</span>
+        <div className="mb-6 p-4 bg-gradient-to-r from-error-50 to-error-100 border border-error-200 rounded-xl flex items-center space-x-3 animate-slide-down shadow-soft">
+          <AlertCircle className="w-5 h-5 text-error-500 flex-shrink-0 animate-pulse" />
+          <span className="text-error-700 text-sm font-medium">{errors.general}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Account Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
+          <label className="block text-sm font-semibold text-neutral-700 mb-4">
             Loại tài khoản
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div
               onClick={() => setFormData(prev => ({ ...prev, role: 'professional' }))}
-              className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${
                 formData.role === 'professional'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-primary-500 bg-gradient-to-br from-primary-50 to-indigo-50 shadow-glow-sm'
+                  : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
               }`}
             >
-              <User className="w-8 h-8 text-blue-600 mb-2 mx-auto" />
+              <User className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${
+                formData.role === 'professional' ? 'text-primary-600' : 'text-neutral-500'
+              }`} />
               <div className="text-center">
-                <h3 className="font-medium text-gray-900">Chuyên Gia IT</h3>
-                <p className="text-sm text-gray-600">Tìm dự án phù hợp</p>
+                <h3 className="font-semibold text-neutral-900 mb-1">Chuyên Gia IT</h3>
+                <p className="text-sm text-neutral-600">Tìm dự án phù hợp</p>
               </div>
             </div>
             
             <div
               onClick={() => setFormData(prev => ({ ...prev, role: 'company' }))}
-              className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${
                 formData.role === 'company'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-secondary-500 bg-gradient-to-br from-secondary-50 to-primary-50 shadow-glow-green'
+                  : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
               }`}
             >
-              <Building className="w-8 h-8 text-blue-600 mb-2 mx-auto" />
+              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${
+                formData.role === 'company' ? 'text-secondary-600' : 'text-neutral-500'
+              }`} />
               <div className="text-center">
-                <h3 className="font-medium text-gray-900">Doanh Nghiệp</h3>
-                <p className="text-sm text-gray-600">Tuyển chuyên gia IT</p>
+                <h3 className="font-semibold text-neutral-900 mb-1">Doanh Nghiệp</h3>
+                <p className="text-sm text-neutral-600">Tuyển chuyên gia IT</p>
               </div>
             </div>
           </div>
@@ -151,40 +160,40 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
 
         {/* Email */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-neutral-700 mb-2">
             Email
           </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
             <input
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.email ? 'border-red-300' : 'border-gray-300 focus:border-blue-500'
+              className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
+                errors.email ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
               }`}
               placeholder="Nhập email của bạn"
               required
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+            <p className="mt-2 text-sm text-error-600 font-medium animate-slide-down">{errors.email}</p>
           )}
         </div>
 
         {/* Password */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-neutral-700 mb-2">
             Mật khẩu
           </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={formData.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
-              className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.password ? 'border-red-300' : 'border-gray-300 focus:border-blue-500'
+              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
+                errors.password ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
               }`}
               placeholder="Nhập mật khẩu"
               required
@@ -192,7 +201,7 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-primary-600 transition-colors duration-300 p-1 rounded-lg hover:bg-primary-50"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
@@ -200,10 +209,10 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
           
           {/* Password Strength Indicator */}
           {formData.password && (
-            <div className="mt-2 space-y-1">
-              <div className="flex items-center text-xs space-x-2">
-                <CheckCircle className={`w-3 h-3 ${passwordRequirements.length ? 'text-green-500' : 'text-gray-300'}`} />
-                <span className={passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center text-xs space-x-2 animate-fade-in">
+                <CheckCircle className={`w-4 h-4 transition-colors duration-300 ${passwordRequirements.length ? 'text-success-500' : 'text-neutral-300'}`} />
+                <span className={`font-medium transition-colors duration-300 ${passwordRequirements.length ? 'text-success-600' : 'text-neutral-500'}`}>
                   Ít nhất 8 ký tự
                 </span>
               </div>
@@ -211,23 +220,23 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
           )}
           
           {errors.password && (
-            <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+            <p className="mt-2 text-sm text-error-600 font-medium animate-slide-down">{errors.password}</p>
           )}
         </div>
 
         {/* Confirm Password */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-neutral-700 mb-2">
             Xác nhận mật khẩu
           </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               value={formData.confirmPassword}
               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-              className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.confirmPassword ? 'border-red-300' : 'border-gray-300 focus:border-blue-500'
+              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
+                errors.confirmPassword ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
               }`}
               placeholder="Nhập lại mật khẩu"
               required
@@ -235,39 +244,39 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-primary-600 transition-colors duration-300 p-1 rounded-lg hover:bg-primary-50"
             >
               {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
           {errors.confirmPassword && (
-            <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+            <p className="mt-2 text-sm text-error-600 font-medium animate-slide-down">{errors.confirmPassword}</p>
           )}
         </div>
 
         {/* Terms Agreement */}
         <div>
-          <div className="flex items-start">
+          <div className="relative z-10 flex items-start">
             <input
               type="checkbox"
               id="terms"
               checked={agreeTerms}
               onChange={(e) => setAgreeTerms(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 mt-1"
+              className="w-4 h-4 text-primary-600 bg-neutral-100 border-neutral-300 rounded focus:ring-primary-500 focus:ring-2 transition-all duration-300 mt-1"
             />
-            <label htmlFor="terms" className="ml-2 text-sm text-gray-600">
+            <label htmlFor="terms" className="ml-3 text-sm text-neutral-600 font-medium">
               Tôi đồng ý với{' '}
-              <a href="#" className="text-blue-600 hover:text-blue-800">
+              <a href="#" className="text-primary-600 hover:text-primary-800 font-semibold transition-colors duration-300 hover:underline">
                 Điều Khoản Sử Dụng
               </a>{' '}
               và{' '}
-              <a href="#" className="text-blue-600 hover:text-blue-800">
+              <a href="#" className="text-primary-600 hover:text-primary-800 font-semibold transition-colors duration-300 hover:underline">
                 Chính Sách Bảo Mật
               </a>
             </label>
           </div>
           {errors.terms && (
-            <p className="mt-1 text-sm text-red-600">{errors.terms}</p>
+            <p className="mt-2 text-sm text-error-600 font-medium animate-slide-down">{errors.terms}</p>
           )}
         </div>
 
@@ -275,18 +284,25 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-gradient-to-r from-secondary-600 to-primary-600 text-white py-3.5 px-6 rounded-xl hover:from-secondary-700 hover:to-primary-700 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-green hover:shadow-glow-lg transform hover:scale-102 active:scale-98 disabled:transform-none"
         >
-          {isLoading ? 'Đang xử lý...' : 'Đăng Ký'}
+          {isLoading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <span>Đang xử lý...</span>
+            </div>
+          ) : (
+            'Đăng Ký'
+          )}
         </button>
       </form>
 
       {/* Switch to Login */}
-      <div className="mt-6 text-center">
-        <span className="text-gray-600">Đã có tài khoản? </span>
+      <div className="relative z-10 mt-8 text-center">
+        <span className="text-neutral-600">Đã có tài khoản? </span>
         <button
           onClick={onToggleForm}
-          className="text-blue-600 hover:text-blue-800 font-medium"
+          className="text-primary-600 hover:text-primary-800 font-semibold transition-colors duration-300 hover:underline"
         >
           Đăng nhập
         </button>
