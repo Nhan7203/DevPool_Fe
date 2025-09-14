@@ -33,7 +33,7 @@ export default function Auth() {
       </div>
 
       {/* Right Side - Illustration */}
-      <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 items-center justify-center p-12 relative overflow-hidden border-l-4 border-gradient-to-b from-cyan-400 to-blue-500">
+      <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 items-center justify-center p-12 relative overflow-hidden border-l-4 border-gradient-to-b">
         {/* Geometric Background Pattern */}
         <div className="absolute inset-0">
           {/* Animated geometric shapes */}
