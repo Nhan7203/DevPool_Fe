@@ -3,7 +3,10 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTER: '/register',
   COMPANIES: '/companies',
+  COMPANY_DETAIL_PATH: "/companies/:id",
   PROFESSIONALS: '/professionals',
+
+  COMPANY_DETAIL: (id: string | number) => `/companies/${id}`,
 
   COMPANY: {
     DASHBOARD: '/company/dashboard',

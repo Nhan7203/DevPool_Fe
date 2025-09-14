@@ -9,6 +9,7 @@ import AdminLayout from '../components/layouts/AdminLayout';
 // Pages
 import HomePage from '../pages/client/home-page';
 import CompanyClientPage from '../pages/client/company-page';
+import CompanyDetailPage from '../pages/client/company-page/company-detail-page';
 import ProfessionalClientPage from '../pages/client/professional-page';
 import Auth from '../pages/client/auth-page';
 import CompanyDashboard from '../pages/company/CompanyDashboard';
@@ -29,6 +30,7 @@ const AppRouter: React.FC = () => {
         <Route path={ROUTES.HOME} element={<HomePage />} />
      
         <Route path={ROUTES.COMPANIES} element={<CompanyClientPage />} />
+        <Route path={ROUTES.COMPANY_DETAIL_PATH} element={<CompanyDetailPage />} />
 
         <Route path={ROUTES.PROFESSIONALS} element={<ProfessionalClientPage />} />
 
