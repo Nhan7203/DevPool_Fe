@@ -5,6 +5,10 @@ export const ROUTES = {
   COMPANIES: '/companies',
   COMPANY_DETAIL_PATH: "/companies/:id",
   PROFESSIONALS: '/professionals',
+  PROJECTS: '/projects',
+  
+  PROJECT_DETAIL: (id: string | number) => `/projects/${id}`,
+  PROFESSIONAL_DETAIL: (id: string | number) => `/professionals/${id}`,
 
   COMPANY_DETAIL: (id: string | number) => `/companies/${id}`,
 
@@ -15,7 +19,7 @@ export const ROUTES = {
     PROFILE: '/company/profile',
     SETTINGS: '/company/settings'
   },
-  
+
   PROFESSIONAL: {
     DASHBOARD: '/professional/dashboard',
     JOBS: '/professional/jobs',
@@ -23,7 +27,7 @@ export const ROUTES = {
     PROFILE: '/professional/profile',
     SETTINGS: '/professional/settings'
   },
-  
+
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
     USERS: '/admin/users',

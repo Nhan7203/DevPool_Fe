@@ -1,12 +1,11 @@
-import React from 'react';
 import Sidebar from '../../components/common/Sidebar';
-import { 
-  BarChart3, 
-  Plus, 
-  Users, 
-  FileText, 
-  CreditCard, 
-  Building, 
+import {
+  BarChart3,
+  Plus,
+  Users,
+  FileText,
+  CreditCard,
+  Building,
   Settings,
   TrendingUp,
   Clock,
@@ -127,7 +126,7 @@ export default function CompanyDashboard() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Doanh Nghiệp" />
-      
+
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
@@ -144,12 +143,11 @@ export default function CompanyDashboard() {
                   <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
                   <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-full ${
-                  stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                  stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                  stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                  'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                } transition-all duration-300`}>
+                <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                    stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                      stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                        'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                  } transition-all duration-300`}>
                   <TrendingUp className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
                 </div>
               </div>
@@ -211,12 +209,11 @@ export default function CompanyDashboard() {
                 {recentActivities.map((activity, index) => (
                   <div key={index} className="group flex space-x-3 hover:bg-neutral-50 p-2 rounded-lg transition-all duration-300">
                     <div className="flex-shrink-0">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 ${
-                        activity.type === 'application' ? 'bg-primary-100 group-hover:bg-primary-200' :
-                        activity.type === 'project' ? 'bg-secondary-100 group-hover:bg-secondary-200' :
-                        activity.type === 'payment' ? 'bg-accent-100 group-hover:bg-accent-200' :
-                        'bg-warning-100 group-hover:bg-warning-200'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 ${activity.type === 'application' ? 'bg-primary-100 group-hover:bg-primary-200' :
+                          activity.type === 'project' ? 'bg-secondary-100 group-hover:bg-secondary-200' :
+                            activity.type === 'payment' ? 'bg-accent-100 group-hover:bg-accent-200' :
+                              'bg-warning-100 group-hover:bg-warning-200'
+                        }`}>
                         {activity.type === 'application' && <Users className="w-4 h-4 text-primary-600" />}
                         {activity.type === 'project' && <CheckCircle className="w-4 h-4 text-secondary-600" />}
                         {activity.type === 'payment' && <CreditCard className="w-4 h-4 text-accent-600" />}

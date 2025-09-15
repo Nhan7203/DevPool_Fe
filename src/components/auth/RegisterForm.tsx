@@ -33,7 +33,7 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -72,12 +72,12 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
 
     try {
       await register(formData.email, formData.password, formData.role);
-      
+
       // Redirect based on role
       switch (formData.role) {
         case 'company':
@@ -124,32 +124,28 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div
               onClick={() => setFormData(prev => ({ ...prev, role: 'professional' }))}
-              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${
-                formData.role === 'professional'
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'professional'
                   ? 'border-primary-500 bg-gradient-to-br from-primary-50 to-indigo-50 shadow-glow-sm'
                   : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
-              }`}
+                }`}
             >
-              <User className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${
-                formData.role === 'professional' ? 'text-primary-600' : 'text-neutral-500'
-              }`} />
+              <User className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'professional' ? 'text-primary-600' : 'text-neutral-500'
+                }`} />
               <div className="text-center">
                 <h3 className="font-semibold text-neutral-900 mb-1">Chuyên Gia IT</h3>
                 <p className="text-sm text-neutral-600">Tìm dự án phù hợp</p>
               </div>
             </div>
-            
+
             <div
               onClick={() => setFormData(prev => ({ ...prev, role: 'company' }))}
-              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${
-                formData.role === 'company'
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'company'
                   ? 'border-secondary-500 bg-gradient-to-br from-secondary-50 to-primary-50 shadow-glow-green'
                   : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
-              }`}
+                }`}
             >
-              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${
-                formData.role === 'company' ? 'text-secondary-600' : 'text-neutral-500'
-              }`} />
+              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'company' ? 'text-secondary-600' : 'text-neutral-500'
+                }`} />
               <div className="text-center">
                 <h3 className="font-semibold text-neutral-900 mb-1">Doanh Nghiệp</h3>
                 <p className="text-sm text-neutral-600">Tuyển chuyên gia IT</p>
@@ -169,9 +165,8 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
-                errors.email ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
-              }`}
+              className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${errors.email ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
+                }`}
               placeholder="Nhập email của bạn"
               required
             />
@@ -192,9 +187,8 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
               type={showPassword ? 'text' : 'password'}
               value={formData.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
-              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
-                errors.password ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
-              }`}
+              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${errors.password ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
+                }`}
               placeholder="Nhập mật khẩu"
               required
             />
@@ -206,7 +200,7 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
-          
+
           {/* Password Strength Indicator */}
           {formData.password && (
             <div className="mt-3 space-y-2">
@@ -218,7 +212,7 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
               </div>
             </div>
           )}
-          
+
           {errors.password && (
             <p className="mt-2 text-sm text-error-600 font-medium animate-slide-down">{errors.password}</p>
           )}
@@ -235,9 +229,8 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
               type={showConfirmPassword ? 'text' : 'password'}
               value={formData.confirmPassword}
               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${
-                errors.confirmPassword ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
-              }`}
+              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 ${errors.confirmPassword ? 'border-error-300 focus:border-error-500 focus:ring-error-500/20' : 'border-neutral-300 focus:border-primary-500 hover:border-neutral-400'
+                }`}
               placeholder="Nhập lại mật khẩu"
               required
             />

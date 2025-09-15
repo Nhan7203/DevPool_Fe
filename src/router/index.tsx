@@ -8,9 +8,10 @@ import AdminLayout from '../components/layouts/AdminLayout';
 
 // Pages
 import HomePage from '../pages/client/home-page';
-import CompanyClientPage from '../pages/client/company-page';
+import CompanyPage from '../pages/client/company-page';
 import CompanyDetailPage from '../pages/client/company-page/company-detail-page';
-import ProfessionalClientPage from '../pages/client/professional-page';
+import ProfessionalPage from '../pages/client/professional-page';
+import ProjectPage from '../pages/client/project-page';
 import Auth from '../pages/client/auth-page';
 import CompanyDashboard from '../pages/company/CompanyDashboard';
 import ProfessionalDashboard from '../pages/professional/ProfessionalDashboard';
@@ -28,52 +29,53 @@ const AppRouter: React.FC = () => {
       {/* Routes với PublicLayout (có Header và Footer) */}
       <Route element={<PublicLayout />}>
         <Route path={ROUTES.HOME} element={<HomePage />} />
-     
-        <Route path={ROUTES.COMPANIES} element={<CompanyClientPage />} />
+
+        <Route path={ROUTES.COMPANIES} element={<CompanyPage />} />
         <Route path={ROUTES.COMPANY_DETAIL_PATH} element={<CompanyDetailPage />} />
 
-        <Route path={ROUTES.PROFESSIONALS} element={<ProfessionalClientPage />} />
+        <Route path={ROUTES.PROFESSIONALS} element={<ProfessionalPage />} />
+        <Route path={ROUTES.PROJECTS} element={<ProjectPage />} />
 
-        <Route 
-          path={ROUTES.LOGIN} 
-          element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />} 
+        <Route
+          path={ROUTES.LOGIN}
+          element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />}
         />
-        
-        <Route 
-          path={ROUTES.REGISTER} 
-          element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />} 
+
+        <Route
+          path={ROUTES.REGISTER}
+          element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />}
         />
 
         {/* Company Dashboard với PublicLayout */}
-        <Route 
-          path={ROUTES.COMPANY.DASHBOARD} 
+        <Route
+          path={ROUTES.COMPANY.DASHBOARD}
           element={
             <ProtectedRoute requiredRole="company">
               <CompanyDashboard />
             </ProtectedRoute>
-          } 
+          }
         />
 
         {/* Professional Dashboard với PublicLayout */}
-        <Route 
-          path={ROUTES.PROFESSIONAL.DASHBOARD} 
+        <Route
+          path={ROUTES.PROFESSIONAL.DASHBOARD}
           element={
             <ProtectedRoute requiredRole="professional">
               <ProfessionalDashboard />
             </ProtectedRoute>
-          } 
+          }
         />
       </Route>
 
       {/* Admin Routes với AdminLayout (không có Header và Footer) */}
       <Route element={<AdminLayout />}>
-        <Route 
-          path={ROUTES.ADMIN.DASHBOARD} 
+        <Route
+          path={ROUTES.ADMIN.DASHBOARD}
           element={
             <ProtectedRoute requiredRole="admin">
               <AdminDashboard />
             </ProtectedRoute>
-          } 
+          }
         />
       </Route>
 

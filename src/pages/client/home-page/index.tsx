@@ -10,14 +10,14 @@ import CompaniesSection from "../../../components/home/CompaniesSection";
 
 
 const HomePage: React.FC = () => {
-  
+
   return (
     <div className="min-h-screen bg-white">
-      <HeroSection />    
+      <HeroSection />
       <FeaturesSection />
       <CategoriesSection />
-      <CompaniesSection/>
-      <ExpertsSection/>
+      <CompaniesSection />
+      <ExpertsSection />
       <TestimonialsSection />
       <HowItWorksSection />
       <CTASection />
