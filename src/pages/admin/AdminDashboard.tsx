@@ -1,11 +1,11 @@
 import React from 'react';
 import Sidebar from '../../components/common/Sidebar';
-import { 
-  BarChart3, 
-  Users, 
-  FolderOpen, 
-  FileText, 
-  CreditCard, 
+import {
+  BarChart3,
+  Users,
+  FolderOpen,
+  FileText,
+  CreditCard,
   Settings,
   Shield,
   HelpCircle,
@@ -149,7 +149,7 @@ export default function AdminDashboard() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Quản Trị" />
-      
+
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
@@ -166,12 +166,11 @@ export default function AdminDashboard() {
                   <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
                   <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-full ${
-                  stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                  stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                  stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                  'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                } transition-all duration-300`}>
+                <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                    stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                      stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                        'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                  } transition-all duration-300`}>
                   <TrendingUp className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
                 </div>
               </div>
@@ -286,7 +285,7 @@ export default function AdminDashboard() {
                   </div>
                   <span className="bg-warning-100 text-warning-800 text-xs px-2 py-1 rounded-full animate-pulse-gentle">12 chờ</span>
                 </button>
-                
+
                 <button className="group flex items-center justify-between p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 hover:border-secondary-300 transition-all duration-300 hover:shadow-soft">
                   <div className="flex items-center space-x-3">
                     <FolderOpen className="w-5 h-5 text-secondary-600 group-hover:scale-110 transition-transform duration-300" />
@@ -294,7 +293,7 @@ export default function AdminDashboard() {
                   </div>
                   <span className="bg-secondary-100 text-secondary-800 text-xs px-2 py-1 rounded-full">89 hoạt động</span>
                 </button>
-                
+
                 <button className="group flex items-center justify-between p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 hover:border-accent-300 transition-all duration-300 hover:shadow-soft">
                   <div className="flex items-center space-x-3">
                     <CreditCard className="w-5 h-5 text-accent-600 group-hover:scale-110 transition-transform duration-300" />
@@ -302,7 +301,7 @@ export default function AdminDashboard() {
                   </div>
                   <span className="bg-error-100 text-error-800 text-xs px-2 py-1 rounded-full animate-pulse-gentle">3 vấn đề</span>
                 </button>
-                
+
                 <button className="group flex items-center justify-between p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 hover:border-warning-300 transition-all duration-300 hover:shadow-soft">
                   <div className="flex items-center space-x-3">
                     <BarChart3 className="w-5 h-5 text-warning-600 group-hover:scale-110 transition-transform duration-300" />

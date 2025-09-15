@@ -19,7 +19,7 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (!email || !password) {
       setError('Vui lòng nhập đầy đủ thông tin');
       return;
@@ -33,9 +33,9 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
       } else if (email.includes('admin')) {
         role = 'admin';
       }
-      
+
       await login(email, password, role as 'company' | 'professional' | 'admin');
-      
+
       // Redirect based on role
       switch (role) {
         case 'company':
@@ -179,7 +179,7 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
             />
             <span className="text-neutral-700 font-semibold">Đăng nhập với Google</span>
           </button>
-          
+
           <button
             type="button"
             className="w-full flex items-center justify-center px-4 py-3.5 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft transform hover:scale-102 active:scale-98 group"
@@ -195,7 +195,7 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
       {/* Switch to Register */}
       <div className="mt-8 text-center">
         <span className="text-neutral-600">Chưa có tài khoản? </span>
-        <button 
+        <button
           onClick={onToggleForm}
           className="relative z-10 text-primary-600 hover:text-primary-800 font-semibold transition-colors duration-300 hover:underline"
         >

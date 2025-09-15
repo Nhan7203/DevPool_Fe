@@ -1,11 +1,11 @@
 import Sidebar from '../../components/common/Sidebar';
-import { 
+import {
   Home,
-  User, 
-  Search, 
-  FileText, 
-  Briefcase, 
-  Clock, 
+  User,
+  Search,
+  FileText,
+  Briefcase,
+  Clock,
   DollarSign,
   Settings,
   TrendingUp,
@@ -135,7 +135,7 @@ export default function ProfessionalDashboard() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Chuyên Gia IT" />
-      
+
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
@@ -160,12 +160,11 @@ export default function ProfessionalDashboard() {
                   <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
                   <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-full ${
-                  stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                  stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                  stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                  'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                } transition-all duration-300`}>
+                <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                    stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                      stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                        'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                  } transition-all duration-300`}>
                   <TrendingUp className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
                 </div>
               </div>
@@ -201,7 +200,7 @@ export default function ProfessionalDashboard() {
                         {project.matchScore}% phù hợp
                       </div>
                     </div>
-                    
+
                     <div className="flex flex-wrap gap-2 mb-3">
                       {project.skills.map((skill) => (
                         <span key={skill} className="px-2 py-1 bg-primary-100 text-primary-800 text-xs font-medium rounded-full group-hover:bg-primary-200 transition-colors duration-300">
@@ -209,7 +208,7 @@ export default function ProfessionalDashboard() {
                         </span>
                       ))}
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
                         <span className="font-medium text-gray-900">{project.budget}</span>
