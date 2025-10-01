@@ -9,7 +9,7 @@ interface RegisterFormProps {
 
 export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
   const [formData, setFormData] = useState({
-    role: 'professional' as 'company' | 'professional',
+    role: 'Developer' as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin',
     email: '',
     password: '',
     confirmPassword: ''
@@ -80,11 +80,11 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
 
       // Redirect based on role
       switch (formData.role) {
-        case 'company':
-          navigate('/company/setup');
+        case 'Staff HR':
+          navigate('/staff_hr/setup');
           break;
-        case 'professional':
-          navigate('/professional/setup');
+        case 'Admin':
+          navigate('/admin/setup');
           break;
         default:
           navigate('/');
@@ -123,13 +123,13 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
           </label>
           <div className="grid grid-cols-2 gap-4">
             <div
-              onClick={() => setFormData(prev => ({ ...prev, role: 'professional' }))}
-              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'professional'
+              onClick={() => setFormData(prev => ({ ...prev, role: 'Developer' }))}
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'Developer'
                   ? 'border-primary-500 bg-gradient-to-br from-primary-50 to-indigo-50 shadow-glow-sm'
                   : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
                 }`}
             >
-              <User className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'professional' ? 'text-primary-600' : 'text-neutral-500'
+              <User className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'Developer' ? 'text-primary-600' : 'text-neutral-500'
                 }`} />
               <div className="text-center">
                 <h3 className="font-semibold text-neutral-900 mb-1">Chuyên Gia IT</h3>
@@ -138,13 +138,28 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
             </div>
 
             <div
-              onClick={() => setFormData(prev => ({ ...prev, role: 'company' }))}
-              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'company'
+              onClick={() => setFormData(prev => ({ ...prev, role: 'Staff HR' }))}
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'Staff HR'
                   ? 'border-secondary-500 bg-gradient-to-br from-secondary-50 to-primary-50 shadow-glow-green'
                   : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
                 }`}
             >
-              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'company' ? 'text-secondary-600' : 'text-neutral-500'
+              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'Staff HR' ? 'text-secondary-600' : 'text-neutral-500'
+                }`} />
+              <div className="text-center">
+                <h3 className="font-semibold text-neutral-900 mb-1">Nhân Sự</h3>
+                <p className="text-sm text-neutral-600">Quản lý nhân sự</p>
+              </div>
+            </div>
+
+            <div
+              onClick={() => setFormData(prev => ({ ...prev, role: 'Staff Accountant' }))}
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'Staff Accountant'
+                  ? 'border-secondary-500 bg-gradient-to-br from-secondary-50 to-primary-50 shadow-glow-green'
+                  : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
+                }`}
+            >
+              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'Staff Accountant' ? 'text-secondary-600' : 'text-neutral-500'
                 }`} />
               <div className="text-center">
                 <h3 className="font-semibold text-neutral-900 mb-1">Doanh Nghiệp</h3>

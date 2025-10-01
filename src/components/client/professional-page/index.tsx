@@ -118,11 +118,11 @@ export default function ProfessionalClientPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <div className="text-center mb-12 animate-fade-in-up">
-                    <h1 className="text-5xl font-bold bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent mb-4">
-                        Tìm Chuyên Gia IT
+                    <h1 className="text-5xl font-bold leading-normal bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent mb-4">
+                        Tìm Nhân Sự IT
                     </h1>
                     <p className="text-xl text-neutral-600 max-w-3xl mx-auto leading-relaxed">
-                        Khám phá hàng nghìn chuyên gia IT tài năng sẵn sàng tham gia dự án của bạn
+                        Khám phá các lập trình viên tài năng sẵn sàng tham gia dự án của bạn
                     </p>
                 </div>
 

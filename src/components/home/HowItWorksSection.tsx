@@ -13,31 +13,45 @@ const HowItWorksSection: React.FC = () => {
   const steps: Step[] = [
     {
       step: "1",
-      title: "Đăng Dự Án",
-      description: "Mô tả chi tiết yêu cầu dự án và ngân sách của bạn",
+      title: "Tiếp Nhận Yêu Cầu",
+      description: "Doanh nghiệp có thể gửi yêu cầu tuyển dụng developer trực tiếp đến DevPool thông qua email hoặc các kênh liên lạc được hỗ trợ.",
       color: "from-primary-500 to-primary-600",
       bgColor: "bg-primary-50",
     },
     {
       step: "2",
-      title: "Nhận Gợi Ý",
-      description: "AI phân tích và gợi ý những ứng viên phù hợp nhất",
+      title: "Thẩm Định CV",
+      description: "DevPool thẩm định và lọc CV phù hợp từ kho nhân sự sẵn có",
       color: "from-violet-500 to-violet-600",
       bgColor: "bg-violet-50",
     },
     {
       step: "3",
-      title: "Chọn Ứng Viên",
-      description: "Phỏng vấn và lựa chọn chuyên gia IT phù hợp",
+      title: "Phỏng Vấn",
+      description: "Sắp xếp phỏng vấn giữa doanh nghiệp và ứng viên phù hợp",
       color: "from-indigo-500 to-indigo-600",
       bgColor: "bg-indigo-50",
     },
     {
       step: "4",
-      title: "Bắt Đầu Làm Việc",
-      description: "Ký hợp đồng số và bắt đầu triển khai dự án",
+      title: "Ký Hợp Đồng",
+      description: "Ký kết hợp đồng 3 bên và bắt đầu làm việc",
       color: "from-secondary-500 to-secondary-600",
       bgColor: "bg-secondary-50",
+    },
+    {
+      step: "5",
+      title: "Theo Dõi",
+      description: "Theo dõi monthly timesheet & performance",
+      color: "from-emerald-500 to-emerald-600",
+      bgColor: "bg-emerald-50",
+    },
+    {
+      step: "6",
+      title: "Thanh Toán & Báo Cáo",
+      description: "Xử lý thanh toán và báo cáo hàng tháng",
+      color: "from-cyan-500 to-cyan-600",
+      bgColor: "bg-cyan-50",
     },
   ]
 
@@ -48,10 +62,10 @@ const HowItWorksSection: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center mb-20 animate-fade-in-up">
           <h2 className="text-5xl leading-[1.3] font-bold bg-gradient-to-r from-neutral-800 to-neutral-600 bg-clip-text text-transparent mb-6">
-            Cách Hoạt Động
+            Quy Trình Làm Việc
           </h2>
           <p className="text-xl lg:text-2xl text-neutral-600 leading-relaxed">
-            4 bước đơn giản để tìm được đội ngũ IT hoàn hảo
+            4 bước đơn giản để có được đội ngũ developer chất lượng cao cho dự án của bạn
           </p>
         </div>
 

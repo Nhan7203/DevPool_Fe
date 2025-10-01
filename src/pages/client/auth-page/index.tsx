@@ -1,11 +1,6 @@
-import { useLocation, useNavigate } from "react-router-dom"
 import LoginForm from "../../../components/auth/LoginForm"
-import RegisterForm from "../../../components/auth/RegisterForm"
 
 export default function Auth() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const isRegister = location.pathname === "/register"
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/30 to-secondary-50/30 flex">
       {/* Left Side - Form */}
@@ -24,11 +19,7 @@ export default function Auth() {
         </div>
 
         <div className="w-full max-w-md">
-          {isRegister ? (
-            <RegisterForm onToggleForm={() => navigate("/login")} />
-          ) : (
-            <LoginForm onToggleForm={() => navigate("/register")} />
-          )}
+            <LoginForm/>
         </div>
       </div>
 

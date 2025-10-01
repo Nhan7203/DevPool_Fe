@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, Star, Clock, CheckCircle, MessageCircle, Heart, Briefcase, DollarSign } from 'lucide-react';
+import { MapPin, Star, Clock, CheckCircle, Heart, Briefcase, DollarSign } from 'lucide-react';
 import type { Professional } from './types';
 
 interface ProfessionalCardProps {
@@ -165,16 +165,10 @@ export default function ProfessionalCard({ professional, isFavorite, onToggleFav
 
             {/* Actions */}
             <div className="flex space-x-3">
-                <button className="flex-1 bg-gradient-to-r from-neutral-100 to-neutral-200 text-neutral-700 px-4 py-3 rounded-xl hover:from-neutral-200 hover:to-neutral-300 font-semibold text-sm flex items-center justify-center space-x-2 transition-all duration-300 shadow-soft hover:shadow-medium transform hover:scale-105">
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Nhắn Tin</span>
-                </button>
-
                 <button
                     className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3 rounded-xl hover:from-primary-700 hover:to-primary-800 font-semibold text-sm transition-all duration-300 shadow-glow hover:shadow-glow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                    disabled={professional.availability === 'unavailable'}
                 >
-                    {professional.availability === 'unavailable' ? 'Không Rảnh' : 'Thuê Ngay'}
+                    Xem Hồ Sơ CV
                 </button>
             </div>
 
