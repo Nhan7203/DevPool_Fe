@@ -3,11 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface LoginFormProps {
-  onToggleForm: () => void;
-}
 
-export default function LoginForm({ onToggleForm }: LoginFormProps) {
+export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,24 +24,41 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
 
     try {
       // For demo, determine role based on email domain
-      let role = 'professional';
-      if (email.includes('company') || email.includes('@cty')) {
-        role = 'company';
+      let role = '';
+      if (email.includes('staff_hr') || email.includes('hr')) {
+        role = 'Staff HR';
+      } else if (email.includes('staff_accountant') || email.includes('accountant')) {
+        role = 'Staff Accountant';
+      } else if (email.includes('staff_sales') || email.includes('sales')) {
+        role = 'Staff Sales';
+      } else if (email.includes('developer') || email.includes('dev')) {
+        role = 'Developer';
+      } else if (email.includes('manager')) {
+        role = 'Manager';
       } else if (email.includes('admin')) {
-        role = 'admin';
+        role = 'Admin';
       }
 
-      await login(email, password, role as 'company' | 'professional' | 'admin');
+      await login(email, password, role as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin');
 
       // Redirect based on role
       switch (role) {
-        case 'company':
-          navigate('/company/dashboard');
+        case 'Staff HR':
+          navigate('/hr/dashboard');
           break;
-        case 'professional':
-          navigate('/professional/dashboard');
+        case 'Staff Accountant':
+          navigate('/accountant/dashboard');
           break;
-        case 'admin':
+        case 'Staff Sales':
+          navigate('/sales/dashboard');
+          break;
+        case 'Developer':
+          navigate('/developer/dashboard');
+          break;
+        case 'Manager':
+          navigate('/manager/dashboard');
+          break;
+        case 'Admin':
           navigate('/admin/dashboard');
           break;
         default:
@@ -157,17 +171,17 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
         </button>
 
         {/* Divider */}
-        <div className="relative">
+        {/* <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-neutral-300" />
           </div>
           <div className="relative flex justify-center text-sm">
             <span className="px-4 bg-white text-neutral-500 font-medium">hoặc</span>
           </div>
-        </div>
+        </div> */}
 
         {/* Social Login */}
-        <div className="space-y-3">
+        {/* <div className="space-y-3">
           <button
             type="button"
             className="w-full flex items-center justify-center px-4 py-3.5 border border-neutral-300 rounded-xl hover:bg-neutral-50 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft transform hover:scale-102 active:scale-98 group"
@@ -189,11 +203,11 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
             </div>
             <span className="text-neutral-700 font-semibold">Đăng nhập với Facebook</span>
           </button>
-        </div>
+        </div> */}
       </form>
 
       {/* Switch to Register */}
-      <div className="mt-8 text-center">
+      {/* <div className="mt-8 text-center">
         <span className="text-neutral-600">Chưa có tài khoản? </span>
         <button
           onClick={onToggleForm}
@@ -201,7 +215,7 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
         >
           Đăng ký ngay
         </button>
-      </div>
+      </div> */}
 
       {/* Demo Accounts */}
       <div className="relative z-10 mt-8 p-6 bg-gradient-to-br from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 shadow-soft">
@@ -210,9 +224,13 @@ export default function LoginForm({ onToggleForm }: LoginFormProps) {
           Tài khoản demo:
         </h4>
         <div className="text-sm text-neutral-600 space-y-2 font-medium">
-          <div>Doanh nghiệp: company@demo.com / 123456</div>
-          <div>Chuyên gia IT: dev@demo.com / 123456</div>
-          <div>Admin: admin@demo.com / 123456</div>
+          <div>Nhân viên HR: staff_hr@demo.com / 123</div>
+          <div>Nhân viên kinh doanh: sales@demo.com / 123</div>
+          <div>Nhân viên kế toán: accountant@demo.com / 123</div>
+          <div>Quản lý: manager@demo.com / 123</div>
+          <div>Admin: admin@demo.com / 123</div>
+          <div>Lập trình viên: dev@demo.com / 123</div>
+
         </div>
       </div>
     </div>

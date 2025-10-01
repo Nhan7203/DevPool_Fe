@@ -17,9 +17,12 @@ export default function Header() {
   const getDashboardRoute = () => {
     if (!user) return '/login';
     switch (user.role) {
-      case 'company': return '/company/dashboard';
-      case 'professional': return '/professional/dashboard';
-      case 'admin': return '/admin/dashboard';
+      case 'Staff HR': return '/staff_hr/dashboard';
+      case 'Staff Accountant': return '/staff_accountant/dashboard';
+      case 'Staff Sales': return '/staff_sales/dashboard';
+      case 'Developer': return '/developer/dashboard';
+      case 'Manager': return '/manager/dashboard';
+      case 'Admin': return '/admin/dashboard';
       default: return '/';
     }
   };
@@ -41,19 +44,27 @@ export default function Header() {
             <Link to="/" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
               Trang Chủ
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link to="/projects" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Dự Án
+            </Link>           
+            <Link to="/professionals" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
+              Nhân Sự IT
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/professionals" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Chuyên Gia IT
+            <Link to="/about" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
+              Về Chúng Tôi
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
+            </Link>
+            <Link to="/contact" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
+              Liên Hệ
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
+            </Link>
+            {/* <Link to="/projects" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
+              Dự Án
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
             <Link to="/companies" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
               Doanh Nghiệp
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
+            </Link> */}
           </nav>
 
           {/* Right Side */}
@@ -121,15 +132,9 @@ export default function Header() {
               <div className="flex items-center space-x-3">
                 <Link
                   to="/login"
-                  className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105"
-                >
-                  Đăng Nhập
-                </Link>
-                <Link
-                  to="/register"
                   className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-2 rounded-xl hover:from-primary-700 hover:to-primary-800 font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                 >
-                  Đăng Ký
+                  Đăng Nhập
                 </Link>
               </div>
             )}

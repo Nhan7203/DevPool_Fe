@@ -1,72 +1,100 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
+type Role =
+  | 'Staff HR'
+  | 'Staff Accountant'
+  | 'Staff Sales'
+  | 'Developer'
+  | 'Manager'
+  | 'Admin';
+
 interface User {
   id: string;
   email: string;
   name: string;
-  role: 'company' | 'professional' | 'admin';
+  role: Role;
   avatar?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, role: User['role']) => Promise<void>;
-  register: (email: string, password: string, role: User['role']) => Promise<void>;
+  login: (email: string, password: string, role: Role) => Promise<void>;
+  register: (email: string, password: string, role: Role) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
 
+const STORAGE_KEY = 'devpool_user';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function roleDisplayName(role: Role, email: string) {
+  switch (role) {
+    case 'Staff HR':
+      return 'Nhân viên Nhân sự';
+    case 'Staff Accountant':
+      return 'Nhân viên Kế toán';
+    case 'Staff Sales':
+      return 'Nhân viên Kinh doanh';
+    case 'Developer':
+      return 'Lập trình viên';
+    case 'Manager':
+      return 'Quản lý';
+    case 'Admin':
+      return 'Admin';
+    default:
+      return email;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('devpool_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    const storedUser = localStorage.getItem(STORAGE_KEY);
+    if (storedUser) setUser(JSON.parse(storedUser));
     setIsLoading(false);
   }, []);
 
-  const login: AuthContextType['login'] = async (email, password, role) => {
+  const login: AuthContextType['login'] = async (email, _password, role) => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((r) => setTimeout(r, 500));
 
     const mockUser: User = {
       id: '1',
       email,
-      name: role === 'company' ? 'Công ty ABC' : role === 'professional' ? 'Nguyễn Văn A' : 'Admin',
+      name: roleDisplayName(role, email),
       role,
-      avatar: `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop`
+      avatar:
+        'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop',
     };
 
     setUser(mockUser);
-    localStorage.setItem('devpool_user', JSON.stringify(mockUser));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
     setIsLoading(false);
   };
 
-  const register: AuthContextType['register'] = async (email, password, role) => {
+  const register: AuthContextType['register'] = async (email, _password, role) => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((r) => setTimeout(r, 500));
 
     const mockUser: User = {
       id: '1',
       email,
-      name: role === 'company' ? 'Công ty mới' : 'Chuyên gia mới',
+      name: roleDisplayName(role, email),
       role,
     };
 
     setUser(mockUser);
-    localStorage.setItem('devpool_user', JSON.stringify(mockUser));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
     setIsLoading(false);
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('devpool_user');
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
@@ -76,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

@@ -1,5 +1,5 @@
 import type React from "react"
-import { Settings, HeartHandshake, CheckCircle } from "lucide-react"
+import {Shield, TrendingUp, Users } from "lucide-react"
 
 interface Feature {
   icon: React.ReactNode
@@ -12,23 +12,23 @@ interface Feature {
 const FeaturesSection: React.FC = () => {
   const features: Feature[] = [
     {
-      icon: <Settings className="w-8 h-8" />,
-      title: "Matching Thông Minh",
-      description: "AI gợi ý ứng viên phù hợp nhất với yêu cầu dự án của bạn",
+      icon: <Users className="w-8 h-8" />,
+      title: "Quy trình chuyên nghiệp",
+      description: "Mọi bước đều có luồng rõ ràng, phê duyệt theo vai trò (HR, Sales, Manager, Accountant). Hệ thống giúp tránh sai sót và giảm thời gian xử lý thủ công",
       color: "text-primary-600",
       bgColor: "bg-primary-50",
     },
     {
-      icon: <HeartHandshake className="w-8 h-8" />,
-      title: "Hợp Đồng Số",
-      description: "Quản lý hợp đồng điện tử an toàn và minh bạch",
+      icon: <Shield  className="w-8 h-8" />,
+      title: "Hợp Đồng Rõ Ràng",
+      description: "Quản lý hợp đồng 3 bên minh bạch, đảm bảo quyền lợi các bên",
       color: "text-violet-600",
       bgColor: "bg-violet-50",
     },
     {
-      icon: <CheckCircle className="w-8 h-8" />,
-      title: "Thanh Toán Minh Bạch",
-      description: "Hệ thống thanh toán trong suốt, an toàn và nhanh chóng",
+      icon: <TrendingUp  className="w-8 h-8" />,
+      title: "Theo Dõi Hiệu Suất",
+      description: "Hệ thống báo cáo và theo dõi tiến độ làm việc hàng tháng",
       color: "text-secondary-600",
       bgColor: "bg-secondary-50",
     },
@@ -39,10 +39,10 @@ const FeaturesSection: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-20 animate-fade-in-up">
           <h2 className="text-5xl leading-[1.3] font-bold bg-gradient-to-r from-neutral-800 to-neutral-600 bg-clip-text text-transparent mb-6">
-            Tính Năng Nổi Bật
+            Tại Sao Chọn DevPool
           </h2>
           <p className="text-xl lg:text-2xl text-neutral-600 max-w-3xl mx-auto leading-relaxed">
-            Những tính năng giúp DevPool trở thành lựa chọn hàng đầu cho tuyển dụng IT
+            Giải pháp outsourcing toàn diện cho doanh nghiệp với quy trình chuyên nghiệp, minh bạch và hiệu quả
           </p>
         </div>
 

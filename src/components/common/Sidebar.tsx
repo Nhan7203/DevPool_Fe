@@ -1,11 +1,19 @@
 import { Link, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+
+interface SubItem {
+  label: string;
+  href: string;
+}
 
 interface SidebarItem {
   label: string;
   href: string;
   icon: LucideIcon;
   badge?: number;
+  subItems?: SubItem[];
 }
 
 interface SidebarProps {
@@ -15,33 +23,89 @@ interface SidebarProps {
 
 export default function Sidebar({ items, title }: SidebarProps) {
   const location = useLocation();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  const toggleExpand = (href: string) => {
+    setExpandedItems(prev =>
+      prev.includes(href)
+        ? prev.filter(item => item !== href)
+        : [...prev, href]
+    );
+  };
 
   return (
-    <div className="w-64 bg-white shadow-sm h-screen sticky top-16">
+    <div className="w-64 bg-white shadow-sm sticky top-16 overflow-y-auto">
       <div className="p-6">
         <h2 className="font-semibold text-lg text-gray-900 mb-6">{title}</h2>
         <nav className="space-y-2">
           {items.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
+            const isExpanded = expandedItems.includes(item.href);
+            const hasSubItems = item.subItems && item.subItems.length > 0;
 
             return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${isActive
-                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
-                {item.badge && (
-                  <span className="ml-auto bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                    {item.badge}
-                  </span>
+              <div key={item.href}>
+                {hasSubItems ? (
+                  // Items with subitems
+                  <div
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${isActive
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    onClick={() => toggleExpand(item.href)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-5 h-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </div>
+                    {hasSubItems && (
+                      <div className="text-gray-400">
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Items without subitems - Make them clickable links
+                  <Link
+                    to={item.href}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${isActive
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-5 h-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </div>
+                  </Link>
                 )}
-              </Link>
+
+                {/* Sub Items */}
+                {hasSubItems && isExpanded && (
+                  <div className="ml-6 mt-2 space-y-1">
+                    {item.subItems!.map((subItem) => {
+                      const isSubActive = location.pathname === subItem.href;
+                      return (
+                        <Link
+                          key={subItem.href}
+                          to={subItem.href}
+                          className={`block px-3 py-2 rounded-lg text-sm transition-colors ${isSubActive
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                          {subItem.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { ArrowRight, Sparkles, Search, Star } from "lucide-react"
+import { ArrowRight, Shield, Sparkles, Users } from "lucide-react"
 
 const HeroSection: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -20,25 +20,25 @@ const HeroSection: React.FC = () => {
         <div className="text-center space-y-12 min-h-screen flex flex-col justify-center">
           <div className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-100 to-blue-100 rounded-full border border-purple-300 backdrop-blur-sm mx-auto animate-fade-in">
             <Sparkles className="w-5 h-5 text-purple-600 mr-2" />
-            <span className="text-purple-700 font-medium">AI-Powered Matching System</span>
+            <span className="text-purple-700 font-medium">DevPool – Giải pháp Quản lý Gia công Phần mềm Tự động
+            </span>
           </div>
 
           <div className="space-y-6 animate-fade-in">
             <h1 className="text-6xl lg:text-8xl font-bold leading-tight">
               <span className="bg-gradient-to-r from-gray-800 via-purple-700 to-blue-700 bg-clip-text text-transparent">
-                Kết Nối Với
+                Cung Cấp
               </span>
               <br />
               <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent animate-gradient">
-                Chuyên Gia IT
+                Nhân Sự IT
               </span>
               <br />
-              <span className="text-gray-900">Hàng Đầu</span>
+              <span className="text-gray-900">Chất Lượng Cao</span>
             </h1>
 
             <p className="text-xl text-gray-700 leading-relaxed max-w-2xl mx-auto">
-              Hệ thống matching thông minh AI giúp tìm kiếm nhân tài IT phù hợp nhất cho dự án của bạn. Nhanh chóng,
-              hiệu quả và đáng tin cậy.
+              DevPool - Đối tác tin cậy cung cấp giải pháp nhân sự IT outsourcing cho doanh nghiệp. Quy trình chuyên nghiệp, minh bạch từ tuyển dụng đến quản lý hợp đồng.
             </p>
           </div>
 
@@ -47,31 +47,31 @@ const HeroSection: React.FC = () => {
               to="/register"
               className="group relative bg-gradient-to-r from-purple-600 to-blue-600 text-white px-10 py-5 rounded-2xl font-semibold text-xl flex items-center space-x-3 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25 transform"
             >
-              <span>Đăng Dự Án</span>
+              <span>Tôi Cần Tuyển Dev</span>
               <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-300" />
               <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl blur opacity-0 group-hover:opacity-50 transition-opacity duration-300 -z-10"></div>
             </Link>
 
             <button
-              onClick={() => setIsModalOpen(true)}
               className="group relative bg-white/80 backdrop-blur-sm text-gray-800 px-10 py-5 rounded-2xl font-semibold text-xl flex items-center space-x-3 border border-gray-200 transition-all duration-300 hover:scale-105 hover:bg-white hover:shadow-2xl hover:shadow-gray-300/20 transform"
             >
-              <Search className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
-              <span>Tìm Việc</span>
+              <Users className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
+              <span>Tôi Là Developer</span>
             </button>
           </div>
 
           <div className="flex justify-center items-center space-x-16 pt-12 animate-fade-in-delay">
             <div className="text-center">
-              <div className="text-4xl font-bold text-gray-900">1,000+</div>
-              <div className="text-purple-600 font-medium">Dự án thành công</div>
+              <div className="text-4xl font-bold text-gray-900">50+</div>
+              <div className="text-purple-600 font-medium">Developers
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-gray-900">500+</div>
-              <div className="text-purple-600 font-medium">Chuyên gia IT</div>
+              <div className="text-4xl font-bold text-gray-900">10+</div>
+              <div className="text-purple-600 font-medium">Doanh nghiệp</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-gray-900">98%</div>
+              <div className="text-4xl font-bold text-gray-900">95%</div>
               <div className="text-purple-600 font-medium">Hài lòng</div>
             </div>
           </div>
@@ -86,8 +86,8 @@ const HeroSection: React.FC = () => {
 
               <div className="absolute top-4 right-4 bg-gradient-to-r from-green-400 to-emerald-500 p-3 rounded-xl shadow-lg">
                 <div className="flex items-center space-x-2">
-                  <Star className="w-5 h-5 text-white fill-current" />
-                  <span className="text-white font-bold text-sm">Premium</span>
+                  <Shield  className="w-5 h-5 text-white fill-current" />
+                  <span className="text-white font-bold text-sm">Đối tác uy tín</span>
                 </div>
               </div>
             </div>
