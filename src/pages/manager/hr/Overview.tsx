@@ -157,7 +157,7 @@ export default function HROverview() {
                       fill="#8884d8"
                       dataKey="value"
                     >
-                      {stats.bySpecialization.map((entry, index) => (
+                      {stats.bySpecialization.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
