@@ -50,6 +50,12 @@ import DeveloperDashboard from '../pages/developer/Dashboard';
 // Components
 import ProtectedRoute from './ProtectedRoute';
 import { ROUTES, getDashboardRoute } from './routes';
+import UploadSignedContract from '../pages/sales_staff/Contract/Upload';
+import ListClientContracts from '../pages/sales_staff/Contract/List';
+import ContractDetailPage from '../pages/sales_staff/Contract/Detail';
+import JobRequestListPage from '../pages/sales_staff/JobRequest/List';
+import JobRequestDetailPage from '../pages/sales_staff/JobRequest/Detail';
+import JobRequestCreatePage from '../pages/sales_staff/JobRequest/Create';
 
 
 const AppRouter: React.FC = () => {
@@ -122,6 +128,15 @@ const AppRouter: React.FC = () => {
           }
         >
           <Route path={ROUTES.SALES_STAFF.DASHBOARD} element={<SalesStaffDashboard />} />
+
+          <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
+          <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadSignedContract />} />
+
+          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
+
         </Route>
 
         {/* ACCOUNTANT_STAFF Dashboard với PublicLayout */}
@@ -132,7 +147,7 @@ const AppRouter: React.FC = () => {
             </ProtectedRoute>
           }
         >
-          <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
+          <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />   
         </Route>
 
         {/* DEVELOPER Dashboard với PublicLayout */}

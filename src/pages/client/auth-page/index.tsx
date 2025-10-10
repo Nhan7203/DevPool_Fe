@@ -121,7 +121,7 @@ export default function Auth() {
             </div>
 
             {/* Enhanced Rating Display */}
-            <div
+            {/* <div
               className="flex items-center justify-center space-x-3 animate-fade-in-up bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10"
               style={{ animationDelay: "0.8s" }}
             >
@@ -135,7 +135,7 @@ export default function Auth() {
                 ))}
               </div>
               <span className="text-slate-200 text-sm font-medium">4.9/5 từ 1,200+ đánh giá</span>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

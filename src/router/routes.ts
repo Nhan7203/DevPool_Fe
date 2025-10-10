@@ -88,6 +88,20 @@ export const ROUTES = {
   SALES_STAFF: {
     DASHBOARD: '/sales/dashboard',
 
+    // Quản lý Hợp đồng 
+    CONTRACTS: {
+      LIST: '/sales/contracts',                     // Danh sách hợp đồng
+      DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
+      UPLOAD: '/sales/contracts/upload',        // Upload file hợp đồng
+    },
+
+    JOB_REQUESTS: {
+      LIST: '/sales/job-requests',
+      CREATE: '/sales/job-requests/create',
+      DETAIL: '/sales/job-requests/:id',
+    },
+
+    
     CLIENTS: {
       LIST: '/sales/clients',
       DETAIL: '/sales/clients/:id',
@@ -96,11 +110,7 @@ export const ROUTES = {
       LIST: '/sales/projects',
       DETAIL: '/sales/projects/:id',
     },
-    JOB_REQUESTS: {
-      LIST: '/sales/job-requests',
-      CREATE: '/sales/job-requests/create',
-      DETAIL: '/sales/job-requests/:id',
-    },
+    
     QUOTES: {
       LIST: '/sales/quotes',
       CREATE: '/sales/quotes/create',
