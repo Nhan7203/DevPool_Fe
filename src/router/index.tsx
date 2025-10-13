@@ -5,25 +5,45 @@ import { useAuth } from '../contexts/AuthContext';
 // Layouts
 import PublicLayout from '../components/layouts/PublicLayout';
 import AdminLayout from '../components/layouts/AdminLayout';
+import ProtectedRoute from './ProtectedRoute';
+import { ROUTES, getDashboardRoute } from './routes';
 
-// Pages
+// Client
 import HomePage from '../pages/client/home-page';
 import ProfessionalPage from '../pages/client/professional-page';
 import AboutPage from '../pages/client/about-page';
 import ContactPage from '../pages/client/contact-page';
 import Auth from '../pages/client/auth-page';
+//Admin
 import AdminDashboard from '../pages/admin/Dashboard/AdminDashboard';
-import HRDashboard from '../pages/hr_staff/dashboard/Dashboard';
-import ListDev from '../pages/hr_staff/developers/List';
 import CreateAccount from '../pages/admin/Users/Create_account';
+import UserManagementPage from '../pages/admin/Users/List_user';
+import RolesPage from '../pages/admin/Users/Roles';
+import { PermissionsPage } from '../pages/admin/Users/Permissions';
+import CompaniesPage from '../pages/admin/Companies/List_company';
+import ClientsPage from '../pages/admin/Companies/Clients';
+//HR Staff
 import ManageCV from '../pages/hr_staff/developers/Manage_CV';
 import ListContract from '../pages/hr_staff/contracts/List_contract';
 import UploadContract from '../pages/hr_staff/contracts/Upload_contract';
 import ListRequest from '../pages/hr_staff/job-requests/List_request';
 import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
 import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
-import BusinessOverview from '../pages/manager/business/Overview';
+import HRDashboard from '../pages/hr_staff/dashboard/Dashboard';
+import ListDev from '../pages/hr_staff/developers/List';
+import ListPartner from '../pages/hr_staff/partners/List';
+import CreatePartner from '../pages/hr_staff/partners/Create';
+import Assignments from '../pages/hr_staff/assignments';
+import InterviewList from '../pages/hr_staff/interviews/List';
+import InterviewHistory from '../pages/hr_staff/interviews/History';
+import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
+//Manager
 import ManagerDashboard from '../pages/manager/dashboard/Dashboard';
+import ClientContracts from '../pages/manager/contract/Clients/List';
+import ClientDetailPage from '../pages/manager/contract/Clients/Detail';
+import DevContracts from '../pages/manager/contract/Devs/List';
+import DevDetailPage from '../pages/manager/contract/Devs/Detail';
+import BusinessOverview from '../pages/manager/business/Overview';
 import Revenue from '../pages/manager/business/Revenue';
 import Utilization from '../pages/manager/hr/Utilization';
 import HRPerformance from '../pages/manager/hr/Performance';
@@ -33,29 +53,20 @@ import Debt from '../pages/manager/finance/Debt';
 import Overview from '../pages/manager/finance/Overview';
 import Profit from '../pages/manager/finance/Profit';
 import CashFlow from '../pages/manager/finance/Cashflow';
-import ListPartner from '../pages/hr_staff/partners/List_partner';
-import Assignments from '../pages/hr_staff/assignments';
-import InterviewList from '../pages/hr_staff/interviews/List';
-import InterviewHistory from '../pages/hr_staff/interviews/History';
-import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
-import UserManagementPage from '../pages/admin/Users/List_user';
-import RolesPage from '../pages/admin/Users/Roles';
-import { PermissionsPage } from '../pages/admin/Users/Permissions';
-import CompaniesPage from '../pages/admin/Companies/List_company';
-import ClientsPage from '../pages/admin/Companies/Clients';
+//Sale Staff
 import SalesStaffDashboard from '../pages/sales_staff/Dashboard';
-import AccountantDashboard from '../pages/accountant_staff/Dashboard';
-import DeveloperDashboard from '../pages/developer/Dashboard';
-
-// Components
-import ProtectedRoute from './ProtectedRoute';
-import { ROUTES, getDashboardRoute } from './routes';
 import UploadSignedContract from '../pages/sales_staff/Contract/Upload';
 import ListClientContracts from '../pages/sales_staff/Contract/List';
 import ContractDetailPage from '../pages/sales_staff/Contract/Detail';
 import JobRequestListPage from '../pages/sales_staff/JobRequest/List';
 import JobRequestDetailPage from '../pages/sales_staff/JobRequest/Detail';
 import JobRequestCreatePage from '../pages/sales_staff/JobRequest/Create';
+//Accountant Staff
+import AccountantDashboard from '../pages/accountant_staff/Dashboard';
+//Developer
+import DeveloperDashboard from '../pages/developer/Dashboard';
+
+
 
 
 const AppRouter: React.FC = () => {
@@ -103,6 +114,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.DEVELOPERS.MANAGE_CV} element={<ManageCV />} />
 
           <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
+          <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
 
           <Route path={ROUTES.HR_STAFF.ASSIGNMENTS} element={<Assignments />} />
 
@@ -170,6 +182,11 @@ const AppRouter: React.FC = () => {
           }
         >
           <Route path={ROUTES.MANAGER.DASHBOARD} element={<ManagerDashboard />} />
+
+          <Route path={ROUTES.MANAGER.CONTRACT.CLIENTS} element={<ClientContracts />} />
+          <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
+          <Route path={ROUTES.MANAGER.CONTRACT.DEVS} element={<DevContracts />} />
+          <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
 
           <Route path={ROUTES.MANAGER.BUSINESS.OVERVIEW} element={<BusinessOverview />} />
           <Route path={ROUTES.MANAGER.BUSINESS.REVENUE} element={<Revenue />} />

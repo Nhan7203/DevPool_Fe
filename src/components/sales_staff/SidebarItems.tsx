@@ -10,7 +10,7 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
-    label: 'Hợp Đồng',
+    label: 'Hợp Đồng Khách Hàng',
     href: '/sales/contracts',
     icon: Users,
     subItems: [

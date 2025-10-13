@@ -13,6 +13,15 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
+    label: 'Hợp Đồng',
+    href: '/manager/contract',
+    icon: Users,
+    subItems: [
+      { label: 'Danh Sách Hợp Đồng Khách Hàng', href: '/manager/contracts/clients' },
+      { label: 'Danh Sách Hợp Đồng Dev', href: '/manager/contracts/developers' },
+    ]
+  },
+  {
     label: 'Báo cáo Kinh doanh',
     href: '/manager/business',
     icon: LineChart,

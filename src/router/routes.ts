@@ -40,6 +40,7 @@ export const ROUTES = {
     PARTNERS: {
       LIST: '/hr/partners',
       DETAIL: '/hr/partners/:id',
+      CREATE: '/hr/partners/create',
     },
     ASSIGNMENTS: '/hr/assignments',                // staffTalentAssignments
 
@@ -209,6 +210,12 @@ export const ROUTES = {
       CLIENTS: '/manager/business/clients',
       PROJECTS: '/manager/business/projects',
       SUCCESS_RATE: '/manager/business/success-rate',
+    },
+    CONTRACT: {
+      CLIENTS: '/manager/contracts/clients',
+      CLIENT_DETAIL:'/manager/contracts/clients/:id',
+      DEVS: '/manager/contracts/developers',
+      DEV_DETAIL:'/manager/contracts/developers/:id',
     },
     HUMAN_RESOURCES: {
       OVERVIEW: '/manager/hr/overview',

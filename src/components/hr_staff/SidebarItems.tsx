@@ -21,6 +21,7 @@ export const sidebarItems = [
     icon: Users,
     subItems: [
       { label: 'Danh Sách Partner', href: '/hr/partners' },
+      { label: 'Tạo Partner', href: '/hr/partners/create' },
     ]
   },
   {
@@ -50,7 +51,7 @@ export const sidebarItems = [
     ]
   },
   {
-    label: 'Hợp Đồng',
+    label: 'Hợp Đồng Dev',
     href: '/hr/contracts',
     icon: FileText,
     subItems: [
