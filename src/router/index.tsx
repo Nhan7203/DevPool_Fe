@@ -16,17 +16,17 @@ import ContactPage from '../pages/client/contact-page';
 import Auth from '../pages/client/auth-page';
 //Admin
 import AdminDashboard from '../pages/admin/Dashboard/AdminDashboard';
-import CreateAccount from '../pages/admin/Users/Create_account';
-import UserManagementPage from '../pages/admin/Users/List_user';
+import CreateAccount from '../pages/admin/Users/Create';
+import UserManagementPage from '../pages/admin/Users/List';
 import RolesPage from '../pages/admin/Users/Roles';
 import { PermissionsPage } from '../pages/admin/Users/Permissions';
-import CompaniesPage from '../pages/admin/Companies/List_company';
+import CompaniesPage from '../pages/admin/Companies/List';
 import ClientsPage from '../pages/admin/Companies/Clients';
 //HR Staff
 import ManageCV from '../pages/hr_staff/developers/Manage_CV';
-import ListContract from '../pages/hr_staff/contracts/List_contract';
-import UploadContract from '../pages/hr_staff/contracts/Upload_contract';
-import ListRequest from '../pages/hr_staff/job-requests/List_request';
+import ListContract from '../pages/hr_staff/contracts/List';
+import UploadContract from '../pages/hr_staff/contracts/Upload';
+import ListRequest from '../pages/hr_staff/job-requests/List';
 import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
 import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
 import HRDashboard from '../pages/hr_staff/dashboard/Dashboard';
