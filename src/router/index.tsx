@@ -14,7 +14,7 @@ import ContactPage from '../pages/client/contact-page';
 import Auth from '../pages/client/auth-page';
 import AdminDashboard from '../pages/admin/Dashboard/AdminDashboard';
 import HRDashboard from '../pages/hr_staff/dashboard/Dashboard';
-import ListDev from '../pages/hr_staff/developers/List_dev';
+import ListDev from '../pages/hr_staff/developers/List';
 import CreateAccount from '../pages/admin/Users/Create_account';
 import ManageCV from '../pages/hr_staff/developers/Manage_CV';
 import ListContract from '../pages/hr_staff/contracts/List_contract';
