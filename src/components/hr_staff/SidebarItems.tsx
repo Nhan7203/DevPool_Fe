@@ -7,12 +7,11 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
-    label: 'Quản Lý Developer',
+    label: 'Quản Lý Talent',
     href: '/hr/developers',
     icon: Users,
     subItems: [
       { label: 'Danh Sách Developer', href: '/hr/developers' },
-      { label: 'Quản Lý CV', href: '/hr/developers/manage-cv' },
     ]
   },
   {
@@ -25,11 +24,13 @@ export const sidebarItems = [
     ]
   },
   {
-    label: 'Quản Lý ST Assignment',
-    href: '/hr/assignments',
+    label: 'Quản Lý CV',
+    href: '/hr/cvs',
     icon: Users,
     subItems: [
-      { label: 'Danh Sách ST Assignment', href: '/hr/assignments' },
+      { label: 'Danh Sách CV', href: '/hr/cvs' },
+      { label: 'Upload CV', href: '/hr/cvs/upload' },
+      { label: 'Matching CV', href: '/hr/cvs/matching' },
     ]
   },
   {
@@ -38,6 +39,24 @@ export const sidebarItems = [
     icon: FileText,
     subItems: [
       { label: 'Danh Sách Yêu Cầu', href: '/hr/job-requests' },
+    ]
+  },
+  {
+    label: 'Quản lý Template CV',
+    href: '/hr/templates',
+    icon: Users,
+    subItems: [
+      { label: 'Danh Sách Template', href: '/hr/templates' },
+      { label: 'Tạo Template', href: '/hr/templates/create' },
+      { label: 'Gán Template KH', href: '/hr/templates/assign' },
+    ]
+  },
+  {
+    label: 'Quản Lý ST Assignment',
+    href: '/hr/assignments',
+    icon: Users,
+    subItems: [
+      { label: 'Danh Sách ST Assignment', href: '/hr/assignments' },
     ]
   },
   {

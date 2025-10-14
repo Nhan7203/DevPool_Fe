@@ -23,7 +23,7 @@ import { PermissionsPage } from '../pages/admin/Users/Permissions';
 import CompaniesPage from '../pages/admin/Companies/List';
 import ClientsPage from '../pages/admin/Companies/Clients';
 //HR Staff
-import ManageCV from '../pages/hr_staff/developers/Manage_CV';
+import ListCV from '../pages/hr_staff/cvs/List';
 import ListContract from '../pages/hr_staff/contracts/List';
 import UploadContract from '../pages/hr_staff/contracts/Upload';
 import ListRequest from '../pages/hr_staff/job-requests/List';
@@ -55,19 +55,21 @@ import Profit from '../pages/manager/finance/Profit';
 import CashFlow from '../pages/manager/finance/Cashflow';
 //Sale Staff
 import SalesStaffDashboard from '../pages/sales_staff/Dashboard';
-import UploadSignedContract from '../pages/sales_staff/Contract/Upload';
-import ListClientContracts from '../pages/sales_staff/Contract/List';
-import ContractDetailPage from '../pages/sales_staff/Contract/Detail';
-import JobRequestListPage from '../pages/sales_staff/JobRequest/List';
-import JobRequestDetailPage from '../pages/sales_staff/JobRequest/Detail';
-import JobRequestCreatePage from '../pages/sales_staff/JobRequest/Create';
+import UploadSignedContract from '../pages/sales_staff/contract/Upload';
+import ListClientContracts from '../pages/sales_staff/contract/List';
+import ContractDetailPage from '../pages/sales_staff/contract/Detail';
+import JobRequestListPage from '../pages/sales_staff/job-requests/List';
+import JobRequestDetailPage from '../pages/sales_staff/job-requests/Detail';
+import JobRequestCreatePage from '../pages/sales_staff/job-requests/Create';
 //Accountant Staff
 import AccountantDashboard from '../pages/accountant_staff/Dashboard';
 //Developer
 import DeveloperDashboard from '../pages/developer/Dashboard';
-import JobRequestEditPage from '../pages/sales_staff/JobRequest/Edit';
-
-
+import JobRequestEditPage from '../pages/sales_staff/job-requests/Edit';
+import JobRequestDetailHRPage from '../pages/hr_staff/job-requests/Detail';
+import TalentCVDetail from '../pages/hr_staff/cvs/Detail';
+import CreateTalentCV from '../pages/hr_staff/cvs/Upload';
+import MatchingCVPage from '../pages/hr_staff/cvs/Matching';
 
 
 const AppRouter: React.FC = () => {
@@ -112,7 +114,11 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.DASHBOARD} element={<HRDashboard />} />
 
           <Route path={ROUTES.HR_STAFF.DEVELOPERS.LIST} element={<ListDev />} />
-          <Route path={ROUTES.HR_STAFF.DEVELOPERS.MANAGE_CV} element={<ManageCV />} />
+
+          <Route path={ROUTES.HR_STAFF.CVS.LIST} element={<ListCV />} />
+          <Route path={ROUTES.HR_STAFF.CVS.DETAIL} element={<TalentCVDetail />} />
+          <Route path={ROUTES.HR_STAFF.CVS.UPLOAD} element={<CreateTalentCV />} />
+          <Route path={ROUTES.HR_STAFF.CVS.MATCHING} element={<MatchingCVPage />} />
 
           <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
           <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
@@ -120,6 +126,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.ASSIGNMENTS} element={<Assignments />} />
 
           <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.LIST} element={<ListRequest />} />
+          <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailHRPage />} />
 
           <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
           <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />

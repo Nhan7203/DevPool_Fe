@@ -83,8 +83,8 @@ export default function ListDev() {
 
             <div className="flex-1 p-8">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Danh Sách Developer</h1>
-                    <p className="text-neutral-600 mt-1">Theo dõi thông tin developer trong hệ thống DevPool</p>
+                    <h1 className="text-3xl font-bold text-gray-900">Danh Sách Talent</h1>
+                    <p className="text-neutral-600 mt-1">Theo dõi thông tin developer tiềm năng trong hệ thống DevPool</p>
                 </div>
 
                 {/* Search and Filters */}
