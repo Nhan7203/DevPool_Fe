@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Developer, type TalentPayload } from '../../../services/talentService';
+import { type Developer, type TalentPayload } from '../../../services/Talent';
 
 export default function EditForm({ dev, onSave }: { dev: Developer; onSave: (data: TalentPayload) => void }) {
   const [form, setForm] = useState(dev);

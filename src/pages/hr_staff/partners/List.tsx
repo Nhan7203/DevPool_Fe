@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Filter, Building2, X } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerService, type Partner, type PartnerPayload } from '../../../services/partnerService';
+import { partnerService, type Partner, type PartnerPayload } from '../../../services/Partner';
 import EditForm from './Edit'; 
 
 export default function ListPartner() {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Filter, Users, X } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { talentService, type Developer, type TalentPayload } from '../../../services/talentService';
+import { talentService, type Developer, type TalentPayload } from '../../../services/Talent';
 import EditForm from './Edit';
 
 export default function ListDev() {

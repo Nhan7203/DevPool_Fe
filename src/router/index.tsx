@@ -65,6 +65,7 @@ import JobRequestCreatePage from '../pages/sales_staff/JobRequest/Create';
 import AccountantDashboard from '../pages/accountant_staff/Dashboard';
 //Developer
 import DeveloperDashboard from '../pages/developer/Dashboard';
+import JobRequestEditPage from '../pages/sales_staff/JobRequest/Edit';
 
 
 
@@ -147,6 +148,7 @@ const AppRouter: React.FC = () => {
 
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.EDIT} element={<JobRequestEditPage />} />
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
 
         </Route>
