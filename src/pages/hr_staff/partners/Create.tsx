@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Building2, Mail, Phone, MapPin, User, FileText } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerService, type PartnerPayload } from '../../../services/partnerService';
+import { partnerService, type PartnerPayload } from '../../../services/Partner';
 
 export default function CreatePartner() {
   const [loading, setLoading] = useState(false);

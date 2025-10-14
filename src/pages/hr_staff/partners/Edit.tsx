@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Partner, type PartnerPayload } from "../../../services/partnerService";
+import { type Partner, type PartnerPayload } from "../../../services/Partner";
 
 export default function EditPartner({
   partner,

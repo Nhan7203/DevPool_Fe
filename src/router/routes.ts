@@ -100,6 +100,7 @@ export const ROUTES = {
       LIST: '/sales/job-requests',
       CREATE: '/sales/job-requests/create',
       DETAIL: '/sales/job-requests/:id',
+      EDIT: '/sales/job-requests/edit/:id',
     },
 
     
