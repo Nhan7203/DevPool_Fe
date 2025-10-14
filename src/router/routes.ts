@@ -33,10 +33,21 @@ export const ROUTES = {
     // Talent & nguồn cung
     DEVELOPERS: {
       LIST: '/hr/developers',                    // Danh sách tất cả developers
-      MANAGE_CV: '/hr/developers/manage-cv',     // Quản lý CV vào pool
-      EDIT: '/hr/developers/:id/edit',           // Sửa thông tin developer
       DETAIL: '/hr/developers/:id',              // Chi tiết developer   
+      EDIT: '/hr/developers/:id/edit',           // Sửa thông tin developer
     },
+    CVS: {
+      LIST: '/hr/cvs',    
+      DETAIL: '/hr/cvs/:id',               
+      UPLOAD: '/hr/cvs/upload',
+      MATCHING: '/hr/cvs/matching',
+    },
+    TEMPLATES: {
+      LIST: '/hr/templates',    
+      CREATE: '/hr/templates/create',
+      Assign: '/hr/templates/assgin',
+    },
+
     PARTNERS: {
       LIST: '/hr/partners',
       DETAIL: '/hr/partners/:id',
@@ -47,7 +58,7 @@ export const ROUTES = {
     // Quản lý Job Request từ công ty
     JOB_REQUESTS: {
       LIST: '/hr/job-requests',                  // Danh sách yêu cầu tuyển dụng
-      DETAIL: '/hr/job-requests/:id',            // Chi tiết yêu cầu
+      DETAIL: '/hr/job-requests/:id',
       MATCHING: '/hr/job-requests/:id/matching', // Matching CV với yêu cầu
     },
 

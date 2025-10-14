@@ -1,111 +1,152 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Filter, Building2, Calendar, Users, ChevronRight } from 'lucide-react';
-import Sidebar from '../../../components/common/Sidebar';
-import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import {
+    Search,
+    Filter,
+    Users,
+    ChevronRight,
+    GraduationCap,
+} from "lucide-react";
+import Sidebar from "../../../components/common/Sidebar";
+import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
+import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
+import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { projectService, type Project } from "../../../services/Project";
+import { jobPositionService, type JobPosition } from "../../../services/JobPosition";
+import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
+import { skillService, type Skill } from "../../../services/Skill";
 
-interface JobRequest {
-    id: string;
+interface HRJobRequest {
+    id: number;
+    title: string;
     companyName: string;
-    position: string;
-    requiredSkills: string[];
-    experience: string;
+    projectName: string;
+    positionName: string;
+    level: string;
     quantity: number;
-    deadline: string;
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-    priority: 'high' | 'medium' | 'low';
-    matchedCandidates: number;
-    totalCandidates: number;
-    createdAt: string;
+    budget?: number | null;
+    skills: string[];
 }
 
-export default function ListRequest() {
-    const [requests, setRequests] = useState<JobRequest[]>([]);
+const levelLabels: Record<number, string> = {
+    0: "Junior",
+    1: "Middle",
+    2: "Senior",
+    3: "Lead",
+};
+
+export default function HRJobRequestList() {
+    const [requests, setRequests] = useState<HRJobRequest[]>([]);
+    const [filteredRequests, setFilteredRequests] = useState<HRJobRequest[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+
+    // 🔍 Search + Filters
+    const [searchTerm, setSearchTerm] = useState("");
     const [showFilters, setShowFilters] = useState(false);
+    const [filterCompany, setFilterCompany] = useState("");
+    const [filterProject, setFilterProject] = useState("");
+    const [filterPosition, setFilterPosition] = useState("");
+    const [filterLevel, setFilterLevel] = useState("");
 
-    // Mock data
     useEffect(() => {
-        const mockRequests: JobRequest[] = [
-            {
-                id: "JR001",
-                companyName: "Tech Solutions Inc",
-                position: "Senior Frontend Developer",
-                requiredSkills: ["React", "TypeScript", "NextJS"],
-                experience: "3-5 năm",
-                quantity: 2,
-                deadline: "2025-03-01",
-                status: "in_progress",
-                priority: "high",
-                matchedCandidates: 5,
-                totalCandidates: 12,
-                createdAt: "2025-01-15",
-            },
-            {
-                id: "JR002",
-                companyName: "Digital Innovations",
-                position: "Backend Developer",
-                requiredSkills: ["Node.js", "PostgreSQL", "AWS"],
-                experience: "2-4 năm",
-                quantity: 1,
-                deadline: "2025-02-28",
-                status: "pending",
-                priority: "medium",
-                matchedCandidates: 3,
-                totalCandidates: 8,
-                createdAt: "2025-01-20",
-            },
-            // Add more mock data as needed
-        ];
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                const [jobReqs, companies, projects, positions, jobSkills, skills] =
+                    await Promise.all([
+                        jobRequestService.getAll() as Promise<JobRequest[]>,
+                        clientCompanyService.getAll() as Promise<ClientCompany[]>,
+                        projectService.getAll() as Promise<Project[]>,
+                        jobPositionService.getAll() as Promise<JobPosition[]>,
+                        jobSkillService.getAll() as Promise<JobSkill[]>,
+                        skillService.getAll() as Promise<Skill[]>,
+                    ]);
 
-        setTimeout(() => {
-            setRequests(mockRequests);
-            setLoading(false);
-        }, 1000);
+                // Chỉ lấy yêu cầu chưa duyệt
+                const filteredReqs = jobReqs.filter((r) => r.status === 0);
+
+                const projectDict: Record<number, Project> = {};
+                projects.forEach((p) => (projectDict[p.id] = p));
+
+                const companyDict: Record<number, ClientCompany> = {};
+                companies.forEach((c) => (companyDict[c.id] = c));
+
+                const positionDict: Record<number, JobPosition> = {};
+                positions.forEach((p) => (positionDict[p.id] = p));
+
+                const skillDict: Record<number, string> = {};
+                skills.forEach((s) => (skillDict[s.id] = s.name));
+
+                const groupedJobSkills: Record<number, string[]> = {};
+                jobSkills.forEach((js) => {
+                    if (!groupedJobSkills[js.jobRequestId])
+                        groupedJobSkills[js.jobRequestId] = [];
+                    groupedJobSkills[js.jobRequestId].push(skillDict[js.skillsId] || "—");
+                });
+
+                const mapped: HRJobRequest[] = filteredReqs.map((r) => {
+                    const project = projectDict[r.projectId];
+                    const company = project ? companyDict[project.clientCompanyId] : undefined;
+                    const position = positionDict[r.jobPositionId];
+                    return {
+                        id: r.id,
+                        title: r.title,
+                        companyName: company?.name ?? "—",
+                        projectName: project?.name ?? "—",
+                        positionName: position?.name ?? "—",
+                        level: levelLabels[r.level],
+                        quantity: r.quantity,
+                        budget: r.budgetPerMonth,
+                        skills: groupedJobSkills[r.id] ?? [],
+                    };
+                });
+
+                setRequests(mapped);
+                setFilteredRequests(mapped);
+            } catch (err) {
+                console.error("❌ Lỗi tải danh sách yêu cầu HR:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'pending':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'in_progress':
-                return 'bg-blue-100 text-blue-800';
-            case 'completed':
-                return 'bg-green-100 text-green-800';
-            case 'cancelled':
-                return 'bg-red-100 text-red-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    };
+    // 🧮 Lọc dữ liệu theo điều kiện
+    useEffect(() => {
+        let filtered = [...requests];
 
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case 'pending':
-                return 'Chờ xử lý';
-            case 'in_progress':
-                return 'Đang xử lý';
-            case 'completed':
-                return 'Hoàn thành';
-            case 'cancelled':
-                return 'Đã hủy';
-            default:
-                return status;
+        if (searchTerm) {
+            filtered = filtered.filter(
+                (r) =>
+                    r.title.toLowerCase().includes(searchTerm.toLowerCase())
+            );
         }
-    };
+        if (filterCompany)
+            filtered = filtered.filter((r) =>
+                r.companyName.toLowerCase().includes(filterCompany.toLowerCase())
+            );
+        if (filterProject)
+            filtered = filtered.filter((r) =>
+                r.projectName.toLowerCase().includes(filterProject.toLowerCase())
+            );
+        if (filterPosition)
+            filtered = filtered.filter((r) =>
+                r.positionName.toLowerCase().includes(filterPosition.toLowerCase())
+            );
+        if (filterLevel)
+            filtered = filtered.filter((r) => r.level === filterLevel);
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority) {
-            case 'high':
-                return 'text-red-600';
-            case 'medium':
-                return 'text-yellow-600';
-            case 'low':
-                return 'text-blue-600';
-            default:
-                return 'text-gray-600';
-        }
+        setFilteredRequests(filtered);
+    }, [searchTerm, filterCompany, filterProject, filterPosition, filterLevel, requests]);
+
+    const handleResetFilters = () => {
+        setSearchTerm("");
+        setFilterCompany("");
+        setFilterProject("");
+        setFilterPosition("");
+        setFilterLevel("");
     };
 
     return (
@@ -114,18 +155,18 @@ export default function ListRequest() {
 
             <div className="flex-1 p-8">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Yêu Cầu Tuyển Dụng</h1>
-                    <p className="text-neutral-600 mt-1">Quản lý các yêu cầu tuyển dụng từ doanh nghiệp</p>
+                    <h1 className="text-3xl font-bold text-gray-900">Yêu Cầu Tuyển Dụng Chưa Duyệt</h1>
+                    <p className="text-neutral-600 mt-1">Danh sách yêu cầu từ Sales cần HR xử lý.</p>
                 </div>
 
-                {/* Search and Filters */}
+                {/* 🔍 Search & Filter */}
                 <div className="mb-6 flex flex-wrap gap-4">
                     <div className="flex-1">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Tìm kiếm theo công ty, vị trí..."
+                                placeholder="Tìm kiếm theo tiêu đề"
                                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -138,11 +179,71 @@ export default function ListRequest() {
                         className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 hover:border-primary-500 text-gray-700"
                     >
                         <Filter className="w-5 h-5" />
-                        {showFilters ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}
+                        {showFilters ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
                     </button>
                 </div>
 
-                {/* Request Cards */}
+                {showFilters && (
+                    <div className="w-full bg-white rounded-xl border border-gray-200 p-4 shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-2 mb-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Công ty KH</label>
+                            <input
+                                type="text"
+                                value={filterCompany}
+                                onChange={(e) => setFilterCompany(e.target.value)}
+                                placeholder="Tên công ty..."
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
+                            <input
+                                type="text"
+                                value={filterProject}
+                                onChange={(e) => setFilterProject(e.target.value)}
+                                placeholder="Tên dự án..."
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí</label>
+                            <input
+                                type="text"
+                                value={filterPosition}
+                                onChange={(e) => setFilterPosition(e.target.value)}
+                                placeholder="Tên vị trí..."
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Trình độ</label>
+                            <select
+                                value={filterLevel}
+                                onChange={(e) => setFilterLevel(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            >
+                                <option value="">Tất cả</option>
+                                <option value="Junior">Junior</option>
+                                <option value="Middle">Middle</option>
+                                <option value="Senior">Senior</option>
+                                <option value="Lead">Lead</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-end">
+                            <button
+                                onClick={handleResetFilters}
+                                className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg"
+                            >
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="text-center py-12">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
@@ -150,66 +251,69 @@ export default function ListRequest() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {requests.map((request) => (
-                            <div key={request.id} className="bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 border border-gray-200 transition-all duration-300">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
-                                            <Building2 className="w-6 h-6 text-primary-600" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold text-gray-900">{request.position}</h3>
-                                            <p className="text-sm text-gray-600">{request.companyName}</p>
-                                        </div>
-                                    </div>
-                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
-                                        {getStatusText(request.status)}
+                        {filteredRequests.map((req) => (
+                            <div
+                                key={req.id}
+                                className="bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 border border-gray-200 transition-all duration-300"
+                            >
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-lg font-semibold text-primary-700">
+                                        {req.title || "(Chưa có tiêu đề)"}
+                                    </h3>
+                                    <span className="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800 font-medium">
+                                        Chưa duyệt
                                     </span>
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex flex-wrap gap-2">
-                                        {request.requiredSkills.map((skill, index) => (
-                                            <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm">
+                                {/* ✅ Thông tin vị trí và công ty */}
+                                <div>
+                                    <p className="font-medium text-gray-900">{req.positionName}</p>
+                                    <p className="text-sm text-gray-600">{req.companyName}</p>
+                                </div>
+
+                                <p className="text-gray-700 mb-2 text-sm">
+                                    Dự án: <span className="font-medium">{req.projectName}</span>
+                                </p>
+
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {req.skills.length > 0 ? (
+                                        req.skills.map((skill, i) => (
+                                            <span
+                                                key={i}
+                                                className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm"
+                                            >
                                                 {skill}
                                             </span>
-                                        ))}
-                                    </div>
+                                        ))
+                                    ) : (
+                                        <span className="text-gray-500 text-sm">Chưa có kỹ năng</span>
+                                    )}
+                                </div>
 
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="flex items-center gap-2 text-gray-600">
-                                            <Users className="w-4 h-4" />
-                                            <span>Cần {request.quantity} developer</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-gray-600">
-                                            <Calendar className="w-4 h-4" />
-                                            <span>Deadline: {new Date(request.deadline).toLocaleDateString('vi-VN')}</span>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <Users className="w-4 h-4" />
+                                        <span>{req.quantity} ứng viên</span>
                                     </div>
+                                    <div className="flex items-center gap-2">
+                                        <GraduationCap className="w-4 h-4" />
+                                        <span>Trình độ: {req.level}</span>
+                                    </div>
+                                </div>
 
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className={`font-medium ${getPriorityColor(request.priority)}`}>
-                                            ● Ưu tiên {request.priority === 'high' ? 'Cao' : request.priority === 'medium' ? 'Trung bình' : 'Thấp'}
-                                        </span>
-                                        <span className="text-gray-600">
-                                            {request.matchedCandidates}/{request.totalCandidates} ứng viên phù hợp
-                                        </span>
-                                    </div>
-
-                                    <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                                        <Link 
-                                            to={`/hr/job-requests/${request.id}`}
-                                            className="text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center gap-1"
-                                        >
-                                            Chi tiết <ChevronRight className="w-4 h-4" />
-                                        </Link>
-                                        <Link
-                                            to={`/hr/job-requests/${request.id}/matching`}
-                                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
-                                        >
-                                            Matching CV
-                                        </Link>
-                                    </div>
+                                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                                    <Link
+                                        to={`/hr/job-requests/${req.id}`}
+                                        className="text-primary-600 hover:underline text-sm font-medium flex items-center gap-1"
+                                    >
+                                        Chi tiết <ChevronRight className="w-4 h-4" />
+                                    </Link>
+                                    <Link
+                                        to={`/hr/job-requests/${req.id}/matching`}
+                                        className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm transition"
+                                    >
+                                        Matching CV
+                                    </Link>
                                 </div>
                             </div>
                         ))}
