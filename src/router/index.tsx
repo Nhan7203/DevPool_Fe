@@ -70,6 +70,30 @@ import JobRequestDetailHRPage from '../pages/hr_staff/job-requests/Detail';
 import TalentCVDetail from '../pages/hr_staff/cvs/Detail';
 import CreateTalentCV from '../pages/hr_staff/cvs/Upload';
 import MatchingCVPage from '../pages/hr_staff/cvs/Matching';
+import ClientCompanyListPage from '../pages/sales_staff/client-companies/List';
+import ClientCompanyDetailPage from '../pages/sales_staff/client-companies/Detail';
+import ClientCompanyEditPage from '../pages/sales_staff/client-companies/Edit';
+import ClientCompanyCreatePage from '../pages/sales_staff/client-companies/Create';
+import ProjectListPage from '../pages/sales_staff/projects/List';
+import ProjectDetailPage from '../pages/sales_staff/projects/Detail';
+import ProjectEditPage from '../pages/sales_staff/projects/Edit';
+import ProjectCreatePage from '../pages/sales_staff/projects/Create';
+import JobPositionListPage from '../pages/sales_staff/job-positions/List';
+import JobPositionDetailPage from '../pages/sales_staff/job-positions/Detail';
+import JobPositionEditPage from '../pages/sales_staff/job-positions/Edit';
+import JobPositionCreatePage from '../pages/sales_staff/job-positions/Create';
+import PositionTypeListPage from '../pages/sales_staff/position-type/List';
+import PositionTypeDetailPage from '../pages/sales_staff/position-type/Detail';
+import PositionTypeEditPage from '../pages/sales_staff/position-type/Edit';
+import PositionTypeCreatePage from '../pages/sales_staff/position-type/Create';
+import MarketListPage from '../pages/sales_staff/markets/List';
+import MarketDetailPage from '../pages/sales_staff/markets/Detail';
+import MarketEditPage from '../pages/sales_staff/markets/Edit';
+import MarketCreatePage from '../pages/sales_staff/markets/Create';
+import IndustryListPage from '../pages/sales_staff/industries/List';
+import IndustryDetailPage from '../pages/sales_staff/industries/Detail';
+import IndustryEditPage from '../pages/sales_staff/industries/Edit';
+import IndustryCreatePage from '../pages/sales_staff/industries/Create';
 
 
 const AppRouter: React.FC = () => {
@@ -158,6 +182,35 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.EDIT} element={<JobRequestEditPage />} />
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
 
+          <Route path={ROUTES.SALES_STAFF.CLIENTS.LIST} element={<ClientCompanyListPage />} />
+          <Route path={ROUTES.SALES_STAFF.CLIENTS.DETAIL} element={<ClientCompanyDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.CLIENTS.EDIT} element={<ClientCompanyEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.CLIENTS.CREATE} element={<ClientCompanyCreatePage />} />
+
+          <Route path={ROUTES.SALES_STAFF.PROJECTS.LIST} element={<ProjectListPage />} />
+          <Route path={ROUTES.SALES_STAFF.PROJECTS.DETAIL} element={<ProjectDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.PROJECTS.EDIT} element={<ProjectEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.PROJECTS.CREATE} element={<ProjectCreatePage />} />
+
+          <Route path={ROUTES.SALES_STAFF.JOB_POSITIONS.LIST} element={<JobPositionListPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_POSITIONS.DETAIL} element={<JobPositionDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_POSITIONS.EDIT} element={<JobPositionEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.JOB_POSITIONS.CREATE} element={<JobPositionCreatePage />} />
+
+          <Route path={ROUTES.SALES_STAFF.POSITION_TYPE.LIST} element={<PositionTypeListPage />} />
+          <Route path={ROUTES.SALES_STAFF.POSITION_TYPE.DETAIL} element={<PositionTypeDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.POSITION_TYPE.EDIT} element={<PositionTypeEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.POSITION_TYPE.CREATE} element={<PositionTypeCreatePage />} />
+
+          <Route path={ROUTES.SALES_STAFF.MARKETS.LIST} element={<MarketListPage />} />
+          <Route path={ROUTES.SALES_STAFF.MARKETS.DETAIL} element={<MarketDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.MARKETS.EDIT} element={<MarketEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.MARKETS.CREATE} element={<MarketCreatePage />} />
+
+          <Route path={ROUTES.SALES_STAFF.INDUSTRIES.LIST} element={<IndustryListPage />} />
+          <Route path={ROUTES.SALES_STAFF.INDUSTRIES.DETAIL} element={<IndustryDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.INDUSTRIES.EDIT} element={<IndustryEditPage />} />
+          <Route path={ROUTES.SALES_STAFF.INDUSTRIES.CREATE} element={<IndustryCreatePage />} />
         </Route>
 
         {/* ACCOUNTANT_STAFF Dashboard với PublicLayout */}

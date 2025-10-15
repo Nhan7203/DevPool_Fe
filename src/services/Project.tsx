@@ -16,6 +16,17 @@ export interface Project {
   isDeleted: boolean;
 }
 
+export interface ProjectPayload {
+  clientCompanyId: number;
+  marketId: number;
+  industryId: number;
+  name: string;
+  description?: string;
+  startDate: string;
+  endDate?: string | null;
+  status: string;
+}
+
 export interface ProjectFilter {
   clientCompanyId?: number;
   marketId?: number;
@@ -70,7 +81,7 @@ export const projectService = {
     }
   },
 
-  async create(payload: Partial<Project>) {
+  async create(payload: Partial<ProjectPayload>) {
     try {
       const response = await axios.post("/project", payload);
       return response.data;
@@ -81,7 +92,7 @@ export const projectService = {
     }
   },
 
-  async update(id: number, payload: Partial<Project>) {
+  async update(id: number, payload: Partial<ProjectPayload>) {
     try {
       const response = await axios.put(`/project/${id}`, payload);
       return response.data;

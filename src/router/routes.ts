@@ -106,35 +106,49 @@ export const ROUTES = {
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
       UPLOAD: '/sales/contracts/upload',        // Upload file hợp đồng
     },
-
     JOB_REQUESTS: {
       LIST: '/sales/job-requests',
-      CREATE: '/sales/job-requests/create',
       DETAIL: '/sales/job-requests/:id',
       EDIT: '/sales/job-requests/edit/:id',
+      CREATE: '/sales/job-requests/create',
     },
-
-    
     CLIENTS: {
       LIST: '/sales/clients',
       DETAIL: '/sales/clients/:id',
+      EDIT: '/sales/clients/edit/:id',
+      CREATE: '/sales/clients/create',
     },
     PROJECTS: {
       LIST: '/sales/projects',
       DETAIL: '/sales/projects/:id',
+      EDIT: '/sales/projects/edit/:id',
+      CREATE: '/sales/projects/create',
     },
-    
-    QUOTES: {
-      LIST: '/sales/quotes',
-      CREATE: '/sales/quotes/create',
-      DETAIL: '/sales/quotes/:id',
+    JOB_POSITIONS: {
+      LIST: '/sales/job-positions',
+      DETAIL: '/sales/job-positions/:id',
+      EDIT: '/sales/job-positions/edit/:id',
+      CREATE: '/sales/job-positions/create',
     },
-    CUSTOMER_CONTRACTS: {
-      LIST: '/sales/contracts',
-      DETAIL: '/sales/contracts/:id',
-      UPLOAD: '/sales/contracts/upload',
+    MARKETS: {
+      LIST: '/sales/markets',
+      DETAIL: '/sales/markets/:id',
+      EDIT: '/sales/markets/edit/:id',
+      CREATE: '/sales/markets/create',
     },
-    BILLING_OVERVIEW: '/sales/billing',            // read-only tình trạng WR/Invoice
+    INDUSTRIES: {
+      LIST: '/sales/industries',
+      DETAIL: '/sales/industries/:id',
+      EDIT: '/sales/industries/edit/:id',
+      CREATE: '/sales/industries/create',
+    },
+    POSITION_TYPE: {
+      LIST: '/sales/position-type',
+      DETAIL: '/sales/position-type/:id',
+      EDIT: '/sales/position-type/edit/:id',
+      CREATE: '/sales/position-type/create',
+    },
+
   },
 
   // ====================================
