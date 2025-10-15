@@ -7,9 +7,6 @@ export interface Industry {
   name: string;
   code: string;
   description?: string;
-  createdAt: string;
-  updatedAt?: string | null;
-  isDeleted: boolean;
 }
 
 // Payload tạo hoặc update Industry
@@ -39,8 +36,8 @@ export const industryService = {
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải danh sách ngành nghề" };
-      throw { message: "Lỗi không xác định khi tải danh sách ngành nghề" };
+        throw error.response?.data || { message: "Không thể tải danh sách lĩnh vực" };
+      throw { message: "Lỗi không xác định khi tải danh sách lĩnh vực" };
     }
   },
 
@@ -51,7 +48,7 @@ export const industryService = {
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải ngành nghề" };
+        throw error.response?.data || { message: "Không thể tải lĩnh vực" };
       throw { message: "Lỗi không xác định khi tải dữ liệu" };
     }
   },
@@ -63,8 +60,8 @@ export const industryService = {
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tạo ngành nghề" };
-      throw { message: "Lỗi không xác định khi tạo ngành nghề" };
+        throw error.response?.data || { message: "Không thể tạo lĩnh vực" };
+      throw { message: "Lỗi không xác định khi tạo lĩnh vực" };
     }
   },
 
@@ -75,8 +72,8 @@ export const industryService = {
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể cập nhật ngành nghề" };
-      throw { message: "Lỗi không xác định khi cập nhật ngành nghề" };
+        throw error.response?.data || { message: "Không thể cập nhật lĩnh vực" };
+      throw { message: "Lỗi không xác định khi cập nhật lĩnh vực" };
     }
   },
 
@@ -87,8 +84,8 @@ export const industryService = {
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể xóa ngành nghề" };
-      throw { message: "Lỗi không xác định khi xóa ngành nghề" };
+        throw error.response?.data || { message: "Không thể xóa lĩnh vực" };
+      throw { message: "Lỗi không xác định khi xóa lĩnh vực" };
     }
   },
 };

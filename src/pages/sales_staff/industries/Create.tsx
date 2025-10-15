@@ -1,44 +1,45 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Briefcase, FileText } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { industryService, type IndustryPayload } from "../../../services/Industry";
 import { Button } from "../../../components/ui/button";
 
-export default function IndustryCreatePage() {
+export default function CreateIndustry() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<IndustryPayload>({
     name: "",
     code: "",
     description: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // 🔁 Handle change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  // 💾 Handle submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess(false);
+    setMessage(null);
 
     if (!form.name.trim() || !form.code.trim()) {
-      setError("⚠️ Vui lòng nhập tên và mã ngành nghề!");
+      setMessage({ type: "error", text: "⚠️ Vui lòng nhập đầy đủ Tên và Mã lĩnh vực!" });
       return;
     }
 
     try {
       setLoading(true);
       await industryService.create(form);
-      setSuccess(true);
+      setMessage({ type: "success", text: "✅ Tạo lĩnh vực thành công! Đang chuyển hướng..." });
       setTimeout(() => navigate("/sales/industries"), 1500);
     } catch (err) {
-      console.error("❌ Lỗi tạo ngành nghề:", err);
-      setError("Không thể tạo ngành nghề. Vui lòng thử lại.");
+      console.error("❌ Lỗi tạo lĩnh vực:", err);
+      setMessage({ type: "error", text: "Không thể tạo lĩnh vực. Vui lòng thử lại." });
     } finally {
       setLoading(false);
     }
@@ -48,82 +49,123 @@ export default function IndustryCreatePage() {
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
 
-      <div className="flex-1 p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Tạo Ngành Nghề Mới</h1>
-          <p className="text-neutral-600 mt-1">Nhập thông tin ngành nghề để tạo mới</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="bg-white shadow-soft rounded-2xl p-8 max-w-4xl space-y-6">
-          <InputField
-            label="Tên ngành nghề"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            required
-          />
-
-          <InputField
-            label="Mã ngành nghề"
-            name="code"
-            value={form.code}
-            onChange={handleChange}
-            required
-          />
-
-          <TextareaField
-            label="Mô tả"
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-            rows={4}
-          />
-
-          {error && <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
-          {success && <p className="text-green-600 bg-green-50 px-4 py-2 rounded-lg">Tạo ngành nghề thành công! Đang chuyển hướng...</p>}
-
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={loading}
-              className={`px-6 py-2 rounded-xl text-white font-medium transition-colors ${loading ? "bg-primary-300 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700"}`}
-            >
-              {loading ? "Đang tạo..." : "Tạo ngành nghề"}
-            </Button>
+      <div className="flex-1 min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/40 to-secondary-50/40">
+        <div className="max-w-4xl mx-auto px-4 py-10">
+          {/* Header */}
+          <div className="text-center mb-10 animate-fade-in-up">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
+              <Briefcase className="text-white w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent">
+              Tạo Lĩnh Vực Mới
+            </h1>
+            <p className="text-neutral-600 mt-2">
+              Thêm lĩnh vực kinh doanh mới cho hệ thống DevPool
+            </p>
           </div>
-        </form>
+
+          {/* Form */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50 animate-fade-in-up">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Tên lĩnh vực */}
+              <FormGroup
+                label="Tên lĩnh vực"
+                name="name"
+                placeholder="VD: Công nghệ thông tin, Tài chính..."
+                icon={<Briefcase className="text-neutral-400 group-focus-within:text-primary-500" />}
+                value={form.name}
+                onChange={handleChange}
+                required
+              />
+
+              {/* Mã lĩnh vực */}
+              <FormGroup
+                label="Mã lĩnh vực"
+                name="code"
+                placeholder="VD: IT, FIN, EDU..."
+                icon={<FileText className="text-neutral-400 group-focus-within:text-primary-500" />}
+                value={form.code}
+                onChange={handleChange}
+                required
+              />
+
+              {/* Mô tả */}
+              <TextareaGroup
+                label="Mô tả (tùy chọn)"
+                name="description"
+                placeholder="Nhập mô tả ngắn về lĩnh vực..."
+                value={form.description}
+                onChange={handleChange}
+              />
+
+              {/* Thông báo */}
+              {message && (
+                <p
+                  className={`px-4 py-3 rounded-lg text-sm font-medium ${
+                    message.type === "success"
+                      ? "text-green-700 bg-green-50 border border-green-200"
+                      : "text-red-700 bg-red-50 border border-red-200"
+                  }`}
+                >
+                  {message.text}
+                </p>
+              )}
+
+              {/* Submit */}
+              <div className="pt-4">
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-3.5 rounded-xl font-semibold transition-all duration-300 hover:from-primary-700 hover:to-secondary-700 shadow-glow hover:shadow-glow-lg transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Đang tạo...</span>
+                    </div>
+                  ) : (
+                    "Tạo lĩnh vực"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 // ===== COMPONENT NHỎ =====
-
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface FormGroupProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
+  icon: React.ReactNode;
 }
-function InputField({ label, ...props }: InputFieldProps) {
+function FormGroup({ label, icon, ...props }: FormGroupProps) {
   return (
     <div>
-      <label className="block text-gray-700 font-medium mb-2">{label}</label>
-      <input
-        {...props}
-        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:ring-1 focus:ring-primary-500"
-      />
+      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
+      <div className="relative group">
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">{icon}</div>
+        <input
+          {...props}
+          className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 border-neutral-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all"
+        />
+      </div>
     </div>
   );
 }
 
-interface TextareaFieldProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaGroupProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
 }
-function TextareaField({ label, ...props }: TextareaFieldProps) {
+function TextareaGroup({ label, ...props }: TextareaGroupProps) {
   return (
     <div>
-      <label className="block text-gray-700 font-medium mb-2">{label}</label>
+      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
       <textarea
         {...props}
-        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:ring-1 focus:ring-primary-500"
+        className="w-full pl-4 pr-4 py-3 border rounded-xl bg-white/50 border-neutral-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all"
       />
     </div>
   );

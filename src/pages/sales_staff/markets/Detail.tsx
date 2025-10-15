@@ -87,9 +87,6 @@ export default function MarketDetailPage() {
           <InfoItem label="Tên thị trường" value={market.name} />
           <InfoItem label="Mã thị trường" value={market.code} />
           <InfoItem label="Mô tả" value={market.description || "—"} />
-          <InfoItem label="Ngày tạo" value={new Date(market.createdAt).toLocaleString()} />
-          <InfoItem label="Ngày cập nhật" value={market.updatedAt ? new Date(market.updatedAt).toLocaleString() : "—"} />
-          <InfoItem label="Đã xóa" value={market.isDeleted ? "Có" : "Không"} />
         </div>
 
         <div className="mt-8">

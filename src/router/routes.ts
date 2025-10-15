@@ -35,6 +35,8 @@ export const ROUTES = {
       LIST: '/hr/developers',                    // Danh sách tất cả developers
       DETAIL: '/hr/developers/:id',              // Chi tiết developer   
       EDIT: '/hr/developers/:id/edit',           // Sửa thông tin developer
+      CREATE: '/hr/developers/create',
+
     },
     CVS: {
       LIST: '/hr/cvs',    

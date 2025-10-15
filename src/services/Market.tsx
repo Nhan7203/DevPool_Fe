@@ -7,9 +7,6 @@ export interface Market {
   name: string;
   code: string;
   description?: string;
-  createdAt: string;
-  updatedAt?: string | null;
-  isDeleted: boolean;
 }
 
 export interface MarketPayload {

@@ -4,6 +4,8 @@ import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { talentService, type Developer, type TalentPayload } from '../../../services/Talent';
 import EditForm from './Edit';
+import { Link } from 'react-router-dom';
+import { Button } from '../../../components/ui/button';
 
 export default function ListDev() {
     const [developers, setDevelopers] = useState<Developer[]>([]);
@@ -82,11 +84,15 @@ export default function ListDev() {
             <Sidebar items={sidebarItems} title="HR Staff" />
 
             <div className="flex-1 p-8">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Danh Sách Talent</h1>
-                    <p className="text-neutral-600 mt-1">Theo dõi thông tin developer tiềm năng trong hệ thống DevPool</p>
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900">Danh Sách Talent</h1>
+                        <p className="text-neutral-600 mt-1">Theo dõi thông tin developer tiềm năng trong hệ thống DevPool</p>
+                    </div>
+                    <Link to="/hr/developers/create">
+                        <Button className="bg-primary-600 hover:bg-primary-700 text-white">+ Tạo talent mới</Button>
+                    </Link>
                 </div>
-
                 {/* Search and Filters */}
                 <div className="mb-6 flex flex-wrap gap-4">
                     <div className="flex-1">
@@ -274,8 +280,6 @@ export default function ListDev() {
                                 <p><strong>Rate/tháng:</strong> {selectedDev.ratePerMonth ? `$${selectedDev.ratePerMonth}` : '—'}</p>
                                 <p><strong>Trạng thái:</strong> {selectedDev.status || '—'}</p>
                                 <p><strong>Partner ID:</strong> {selectedDev.partnerId ?? '—'}</p>
-                                <p><strong>Project hiện tại:</strong> {selectedDev.currentProjectId ?? '—'}</p>
-                                <p><strong>Contract hiện tại:</strong> {selectedDev.currentContractId ?? '—'}</p>
                             </div>
                         ) : (
                             <EditForm dev={selectedDev} onSave={handleUpdate} />

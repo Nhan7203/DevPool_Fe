@@ -71,12 +71,12 @@ export const sidebarItems = [
     ]
   },
   {
-    label: 'Quản Lý Ngành',
+    label: 'Quản Lý Lĩnh Vực',
     href: '/sales/industries',
-    icon: Briefcase, // ngành nghề => dùng briefcase cũng hợp
+    icon: Briefcase,
     subItems: [
-      { label: 'Danh sách ngành', href: '/sales/industries' },
-      { label: 'Tạo ngành', href: '/sales/industries/create' },
+      { label: 'Danh sách lĩnh vực', href: '/sales/industries' },
+      { label: 'Tạo lĩnh vực', href: '/sales/industries/create' },
     ]
   },
   {

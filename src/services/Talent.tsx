@@ -1,21 +1,18 @@
-// src/services/talentService.ts
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
 export interface Developer {
-    id: number;
-    fullName: string;
-    email?: string;
-    phone?: string;
-    level?: string;
-    yearsOfExp: number;
-    ratePerMonth: number;
-    status?: string;
-    githubUrl?: string;
-    portfolioUrl?: string;
-    partnerId?: number;
-    currentProjectId?: number;
-    currentContractId?: number;
+  id: number;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  level?: string;
+  yearsOfExp: number;
+  ratePerMonth: number;
+  status?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  partnerId?: number;
 }
 
 export interface TalentPayload {
@@ -24,8 +21,6 @@ export interface TalentPayload {
   fullName?: string;
   email?: string;
   phone?: string;
-  currentProjectId?: number;
-  currentContractId?: number;
   level?: string;
   yearsOfExp: number;
   ratePerMonth?: number;
@@ -52,14 +47,25 @@ export const talentService = {
     }
   },
 
-  async deleteById(id: number) {
+  async getById(id: number) {
     try {
-      const response = await axios.delete(`/talent/${id}`);
+      const response = await axios.get(`/talent/${id}`);
       return response.data;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Failed to delete talent" };
+        throw error.response?.data || { message: "Failed to fetch talent details" };
       throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  async create(payload: TalentPayload) {
+    try {
+      const response = await axios.post("/talent", payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to create new talent" };
+      throw { message: "Unexpected error occurred during creation" };
     }
   },
 
@@ -70,6 +76,17 @@ export const talentService = {
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to update talent" };
+      throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  async deleteById(id: number) {
+    try {
+      const response = await axios.delete(`/talent/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to delete talent" };
       throw { message: "Unexpected error occurred" };
     }
   },

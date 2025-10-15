@@ -94,6 +94,7 @@ import IndustryListPage from '../pages/sales_staff/industries/List';
 import IndustryDetailPage from '../pages/sales_staff/industries/Detail';
 import IndustryEditPage from '../pages/sales_staff/industries/Edit';
 import IndustryCreatePage from '../pages/sales_staff/industries/Create';
+import CreateTalent from '../pages/hr_staff/developers/Create';
 
 
 const AppRouter: React.FC = () => {
@@ -138,6 +139,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.DASHBOARD} element={<HRDashboard />} />
 
           <Route path={ROUTES.HR_STAFF.DEVELOPERS.LIST} element={<ListDev />} />
+          <Route path={ROUTES.HR_STAFF.DEVELOPERS.CREATE} element={<CreateTalent />} />
 
           <Route path={ROUTES.HR_STAFF.CVS.LIST} element={<ListCV />} />
           <Route path={ROUTES.HR_STAFF.CVS.DETAIL} element={<TalentCVDetail />} />
