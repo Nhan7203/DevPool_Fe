@@ -14,17 +14,17 @@ export default function IndustryListPage() {
   // Bộ lọc
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterDeleted, setFilterDeleted] = useState("");
+  const [filterCode, setFilterCode] = useState("");
 
   useEffect(() => {
     const fetchIndustries = async () => {
       try {
         setLoading(true);
-        const data = await industryService.getAll({ excludeDeleted: false });
+        const data = await industryService.getAll({ excludeDeleted: true });
         setIndustries(data);
         setFilteredIndustries(data);
       } catch (err) {
-        console.error("❌ Lỗi khi load danh sách ngành nghề:", err);
+        console.error("❌ Lỗi khi load danh sách lĩnh vực:", err);
       } finally {
         setLoading(false);
       }
@@ -43,23 +43,24 @@ export default function IndustryListPage() {
       );
     }
 
-    if (filterDeleted) {
-      const isDeleted = filterDeleted === "true";
-      filtered = filtered.filter((i) => i.isDeleted === isDeleted);
+    if (filterCode) {
+      filtered = filtered.filter((i) =>
+        i.code.toLowerCase().includes(filterCode.toLowerCase())
+      );
     }
 
     setFilteredIndustries(filtered);
-  }, [searchTerm, filterDeleted, industries]);
+  }, [searchTerm, filterCode, industries]);
 
   const handleResetFilters = () => {
-    setSearchTerm("");
-    setFilterDeleted("");
-  };
+  setSearchTerm("");
+  setFilterCode("");
+};
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen text-gray-500">
-        Đang tải danh sách ngành nghề...
+        Đang tải danh sách lĩnh vực...
       </div>
     );
   }
@@ -70,11 +71,11 @@ export default function IndustryListPage() {
       <div className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Danh sách Ngành nghề</h1>
-            <p className="text-neutral-600 mt-1">Tổng hợp các ngành nghề có trong hệ thống.</p>
+            <h1 className="text-3xl font-bold text-gray-900">Danh sách lĩnh vực</h1>
+            <p className="text-neutral-600 mt-1">Tổng hợp các lĩnh vực có trong hệ thống.</p>
           </div>
           <Link to="/sales/industries/create">
-            <Button className="bg-primary-600 hover:bg-primary-700 text-white">+ Tạo ngành nghề mới</Button>
+            <Button className="bg-primary-600 hover:bg-primary-700 text-white">+ Tạo lĩnh vực mới</Button>
           </Link>
         </div>
 
@@ -84,7 +85,7 @@ export default function IndustryListPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Tìm kiếm theo tên ngành nghề..."
+              placeholder="Tìm kiếm theo tên lĩnh vực..."
               className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -102,16 +103,14 @@ export default function IndustryListPage() {
           {showFilters && (
             <div className="w-full bg-white rounded-xl border border-gray-200 p-4 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
-                <select
-                  value={filterDeleted}
-                  onChange={(e) => setFilterDeleted(e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mã lĩnh vực</label>
+                <input
+                  type="text"
+                  value={filterCode}
+                  onChange={(e) => setFilterCode(e.target.value)}
+                  placeholder="Nhập mã lĩnh vực..."
                   className="w-full border rounded-lg px-3 py-2 text-sm"
-                >
-                  <option value="">Tất cả</option>
-                  <option value="false">Đang sử dụng</option>
-                  <option value="true">Đã xóa</option>
-                </select>
+                />
               </div>
 
               <div className="flex items-end">
@@ -132,10 +131,9 @@ export default function IndustryListPage() {
             <thead className="bg-gray-100 text-gray-700">
               <tr>
                 <th className="text-left py-2 px-4">#</th>
-                <th className="text-left py-2 px-4">Tên ngành nghề</th>
+                <th className="text-left py-2 px-4">Tên lĩnh vực</th>
                 <th className="text-left py-2 px-4">Mã</th>
                 <th className="text-left py-2 px-4">Mô tả</th>
-                <th className="text-left py-2 px-4">Trạng thái</th>
                 <th className="text-left py-2 px-4">Thao tác</th>
               </tr>
             </thead>
@@ -146,7 +144,6 @@ export default function IndustryListPage() {
                   <td className="py-2 px-4 font-medium text-primary-700">{i.name}</td>
                   <td className="py-2 px-4">{i.code}</td>
                   <td className="py-2 px-4">{i.description || "—"}</td>
-                  <td className="py-2 px-4">{i.isDeleted ? "Đã xóa" : "Đang sử dụng"}</td>
                   <td className="py-2 px-4">
                     <Link to={`/sales/industries/${i.id}`} className="text-blue-600 hover:underline">
                       Xem chi tiết

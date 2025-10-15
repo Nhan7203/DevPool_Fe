@@ -79,7 +79,6 @@ export default function MarketListPage() {
                 <th className="text-left py-2 px-4">Tên</th>
                 <th className="text-left py-2 px-4">Mã</th>
                 <th className="text-left py-2 px-4">Mô tả</th>
-                <th className="text-left py-2 px-4">Ngày tạo</th>
                 <th className="text-left py-2 px-4">Hành động</th>
               </tr>
             </thead>
@@ -90,7 +89,6 @@ export default function MarketListPage() {
                   <td className="py-2 px-4 font-medium text-primary-700">{m.name}</td>
                   <td className="py-2 px-4">{m.code}</td>
                   <td className="py-2 px-4">{m.description ?? "—"}</td>
-                  <td className="py-2 px-4">{new Date(m.createdAt).toLocaleDateString()}</td>
                   <td className="py-2 px-4 space-x-2">
                     <Link
                       to={`/sales/markets/${m.id}`}

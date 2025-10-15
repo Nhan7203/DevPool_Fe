@@ -25,8 +25,6 @@ export default function EditForm({ dev, onSave }: { dev: Developer; onSave: (dat
           status: form.status,
           githubUrl: form.githubUrl,
           portfolioUrl: form.portfolioUrl,
-          currentProjectId: form.currentProjectId,
-          currentContractId: form.currentContractId,
         };
 
         onSave(payload);

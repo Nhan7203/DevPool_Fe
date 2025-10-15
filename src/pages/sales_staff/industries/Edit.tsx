@@ -32,8 +32,8 @@ export default function IndustryEditPage() {
           description: data.description || "",
         });
       } catch (err) {
-        console.error("❌ Lỗi tải dữ liệu ngành nghề:", err);
-        alert("Không thể tải thông tin ngành nghề!");
+        console.error("❌ Lỗi tải dữ liệu lĩnh vực:", err);
+        alert("Không thể tải thông tin lĩnh vực!");
       } finally {
         setLoading(false);
       }
@@ -53,24 +53,24 @@ export default function IndustryEditPage() {
     if (!id) return;
 
     if (!formData.name.trim() || !formData.code.trim()) {
-      alert("⚠️ Vui lòng điền đầy đủ tên và mã ngành nghề!");
+      alert("⚠️ Vui lòng điền đầy đủ tên và mã lĩnh vực!");
       return;
     }
 
     try {
       await industryService.update(Number(id), formData);
-      alert("✅ Cập nhật ngành nghề thành công!");
+      alert("✅ Cập nhật lĩnh vực thành công!");
       navigate(`/sales/industries/${id}`);
     } catch (err) {
-      console.error("❌ Lỗi khi cập nhật ngành nghề:", err);
-      alert("Không thể cập nhật ngành nghề!");
+      console.error("❌ Lỗi khi cập nhật lĩnh vực:", err);
+      alert("Không thể cập nhật lĩnh vực!");
     }
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen text-gray-500">
-        Đang tải dữ liệu ngành nghề...
+        Đang tải dữ liệu lĩnh vực...
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function IndustryEditPage() {
   if (!industry) {
     return (
       <div className="flex justify-center items-center min-h-screen text-red-500">
-        Không tìm thấy ngành nghề
+        Không tìm thấy lĩnh vực
       </div>
     );
   }
@@ -89,33 +89,33 @@ export default function IndustryEditPage() {
 
       <div className="flex-1 p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Chỉnh sửa ngành nghề</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Chỉnh sửa lĩnh vực</h1>
           <p className="text-neutral-600 mt-1">
-            Cập nhật thông tin ngành nghề.
+            Cập nhật thông tin lĩnh vực.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-soft p-8 space-y-6">
-          {/* Tên ngành nghề */}
+          {/* Tên lĩnh vực */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Tên ngành nghề</label>
+            <label className="block text-gray-700 font-medium mb-1">Tên lĩnh vực</label>
             <Input
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="Nhập tên ngành nghề"
+              placeholder="Nhập tên lĩnh vực"
               required
             />
           </div>
 
-          {/* Mã ngành nghề */}
+          {/* Mã lĩnh vực */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Mã ngành nghề</label>
+            <label className="block text-gray-700 font-medium mb-1">Mã lĩnh vực</label>
             <Input
               name="code"
               value={formData.code}
               onChange={handleChange}
-              placeholder="Nhập mã ngành nghề"
+              placeholder="Nhập mã lĩnh vực"
               required
             />
           </div>
@@ -128,7 +128,7 @@ export default function IndustryEditPage() {
               value={formData.description}
               onChange={handleChange}
               rows={4}
-              placeholder="Nhập mô tả ngành nghề..."
+              placeholder="Nhập mô tả lĩnh vực..."
             />
           </div>
 

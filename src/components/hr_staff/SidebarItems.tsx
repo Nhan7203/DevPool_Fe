@@ -11,7 +11,9 @@ export const sidebarItems = [
     href: '/hr/developers',
     icon: Users,
     subItems: [
-      { label: 'Danh Sách Developer', href: '/hr/developers' },
+      { label: 'Danh sách talent', href: '/hr/developers' },
+      { label: 'Tạo talent', href: '/hr/developers/create' },
+
     ]
   },
   {
