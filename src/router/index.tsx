@@ -61,15 +61,6 @@ import ContractDetailPage from '../pages/sales_staff/contract/Detail';
 import JobRequestListPage from '../pages/sales_staff/job-requests/List';
 import JobRequestDetailPage from '../pages/sales_staff/job-requests/Detail';
 import JobRequestCreatePage from '../pages/sales_staff/job-requests/Create';
-//Accountant Staff
-import AccountantDashboard from '../pages/accountant_staff/Dashboard';
-//Developer
-import DeveloperDashboard from '../pages/developer/Dashboard';
-import JobRequestEditPage from '../pages/sales_staff/job-requests/Edit';
-import JobRequestDetailHRPage from '../pages/hr_staff/job-requests/Detail';
-import TalentCVDetail from '../pages/hr_staff/cvs/Detail';
-import CreateTalentCV from '../pages/hr_staff/cvs/Upload';
-import MatchingCVPage from '../pages/hr_staff/cvs/Matching';
 import ClientCompanyListPage from '../pages/sales_staff/client-companies/List';
 import ClientCompanyDetailPage from '../pages/sales_staff/client-companies/Detail';
 import ClientCompanyEditPage from '../pages/sales_staff/client-companies/Edit';
@@ -94,6 +85,15 @@ import IndustryListPage from '../pages/sales_staff/industries/List';
 import IndustryDetailPage from '../pages/sales_staff/industries/Detail';
 import IndustryEditPage from '../pages/sales_staff/industries/Edit';
 import IndustryCreatePage from '../pages/sales_staff/industries/Create';
+//Accountant Staff
+import AccountantDashboard from '../pages/accountant_staff/Dashboard';
+//Developer
+import DeveloperDashboard from '../pages/developer/Dashboard';
+import JobRequestEditPage from '../pages/sales_staff/job-requests/Edit';
+import JobRequestDetailHRPage from '../pages/hr_staff/job-requests/Detail';
+import TalentCVDetail from '../pages/hr_staff/cvs/Detail';
+import CreateTalentCV from '../pages/hr_staff/cvs/Upload';
+import MatchingCVPage from '../pages/hr_staff/cvs/Matching';
 import CreateTalent from '../pages/hr_staff/developers/Create';
 
 
