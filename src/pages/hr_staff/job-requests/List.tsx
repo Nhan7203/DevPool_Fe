@@ -9,10 +9,10 @@ import {
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
+import { jobRequestService, type JobRequest, JobRequestStatus } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
-import { jobPositionService, type JobPosition } from "../../../services/JobPosition";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { skillService, type Skill } from "../../../services/Skill";
 
@@ -22,17 +22,26 @@ interface HRJobRequest {
     companyName: string;
     projectName: string;
     positionName: string;
-    level: string;
     quantity: number;
     budget?: number | null;
+    workingMode: string;
+    status: string;
     skills: string[];
 }
 
-const levelLabels: Record<number, string> = {
-    0: "Junior",
-    1: "Middle",
-    2: "Senior",
-    3: "Lead",
+const workingModeLabels: Record<number, string> = {
+    0: "None",
+    1: "Onsite", 
+    2: "Remote",
+    4: "Hybrid",
+    8: "Flexible"
+};
+
+const statusLabels: Record<number, string> = {
+    0: "Pending",
+    1: "Approved", 
+    2: "Closed",
+    3: "Rejected"
 };
 
 export default function HRJobRequestList() {
@@ -46,7 +55,7 @@ export default function HRJobRequestList() {
     const [filterCompany, setFilterCompany] = useState("");
     const [filterProject, setFilterProject] = useState("");
     const [filterPosition, setFilterPosition] = useState("");
-    const [filterLevel, setFilterLevel] = useState("");
+    const [filterWorkingMode, setFilterWorkingMode] = useState("");
 
     useEffect(() => {
         const fetchData = async () => {
@@ -57,13 +66,13 @@ export default function HRJobRequestList() {
                         jobRequestService.getAll() as Promise<JobRequest[]>,
                         clientCompanyService.getAll() as Promise<ClientCompany[]>,
                         projectService.getAll() as Promise<Project[]>,
-                        jobPositionService.getAll() as Promise<JobPosition[]>,
+                        jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
                         jobSkillService.getAll() as Promise<JobSkill[]>,
                         skillService.getAll() as Promise<Skill[]>,
                     ]);
 
-                // Chỉ lấy yêu cầu chưa duyệt
-                const filteredReqs = jobReqs.filter((r) => r.status === 0);
+                // Chỉ lấy yêu cầu chưa duyệt (Pending)
+                const filteredReqs = jobReqs.filter((r) => r.status === JobRequestStatus.Pending);
 
                 const projectDict: Record<number, Project> = {};
                 projects.forEach((p) => (projectDict[p.id] = p));
@@ -71,7 +80,7 @@ export default function HRJobRequestList() {
                 const companyDict: Record<number, ClientCompany> = {};
                 companies.forEach((c) => (companyDict[c.id] = c));
 
-                const positionDict: Record<number, JobPosition> = {};
+                const positionDict: Record<number, JobRoleLevel> = {};
                 positions.forEach((p) => (positionDict[p.id] = p));
 
                 const skillDict: Record<number, string> = {};
@@ -87,16 +96,17 @@ export default function HRJobRequestList() {
                 const mapped: HRJobRequest[] = filteredReqs.map((r) => {
                     const project = projectDict[r.projectId];
                     const company = project ? companyDict[project.clientCompanyId] : undefined;
-                    const position = positionDict[r.jobPositionId];
+                    const position = positionDict[r.jobRoleLevelId];
                     return {
                         id: r.id,
                         title: r.title,
                         companyName: company?.name ?? "—",
                         projectName: project?.name ?? "—",
                         positionName: position?.name ?? "—",
-                        level: levelLabels[r.level],
                         quantity: r.quantity,
                         budget: r.budgetPerMonth,
+                        workingMode: workingModeLabels[r.workingMode] ?? "—",
+                        status: statusLabels[r.status] ?? "—",
                         skills: groupedJobSkills[r.id] ?? [],
                     };
                 });
@@ -135,18 +145,18 @@ export default function HRJobRequestList() {
             filtered = filtered.filter((r) =>
                 r.positionName.toLowerCase().includes(filterPosition.toLowerCase())
             );
-        if (filterLevel)
-            filtered = filtered.filter((r) => r.level === filterLevel);
+        if (filterWorkingMode)
+            filtered = filtered.filter((r) => r.workingMode === filterWorkingMode);
 
         setFilteredRequests(filtered);
-    }, [searchTerm, filterCompany, filterProject, filterPosition, filterLevel, requests]);
+    }, [searchTerm, filterCompany, filterProject, filterPosition, filterWorkingMode, requests]);
 
     const handleResetFilters = () => {
         setSearchTerm("");
         setFilterCompany("");
         setFilterProject("");
         setFilterPosition("");
-        setFilterLevel("");
+        setFilterWorkingMode("");
     };
 
     return (
@@ -219,17 +229,18 @@ export default function HRJobRequestList() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Trình độ</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Chế độ làm việc</label>
                             <select
-                                value={filterLevel}
-                                onChange={(e) => setFilterLevel(e.target.value)}
+                                value={filterWorkingMode}
+                                onChange={(e) => setFilterWorkingMode(e.target.value)}
                                 className="w-full border rounded-lg px-3 py-2 text-sm"
                             >
                                 <option value="">Tất cả</option>
-                                <option value="Junior">Junior</option>
-                                <option value="Middle">Middle</option>
-                                <option value="Senior">Senior</option>
-                                <option value="Lead">Lead</option>
+                                <option value="None">None</option>
+                                <option value="Onsite">Onsite</option>
+                                <option value="Remote">Remote</option>
+                                <option value="Hybrid">Hybrid</option>
+                                <option value="Flexible">Flexible</option>
                             </select>
                         </div>
 
@@ -297,7 +308,7 @@ export default function HRJobRequestList() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <GraduationCap className="w-4 h-4" />
-                                        <span>Trình độ: {req.level}</span>
+                                        <span>Chế độ: {req.workingMode}</span>
                                     </div>
                                 </div>
 

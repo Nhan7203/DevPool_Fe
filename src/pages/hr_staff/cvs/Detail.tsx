@@ -15,7 +15,7 @@ interface TalentCV {
   highlights: string;
   description: string;
   talent: Talent;
-  positionType: PositionType;
+  jobRole: JobRole;
   workingStyle: WorkingStyle;
 }
 
@@ -30,7 +30,7 @@ interface Talent {
   ratePerMonth?: number;
 }
 
-interface PositionType {
+interface JobRole {
   id: number;
   name: string;
 }
@@ -67,7 +67,7 @@ export default function TalentCVDetail() {
           yearsOfExp: 3,
           ratePerMonth: 2500,
         },
-        positionType: {
+        jobRole: {
           id: 5,
           name: "Frontend Developer",
         },
@@ -123,7 +123,7 @@ export default function TalentCVDetail() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">{cv.talent.fullName}</h2>
-              <p className="text-gray-600">{cv.positionType.name}</p>
+              <p className="text-gray-600">{cv.jobRole.name}</p>
             </div>
           </div>
 

@@ -125,13 +125,7 @@ export const ROUTES = {
       DETAIL: '/sales/projects/:id',
       EDIT: '/sales/projects/edit/:id',
       CREATE: '/sales/projects/create',
-    },
-    JOB_POSITIONS: {
-      LIST: '/sales/job-positions',
-      DETAIL: '/sales/job-positions/:id',
-      EDIT: '/sales/job-positions/edit/:id',
-      CREATE: '/sales/job-positions/create',
-    },
+    },    
     MARKETS: {
       LIST: '/sales/markets',
       DETAIL: '/sales/markets/:id',
@@ -144,11 +138,17 @@ export const ROUTES = {
       EDIT: '/sales/industries/edit/:id',
       CREATE: '/sales/industries/create',
     },
-    POSITION_TYPE: {
-      LIST: '/sales/position-type',
-      DETAIL: '/sales/position-type/:id',
-      EDIT: '/sales/position-type/edit/:id',
-      CREATE: '/sales/position-type/create',
+    JOB_ROLE_LEVELS: {
+      LIST: '/sales/job-role-levels',
+      DETAIL: '/sales/job-role-levels/:id',
+      EDIT: '/sales/job-role-levels/edit/:id',
+      CREATE: '/sales/job-role-levels/create',
+    },
+    JOB_ROLES: {
+      LIST: '/sales/job-roles',
+      DETAIL: '/sales/job-roles/:id',
+      EDIT: '/sales/job-roles/edit/:id',
+      CREATE: '/sales/job-roles/create',
     },
 
   },
@@ -275,9 +275,70 @@ export const ROUTES = {
     USERS: {
       LIST: '/admin/users',                          // Danh sách users
       CREATE_ACCOUNT: '/admin/users/create-account', // Tạo tài khoản cho dev đã ký HĐ
-      EDIT: '/admin/users/:id/edit',                 // Sửa user
-      ROLES: '/admin/users/roles',                   // Quản lý phân quyền
-      PERMISSIONS: '/admin/users/permissions',       // Quản lý permissions
+    },
+
+    // Danh mục
+    CATEGORIES: {
+      SKILLS: {
+        LIST: '/admin/categories/skills',          
+        DETAIL: '/admin/categories/skills/:id',
+        EDIT: '/admin/categories/skills/edit/:id',
+        CREATE: '/admin/categories/skills/create',
+      },
+      SKILL_GROUPS: {
+        LIST: '/admin/categories/skill-groups',
+        DETAIL: '/admin/categories/skill-groups/:id',
+        EDIT: '/admin/categories/skill-groups/edit/:id',
+        CREATE: '/admin/categories/skill-groups/create',
+      },
+      JOB_ROLE_LEVELS: {
+        LIST: '/admin/categories/job-role-levels',    
+        DETAIL: '/admin/categories/job-role-levels/:id',
+        EDIT: '/admin/categories/job-role-levels/edit/:id',
+        CREATE: '/admin/categories/job-role-levels/create',
+      },
+      JOB_ROLES: {
+        LIST: '/admin/categories/job-roles',      
+        DETAIL: '/admin/categories/job-roles/:id',
+        EDIT: '/admin/categories/job-roles/edit/:id',
+        CREATE: '/admin/categories/job-roles/create',
+      },
+      LOCATIONS: {
+        LIST: '/admin/categories/locations',
+        DETAIL: '/admin/categories/locations/:id',
+        EDIT: '/admin/categories/locations/edit/:id',
+        CREATE: '/admin/categories/locations/create',
+      },
+      WORKING_STYLES: {
+        LIST: '/admin/categories/working-styles',
+        DETAIL: '/admin/categories/working-styles/:id',
+        EDIT: '/admin/categories/working-styles/edit/:id',
+        CREATE: '/admin/categories/working-styles/create',
+      },
+      MARKETS: {
+        LIST: '/admin/categories/markets',
+        DETAIL: '/admin/categories/markets/:id',
+        EDIT: '/admin/categories/markets/edit/:id',
+        CREATE: '/admin/categories/markets/create',
+      },     
+      INDUSTRIES: 
+      {
+        LIST: '/admin/categories/industries',
+        DETAIL: '/admin/categories/industries/:id',
+        EDIT: '/admin/categories/industries/edit/:id',
+        CREATE: '/admin/categories/industries/create',
+      },
+
+      OVERTIME_COEFFICIENTS: '/admin/categories/overtime-coefficients', // Hệ số OT
+      NUMBERING: '/admin/categories/numbering',     // Cấu hình số hóa đơn, hợp đồng
+    },
+
+    // Quản lý Templates
+    TEMPLATES: {
+      LIST: '/admin/templates',                      // Danh sách templates
+      CONTRACTS: '/admin/templates/contracts',       // Mẫu hợp đồng
+      INVOICES: '/admin/templates/invoices',         // Mẫu hóa đơn
+      REPORTS: '/admin/templates/reports',           // Mẫu báo cáo
     },
 
     // Quản lý Công ty
@@ -296,26 +357,6 @@ export const ROUTES = {
       NOTIFICATIONS: '/admin/settings/notifications', // Thông báo
       BACKUP: '/admin/settings/backup',              // Sao lưu
       LOGS: '/admin/settings/logs',                  // System logs  
-    },
-
-    // Danh mục
-    CATEGORIES: {
-      SKILLS: '/admin/categories/skills',            // Danh mục kỹ năng
-      SKILL_GROUPS: '/admin/categories/skill-groups', // Nhóm kỹ năng
-      POSITIONS: '/admin/categories/positions',      // Danh mục vị trí
-      WORKING_STYLES: '/admin/categories/working-styles',
-      MARKETS: '/admin/categories/markets',
-      INDUSTRIES: '/admin/categories/industries',
-      OVERTIME_COEFFICIENTS: '/admin/categories/overtime-coefficients', // Hệ số OT
-      NUMBERING: '/admin/categories/numbering',     // Cấu hình số hóa đơn, hợp đồng
-    },
-
-    // Quản lý Templates
-    TEMPLATES: {
-      LIST: '/admin/templates',                      // Danh sách templates
-      CONTRACTS: '/admin/templates/contracts',       // Mẫu hợp đồng
-      INVOICES: '/admin/templates/invoices',         // Mẫu hóa đơn
-      REPORTS: '/admin/templates/reports',           // Mẫu báo cáo
     },
 
     AUDIT: '/admin/audit',                        // Audit logs
