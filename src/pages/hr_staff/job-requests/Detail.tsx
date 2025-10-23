@@ -4,7 +4,7 @@ import Sidebar from "../../../components/common/Sidebar";
 import { jobRequestService } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
-import { jobPositionService, type JobPosition } from "../../../services/JobPosition";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { skillService, type Skill } from "../../../services/Skill";
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
@@ -13,7 +13,7 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 
 interface JobRequestDetail {
     id: number;
-    jobPositionId: number;
+    jobRoleLevelId: number;
     projectId: number;
     clientCompanyCVTemplateId: number;
     title: string;
@@ -60,7 +60,7 @@ export default function JobRequestDetailHRPage() {
                         jobRequestService.getById(Number(id)),
                         projectService.getAll() as Promise<Project[]>,
                         clientCompanyService.getAll() as Promise<ClientCompany[]>,
-                        jobPositionService.getAll() as Promise<JobPosition[]>,
+                        jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
                         skillService.getAll() as Promise<Skill[]>,
                     ]);
 
@@ -69,7 +69,7 @@ export default function JobRequestDetailHRPage() {
                     ? allCompanies.find((c) => c.id === project.clientCompanyId)
                     : null;
                 const position = allPositions.find(
-                    (pos) => pos.id === jobReqData.jobPositionId
+                    (pos) => pos.id === jobReqData.jobRoleLevelId
                 );
 
                 let templateName = "—";
@@ -137,7 +137,7 @@ export default function JobRequestDetailHRPage() {
         setUpdating(true);
         try {
             await jobRequestService.update(Number(id), {
-                jobPositionId: jobRequest.jobPositionId,
+                jobRoleLevelId: jobRequest.jobRoleLevelId,
                 projectId: jobRequest.projectId,
                 clientCompanyCVTemplateId: jobRequest.clientCompanyCVTemplateId,
                 title: jobRequest.title,

@@ -1,10 +1,21 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Building2, Mail, Phone, MapPin, User, Briefcase } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { 
+  Building2, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  User, 
+  Briefcase,
+  ArrowLeft,
+  Plus,
+  Save,
+  AlertCircle,
+  CheckCircle
+} from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { clientCompanyService, type ClientCompanyPayload } from "../../../services/ClientCompany";
-import { Button } from "../../../components/ui/button";
 
 export default function ClientCompanyCreatePage() {
   const navigate = useNavigate();
@@ -47,85 +58,227 @@ export default function ClientCompanyCreatePage() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
-
-      {/* Content */}
-      <div className="flex-1 min-h-screen bg-gradient-to-br from-primary-50/30 via-white to-secondary-50/30 p-8">
+      
+      <div className="flex-1 p-8">
         {/* Header */}
-        <div className="text-center mb-10 animate-fade-in-up">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
-            <Building2 className="text-white w-8 h-8" />
+        <div className="mb-8 animate-slide-up">
+          <div className="flex items-center gap-4 mb-6">
+            <Link 
+              to="/sales/clients"
+              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+            >
+              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+              <span className="font-medium">Quay lại danh sách</span>
+            </Link>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-700 to-secondary-600 bg-clip-text text-transparent">
-            Tạo Công Ty Khách Hàng Mới
-          </h1>
-          <p className="text-neutral-600 mt-2">
-            Nhập thông tin chi tiết để thêm công ty khách hàng vào hệ thống DevPool
-          </p>
+
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo công ty khách hàng mới</h1>
+              <p className="text-neutral-600 mb-4">
+                Nhập thông tin chi tiết để thêm công ty khách hàng vào hệ thống
+              </p>
+              
+              {/* Status Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
+                <Plus className="w-4 h-4 text-primary-600" />
+                <span className="text-sm font-medium text-primary-800">
+                  Tạo công ty khách hàng mới
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 max-w-3xl mx-auto border border-neutral-200/50 animate-fade-in-up space-y-6"
-        >
-          <InputField label="Tên công ty" name="name" value={form.name} onChange={handleChange} required icon={<Building2 />} />
-          <InputField label="Mã số thuế" name="taxCode" value={form.taxCode} onChange={handleChange} icon={<Briefcase />} />
-          <InputField label="Người liên hệ" name="contactPerson" value={form.contactPerson} onChange={handleChange} required icon={<User />} />
-          <InputField label="Chức vụ" name="position" value={form.position} onChange={handleChange} icon={<Briefcase />} />
-          <InputField label="Email" type="email" name="email" value={form.email} onChange={handleChange} required icon={<Mail />} />
-          <InputField label="Số điện thoại" name="phone" value={form.phone} onChange={handleChange} icon={<Phone />} />
-          <InputField label="Địa chỉ" name="address" value={form.address} onChange={handleChange} icon={<MapPin />} />
+        <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {/* Basic Information */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Building2 className="w-5 h-5 text-primary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin cơ bản</h2>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Tên công ty */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Tên công ty
+                </label>
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Nhập tên công ty..."
+                  required
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                />
+              </div>
 
-          {/* Messages */}
-          {error && <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
-          {success && <p className="text-green-600 bg-green-50 px-4 py-2 rounded-lg">✅ Tạo công ty thành công! Đang chuyển hướng...</p>}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Mã số thuế */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Mã số thuế
+                  </label>
+                  <input
+                    name="taxCode"
+                    value={form.taxCode}
+                    onChange={handleChange}
+                    placeholder="Nhập mã số thuế..."
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
 
-          <div className="pt-4 flex justify-end">
-            <Button
+                {/* Người liên hệ */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Người liên hệ
+                  </label>
+                  <input
+                    name="contactPerson"
+                    value={form.contactPerson}
+                    onChange={handleChange}
+                    placeholder="Nhập người liên hệ..."
+                    required
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-secondary-100 rounded-lg">
+                  <Mail className="w-5 h-5 text-secondary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin liên hệ</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Chức vụ */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Chức vụ
+                  </label>
+                  <input
+                    name="position"
+                    value={form.position}
+                    onChange={handleChange}
+                    placeholder="Nhập chức vụ..."
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Email
+                  </label>
+                  <input
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    type="email"
+                    placeholder="Nhập email..."
+                    required
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+
+                {/* Số điện thoại */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    Số điện thoại
+                  </label>
+                  <input
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    placeholder="Nhập số điện thoại..."
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+
+                {/* Địa chỉ */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Địa chỉ
+                  </label>
+                  <input
+                    name="address"
+                    value={form.address}
+                    onChange={handleChange}
+                    placeholder="Nhập địa chỉ..."
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notifications */}
+          {(error || success) && (
+            <div className="animate-fade-in">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-700 font-medium">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-700 font-medium">
+                    ✅ Tạo công ty thành công! Đang chuyển hướng...
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-6">
+            <Link
+              to="/sales/clients"
+              className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+              Hủy
+            </Link>
+            <button
               type="submit"
               disabled={loading}
-              className={`px-6 py-3 rounded-xl text-white font-semibold transition-all duration-300 shadow-glow 
-                ${loading
-                  ? "bg-primary-300 cursor-not-allowed"
-                  : "bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 hover:scale-[1.02]"}`}
+              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-                  <span>Đang lưu...</span>
-                </div>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Đang lưu...
+                </>
               ) : (
-                "Tạo công ty"
+                <>
+                  <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Tạo công ty
+                </>
               )}
-            </Button>
+            </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-// 🧩 Input Field Component
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  icon?: React.ReactNode;
-}
-function InputField({ label, icon, ...props }: InputFieldProps) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <div className="relative group">
-        {icon && (
-          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 group-focus-within:text-primary-500 transition-colors">
-            {icon}
-          </div>
-        )}
-        <input
-          {...props}
-          className="w-full pl-12 pr-4 py-3 border rounded-xl bg-white/60 border-neutral-300 
-          focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 
-          hover:shadow-soft transition-all duration-200"
-        />
       </div>
     </div>
   );

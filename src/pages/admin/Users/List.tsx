@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Search, Filter, Plus, Shield, ShieldCheck, ShieldX, MoreVertical, UserRound, RefreshCw, Lock, Unlock, Trash2, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, Filter, Plus, Shield, ShieldCheck, MoreVertical, UserRound, Trash2, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
 import { sidebarItems } from "../../../components/admin/SidebarItems";
 import Sidebar from "../../../components/common/Sidebar";
+import { userService, type User, type UserFilterModel, type PagedResult } from "../../../services/User";
 
 // ------ Types ------
 export type SystemRole =
   | "Admin"
   | "Manager"
-  | "Staff HR"
-  | "Staff Sales"
-  | "Staff Accountant"
-  | "Developer";
+  | "HR"
+  | "Sale"
+  | "Accountant"
+  | "Dev";
 
 type StatusFilter = "All" | "Active" | "Inactive";
 
@@ -18,114 +19,44 @@ type StatusFilter = "All" | "Active" | "Inactive";
 const ROLE_OPTIONS = [
   "Admin",
   "Manager",
-  "Staff HR",
-  "Staff Sales",
-  "Staff Accountant",
-  "Developer",
+  "HR",
+  "Sale",
+  "Accountant",
+  "Dev",
 ] as const satisfies readonly SystemRole[];
 
 
-type UserRow = {
-  id: string;
-  fullName: string;
-  avatar?: string;
-  email: string;
-  phone?: string;
-  roles: SystemRole[];
-  isActive: boolean;
-  mfaEnabled: boolean;
-  lastLoginAt?: string; // ISO string
-};
+// Use the User type from service instead of UserRow
+type UserRow = User;
 
-// ------ Mock API (replace with real endpoints) ------
-const mockUsers: UserRow[] = [
-  {
-    id: "u-001",
-    fullName: "Trần Minh Quân",
-    email: "quan.tran@devpool.com",
-    phone: "0901 222 333",
-    roles: ["Admin"],
-    isActive: true,
-    mfaEnabled: true,
-    lastLoginAt: new Date().toISOString(),
-  },
-  {
-    id: "u-002",
-    fullName: "Nguyễn Thu Hà",
-    email: "ha.nguyen@devpool.com",
-    phone: "0909 111 888",
-    roles: ["Manager"],
-    isActive: true,
-    mfaEnabled: true,
-    lastLoginAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-  {
-    id: "u-003",
-    fullName: "Lê Hải Nam",
-    email: "nam.le@devpool.com",
-    phone: "0934 567 890",
-    roles: ["Staff HR"],
-    isActive: true,
-    mfaEnabled: false,
-    lastLoginAt: new Date(Date.now() - 1000 * 60 * 60 * 28).toISOString(),
-  },
-  {
-    id: "u-004",
-    fullName: "Phạm Bảo Anh",
-    email: "anh.pham@devpool.com",
-    phone: "0978 555 666",
-    roles: ["Staff Sales"],
-    isActive: false,
-    mfaEnabled: false,
-    lastLoginAt: undefined,
-  },
-  {
-    id: "u-005",
-    fullName: "Đỗ Kiều My",
-    email: "my.do@devpool.com",
-    phone: "0967 101 202",
-    roles: ["Staff Accountant"],
-    isActive: true,
-    mfaEnabled: true,
-    lastLoginAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-  },
-  {
-    id: "u-006",
-    fullName: "Vũ Đức Long",
-    email: "long.vu@devpool.com",
-    phone: "0912 000 777",
-    roles: ["Developer"],
-    isActive: true,
-    mfaEnabled: true,
-    lastLoginAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  },
-];
+// Helper function to convert User to UserRow
+const convertToUserRow = (user: User): UserRow => user;
 
 // Helper
 const roleColors: Record<SystemRole, string> = {
   Admin: "bg-purple-100 text-purple-700",
   Manager: "bg-amber-100 text-amber-700",
-  "Staff HR": "bg-blue-100 text-blue-700",
-  "Staff Sales": "bg-sky-100 text-sky-700",
-  "Staff Accountant": "bg-teal-100 text-teal-700",
-  Developer: "bg-green-100 text-green-700",
+  "HR": "bg-blue-100 text-blue-700",
+  "Sale": "bg-sky-100 text-sky-700",
+  "Accountant": "bg-teal-100 text-teal-700",
+  Dev: "bg-green-100 text-green-700",
 };
 
-function formatRelative(iso?: string) {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins} phút trước`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} giờ trước`;
-  const days = Math.floor(hrs / 24);
-  return `${days} ngày trước`;
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('vi-VN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 // ------ Page Component ------
 export default function UserManagementPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"All" | SystemRole>("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
@@ -134,27 +65,56 @@ export default function UserManagementPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<null | UserRow>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PagedResult<User> | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
 
-  // Simulate API load
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setUsers(mockUsers);
+  // Fetch users from API
+  const fetchUsers = async (page = 1) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const filter: UserFilterModel = {
+        name: query || undefined,
+        role: roleFilter === "All" ? undefined : roleFilter,
+        isActive: statusFilter === "All" ? undefined : statusFilter === "Active",
+        excludeDeleted: true,
+        pageNumber: page,
+        pageSize: pageSize,
+      };
+
+      const result = await userService.getAll(filter);
+      setPagination(result);
+      setUsers(result.items.map(convertToUserRow));
+    } catch (err: any) {
+      console.error("❌ Lỗi khi tải danh sách người dùng:", err);
+      setError(err.message || "Không thể tải danh sách người dùng");
+    } finally {
       setLoading(false);
-    }, 600);
-    return () => clearTimeout(t);
-  }, []);
+    }
+  };
 
-  const filtered = useMemo(() => {
-    return users.filter((u) => {
-      const matchesQ = `${u.fullName} ${u.email} ${u.phone ?? ""}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
-      const matchesRole = roleFilter === "All" ? true : u.roles.includes(roleFilter);
-      const matchesStatus =
-        statusFilter === "All" ? true : statusFilter === "Active" ? u.isActive : !u.isActive;
-      return matchesQ && matchesRole && matchesStatus;
-    });
-  }, [users, query, roleFilter, statusFilter]);
+  // Load users on component mount and when filters change
+  useEffect(() => {
+    fetchUsers(currentPage);
+  }, [query, roleFilter, statusFilter, currentPage]);
+
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      } else {
+        fetchUsers(1);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
+
+  // Since filtering is now done on the server, we just use the users directly
+  const filtered = users;
 
   function toggleAll(v: boolean) {
     const map: Record<string, boolean> = {};
@@ -166,20 +126,26 @@ export default function UserManagementPage() {
     setSelected((s) => ({ ...s, [id]: !s[id] }));
   }
 
-  function resetMFA(ids: string[]) {
-    // TODO: call POST /users/:id/reset-mfa
-    alert(`Đã gửi yêu cầu reset MFA cho: ${ids.join(", ")}`);
-  }
 
-  function setActive(ids: string[], active: boolean) {
-    // TODO: PATCH /users/bulk-status
-    setUsers((prev) => prev.map((u) => (ids.includes(u.id) ? { ...u, isActive: active } : u)));
-  }
 
-  function removeUsers(ids: string[]) {
-    // TODO: DELETE /users/bulk
-    setUsers((prev) => prev.filter((u) => !ids.includes(u.id)));
-    setSelected({});
+  async function removeUsers(ids: string[]) {
+    try {
+      if (!confirm(`Bạn có chắc muốn xóa ${ids.length} người dùng?`)) {
+        return;
+      }
+
+      // Delete each user individually
+      for (const id of ids) {
+        await userService.delete(id);
+      }
+      
+      // Refresh the user list
+      await fetchUsers(currentPage);
+      setSelected({});
+    } catch (err: any) {
+      console.error("❌ Lỗi khi xóa người dùng:", err);
+      alert("Không thể xóa người dùng. Vui lòng thử lại.");
+    }
   }
   // Guards
   function isSystemRole(v: string): v is SystemRole {
@@ -276,24 +242,6 @@ export default function UserManagementPage() {
               <label className="text-sm text-gray-600">Tác vụ hàng loạt</label>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setActive(Object.keys(selected).filter((k) => selected[k]), true)}
-                  className="px-3 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-                >
-                  <Unlock className="w-4 h-4 inline mr-1" /> Mở khóa
-                </button>
-                <button
-                  onClick={() => setActive(Object.keys(selected).filter((k) => selected[k]), false)}
-                  className="px-3 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-                >
-                  <Lock className="w-4 h-4 inline mr-1" /> Vô hiệu hóa
-                </button>
-                <button
-                  onClick={() => resetMFA(Object.keys(selected).filter((k) => selected[k]))}
-                  className="px-3 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-                >
-                  <RefreshCw className="w-4 h-4 inline mr-1" /> Reset MFA
-                </button>
-                <button
                   onClick={() => removeUsers(Object.keys(selected).filter((k) => selected[k]))}
                   className="px-3 py-2 text-sm rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                 >
@@ -301,6 +249,20 @@ export default function UserManagementPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+            <XCircle className="w-5 h-5 text-red-600" />
+            <p className="text-red-700 font-medium">{error}</p>
+            <button
+              onClick={() => fetchUsers(currentPage)}
+              className="ml-auto px-3 py-1 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Thử lại
+            </button>
           </div>
         )}
 
@@ -318,10 +280,10 @@ export default function UserManagementPage() {
                     />
                   </th>
                   <th className="px-4 py-3">Người dùng</th>
+                  <th className="px-4 py-3">Số điện thoại</th>
                   <th className="px-4 py-3">Vai trò</th>
-                  <th className="px-4 py-3">MFA</th>
                   <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-4 py-3">Đăng nhập gần nhất</th>
+                  <th className="px-4 py-3">Ngày tạo</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -329,7 +291,10 @@ export default function UserManagementPage() {
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-gray-500">
-                      Đang tải người dùng...
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                        Đang tải người dùng...
+                      </div>
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
@@ -356,34 +321,32 @@ export default function UserManagementPage() {
                           </div>
                           <div>
                             <div className="font-medium text-gray-900">{u.fullName}</div>
-                            <div className="flex gap-4 text-sm text-gray-600">
+                            <div className="text-sm text-gray-600">
                               <span className="inline-flex items-center gap-1"><Mail className="w-4 h-4" />{u.email}</span>
-                              {u.phone && (
-                                <span className="inline-flex items-center gap-1"><Phone className="w-4 h-4" />{u.phone}</span>
-                              )}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
+                        <div className="text-sm text-gray-600">
+                          {u.phoneNumber ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Phone className="w-4 h-4" />
+                              {u.phoneNumber}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {u.roles.map((r) => (
-                            <span key={r} className={`px-2 py-1 rounded-lg text-xs font-medium ${roleColors[r]}`}>
+                            <span key={r} className={`px-2 py-1 rounded-lg text-xs font-medium ${roleColors[r as SystemRole] || 'bg-gray-100 text-gray-700'}`}>
                               {r}
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {u.mfaEnabled ? (
-                          <span className="inline-flex items-center gap-1 text-green-700 bg-green-100 px-2 py-1 rounded-lg text-xs font-medium">
-                            <ShieldCheck className="w-4 h-4" /> Bật
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2 py-1 rounded-lg text-xs font-medium">
-                            <ShieldX className="w-4 h-4" /> Tắt
-                          </span>
-                        )}
                       </td>
                       <td className="px-4 py-3">
                         {u.isActive ? (
@@ -396,7 +359,7 @@ export default function UserManagementPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{formatRelative(u.lastLoginAt)}</td>
+                      <td className="px-4 py-3 text-gray-600">{formatDate(u.createdAt)}</td>
                       <td className="px-4 py-3 text-right relative">
                         <button
                           className="p-2 rounded-lg hover:bg-gray-100"
@@ -418,32 +381,6 @@ export default function UserManagementPage() {
                             </button>
                             <button
                               onClick={() => {
-                                setActive([u.id], !u.isActive);
-                                setMenuOpen(null);
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2"
-                            >
-                              {u.isActive ? (
-                                <>
-                                  <Lock className="w-4 h-4" /> Vô hiệu hóa
-                                </>
-                              ) : (
-                                <>
-                                  <Unlock className="w-4 h-4" /> Mở khóa
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => {
-                                resetMFA([u.id]);
-                                setMenuOpen(null);
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2"
-                            >
-                              <RefreshCw className="w-4 h-4" /> Reset MFA/SSO
-                            </button>
-                            <button
-                              onClick={() => {
                                 removeUsers([u.id]);
                                 setMenuOpen(null);
                               }}
@@ -462,24 +399,68 @@ export default function UserManagementPage() {
           </div>
         </div>
 
+        {/* Pagination */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Hiển thị {((pagination.pageNumber - 1) * pagination.pageSize) + 1} - {Math.min(pagination.pageNumber * pagination.pageSize, pagination.totalCount)} trong {pagination.totalCount} người dùng
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={!pagination.hasPreviousPage}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Đầu
+              </button>
+              <button
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={!pagination.hasPreviousPage}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Trước
+              </button>
+              <span className="px-3 py-2 text-sm text-gray-600">
+                Trang {pagination.pageNumber} / {pagination.totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={!pagination.hasNextPage}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Sau
+              </button>
+              <button
+                onClick={() => setCurrentPage(pagination.totalPages)}
+                disabled={!pagination.hasNextPage}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Cuối
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Create Modal */}
         {showCreate && (
           <UserModal
             title="Thêm người dùng"
             onClose={() => setShowCreate(false)}
-            onSubmit={(payload) => {
-              const newUser: UserRow = {
-                id: `u-${Math.random().toString(36).slice(2, 8)}`,
-                fullName: payload.fullName,
-                email: payload.email,
-                phone: payload.phone,
-                roles: payload.roles,
-                isActive: true,
-                mfaEnabled: false,
-                lastLoginAt: undefined,
-              };
-              setUsers((u) => [newUser, ...u]);
-              setShowCreate(false);
+            onSubmit={async (payload) => {
+              try {
+                await userService.create({
+                  email: payload.email,
+                  fullName: payload.fullName,
+                  phoneNumber: payload.phone,
+                  password: "TempPassword123!", // This should be generated or set by admin
+                  role: payload.roles[0] || "Dev", // Take first role for now
+                });
+                await fetchUsers(currentPage);
+                setShowCreate(false);
+              } catch (err: any) {
+                console.error("❌ Lỗi khi tạo người dùng:", err);
+                alert(err.message || "Không thể tạo người dùng. Vui lòng thử lại.");
+              }
             }}
           />
         )}
@@ -490,11 +471,26 @@ export default function UserManagementPage() {
             title="Cập nhật người dùng"
             initial={showEdit}
             onClose={() => setShowEdit(null)}
-            onSubmit={(payload) => {
-              setUsers((prev) =>
-                prev.map((u) => (u.id === showEdit.id ? { ...u, ...payload } : u))
-              );
-              setShowEdit(null);
+            onSubmit={async (payload) => {
+              try {
+                await userService.update(showEdit.id, {
+                  fullName: payload.fullName,
+                  phoneNumber: payload.phone,
+                });
+                
+                // Update role if changed
+                if (payload.roles[0] !== showEdit.roles[0]) {
+                  await userService.updateRole(showEdit.id, {
+                    role: payload.roles[0] || "Dev",
+                  });
+                }
+                
+                await fetchUsers(currentPage);
+                setShowEdit(null);
+              } catch (err: any) {
+                console.error("❌ Lỗi khi cập nhật người dùng:", err);
+                alert(err.message || "Không thể cập nhật người dùng. Vui lòng thử lại.");
+              }
             }}
           />
         )}
@@ -522,7 +518,7 @@ function UserModal({
 }) {
   const [fullName, setFullName] = useState(initial?.fullName ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
-  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [phone, setPhone] = useState(initial?.phoneNumber ?? "");
   const [roles, setRoles] = useState<SystemRole[]>(
     (initial?.roles as SystemRole[]) ?? []
   );
@@ -581,10 +577,10 @@ function UserModal({
                 [
                   "Admin",
                   "Manager",
-                  "Staff HR",
-                  "Staff Sales",
-                  "Staff Accountant",
-                  "Developer",
+                  "HR",
+                  "Sale",
+                  "Accountant",
+                  "Dev",
                 ] as SystemRole[]
               ).map((r) => (
                 <button

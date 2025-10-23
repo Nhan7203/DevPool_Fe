@@ -1,13 +1,31 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { jobRequestService } from "../../../services/JobRequest";
+import { jobRequestService, WorkingMode, JobRequestStatus } from "../../../services/JobRequest";
 import { skillService, type Skill } from "../../../services/Skill";
 import { projectService, type Project } from "../../../services/Project";
-import { jobPositionService, type JobPosition } from "../../../services/JobPosition";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { type ClientCompanyTemplate, clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
-import { ClipboardList } from "lucide-react";
+import { locationService, type Location } from "../../../services/location";
+import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
+import { 
+  ArrowLeft, 
+  Plus, 
+  Save, 
+  Briefcase, 
+  Users, 
+  DollarSign, 
+  Target, 
+  FileText, 
+  CheckSquare, 
+  Building2, 
+  Calendar, 
+  AlertCircle, 
+  CheckCircle,
+  X
+} from "lucide-react";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
@@ -16,35 +34,47 @@ export default function JobRequestCreatePage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     projectId: "",
-    jobPositionId: "",
+    jobRoleLevelId: "",
     clientCompanyCVTemplateId: 0,
+    applyProcessTemplateId: "",
     title: "",
     description: "",
     requirements: "",
-    level: 0,
     quantity: 1,
     budgetPerMonth: "",
-    status: 0,
+    status: JobRequestStatus.Pending as number,
+    workingMode: WorkingMode.None as number,
+    locationId: "",
     skillIds: [] as number[],
   });
 
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
+  const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [selectedJobRoleId, setSelectedJobRoleId] = useState<number>(0);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [skills, projectsData, jobPositionsData] = await Promise.all([
+        const [skills, projectsData, jobRoleLevelsData, jobRolesData, locs, apts] = await Promise.all([
           skillService.getAll(),
           projectService.getAll(),
-          jobPositionService.getAll(),
+          jobRoleLevelService.getAll(),
+          jobRoleService.getAll(),
+          locationService.getAll(),
+          applyProcessTemplateService.getAll(),
         ]);
         setAllSkills(skills);
         setProjects(projectsData);
-        setJobPositions(jobPositionsData);
+        setJobRoleLevels(jobRoleLevelsData);
+        setJobRoles(jobRolesData);
+        setLocations(locs);
+        setApplyTemplates(apts);
       } catch (error) {
         console.error("❌ Error loading data", error);
       }
@@ -69,6 +99,10 @@ export default function JobRequestCreatePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
+    if (name === "jobRoleLevelId") {
+      const lvl = jobRoleLevels.find(j => j.id.toString() === value);
+      if (lvl) setSelectedJobRoleId(lvl.jobRoleId);
+    }
   };
 
   const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -94,15 +128,17 @@ export default function JobRequestCreatePage() {
     try {
       const payload = {
         projectId: Number(form.projectId),
-        jobPositionId: Number(form.jobPositionId),
+        jobRoleLevelId: Number(form.jobRoleLevelId),
+        applyProcessTemplateId: form.applyProcessTemplateId ? Number(form.applyProcessTemplateId) : undefined,
         clientCompanyCVTemplateId: Number(form.clientCompanyCVTemplateId),
         title: form.title,
         description: form.description,
         requirements: form.requirements,
-        level: Number(form.level),
         quantity: Number(form.quantity),
         budgetPerMonth: form.budgetPerMonth ? Number(form.budgetPerMonth) : undefined,
-        status: Number(form.status),
+        locationId: form.locationId ? Number(form.locationId) : undefined,
+        workingMode: Number(form.workingMode) as WorkingMode,
+        status: Number(form.status) as JobRequestStatus,
         skillIds: form.skillIds,
       };
 
@@ -121,244 +157,436 @@ export default function JobRequestCreatePage() {
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
 
-      <div className="flex-1 min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/30 to-secondary-50/30">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="text-center mb-8 animate-fade-in-up">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
-              <ClipboardList className="text-white w-8 h-8" />
-            </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent">
-              Tạo Yêu Cầu Tuyển Dụng Mới
-            </h1>
-            <p className="text-neutral-600 mt-2">
-              Điền thông tin chi tiết để tạo yêu cầu tuyển dụng cho khách hàng
-            </p>
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-8 animate-slide-up">
+          <div className="flex items-center gap-4 mb-6">
+            <Link 
+              to="/sales/job-requests"
+              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+            >
+              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+              <span className="font-medium">Quay lại danh sách</span>
+            </Link>
           </div>
 
-          {/* Form Container */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50 animate-fade-in-up">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Grid: Dự án - Vị trí - Level - Số lượng */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <SelectField
-                  label="Dự án"
-                  name="projectId"
-                  value={form.projectId}
-                  onChange={handleProjectChange}
-                  options={[{ value: "", label: "-- Chọn dự án --" }, ...projects.map(p => ({ value: p.id.toString(), label: p.name }))]}
-                  required
-                />
-                <SelectField
-                  label="Vị trí tuyển dụng"
-                  name="jobPositionId"
-                  value={form.jobPositionId}
-                  onChange={handleChange}
-                  options={[{ value: "", label: "-- Chọn vị trí --" }, ...jobPositions.map(p => ({ value: p.id.toString(), label: p.name }))]}
-                  required
-                />
-                <SelectField
-                  label="Cấp độ"
-                  name="level"
-                  value={form.level.toString()}
-                  onChange={handleChange}
-                  options={[
-                    { value: "0", label: "Junior" },
-                    { value: "1", label: "Middle" },
-                    { value: "2", label: "Senior" },
-                    { value: "3", label: "Lead" },
-                  ]}
-                  required
-                />
-                <InputField
-                  label="Số lượng cần tuyển"
-                  name="quantity"
-                  type="number"
-                  min={1}
-                  value={form.quantity}
-                  onChange={handleChange}
-                  required
-                />
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo yêu cầu tuyển dụng mới</h1>
+              <p className="text-neutral-600 mb-4">
+                Nhập thông tin chi tiết để tạo yêu cầu tuyển dụng cho khách hàng
+              </p>
+              
+              {/* Status Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
+                <Plus className="w-4 h-4 text-primary-600" />
+                <span className="text-sm font-medium text-primary-800">
+                  Tạo yêu cầu tuyển dụng mới
+                </span>
               </div>
-
-              {/* Grid: Ngân sách + Template */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InputField
-                  label="Ngân sách dự kiến (VNĐ/tháng)"
-                  name="budgetPerMonth"
-                  type="number"
-                  value={form.budgetPerMonth}
-                  onChange={handleChange}
-                  required
-                />
-                {form.projectId && (
-                  <SelectField
-                    label="Mẫu CV của khách hàng"
-                    name="clientCompanyCVTemplateId"
-                    value={form.clientCompanyCVTemplateId.toString()}
-                    onChange={handleChange}
-                    required
-                    options={[
-                      { value: "0", label: clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --" },
-                      ...clientTemplates.map(t => ({ value: t.templateId.toString(), label: t.templateName })),
-                    ]}
-                  />
-                )}
-              </div>
-
-              {/* Title */}
-              <InputField
-                label="Tiêu đề yêu cầu"
-                name="title"
-                value={form.title}
-                onChange={handleChange}
-                placeholder="VD: Senior Backend Developer cho dự án Fintech"
-                required
-              />
-
-              {/* Description & Requirements */}
-              <TextareaField
-                label="Mô tả công việc"
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                rows={3}
-              />
-              <TextareaField
-                label="Yêu cầu ứng viên"
-                name="requirements"
-                value={form.requirements}
-                onChange={handleChange}
-                rows={3}
-              />
-
-              {/* Skills */}
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2">Kỹ năng yêu cầu</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 border border-gray-200 rounded-xl p-3 max-h-48 overflow-y-auto">
-                  {allSkills.map(skill => (
-                    <label
-                      key={skill.id}
-                      className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition ${form.skillIds.includes(skill.id)
-                          ? "bg-primary-50 border border-primary-400"
-                          : "hover:bg-gray-50"
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        value={skill.id}
-                        checked={form.skillIds.includes(skill.id)}
-                        onChange={(e) => {
-                          const value = Number(e.target.value);
-                          setForm(prev => ({
-                            ...prev,
-                            skillIds: e.target.checked
-                              ? [...prev.skillIds, value]
-                              : prev.skillIds.filter(id => id !== value),
-                          }));
-                        }}
-                        className="accent-primary-500"
-                      />
-                      <span className="text-gray-800">{skill.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Status */}
-              <SelectField
-                label="Trạng thái"
-                name="status"
-                value={form.status.toString()}
-                onChange={handleChange}
-                options={[
-                  { value: "0", label: "Chưa duyệt" },
-                  { value: "1", label: "Đã duyệt" },
-                  { value: "2", label: "Đã đóng" },
-                ]}
-                disabled
-              />
-
-              {/* Notifications */}
-              {error && <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
-              {success && <p className="text-green-600 bg-green-50 px-4 py-2 rounded-lg">✅ Tạo yêu cầu thành công! Đang chuyển hướng...</p>}
-
-              {/* Submit */}
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-3.5 px-6 rounded-xl hover:from-primary-700 hover:to-secondary-700 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-lg transform hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  {loading ? "Đang lưu..." : "Tạo yêu cầu"}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {/* Basic Information */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-primary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin cơ bản</h2>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Tiêu đề */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tiêu đề yêu cầu
+                </label>
+                <input
+                  name="title"
+                  value={form.title}
+                  onChange={handleChange}
+                  placeholder="VD: Senior Backend Developer cho dự án Fintech"
+                  required
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Dự án */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Dự án
+                  </label>
+                  <select
+                    name="projectId"
+                    value={form.projectId}
+                    onChange={handleProjectChange}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
+                  >
+                    <option value="">-- Chọn dự án --</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Vị trí tuyển dụng (Job Role Level) */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Vị trí tuyển dụng
+                  </label>
+                  <select
+                    name="jobRoleLevelId"
+                    value={form.jobRoleLevelId}
+                    onChange={handleChange}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
+                  >
+                    <option value="">-- Chọn vị trí --</option>
+                    {jobRoleLevels.map(p => (
+                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Job Role (chỉ hiển thị khi đã chọn Job Role Level) */}
+                {form.jobRoleLevelId && (
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Kiểu vị trí tuyển dụng
+                    </label>
+                    <select
+                      name="jobRoleId"
+                      value={selectedJobRoleId ? selectedJobRoleId.toString() : ""}
+                      onChange={(e) => setSelectedJobRoleId(e.target.value ? Number(e.target.value) : 0)}
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="">-- Chọn Job Role --</option>
+                      {jobRoles.map(r => (
+                        <option key={r.id} value={r.id.toString()}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Project Details */}
+          {form.projectId && (
+            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+              <div className="p-6 border-b border-neutral-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-secondary-100 rounded-lg">
+                    <Building2 className="w-5 h-5 text-secondary-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Chi tiết dự án</h2>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Mẫu CV khách hàng */}
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Mẫu CV khách hàng
+                    </label>
+                    <select
+                      name="clientCompanyCVTemplateId"
+                      value={form.clientCompanyCVTemplateId.toString()}
+                      onChange={handleChange}
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      required
+                    >
+                      <option value="0">
+                        {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
+                      </option>
+                      {clientTemplates.map(t => (
+                        <option key={t.templateId} value={t.templateId.toString()}>{t.templateName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Chế độ làm việc */}
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      Chế độ làm việc
+                    </label>
+                    <select
+                      name="workingMode"
+                      value={form.workingMode}
+                      onChange={handleChange}
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      required
+                    >
+                      <option value={WorkingMode.None}>Không xác định</option>
+                      <option value={WorkingMode.Onsite}>Onsite</option>
+                      <option value={WorkingMode.Remote}>Remote</option>
+                      <option value={WorkingMode.Hybrid}>Hybrid</option>
+                      <option value={WorkingMode.Flexible}>Linh hoạt</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Job Details */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-accent-100 rounded-lg">
+                  <DollarSign className="w-5 h-5 text-accent-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Chi tiết công việc</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Số lượng */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Số lượng
+                  </label>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={form.quantity}
+                    onChange={handleChange}
+                    min={1}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
+                  />
+                </div>
+
+                {/* Địa điểm */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Địa điểm
+                  </label>
+                  <select
+                    name="locationId"
+                    value={form.locationId}
+                    onChange={handleChange}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">-- Chọn địa điểm --</option>
+                    {locations.map(l => (
+                      <option key={l.id} value={l.id.toString()}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Quy trình Apply */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Quy trình Apply
+                  </label>
+                  <select
+                    name="applyProcessTemplateId"
+                    value={form.applyProcessTemplateId}
+                    onChange={handleChange}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">-- Chọn quy trình --</option>
+                    {applyTemplates.map(t => (
+                      <option key={t.id} value={t.id.toString()}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Ngân sách */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Ngân sách/tháng (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    name="budgetPerMonth"
+                    value={form.budgetPerMonth}
+                    onChange={handleChange}
+                    placeholder="Nhập ngân sách..."
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
+                  />
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {/* Description & Requirements */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Mô tả công việc */}
+            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+              <div className="p-6 border-b border-neutral-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-secondary-100 rounded-lg">
+                    <FileText className="w-5 h-5 text-secondary-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Mô tả công việc</h3>
+                </div>
+              </div>
+              <div className="p-6">
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  rows={6}
+                  placeholder="Nhập mô tả chi tiết về công việc..."
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Yêu cầu ứng viên */}
+            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+              <div className="p-6 border-b border-neutral-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-accent-100 rounded-lg">
+                    <Target className="w-5 h-5 text-accent-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
+                </div>
+              </div>
+              <div className="p-6">
+                <textarea
+                  name="requirements"
+                  value={form.requirements}
+                  onChange={handleChange}
+                  rows={6}
+                  placeholder="Nhập yêu cầu cụ thể cho ứng viên..."
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Skills Selection */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-warning-100 rounded-lg">
+                  <CheckSquare className="w-5 h-5 text-warning-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
+                <div className="ml-auto">
+                  <span className="text-sm text-neutral-500">
+                    Đã chọn: {form.skillIds.length} kỹ năng
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
+                {allSkills.map(skill => (
+                  <label
+                    key={skill.id}
+                    className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${
+                      form.skillIds.includes(skill.id)
+                        ? "bg-gradient-to-r from-primary-50 to-primary-100 border-primary-300 text-primary-800"
+                        : "bg-neutral-50 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      value={skill.id}
+                      checked={form.skillIds.includes(skill.id)}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setForm(prev => ({
+                          ...prev,
+                          skillIds: e.target.checked
+                            ? [...prev.skillIds, value]
+                            : prev.skillIds.filter(id => id !== value),
+                        }));
+                      }}
+                      className="w-4 h-4 text-primary-600 bg-white border-neutral-300 rounded focus:ring-primary-500 focus:ring-2"
+                    />
+                    <span className="text-sm font-medium group-hover:scale-105 transition-transform duration-300">
+                      {skill.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {allSkills.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckSquare className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Không có kỹ năng nào</p>
+                  <p className="text-neutral-400 text-sm mt-1">Liên hệ admin để thêm kỹ năng mới</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Notifications */}
+          {(error || success) && (
+            <div className="animate-fade-in">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-700 font-medium">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-700 font-medium">
+                    ✅ Tạo yêu cầu thành công! Đang chuyển hướng...
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-6">
+            <Link
+              to="/sales/job-requests"
+              className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
+            >
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+              Hủy
+            </Link>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Tạo yêu cầu
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-// ====== COMPONENTS NHỎ ======
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-}
-function InputField({ label, ...props }: InputFieldProps) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <input
-        {...props}
-        className="w-full border border-neutral-300 rounded-xl px-4 py-3.5 bg-white/50 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 hover:shadow-soft transition-all"
-      />
-    </div>
-  );
-}
-
-interface SelectFieldProps {
-  label: string;
-  name: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  options: { value: string; label: string }[];
-  required?: boolean;
-  disabled?: boolean;
-}
-function SelectField({ label, name, value, onChange, options, required, disabled }: SelectFieldProps) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        required={required}
-        disabled={disabled}
-        className="w-full border border-neutral-300 rounded-xl px-4 py-3.5 bg-white/50 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 hover:shadow-soft transition-all"
-      >
-        {options.map(opt => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-interface TextareaFieldProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label: string;
-}
-function TextareaField({ label, ...props }: TextareaFieldProps) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <textarea
-        {...props}
-        className="w-full border border-neutral-300 rounded-xl px-4 py-3.5 bg-white/50 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 hover:shadow-soft transition-all"
-      />
-    </div>
-  );
-}

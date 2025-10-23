@@ -6,24 +6,22 @@ export interface Skill {
   skillGroupId: number;
   name: string;
   description?: string;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
-export interface SkillPayload {
+export interface SkillCreateModel {
   skillGroupId: number;
   name: string;
   description?: string;
 }
 
-export interface SkillFilter {
-  skillGroupId?: number;
+export interface SkillFilterModel {
   name?: string;
+  skillGroupId?: number;
   excludeDeleted?: boolean;
 }
 
 export const skillService = {
-  async getAll(filter?: SkillFilter) {
+  async getAll(filter?: SkillFilterModel) {
     try {
       const params = new URLSearchParams();
 
@@ -56,7 +54,7 @@ export const skillService = {
     }
   },
 
-  async create(payload: SkillPayload) {
+  async create(payload: SkillCreateModel) {
     try {
       const response = await axios.post("/skill", payload);
       return response.data;
@@ -67,7 +65,7 @@ export const skillService = {
     }
   },
 
-  async update(id: number, payload: Partial<SkillPayload>) {
+  async update(id: number, payload: Partial<SkillCreateModel>) {
     try {
       const response = await axios.put(`/skill/${id}`, payload);
       return response.data;

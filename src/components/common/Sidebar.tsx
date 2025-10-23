@@ -34,7 +34,7 @@ export default function Sidebar({ items, title }: SidebarProps) {
   };
 
   return (
-    <div className="w-64 bg-white shadow-sm sticky top-16 overflow-y-auto">
+    <div className="w-64 bg-white shadow-sm sticky top-0 overflow-y-auto z-10 flex-shrink-0">
       <div className="p-6">
         <h2 className="font-semibold text-lg text-gray-900 mb-6">{title}</h2>
         <nav className="space-y-2">

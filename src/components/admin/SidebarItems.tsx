@@ -1,4 +1,4 @@
-import { BarChart3, Users } from "lucide-react";
+import { BarChart3, Grid, Users } from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -13,18 +13,21 @@ export const sidebarItems = [
     subItems: [
       { label: 'Danh sách người dùng', href: '/admin/users' },
       { label: 'Tạo tài khoản', href: '/admin/users/create-account' },
-      { label: 'Quản lý phân quyền', href: '/admin/users/roles' },
-      { label: 'Quản lý permissions', href: '/admin/users/permissions' },
     ]
   },
   {
-    label: 'Quản Lý Công Ty',
-    href: '/admin/companies',
-    icon: Users,
+    label: 'Danh Mục',
+    href: '/admin/categories',
+    icon: Grid,
     subItems: [
-      { label: 'Danh sách công ty', href: '/admin/companies' },
-      { label: 'Công ty khách hàng', href: '/admin/companies/clients' },
-
+      { label: 'Kỹ năng', href: '/admin/categories/skills' },
+      { label: 'Nhóm kỹ năng', href: '/admin/categories/skill-groups' },
+      { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },
+      { label: 'Vị trí tuyển dụng', href: '/admin/categories/job-role-levels' },
+      { label: 'Loại vị trí tuyển dụng', href: '/admin/categories/job-roles' },
+      { label: 'Khu vực làm việc', href: '/admin/categories/locations' },
+      { label: 'Thị trường', href: '/admin/categories/markets' },
+      { label: 'Lĩnh vực', href: '/admin/categories/industries' },
     ]
   },
 ];

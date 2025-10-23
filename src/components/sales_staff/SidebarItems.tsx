@@ -1,13 +1,9 @@
 import { 
   BarChart3,
   Users, 
-  Briefcase, 
   Layers, 
-  Grid,
   FileText,
   Building,
-  Globe,
-  List, 
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -41,42 +37,6 @@ export const sidebarItems = [
     subItems: [
       { label: 'Danh Sách dự án', href: '/sales/projects' },
       { label: 'Tạo dự án', href: '/sales/projects/create' },
-    ]
-  },
-  {
-    label: 'Quản Lý Vị Trí TD',
-    href: '/sales/job-positions',
-    icon: Grid, // vị trí tuyển dụng => nhân sự
-    subItems: [
-      { label: 'Danh sách vị trí TD', href: '/sales/job-positions' },
-      { label: 'Tạo vị trí TD', href: '/sales/job-positions/create' },
-    ]
-  },
-  {
-    label: 'Quản Lý Kiểu Vị Trí',
-    href: '/sales/position-type',
-    icon: List, // kiểu vị trí => biểu tượng lưới
-    subItems: [
-      { label: 'Danh sách Kiểu Vị Trí', href: '/sales/position-type' },
-      { label: 'Tạo kiểu vị trí', href: '/sales/position-type/create' },
-    ]
-  },
-  {
-    label: 'Quản Lý Thị Trường',
-    href: '/sales/markets',
-    icon: Globe, // thị trường, địa điểm
-    subItems: [
-      { label: 'Danh sách thị trường', href: '/sales/markets' },
-      { label: 'Tạo thị trường', href: '/sales/markets/create' },
-    ]
-  },
-  {
-    label: 'Quản Lý Lĩnh Vực',
-    href: '/sales/industries',
-    icon: Briefcase,
-    subItems: [
-      { label: 'Danh sách lĩnh vực', href: '/sales/industries' },
-      { label: 'Tạo lĩnh vực', href: '/sales/industries/create' },
     ]
   },
   {

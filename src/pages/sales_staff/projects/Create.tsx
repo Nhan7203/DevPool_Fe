@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Briefcase,
   CalendarDays,
@@ -8,6 +8,11 @@ import {
   Globe2,
   Factory,
   CheckCircle,
+  ArrowLeft,
+  Plus,
+  Save,
+  AlertCircle,
+  X
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
@@ -21,6 +26,7 @@ export default function ProjectCreatePage() {
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const [form, setForm] = useState<Partial<ProjectPayload>>({
     name: "",
@@ -75,6 +81,7 @@ export default function ProjectCreatePage() {
     e.preventDefault();
     setFormLoading(true);
     setError("");
+    setSuccess(false);
 
     if (!form.name?.trim()) {
       setError("Tên dự án không được để trống!");
@@ -95,8 +102,8 @@ export default function ProjectCreatePage() {
       };
 
       await projectService.create(payload);
-      alert("✅ Tạo dự án thành công!");
-      navigate("/sales/projects");
+      setSuccess(true);
+      setTimeout(() => navigate("/sales/projects"), 1500);
     } catch (err) {
       console.error("❌ Lỗi tạo dự án:", err);
       setError("Không thể tạo dự án. Vui lòng thử lại.");
@@ -107,8 +114,14 @@ export default function ProjectCreatePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen text-gray-500">
-        Đang tải dữ liệu...
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar items={sidebarItems} title="Sales Staff" />
+        <div className="flex-1 flex justify-center items-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Đang tải dữ liệu...</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -117,211 +130,265 @@ export default function ProjectCreatePage() {
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
 
-      <div className="flex-1 min-h-screen bg-gradient-to-br from-primary-50/40 via-neutral-50 to-secondary-50/30">
-        <div className="max-w-4xl mx-auto px-4 py-10">
+      <div className="flex-1 p-8">
           {/* Header */}
-          <div className="text-center mb-10 animate-fade-in-up">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
-              <Briefcase className="text-white w-8 h-8" />
+        <div className="mb-8 animate-slide-up">
+          <div className="flex items-center gap-4 mb-6">
+            <Link 
+              to="/sales/projects"
+              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+            >
+              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+              <span className="font-medium">Quay lại danh sách</span>
+            </Link>
+          </div>
+
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo dự án mới</h1>
+              <p className="text-neutral-600 mb-4">
+                Thêm thông tin dự án khách hàng vào hệ thống DevPool
+              </p>
+              
+              {/* Status Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
+                <Plus className="w-4 h-4 text-primary-600" />
+                <span className="text-sm font-medium text-primary-800">
+                  Tạo dự án mới
+                </span>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent">
-              Tạo Dự Án Mới
-            </h1>
-            <p className="text-neutral-600 mt-2">Thêm thông tin dự án khách hàng</p>
+          </div>
           </div>
 
           {/* Form */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50 animate-fade-in-up">
-            {error && (
-              <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg mb-4">{error}</p>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {/* Basic Information */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-primary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin dự án</h2>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
               {/* Tên dự án */}
-              <InputField
-                icon={<FileText />}
-                label="Tên dự án"
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tên dự án
+                </label>
+                <input
+                  type="text"
                 name="name"
                 value={form.name}
                 onChange={handleChange}
+                  required
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                 placeholder="VD: Hệ thống quản lý nhân sự"
-                required
               />
+              </div>
 
               {/* Mô tả */}
-              <TextareaField
-                label="Mô tả dự án"
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Mô tả dự án
+                </label>
+                <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
+                  rows={3}
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 placeholder="Nhập mô tả ngắn gọn về dự án..."
               />
+              </div>
 
               {/* Ngày bắt đầu & kết thúc */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InputField
-                  icon={<CalendarDays />}
-                  label="Ngày bắt đầu"
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    Ngày bắt đầu
+                  </label>
+                  <input
                   type="date"
                   name="startDate"
                   value={form.startDate}
                   onChange={handleChange}
                   required
-                />
-                <InputField
-                  icon={<CalendarDays />}
-                  label="Ngày kết thúc"
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    Ngày kết thúc
+                  </label>
+                  <input
                   type="date"
                   name="endDate"
                   value={form.endDate ?? ""}
                   onChange={handleChange}
-                  required
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                 />
+                </div>
+              </div>
+            </div>
               </div>
 
-              {/* Selects */}
-              <SelectField
-                icon={<Building2 />}
-                label="Công ty khách hàng"
+          {/* Client & Market Information */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-secondary-100 rounded-lg">
+                  <Building2 className="w-5 h-5 text-secondary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin khách hàng & thị trường</h2>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Công ty khách hàng */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Công ty khách hàng
+                </label>
+                <select
                 name="clientCompanyId"
                 value={form.clientCompanyId?.toString() || ""}
                 onChange={handleChange}
-                options={[
-                  { value: "", label: "-- Chọn công ty --" },
-                  ...clients.map((c) => ({ value: c.id.toString(), label: c.name })),
-                ]}
                 required
-              />
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                >
+                  <option value="">-- Chọn công ty --</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id.toString()}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <SelectField
-                icon={<Globe2 />}
-                label="Thị trường"
+              {/* Thị trường & Ngành */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Globe2 className="w-4 h-4" />
+                    Thị trường
+                  </label>
+                  <select
                 name="marketId"
                 value={form.marketId?.toString() || ""}
                 onChange={handleChange}
-                options={[
-                  { value: "", label: "-- Chọn thị trường --" },
-                  ...markets.map((m) => ({ value: m.id.toString(), label: m.name })),
-                ]}
                 required
-              />
-
-              <SelectField
-                icon={<Factory />}
-                label="Ngành"
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">-- Chọn thị trường --</option>
+                    {markets.map((m) => (
+                      <option key={m.id} value={m.id.toString()}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Factory className="w-4 h-4" />
+                    Ngành
+                  </label>
+                  <select
                 name="industryId"
                 value={form.industryId?.toString() || ""}
                 onChange={handleChange}
-                options={[
-                  { value: "", label: "-- Chọn ngành --" },
-                  ...industries.map((i) => ({ value: i.id.toString(), label: i.name })),
-                ]}
                 required
-              />
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">-- Chọn ngành --</option>
+                    {industries.map((i) => (
+                      <option key={i.id} value={i.id.toString()}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-              <SelectField
-                icon={<CheckCircle />}
-                label="Trạng thái"
+              {/* Trạng thái */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  Trạng thái
+                </label>
+                <select
                 name="status"
                 value={form.status || ""}
                 onChange={handleChange}
-                options={[
-                  { value: "", label: "-- Chọn trạng thái --" },
-                  { value: "Planned", label: "Đã lên kế hoạch" },
-                  { value: "Ongoing", label: "Đang thực hiện" },
-                  { value: "Completed", label: "Đã hoàn thành" },
-                ]}
                 required
-              />
-
-              {/* Submit */}
-              <div className="pt-6">
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-3.5 px-6 rounded-xl hover:from-primary-700 hover:to-secondary-700 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-lg transform hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                 >
-                  {formLoading ? "Đang lưu..." : "Tạo dự án"}
-                </button>
+                  <option value="">-- Chọn trạng thái --</option>
+                  <option value="Planned">Đã lên kế hoạch</option>
+                  <option value="Ongoing">Đang thực hiện</option>
+                  <option value="Completed">Đã hoàn thành</option>
+                </select>
               </div>
-            </form>
+            </div>
           </div>
+
+          {/* Notifications */}
+          {(error || success) && (
+            <div className="animate-fade-in">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-700 font-medium">{error}</p>
         </div>
+              )}
+              {success && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-700 font-medium">
+                    ✅ Tạo dự án thành công! Đang chuyển hướng...
+                  </p>
+      </div>
+              )}
+    </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-6">
+            <Link
+              to="/sales/projects"
+              className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
+            >
+              <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+              Hủy
+            </Link>
+            <button
+              type="submit"
+              disabled={formLoading}
+              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {formLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Đang tạo...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Tạo dự án
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-/* ---- COMPONENT CON ---- */
-function InputField({
-  label,
-  icon,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { label: string; icon?: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <div className="relative group">
-        {icon && (
-          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500">
-            {icon}
-          </span>
-        )}
-        <input
-          {...props}
-          className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
-        />
-      </div>
-    </div>
-  );
-}
-
-function TextareaField({
-  label,
-  ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <textarea
-        {...props}
-        rows={3}
-        className="w-full border border-neutral-300 rounded-xl bg-white/50 px-4 py-3.5 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft focus:border-primary-500 transition-all"
-      />
-    </div>
-  );
-}
-
-function SelectField({
-  label,
-  icon,
-  options,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & {
-  label: string;
-  icon?: React.ReactNode;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-semibold text-neutral-700 mb-2">{label}</label>
-      <div className="relative group">
-        {icon && (
-          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500">
-            {icon}
-          </span>
-        )}
-        <select
-          {...props}
-          className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
-        >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
-}
