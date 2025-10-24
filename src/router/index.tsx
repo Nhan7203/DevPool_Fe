@@ -83,9 +83,9 @@ import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
 // SALES STAFF PAGES
 // ========================================
 import SalesStaffDashboard from '../pages/sales_staff/Dashboard';
-import ListClientContracts from '../pages/sales_staff/contract/List';
-import ContractDetailPage from '../pages/sales_staff/contract/Detail';
-import UploadSignedContract from '../pages/sales_staff/contract/Upload';
+import ListClientContracts from '../pages/sales_staff/contracts/List';
+import ContractDetailPage from '../pages/sales_staff/contracts/Detail';
+import UploadSignedContract from '../pages/sales_staff/contracts/Upload';
 import JobRequestListPage from '../pages/sales_staff/job-requests/List';
 import JobRequestDetailPage from '../pages/sales_staff/job-requests/Detail';
 import JobRequestEditPage from '../pages/sales_staff/job-requests/Edit';
