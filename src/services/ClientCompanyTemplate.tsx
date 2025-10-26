@@ -1,7 +1,7 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
-// Model ClientCompanyTemplate
+//  ClientCompanyTemplate
 export interface ClientCompanyTemplate {
   clientCompanyId: number;
   clientCompanyName: string;

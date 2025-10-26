@@ -1,8 +1,8 @@
-import { BarChart3, Grid, Users } from "lucide-react";
+import { BarChart3, Grid, Settings, Users, LogOut } from "lucide-react";
 
 export const sidebarItems = [
   {
-    label: 'Tổng Quan Hệ Thống Quan',
+    label: 'Tổng Quan Hệ Thống',
     href: '/admin/dashboard',
     icon: BarChart3
   },
@@ -22,7 +22,9 @@ export const sidebarItems = [
     subItems: [
       { label: 'Kỹ năng', href: '/admin/categories/skills' },
       { label: 'Nhóm kỹ năng', href: '/admin/categories/skill-groups' },
-      { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },
+      // { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },
+      { label: 'Mẫu CV', href: '/admin/categories/cv-templates' },
+      { label: 'Loại chứng chỉ', href: '/admin/categories/certificate-types' },
       { label: 'Vị trí tuyển dụng', href: '/admin/categories/job-role-levels' },
       { label: 'Loại vị trí tuyển dụng', href: '/admin/categories/job-roles' },
       { label: 'Khu vực làm việc', href: '/admin/categories/locations' },
@@ -30,4 +32,14 @@ export const sidebarItems = [
       { label: 'Lĩnh vực', href: '/admin/categories/industries' },
     ]
   },
+  {
+    label: 'Cài Đặt',
+    href: '/admin/settings',
+    icon: Settings,
+    subItems: [
+      // { label: 'Thông tin tài khoản', href: '/admin/settings/profile', icon: User },
+      // { label: 'Thông báo', href: '/admin/settings/notifications', icon: Bell },
+      { label: 'Đăng xuất', href: '/logout', icon: LogOut },
+    ]
+  }
 ];

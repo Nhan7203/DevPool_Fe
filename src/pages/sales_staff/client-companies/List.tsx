@@ -32,32 +32,24 @@ export default function ClientCompanyListPage() {
     {
       title: 'Tổng Công Ty',
       value: companies.length.toString(),
-      change: '+5 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Building2 className="w-6 h-6" />
     },
     {
       title: 'Đang Hoạt Động',
       value: companies.filter(c => !c.isDeleted).length.toString(),
-      change: '+3 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
       title: 'Có Thông Tin Đầy Đủ',
       value: companies.filter(c => c.taxCode && c.address && c.phone).length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <Users className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Hoàn Thiện',
       value: `${Math.round((companies.filter(c => c.taxCode && c.address && c.phone).length / Math.max(companies.length, 1)) * 100)}%`,
-      change: '+8% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <TrendingUp className="w-6 h-6" />
     }
@@ -159,10 +151,6 @@ export default function ClientCompanyListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>

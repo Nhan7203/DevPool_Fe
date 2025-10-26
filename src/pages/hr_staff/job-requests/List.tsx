@@ -4,12 +4,17 @@ import {
     Search,
     Filter,
     Users,
-    ChevronRight,
     GraduationCap,
+    Briefcase,
+    Building2,
+    Target,
+    Eye,
+    Plus
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { jobRequestService, type JobRequest, JobRequestStatus } from "../../../services/JobRequest";
+import { Button } from "../../../components/ui/button";
+import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
@@ -55,7 +60,35 @@ export default function HRJobRequestList() {
     const [filterCompany, setFilterCompany] = useState("");
     const [filterProject, setFilterProject] = useState("");
     const [filterPosition, setFilterPosition] = useState("");
-    const [filterWorkingMode, setFilterWorkingMode] = useState("");
+    const [filterStatus, setFilterStatus] = useState("");
+
+    // Stats data
+    const stats = [
+        {
+            title: 'Tổng Yêu Cầu',
+            value: requests.length.toString(),
+            color: 'blue',
+            icon: <Briefcase className="w-6 h-6" />
+        },
+        {
+            title: 'Chưa Duyệt',
+            value: requests.filter(r => r.status === 'Pending').length.toString(),
+            color: 'orange',
+            icon: <Target className="w-6 h-6" />
+        },
+        {
+            title: 'Có Kỹ Năng',
+            value: requests.filter(r => r.skills.length > 0).length.toString(),
+            color: 'green',
+            icon: <GraduationCap className="w-6 h-6" />
+        },
+        {
+            title: 'Đã Duyệt',
+            value: requests.filter(r => r.status === 'Approved').length.toString(),
+            color: 'purple',
+            icon: <Users className="w-6 h-6" />
+        }
+    ];
 
     useEffect(() => {
         const fetchData = async () => {
@@ -71,8 +104,8 @@ export default function HRJobRequestList() {
                         skillService.getAll() as Promise<Skill[]>,
                     ]);
 
-                // Chỉ lấy yêu cầu chưa duyệt (Pending)
-                const filteredReqs = jobReqs.filter((r) => r.status === JobRequestStatus.Pending);
+                // Lấy tất cả yêu cầu
+                const filteredReqs = jobReqs;
 
                 const projectDict: Record<number, Project> = {};
                 projects.forEach((p) => (projectDict[p.id] = p));
@@ -145,191 +178,253 @@ export default function HRJobRequestList() {
             filtered = filtered.filter((r) =>
                 r.positionName.toLowerCase().includes(filterPosition.toLowerCase())
             );
-        if (filterWorkingMode)
-            filtered = filtered.filter((r) => r.workingMode === filterWorkingMode);
+        if (filterStatus)
+            filtered = filtered.filter((r) => r.status === filterStatus);
 
         setFilteredRequests(filtered);
-    }, [searchTerm, filterCompany, filterProject, filterPosition, filterWorkingMode, requests]);
+    }, [searchTerm, filterCompany, filterProject, filterPosition, filterStatus, requests]);
 
     const handleResetFilters = () => {
         setSearchTerm("");
         setFilterCompany("");
         setFilterProject("");
         setFilterPosition("");
-        setFilterWorkingMode("");
+        setFilterStatus("");
     };
+
+    if (loading)
+        return (
+            <div className="flex bg-gray-50 min-h-screen">
+                <Sidebar items={sidebarItems} title="HR Staff" />
+                <div className="flex-1 flex justify-center items-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                        <p className="text-gray-500">Đang tải dữ liệu...</p>
+                    </div>
+                </div>
+            </div>
+        );
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
             <Sidebar items={sidebarItems} title="HR Staff" />
-
             <div className="flex-1 p-8">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Yêu Cầu Tuyển Dụng Chưa Duyệt</h1>
-                    <p className="text-neutral-600 mt-1">Danh sách yêu cầu từ Sales cần HR xử lý.</p>
-                </div>
-
-                {/* 🔍 Search & Filter */}
-                <div className="mb-6 flex flex-wrap gap-4">
-                    <div className="flex-1">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Tìm kiếm theo tiêu đề"
-                                className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                {/* Header */}
+                <div className="mb-8 animate-slide-up">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900">Quản lý yêu cầu tuyển dụng</h1>
+                            <p className="text-neutral-600 mt-1">Xem và duyệt yêu cầu tuyển dụng từ Sales</p>
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 hover:border-primary-500 text-gray-700"
-                    >
-                        <Filter className="w-5 h-5" />
-                        {showFilters ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
-                    </button>
-                </div>
-
-                {showFilters && (
-                    <div className="w-full bg-white rounded-xl border border-gray-200 p-4 shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-2 mb-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Công ty KH</label>
-                            <input
-                                type="text"
-                                value={filterCompany}
-                                onChange={(e) => setFilterCompany(e.target.value)}
-                                placeholder="Tên công ty..."
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
-                            <input
-                                type="text"
-                                value={filterProject}
-                                onChange={(e) => setFilterProject(e.target.value)}
-                                placeholder="Tên dự án..."
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí</label>
-                            <input
-                                type="text"
-                                value={filterPosition}
-                                onChange={(e) => setFilterPosition(e.target.value)}
-                                placeholder="Tên vị trí..."
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Chế độ làm việc</label>
-                            <select
-                                value={filterWorkingMode}
-                                onChange={(e) => setFilterWorkingMode(e.target.value)}
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
-                            >
-                                <option value="">Tất cả</option>
-                                <option value="None">None</option>
-                                <option value="Onsite">Onsite</option>
-                                <option value="Remote">Remote</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Flexible">Flexible</option>
-                            </select>
-                        </div>
-
-                        <div className="flex items-end">
-                            <button
-                                onClick={handleResetFilters}
-                                className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {loading ? (
-                    <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Đang tải danh sách yêu cầu...</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {filteredRequests.map((req) => (
-                            <div
-                                key={req.id}
-                                className="bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 border border-gray-200 transition-all duration-300"
-                            >
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-lg font-semibold text-primary-700">
-                                        {req.title || "(Chưa có tiêu đề)"}
-                                    </h3>
-                                    <span className="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800 font-medium">
-                                        Chưa duyệt
-                                    </span>
-                                </div>
-
-                                {/* ✅ Thông tin vị trí và công ty */}
-                                <div>
-                                    <p className="font-medium text-gray-900">{req.positionName}</p>
-                                    <p className="text-sm text-gray-600">{req.companyName}</p>
-                                </div>
-
-                                <p className="text-gray-700 mb-2 text-sm">
-                                    Dự án: <span className="font-medium">{req.projectName}</span>
-                                </p>
-
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {req.skills.length > 0 ? (
-                                        req.skills.map((skill, i) => (
-                                            <span
-                                                key={i}
-                                                className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm"
-                                            >
-                                                {skill}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <span className="text-gray-500 text-sm">Chưa có kỹ năng</span>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="w-4 h-4" />
-                                        <span>{req.quantity} ứng viên</span>
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
+                        {stats.map((stat, index) => (
+                            <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <GraduationCap className="w-4 h-4" />
-                                        <span>Chế độ: {req.workingMode}</span>
+                                    <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                                        stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                                            stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                                                'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                                        } transition-all duration-300`}>
+                                        {stat.icon}
                                     </div>
-                                </div>
-
-                                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                                    <Link
-                                        to={`/hr/job-requests/${req.id}`}
-                                        className="text-primary-600 hover:underline text-sm font-medium flex items-center gap-1"
-                                    >
-                                        Chi tiết <ChevronRight className="w-4 h-4" />
-                                    </Link>
-                                    <Link
-                                        to={`/hr/job-requests/${req.id}/matching`}
-                                        className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm transition"
-                                    >
-                                        Matching CV
-                                    </Link>
                                 </div>
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
+
+                {/* Search & Filters */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6 animate-fade-in">
+                    <div className="p-6">
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="relative flex-1 min-w-[300px]">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                                <input
+                                    type="text"
+                                    placeholder="Tìm kiếm theo tiêu đề..."
+                                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+
+                            <button
+                                onClick={() => setShowFilters(!showFilters)}
+                                className="group flex items-center gap-2 px-6 py-3 border border-neutral-200 rounded-xl hover:border-primary-500 hover:text-primary-600 hover:bg-primary-50 transition-all duration-300 bg-white"
+                            >
+                                <Filter className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                                <span className="font-medium">{showFilters ? "Ẩn bộ lọc" : "Bộ lọc"}</span>
+                            </button>
+                        </div>
+
+                        {showFilters && (
+                            <div className="mt-6 pt-6 border-t border-neutral-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                    <div className="relative">
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Công ty khách hàng"
+                                            className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
+                                            value={filterCompany}
+                                            onChange={(e) => setFilterCompany(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Dự án"
+                                            className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
+                                            value={filterProject}
+                                            onChange={(e) => setFilterProject(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <Target className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Vị trí"
+                                            className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
+                                            value={filterPosition}
+                                            onChange={(e) => setFilterPosition(e.target.value)}
+                                        />
+                                    </div>
+                                    <select
+                                        value={filterStatus}
+                                        onChange={(e) => setFilterStatus(e.target.value)}
+                                        className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
+                                    >
+                                        <option value="">Tất cả trạng thái</option>
+                                        <option value="Pending">⏳ Chờ duyệt</option>
+                                        <option value="Approved">✅ Đã duyệt</option>
+                                        <option value="Closed">🔒 Đã đóng</option>
+                                        <option value="Rejected">❌ Từ chối</option>
+                                    </select>
+                                    <button
+                                        onClick={handleResetFilters}
+                                        className="group flex items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105 transform"
+                                    >
+                                        <span className="font-medium">Đặt lại</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Table */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
+                    <div className="p-6 border-b border-neutral-200">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-gray-900">Danh sách yêu cầu tuyển dụng</h2>
+                            <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                <span>Tổng: {filteredRequests.length} yêu cầu</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+                                <tr>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tiêu đề</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Vị trí</th>
+                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
+                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Chế độ</th>
+                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200">
+                                {filteredRequests.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="text-center py-12">
+                                            <div className="flex flex-col items-center justify-center">
+                                                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
+                                                    <Briefcase className="w-8 h-8 text-neutral-400" />
+                                                </div>
+                                                <p className="text-neutral-500 text-lg font-medium">Không có yêu cầu nào phù hợp</p>
+                                                <p className="text-neutral-400 text-sm mt-1">Thử thay đổi bộ lọc hoặc tạo yêu cầu mới</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredRequests.map((req, i) => (
+                                        <tr
+                                            key={req.id}
+                                            className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
+                                        >
+                                            <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                                            <td className="py-4 px-6">
+                                                <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
+                                                    {req.title || "(Chưa có tiêu đề)"}
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <Building2 className="w-4 h-4 text-neutral-400" />
+                                                    <span className="text-sm text-neutral-700">{req.companyName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <Briefcase className="w-4 h-4 text-neutral-400" />
+                                                    <span className="text-sm text-neutral-700">{req.projectName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <Target className="w-4 h-4 text-neutral-400" />
+                                                    <span className="text-sm text-neutral-700">{req.positionName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                                    req.status === 'Pending' ? 'bg-warning-100 text-warning-700' :
+                                                    req.status === 'Approved' ? 'bg-secondary-100 text-secondary-700' :
+                                                    req.status === 'Closed' ? 'bg-neutral-100 text-neutral-700' :
+                                                    'bg-red-100 text-red-700'
+                                                }`}>
+                                                    {req.status === 'Pending' ? '⏳ Chờ duyệt' :
+                                                     req.status === 'Approved' ? '✅ Đã duyệt' :
+                                                     req.status === 'Closed' ? '🔒 Đã đóng' :
+                                                     '❌ Từ chối'}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <GraduationCap className="w-4 h-4 text-neutral-400" />
+                                                    <span className="text-sm text-neutral-700">{req.workingMode}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Link
+                                                        to={`/hr/job-requests/${req.id}`}
+                                                        className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                                                    >
+                                                        <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                        <span className="text-sm font-medium">Xem</span>
+                                                    </Link>                                                 
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     );

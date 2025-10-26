@@ -23,14 +23,14 @@ import Auth from '../pages/client/auth-page';
 import AdminDashboard from '../pages/admin/Dashboard/AdminDashboard';
 import CreateAccount from '../pages/admin/Users/Create';
 import UserManagementPage from '../pages/admin/Users/List';
-import JobRoleLevelCreatePage from '../pages/admin/Categories/jobRoleLevels/Create';
-import JobRoleLevelDetailPage from '../pages/admin/Categories/jobRoleLevels/Detail';
-import JobRoleLevelEditPage from '../pages/admin/Categories/jobRoleLevels/Edit';
-import JobRoleLevelListPage from '../pages/admin/Categories/jobRoleLevels/List';
-import JobRoleCreatePage from '../pages/admin/Categories/jobRoles/Create';
-import JobRoleDetailPage from '../pages/admin/Categories/jobRoles/Detail';
-import JobRoleEditPage from '../pages/admin/Categories/jobRoles/Edit';
-import JobRoleListPage from '../pages/admin/Categories/jobRoles/List';
+import JobRoleLevelCreatePage from '../pages/admin/Categories/job-role-levels/Create';
+import JobRoleLevelDetailPage from '../pages/admin/Categories/job-role-levels/Detail';
+import JobRoleLevelEditPage from '../pages/admin/Categories/job-role-levels/Edit';
+import JobRoleLevelListPage from '../pages/admin/Categories/job-role-levels/List';
+import JobRoleCreatePage from '../pages/admin/Categories/job-roles/Create';
+import JobRoleDetailPage from '../pages/admin/Categories/job-roles/Detail';
+import JobRoleEditPage from '../pages/admin/Categories/job-roles/Edit';
+import JobRoleListPage from '../pages/admin/Categories/job-roles/List';
 import MarketListPage from '../pages/admin/Categories/markets/List';
 import MarketDetailPage from '../pages/admin/Categories/markets/Detail';
 import MarketEditPage from '../pages/admin/Categories/markets/Edit';
@@ -39,6 +39,14 @@ import IndustryListPage from '../pages/admin/Categories/industries/List';
 import IndustryDetailPage from '../pages/admin/Categories/industries/Detail';
 import IndustryEditPage from '../pages/admin/Categories/industries/Edit';
 import IndustryCreatePage from '../pages/admin/Categories/industries/Create';
+import CertificateTypeListPage from '../pages/admin/Categories/certificate-types/List';
+import CertificateTypeDetailPage from '../pages/admin/Categories/certificate-types/Detail';
+import CertificateTypeEditPage from '../pages/admin/Categories/certificate-types/Edit';
+import CertificateTypeCreatePage from '../pages/admin/Categories/certificate-types/Create';
+import CVTemplateListPage from '../pages/admin/Categories/cv-templates/List';
+import CVTemplateDetailPage from '../pages/admin/Categories/cv-templates/Detail';
+import CVTemplateEditPage from '../pages/admin/Categories/cv-templates/Edit';
+import CVTemplateCreatePage from '../pages/admin/Categories/cv-templates/Create';
 import LocationCreatePage from '../pages/admin/Categories/locations/Create';
 import LocationDetailPage from '../pages/admin/Categories/locations/Detail';
 import LocationEditPage from '../pages/admin/Categories/locations/Edit';
@@ -47,25 +55,22 @@ import SkillCreatePage from '../pages/admin/Categories/skill/Create';
 import SkillDetailPage from '../pages/admin/Categories/skill/Detail';
 import SkillEditPage from '../pages/admin/Categories/skill/Edit';
 import SkillListPage from '../pages/admin/Categories/skill/List';
-import SkillGroupCreatePage from '../pages/admin/Categories/skillGroups/Create';
-import SkillGroupDetailPage from '../pages/admin/Categories/skillGroups/Detail';
-import SkillGroupEditPage from '../pages/admin/Categories/skillGroups/Edit';
-import SkillGroupListPage from '../pages/admin/Categories/skillGroups/List';
-import WorkingStyleCreatePage from '../pages/admin/Categories/workingStyles.tsx/Create';
-import WorkingStyleDetailPage from '../pages/admin/Categories/workingStyles.tsx/Detail';
-import WorkingStyleEditPage from '../pages/admin/Categories/workingStyles.tsx/Edit';
-import WorkingStyleListPage from '../pages/admin/Categories/workingStyles.tsx/List';
+import SkillGroupCreatePage from '../pages/admin/Categories/skill-groups/Create';
+import SkillGroupDetailPage from '../pages/admin/Categories/skill-groups/Detail';
+import SkillGroupEditPage from '../pages/admin/Categories/skill-groups/Edit';
+import SkillGroupListPage from '../pages/admin/Categories/skill-groups/List';
+import WorkingStyleCreatePage from '../pages/admin/Categories/working-styles.tsx/Create';
+import WorkingStyleDetailPage from '../pages/admin/Categories/working-styles.tsx/Detail';
+import WorkingStyleEditPage from '../pages/admin/Categories/working-styles.tsx/Edit';
+import WorkingStyleListPage from '../pages/admin/Categories/working-styles.tsx/List';
 
 // ========================================
 // HR STAFF PAGES
 // ========================================
 import HRDashboard from '../pages/hr_staff/dashboard/Dashboard';
-import ListDev from '../pages/hr_staff/developers/List';
-import CreateTalent from '../pages/hr_staff/developers/Create';
-import ListCV from '../pages/hr_staff/cvs/List';
-import TalentCVDetail from '../pages/hr_staff/cvs/Detail';
-import CreateTalentCV from '../pages/hr_staff/cvs/Upload';
-import MatchingCVPage from '../pages/hr_staff/cvs/Matching';
+import ListDev from '../pages/hr_staff/talents/List';
+import CreateTalent from '../pages/hr_staff/talents/Create';
+import MatchingCVPage from '../pages/hr_staff/job-requests/Matching';
 import ListPartner from '../pages/hr_staff/partners/List';
 import CreatePartner from '../pages/hr_staff/partners/Create';
 import Assignments from '../pages/hr_staff/assignments';
@@ -76,16 +81,11 @@ import InterviewHistory from '../pages/hr_staff/interviews/History';
 import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
 import ListContract from '../pages/hr_staff/contracts/List';
 import UploadContract from '../pages/hr_staff/contracts/Upload';
-import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
-import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
 
 // ========================================
 // SALES STAFF PAGES
 // ========================================
 import SalesStaffDashboard from '../pages/sales_staff/Dashboard';
-import ListClientContracts from '../pages/sales_staff/contract/List';
-import ContractDetailPage from '../pages/sales_staff/contract/Detail';
-import UploadSignedContract from '../pages/sales_staff/contract/Upload';
 import JobRequestListPage from '../pages/sales_staff/job-requests/List';
 import JobRequestDetailPage from '../pages/sales_staff/job-requests/Detail';
 import JobRequestEditPage from '../pages/sales_staff/job-requests/Edit';
@@ -127,6 +127,39 @@ import Overview from '../pages/manager/finance/Overview';
 import CashFlow from '../pages/manager/finance/Cashflow';
 import Debt from '../pages/manager/finance/Debt';
 import Profit from '../pages/manager/finance/Profit';
+import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
+import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
+import ContractDetailPage from '../pages/sales_staff/contracts/Detail';
+import ListClientContracts from '../pages/sales_staff/contracts/List';
+import TalentDetailPage from '../pages/hr_staff/talents/Detail';
+import TalentEditPage from '../pages/hr_staff/talents/Edit';
+import TalentSkillCreatePage from '../pages/hr_staff/talent-skills/Create';
+import TalentSkillEditPage from '../pages/hr_staff/talent-skills/Edit';
+import TalentProjectCreatePage from '../pages/hr_staff/talent-projects/Create';
+import TalentProjectEditPage from '../pages/hr_staff/talent-projects/Edit';
+import TalentWorkExperienceCreatePage from '../pages/hr_staff/talent-work-experiences/Create';
+import TalentCertificateCreatePage from '../pages/hr_staff/talent-certificates/Create';
+import TalentAvailableTimeCreatePage from '../pages/hr_staff/talent-available-times/Create';
+import TalentCVCreatePage from '../pages/hr_staff/talent-cvs/Create';
+import TalentCVEditPage from '../pages/hr_staff/talent-cvs/Edit';
+import TalentJobRoleLevelCreatePage from '../pages/hr_staff/talent-job-role-levels/Create';
+import TalentJobRoleLevelEditPage from '../pages/hr_staff/talent-job-role-levels/Edit';
+import TalentCertificateEditPage from '../pages/hr_staff/talent-certificates/Edit';
+import TalentAvailableTimeEditPage from '../pages/hr_staff/talent-available-times/Edit';
+import TalentWorkExperienceEditPage from '../pages/hr_staff/talent-work-experiences/Edit';
+import TalentCVApplicationDetailPage from '../pages/hr_staff/applications/Detail';
+import TalentCVApplicationPage from '../pages/hr_staff/applications/List';
+import ApplyActivityCreatePage from '../pages/hr_staff/apply-activities/Create';
+import ApplyActivityDetailPage from '../pages/hr_staff/apply-activities/Detail';
+import ApplyActivityEditPage from '../pages/hr_staff/apply-activities/Edit';
+import ApplyProcessStepCreatePage from '../pages/hr_staff/apply-process-steps/Create';
+import ApplyProcessStepDetailPage from '../pages/hr_staff/apply-process-steps/Detail';
+import ApplyProcessStepListPage from '../pages/hr_staff/apply-process-steps/List';
+import ApplyProcessStepEditPage from '../pages/hr_staff/apply-process-steps/Edit';
+import ApplyProcessTemplateCreatePage from '../pages/hr_staff/apply-process-templates/Create';
+import ApplyProcessTemplateDetailPage from '../pages/hr_staff/apply-process-templates/Detail';
+import ApplyProcessTemplateListPage from '../pages/hr_staff/apply-process-templates/List';
+import ApplyProcessTemplateEditPage from '../pages/hr_staff/apply-process-templates/Edit';
 
 
 
@@ -163,14 +196,38 @@ const AppRouter: React.FC = () => {
           
           {/* Developers */}
           <Route path={ROUTES.HR_STAFF.DEVELOPERS.LIST} element={<ListDev />} />
+          <Route path={ROUTES.HR_STAFF.DEVELOPERS.DETAIL} element={<TalentDetailPage />} />
+          <Route path={ROUTES.HR_STAFF.DEVELOPERS.EDIT} element={<TalentEditPage />} />
           <Route path={ROUTES.HR_STAFF.DEVELOPERS.CREATE} element={<CreateTalent />} />
           
-          {/* CVs */}
-          <Route path={ROUTES.HR_STAFF.CVS.LIST} element={<ListCV />} />
-          <Route path={ROUTES.HR_STAFF.CVS.DETAIL} element={<TalentCVDetail />} />
-          <Route path={ROUTES.HR_STAFF.CVS.UPLOAD} element={<CreateTalentCV />} />
-          <Route path={ROUTES.HR_STAFF.CVS.MATCHING} element={<MatchingCVPage />} />
+          {/* Talent Available Times */}
+          <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.EDIT} element={<TalentAvailableTimeEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.CREATE} element={<TalentAvailableTimeCreatePage />} />
           
+          {/* Talent Certificates */}
+          <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.EDIT} element={<TalentCertificateEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.CREATE} element={<TalentCertificateCreatePage />} />
+          
+          {/* Talent CVs */}
+          <Route path={ROUTES.HR_STAFF.TALENT_CVS.EDIT} element={<TalentCVEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_CVS.CREATE} element={<TalentCVCreatePage />} />
+          
+          {/* Talent Job Role Levels */}
+          <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.EDIT} element={<TalentJobRoleLevelEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.CREATE} element={<TalentJobRoleLevelCreatePage />} />
+          
+          {/* Talent Projects */}
+          <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.EDIT} element={<TalentProjectEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.CREATE} element={<TalentProjectCreatePage />} />
+
+          {/* Talent Skills */}
+          <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.EDIT} element={<TalentSkillEditPage />} />
+          <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.CREATE} element={<TalentSkillCreatePage />} />
+                        
+          {/* Talent Work Experiences */}
+          <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.CREATE} element={<TalentWorkExperienceCreatePage />} />  
+          <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.EDIT} element={<TalentWorkExperienceEditPage />} />
+  
           {/* Partners */}
           <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
           <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
@@ -181,7 +238,29 @@ const AppRouter: React.FC = () => {
           {/* Job Requests */}
           <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.LIST} element={<ListRequest />} />
           <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailHRPage />} />
+          <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.MATCHING} element={<MatchingCVPage />} />
           
+          {/* Applications */}
+          <Route path={ROUTES.HR_STAFF.APPLICATIONS.LIST} element={<TalentCVApplicationPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLICATIONS.DETAIL} element={<TalentCVApplicationDetailPage />} />
+
+          {/* Apply Activities */}
+          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.DETAIL} element={<ApplyActivityDetailPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.EDIT} element={<ApplyActivityEditPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.CREATE} element={<ApplyActivityCreatePage />} />
+          
+          {/* Apply Process Steps */}
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.LIST} element={<ApplyProcessStepListPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.DETAIL} element={<ApplyProcessStepDetailPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<ApplyProcessStepEditPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<ApplyProcessStepCreatePage />} />
+  
+          {/* Apply Process Templates */}
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.LIST} element={<ApplyProcessTemplateListPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.DETAIL} element={<ApplyProcessTemplateDetailPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.EDIT} element={<ApplyProcessTemplateEditPage />} />
+          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.CREATE} element={<ApplyProcessTemplateCreatePage />} />
+
           {/* Interviews */}
           <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
           <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />
@@ -205,7 +284,7 @@ const AppRouter: React.FC = () => {
           {/* Contracts */}
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadSignedContract />} />
+          <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
           
           {/* Job Requests */}
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
@@ -294,6 +373,18 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.EDIT} element={<SkillGroupEditPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.CREATE} element={<SkillGroupCreatePage />} />
           
+          {/* Certificate Types */}
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.LIST} element={<CertificateTypeListPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.DETAIL} element={<CertificateTypeDetailPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.EDIT} element={<CertificateTypeEditPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.CREATE} element={<CertificateTypeCreatePage />} />
+          
+          {/* CV Templates */}
+          <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.LIST} element={<CVTemplateListPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.DETAIL} element={<CVTemplateDetailPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.EDIT} element={<CVTemplateEditPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.CREATE} element={<CVTemplateCreatePage />} />
+ 
           {/* Working Styles */}
           <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.LIST} element={<WorkingStyleListPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.DETAIL} element={<WorkingStyleDetailPage />} />
@@ -329,6 +420,12 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.DETAIL} element={<IndustryDetailPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.EDIT} element={<IndustryEditPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.CREATE} element={<IndustryCreatePage />} />
+          
+          {/* Certificate Types */}
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.LIST} element={<CertificateTypeListPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.DETAIL} element={<CertificateTypeDetailPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.EDIT} element={<CertificateTypeEditPage />} />
+          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.CREATE} element={<CertificateTypeCreatePage />} />
        
         </Route>
       </Route>

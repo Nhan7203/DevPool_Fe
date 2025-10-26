@@ -9,7 +9,6 @@ import {
   Plus, 
   Eye, 
   MapPin, 
-  TrendingUp, 
   FileText,
   Building2,
   Hash
@@ -26,8 +25,6 @@ export default function LocationListPage() {
     {
       title: 'Tổng Khu Vực Làm Việc',
       value: locations.length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <MapPin className="w-6 h-6" />
     },
@@ -35,16 +32,12 @@ export default function LocationListPage() {
     {
       title: 'Có Mô Tả',
       value: locations.filter(l => l.description && l.description.trim()).length.toString(),
-      change: '+1 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <FileText className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Hoàn Thiện',
       value: `${Math.round(((locations.filter(l => l.code && l.code.trim()).length + locations.filter(l => l.description && l.description.trim()).length) / Math.max(locations.length * 2, 1)) * 100)}%`,
-      change: '+5% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <Building2 className="w-6 h-6" />
     }
@@ -104,7 +97,7 @@ export default function LocationListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Khu vực làm việc</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Khu vực làm việc (Locations)</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các khu vực làm việc trong hệ thống</p>
             </div>
             <Link to="/admin/categories/locations/create">
@@ -132,10 +125,6 @@ export default function LocationListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>

@@ -9,7 +9,6 @@ import {
   Filter, 
   Plus, 
   Eye, 
-  Edit, 
   Briefcase, 
   Building2, 
   CalendarDays, 
@@ -32,32 +31,24 @@ export default function ProjectListPage() {
     {
       title: 'Tổng Dự Án',
       value: projects.length.toString(),
-      change: '+5 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Briefcase className="w-6 h-6" />
     },
     {
       title: 'Đang Thực Hiện',
       value: projects.filter(p => p.status === 'Ongoing').length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
       title: 'Đã Hoàn Thành',
       value: projects.filter(p => p.status === 'Completed').length.toString(),
-      change: '+3 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Hoàn Thành',
       value: `${Math.round((projects.filter(p => p.status === 'Completed').length / Math.max(projects.length, 1)) * 100)}%`,
-      change: '+8% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <TrendingUp className="w-6 h-6" />
     }
@@ -169,10 +160,6 @@ export default function ProjectListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>
@@ -332,14 +319,7 @@ export default function ProjectListPage() {
                             >
                               <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                               <span className="text-sm font-medium">Xem</span>
-                            </Link>
-                            <Link
-                              to={`/sales/projects/edit/${p.id}`}
-                              className="group inline-flex items-center gap-1 px-3 py-2 text-secondary-600 hover:text-secondary-800 hover:bg-secondary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
-                            >
-                              <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                              <span className="text-sm font-medium">Sửa</span>
-                            </Link>
+                            </Link>                          
                           </div>
                         </td>
                       </tr>

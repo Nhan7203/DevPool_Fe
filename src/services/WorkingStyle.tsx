@@ -7,18 +7,18 @@ export interface WorkingStyle {
   description?: string;
 }
 
-export interface WorkingStyleCreateModel {
+export interface WorkingStyleCreate {
   name: string;
   description?: string;
 }
 
-export interface WorkingStyleFilterModel {
+export interface WorkingStyleFilter {
   name?: string;
   excludeDeleted?: boolean;
 }
 
 export const workingStyleService = {
-  async getAll(filter?: WorkingStyleFilterModel) {
+  async getAll(filter?: WorkingStyleFilter) {
     try {
       const params = new URLSearchParams();
 
@@ -49,7 +49,7 @@ export const workingStyleService = {
     }
   },
 
-  async create(payload: WorkingStyleCreateModel) {
+  async create(payload: WorkingStyleCreate) {
     try {
       const response = await axios.post("/workingstyle", payload);
       return response.data;
@@ -60,7 +60,7 @@ export const workingStyleService = {
     }
   },
 
-  async update(id: number, payload: Partial<WorkingStyleCreateModel>) {
+  async update(id: number, payload: Partial<WorkingStyleCreate>) {
     try {
       const response = await axios.put(`/workingstyle/${id}`, payload);
       return response.data;

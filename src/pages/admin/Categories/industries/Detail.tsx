@@ -9,7 +9,6 @@ import {
   Edit, 
   Trash2, 
   FileText, 
-  Calendar, 
   Building2,
   AlertCircle,
   CheckCircle
@@ -189,11 +188,6 @@ export default function IndustryDetailPage() {
                   label="Mô tả" 
                   value={industry.description || "Không có mô tả"}
                   icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="ID" 
-                  value={industry.id.toString()}
-                  icon={<Calendar className="w-4 h-4" />}
                 />
               </div>
             </div>

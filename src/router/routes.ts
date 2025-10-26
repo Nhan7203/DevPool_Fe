@@ -34,16 +34,80 @@ export const ROUTES = {
     DEVELOPERS: {
       LIST: '/hr/developers',                    // Danh sách tất cả developers
       DETAIL: '/hr/developers/:id',              // Chi tiết developer   
-      EDIT: '/hr/developers/:id/edit',           // Sửa thông tin developer
+      EDIT: '/hr/developers/edit/:id',           // Sửa thông tin developer
       CREATE: '/hr/developers/create',
 
     },
-    CVS: {
-      LIST: '/hr/cvs',    
-      DETAIL: '/hr/cvs/:id',               
-      UPLOAD: '/hr/cvs/upload',
-      MATCHING: '/hr/cvs/matching',
+    TALENT_AVAILABLE_TIMES: {
+      LIST: '/hr/talent-available-times',
+      EDIT: '/hr/talent-available-times/edit/:id',
+      CREATE: '/hr/talent-available-times/create',
     },
+    TALENT_CERTIFICATES: {
+      LIST: '/hr/talent-certificates',
+      EDIT: '/hr/talent-certificates/edit/:id',
+      CREATE: '/hr/talent-certificates/create',
+    },
+    TALENT_CVS: {
+      LIST: '/hr/talent-cvs',
+      EDIT: '/hr/talent-cvs/edit/:id',
+      CREATE: '/hr/talent-cvs/create',
+    },
+
+    TALENT_JOB_ROLE_LEVELS: {
+      LIST: '/hr/talent-job-role-levels',
+      EDIT: '/hr/talent-job-role-levels/edit/:id',
+      CREATE: '/hr/talent-job-role-levels/create',
+    },
+    
+    TALENT_PROJECTS: {
+      LIST: '/hr/talent-projects',
+      EDIT: '/hr/talent-projects/edit/:id',
+      CREATE: '/hr/talent-projects/create',
+    },
+    TALENT_SKILLS: {
+      LIST: '/hr/talent-skills',
+      EDIT: '/hr/talent-skills/edit/:id',
+      CREATE: '/hr/talent-skills/create',
+    },
+    TALENT_WORK_EXPERIENCES: {
+      LIST: '/hr/talent-work-experiences',
+      EDIT: '/hr/talent-work-experiences/edit/:id',
+      CREATE: '/hr/talent-work-experiences/create',
+    },
+
+    JOB_REQUESTS: {
+      LIST: '/hr/job-requests',                 
+      DETAIL: '/hr/job-requests/:id',
+      MATCHING: '/hr/job-requests/matching-cv', // Matching CV với yêu cầu
+    },
+    
+    APPLICATIONS: {
+      LIST: '/hr/applications',
+      DETAIL: '/hr/applications/:id',
+    },
+
+    APPLY_ACTIVITIES: {
+      LIST: '/hr/apply-activities',
+      DETAIL: '/hr/apply-activities/:id',
+      EDIT: '/hr/apply-activities/edit/:id',
+      CREATE: '/hr/apply-activities/create',
+    },
+    
+    APPLY_PROCESS_STEPS: {
+      LIST: '/hr/apply-process-steps',
+      DETAIL: '/hr/apply-process-steps/:id',
+      EDIT: '/hr/apply-process-steps/edit/:id',
+      CREATE: '/hr/apply-process-steps/create',
+    },
+
+    APPLY_PROCESS_TEMPLATES: {
+      LIST: '/hr/apply-process-templates',
+      DETAIL: '/hr/apply-process-templates/:id',
+      EDIT: '/hr/apply-process-templates/edit/:id',
+      CREATE: '/hr/apply-process-templates/create',
+    },
+
     TEMPLATES: {
       LIST: '/hr/templates',    
       CREATE: '/hr/templates/create',
@@ -56,13 +120,6 @@ export const ROUTES = {
       CREATE: '/hr/partners/create',
     },
     ASSIGNMENTS: '/hr/assignments',                // staffTalentAssignments
-
-    // Quản lý Job Request từ công ty
-    JOB_REQUESTS: {
-      LIST: '/hr/job-requests',                  // Danh sách yêu cầu tuyển dụng
-      DETAIL: '/hr/job-requests/:id',
-      MATCHING: '/hr/job-requests/:id/matching', // Matching CV với yêu cầu
-    },
 
     // Quản lý Phỏng vấn
     INTERVIEWS: {
@@ -290,6 +347,18 @@ export const ROUTES = {
         DETAIL: '/admin/categories/skill-groups/:id',
         EDIT: '/admin/categories/skill-groups/edit/:id',
         CREATE: '/admin/categories/skill-groups/create',
+      },
+      CERTIFICATE_TYPES: {
+        LIST: '/admin/categories/certificate-types',
+        DETAIL: '/admin/categories/certificate-types/:id',
+        EDIT: '/admin/categories/certificate-types/edit/:id',
+        CREATE: '/admin/categories/certificate-types/create',
+      },
+      CV_TEMPLATES: {
+        LIST: '/admin/categories/cv-templates',
+        DETAIL: '/admin/categories/cv-templates/:id',
+        EDIT: '/admin/categories/cv-templates/edit/:id',
+        CREATE: '/admin/categories/cv-templates/create',
       },
       JOB_ROLE_LEVELS: {
         LIST: '/admin/categories/job-role-levels',    

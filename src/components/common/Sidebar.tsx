@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SubItem {
   label: string;
@@ -23,6 +24,8 @@ interface SidebarProps {
 
 export default function Sidebar({ items, title }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (href: string) => {
@@ -31,6 +34,11 @@ export default function Sidebar({ items, title }: SidebarProps) {
         ? prev.filter(item => item !== href)
         : [...prev, href]
     );
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   return (
@@ -90,6 +98,20 @@ export default function Sidebar({ items, title }: SidebarProps) {
                   <div className="ml-6 mt-2 space-y-1">
                     {item.subItems!.map((subItem) => {
                       const isSubActive = location.pathname === subItem.href;
+                      
+                      // Handle logout specially
+                      if (subItem.href === '/logout') {
+                        return (
+                          <button
+                            key={subItem.href}
+                            onClick={handleLogout}
+                            className="w-full text-left block px-3 py-2 rounded-lg text-sm transition-colors text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            {subItem.label}
+                          </button>
+                        );
+                      }
+                      
                       return (
                         <Link
                           key={subItem.href}

@@ -1,7 +1,7 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
-export interface ApplyModel {
+export interface Apply {
   id: number;
   jobRequestId: number;
   cvId: number;
@@ -12,7 +12,7 @@ export interface ApplyModel {
   createdAt: string;
 }
 
-export interface ApplyCreateModel {
+export interface ApplyCreate {
   jobRequestId: number;
   cvId: number;
   submittedBy: string;
@@ -20,14 +20,19 @@ export interface ApplyCreateModel {
   convertedCVPath?: string;
 }
 
-export interface ApplyFilterModel {
+export interface ApplyStatusUpdate {
+  status: string;
+  note?: string;
+}
+
+export interface ApplyFilter {
   jobRequestId?: number;
   cvId?: number;
   status?: string;
 }
 
 export const applyService = {
-  async getAll(filter?: ApplyFilterModel) {
+  async getAll(filter?: ApplyFilter) {
     try {
       const params = new URLSearchParams();
 
@@ -38,7 +43,7 @@ export const applyService = {
       const url = `/apply${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
 
-      return response.data as ApplyModel[];
+      return response.data as Apply[];
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Cannot fetch apply list" };
@@ -49,7 +54,7 @@ export const applyService = {
   async getById(id: number) {
     try {
       const response = await axios.get(`/apply/${id}`);
-      return response.data as ApplyModel;
+      return response.data as Apply;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Cannot fetch apply details" };
@@ -57,10 +62,10 @@ export const applyService = {
     }
   },
 
-  async create(payload: ApplyCreateModel) {
+  async create(payload: ApplyCreate) {
     try {
       const response = await axios.post("/apply", payload);
-      return response.data as ApplyModel;
+      return response.data as Apply;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Cannot create apply" };
@@ -68,14 +73,25 @@ export const applyService = {
     }
   },
 
-  async update(id: number, payload: Partial<ApplyCreateModel> & { status?: string }) {
+  async update(id: number, payload: Partial<ApplyCreate> & { status?: string }) {
     try {
       const response = await axios.put(`/apply/${id}`, payload);
-      return response.data as ApplyModel;
+      return response.data as Apply;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Cannot update apply" };
       throw { message: "Unknown error while updating apply" };
+    }
+  },
+
+  async updateStatus(id: number, payload: ApplyStatusUpdate) {
+    try {
+      const response = await axios.patch(`/apply/${id}/status`, payload);
+      return response.data as Apply;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Cannot update apply status" };
+      throw { message: "Unknown error while updating apply status" };
     }
   },
 

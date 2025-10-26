@@ -15,7 +15,7 @@ export interface User {
   roles: string[];
 }
 
-export interface UserCreateModel {
+export interface UserCreate {
   email: string;
   fullName: string;
   phoneNumber?: string;
@@ -23,16 +23,16 @@ export interface UserCreateModel {
   role: string;
 }
 
-export interface UserUpdateModel {
+export interface UserUpdate {
   fullName: string;
   phoneNumber?: string;
 }
 
-export interface UserUpdateRoleModel {
+export interface UserUpdateRole {
   role: string;
 }
 
-export interface UserFilterModel {
+export interface UserFilter {
   name?: string;
   role?: string;
   isActive?: boolean;
@@ -52,7 +52,7 @@ export interface PagedResult<T> {
 }
 
 export const userService = {
-  async getAll(filter?: UserFilterModel): Promise<PagedResult<User>> {
+  async getAll(filter?: UserFilter): Promise<PagedResult<User>> {
     try {
       const params = new URLSearchParams();
 
@@ -91,7 +91,7 @@ export const userService = {
     }
   },
 
-  async create(payload: UserCreateModel): Promise<User> {
+  async create(payload: UserCreate): Promise<User> {
     try {
       const response = await axios.post("/user", payload);
       return response.data;
@@ -102,7 +102,7 @@ export const userService = {
     }
   },
 
-  async update(id: string, payload: UserUpdateModel): Promise<User> {
+  async update(id: string, payload: UserUpdate): Promise<User> {
     try {
       const response = await axios.put(`/user/${id}`, payload);
       return response.data;
@@ -113,7 +113,7 @@ export const userService = {
     }
   },
 
-  async updateRole(id: string, payload: UserUpdateRoleModel): Promise<User> {
+  async updateRole(id: string, payload: UserUpdateRole): Promise<User> {
     try {
       const response = await axios.put(`/user/${id}/role`, payload);
       return response.data;
