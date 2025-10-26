@@ -27,24 +27,18 @@ export default function IndustryListPage() {
     {
       title: 'Tổng Lĩnh Vực',
       value: industries.length.toString(),
-      change: '+3 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Briefcase className="w-6 h-6" />
     },
     {
       title: 'Có Mô Tả',
       value: industries.filter(i => i.description).length.toString(),
-      change: '+4 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <FileText className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Hoàn Thiện',
       value: `${Math.round((industries.filter(i => i.description).length / Math.max(industries.length, 1)) * 100)}%`,
-      change: '+8% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <TrendingUp className="w-6 h-6" />
     }
@@ -109,7 +103,7 @@ export default function IndustryListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-between items-center mb-6">
           <div>
-              <h1 className="text-3xl font-bold text-gray-900">Lĩnh vực</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Lĩnh vực (Industries)</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các lĩnh vực kinh doanh</p>
           </div>
           <Link to="/admin/categories/industries/create">
@@ -137,10 +131,6 @@ export default function IndustryListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>
@@ -268,14 +258,7 @@ export default function IndustryListPage() {
                           >
                             <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                             <span className="text-sm font-medium">Xem</span>
-                          </Link>
-                          <Link
-                            to={`/admin/categories/industries/edit/${i.id}`}
-                            className="group inline-flex items-center gap-1 px-3 py-2 text-secondary-600 hover:text-secondary-800 hover:bg-secondary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
-                          >
-                            <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="text-sm font-medium">Sửa</span>
-                    </Link>
+                          </Link>                       
                         </div>
                   </td>
                 </tr>

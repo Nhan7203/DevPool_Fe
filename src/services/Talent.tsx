@@ -1,42 +1,57 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
+import { WorkingMode } from "../types/WorkingMode";
 
-export interface Developer {
+export interface Talent {
   id: number;
+  currentPartnerId: number;
+  userId: string;
   fullName: string;
-  email?: string;
-  phone?: string;
-  level?: string;
-  yearsOfExp: number;
-  ratePerMonth: number;
-  status?: string;
-  githubUrl?: string;
-  portfolioUrl?: string;
-  partnerId?: number;
+  email: string;
+  phone: string;
+  dateOfBirth?: string; // DateTime as ISO string
+  locationId?: number;
+  workingMode: WorkingMode;
+  githubUrl: string;
+  portfolioUrl: string;
+  status: string;
 }
 
-export interface TalentPayload {
-  partnerId?: number;
-  userId?: string;
+export interface TalentFilter {
+  currentPartnerId?: number;
   fullName?: string;
   email?: string;
-  phone?: string;
-  level?: string;
-  yearsOfExp: number;
-  ratePerMonth?: number;
+  locationId?: number;
+  workingMode?: WorkingMode;
   status?: string;
-  githubUrl?: string;
-  portfolioUrl?: string;
+  excludeDeleted?: boolean;
+}
+
+export interface TalentCreate {
+  currentPartnerId: number;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth?: string; // DateTime as ISO string
+  locationId?: number;
+  workingMode: WorkingMode;
+  githubUrl: string;
+  portfolioUrl: string;
+  status: string;
 }
 
 export const talentService = {
-  async getAll(filter?: { fullName?: string; partnerId?: number; level?: string; status?: string }) {
+  async getAll(filter?: TalentFilter) {
     try {
       const params = new URLSearchParams();
+      if (filter?.currentPartnerId) params.append("CurrentPartnerId", filter.currentPartnerId.toString());
       if (filter?.fullName) params.append("FullName", filter.fullName);
-      if (filter?.partnerId) params.append("PartnerId", filter.partnerId.toString());
-      if (filter?.level) params.append("Level", filter.level);
+      if (filter?.email) params.append("Email", filter.email);
+      if (filter?.locationId) params.append("LocationId", filter.locationId.toString());
+      if (filter?.workingMode !== undefined) params.append("WorkingMode", filter.workingMode.toString());
       if (filter?.status) params.append("Status", filter.status);
+      if (filter?.excludeDeleted !== undefined) params.append("ExcludeDeleted", filter.excludeDeleted.toString());
       const url = `/talent${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
       return response.data;
@@ -58,7 +73,7 @@ export const talentService = {
     }
   },
 
-  async create(payload: TalentPayload) {
+  async create(payload: TalentCreate) {
     try {
       const response = await axios.post("/talent", payload);
       return response.data;
@@ -69,7 +84,7 @@ export const talentService = {
     }
   },
 
-  async update(id: number, payload: TalentPayload) {
+  async update(id: number, payload: Partial<TalentCreate>) {
     try {
       const response = await axios.put(`/talent/${id}`, payload);
       return response.data;

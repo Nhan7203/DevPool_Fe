@@ -7,7 +7,6 @@ import {
   Search, 
   Plus, 
   Eye, 
-  Edit, 
   Globe2, 
   Hash, 
   FileText, 
@@ -25,24 +24,18 @@ export default function MarketListPage() {
     {
       title: 'Tổng Thị Trường',
       value: markets.length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Globe2 className="w-6 h-6" />
     },
     {
       title: 'Có Mô Tả',
       value: markets.filter(m => m.description).length.toString(),
-      change: '+3 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <FileText className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Hoàn Thiện',
       value: `${Math.round((markets.filter(m => m.description).length / Math.max(markets.length, 1)) * 100)}%`,
-      change: '+5% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <TrendingUp className="w-6 h-6" />
     }
@@ -96,7 +89,7 @@ export default function MarketListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Thị trường</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Thị trường (Markets)</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các thị trường kinh doanh</p>
             </div>
             <Link to="/admin/categories/markets/create">
@@ -123,11 +116,7 @@ export default function MarketListPage() {
                     } transition-all duration-300`}>
                     {stat.icon}
                   </div>
-                </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
+                </div>            
               </div>
             ))}
           </div>
@@ -219,14 +208,7 @@ export default function MarketListPage() {
                           >
                             <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                             <span className="text-sm font-medium">Xem</span>
-                          </Link>
-                          <Link
-                            to={`/admin/categories/markets/edit/${m.id}`}
-                            className="group inline-flex items-center gap-1 px-3 py-2 text-secondary-600 hover:text-secondary-800 hover:bg-secondary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
-                          >
-                            <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="text-sm font-medium">Sửa</span>
-                          </Link>
+                          </Link>                     
                         </div>
                       </td>
                     </tr>

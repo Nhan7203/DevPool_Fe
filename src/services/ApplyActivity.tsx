@@ -2,26 +2,28 @@ import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
 export const ApplyActivityType = {
-    Interview: "Interview",
-    Test: "Test",
-    Meeting: "Meeting",
-    Review: "Review",
-} as const;
-export type ApplyActivityType = (typeof ApplyActivityType)[keyof typeof ApplyActivityType];
+    Interview: 0,
+    Test: 1,
+    Meeting: 2,
+    Review: 3,
+};
+
+export type ApplyActivityType = number;
 
 export const ApplyActivityStatus = {
-    Scheduled: "Scheduled",
-    Completed: "Completed",
-    Passed: "Passed",
-    Failed: "Failed",
-    Considered: "Considered",
-    NoShow: "NoShow",
-    } as const;
-export type ApplyActivityStatus = (typeof ApplyActivityStatus)[keyof typeof ApplyActivityStatus];
+    Scheduled: 0,
+    Completed: 1,
+    Passed: 2,
+    Failed: 3,
+    Approved: 4,
+    NoShow: 5,
+};
+
+export type ApplyActivityStatus = number;
 
 
 
-export interface ApplyActivityModel {
+export interface ApplyActivity {
     id: number;
     applyId: number;
     processStepId: number;
@@ -31,7 +33,7 @@ export interface ApplyActivityModel {
     notes: string;
 }
 
-export interface ApplyActivityCreateModel {
+export interface ApplyActivityCreate {
     applyId: number;
     processStepId: number;
     activityType: ApplyActivityType;
@@ -40,7 +42,12 @@ export interface ApplyActivityCreateModel {
     notes?: string;
 }
 
-export interface ApplyActivityFilterModel {
+export interface ApplyActivityStatusUpdate {
+    status: ApplyActivityStatus;
+    notes?: string;
+}
+
+export interface ApplyActivityFilter {
     applyId?: number;
     processStepId?: number;
     activityType?: ApplyActivityType;
@@ -52,23 +59,23 @@ export interface ApplyActivityFilterModel {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const applyActivityService = {
-    async getAll(filter?: ApplyActivityFilterModel) {
+    async getAll(filter?: ApplyActivityFilter) {
         try {
             const params = new URLSearchParams();
 
             if (filter?.applyId) params.append("ApplyId", filter.applyId.toString());
             if (filter?.processStepId) params.append("ProcessStepId", filter.processStepId.toString());
-            if (filter?.activityType) params.append("ActivityType", filter.activityType);
-            if (filter?.status) params.append("Status", filter.status);
+            if (filter?.activityType !== undefined) params.append("ActivityType", filter.activityType.toString());
+            if (filter?.status !== undefined) params.append("Status", filter.status.toString());
             if (filter?.scheduledDateFrom) params.append("ScheduledDateFrom", filter.scheduledDateFrom);
             if (filter?.scheduledDateTo) params.append("ScheduledDateTo", filter.scheduledDateTo);
             if (filter?.excludeDeleted !== undefined)
                 params.append("ExcludeDeleted", filter.excludeDeleted ? "true" : "false");
 
-            const url = `/apply-activity${params.toString() ? `?${params}` : ""}`;
+            const url = `/applyactivity${params.toString() ? `?${params}` : ""}`;
             const response = await axios.get(url);
 
-            return response.data as ApplyActivityModel[];
+            return response.data as ApplyActivity[];
         } catch (error: unknown) {
             if (error instanceof AxiosError)
                 throw error.response?.data || { message: "Cannot fetch apply activities" };
@@ -78,8 +85,8 @@ export const applyActivityService = {
 
     async getById(id: number) {
         try {
-            const response = await axios.get(`/apply-activity/${id}`);
-            return response.data as ApplyActivityModel;
+            const response = await axios.get(`/applyactivity/${id}`);
+            return response.data as ApplyActivity;
         } catch (error: unknown) {
             if (error instanceof AxiosError)
                 throw error.response?.data || { message: "Cannot fetch apply activity details" };
@@ -87,10 +94,10 @@ export const applyActivityService = {
         }
     },
 
-    async create(payload: ApplyActivityCreateModel) {
+    async create(payload: ApplyActivityCreate) {
         try {
-            const response = await axios.post("/apply-activity", payload);
-            return response.data as ApplyActivityModel;
+            const response = await axios.post("/applyactivity", payload);
+            return response.data as ApplyActivity;
         } catch (error: unknown) {
             if (error instanceof AxiosError)
                 throw error.response?.data || { message: "Cannot create apply activity" };
@@ -98,10 +105,10 @@ export const applyActivityService = {
         }
     },
 
-    async update(id: number, payload: Partial<ApplyActivityCreateModel> & { status?: ApplyActivityStatus }) {
+    async update(id: number, payload: Partial<ApplyActivityCreate> & { status?: ApplyActivityStatus }) {
         try {
-            const response = await axios.put(`/apply-activity/${id}`, payload);
-            return response.data as ApplyActivityModel;
+            const response = await axios.put(`/applyactivity/${id}`, payload);
+            return response.data as ApplyActivity;
         } catch (error: unknown) {
             if (error instanceof AxiosError)
                 throw error.response?.data || { message: "Cannot update apply activity" };
@@ -109,9 +116,20 @@ export const applyActivityService = {
         }
     },
 
+    async updateStatus(id: number, payload: ApplyActivityStatusUpdate) {
+        try {
+            const response = await axios.patch(`/applyactivity/${id}/status`, payload);
+            return response.data as ApplyActivity;
+        } catch (error: unknown) {
+            if (error instanceof AxiosError)
+                throw error.response?.data || { message: "Cannot update apply activity status" };
+            throw { message: "Unknown error while updating apply activity status" };
+        }
+    },
+
     async delete(id: number) {
         try {
-            const response = await axios.delete(`/apply-activity/${id}`);
+            const response = await axios.delete(`/applyactivity/${id}`);
             return response.data;
         } catch (error: unknown) {
             if (error instanceof AxiosError)

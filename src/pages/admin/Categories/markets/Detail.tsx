@@ -10,7 +10,6 @@ import {
   Trash2, 
   Hash, 
   FileText, 
-  Calendar, 
   Building2,
   AlertCircle,
   CheckCircle
@@ -189,11 +188,6 @@ export default function MarketDetailPage() {
                   label="Mô tả" 
                   value={market.description || "Không có mô tả"}
                   icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="ID" 
-                  value={market.id.toString()}
-                  icon={<Calendar className="w-4 h-4" />}
                 />
               </div>
             </div>

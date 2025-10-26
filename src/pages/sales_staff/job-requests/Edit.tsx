@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { jobRequestService, type JobRequestPayload, WorkingMode } from "../../../services/JobRequest";
+import { jobRequestService, type JobRequestPayload } from "../../../services/JobRequest";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
@@ -25,10 +25,9 @@ import {
   CheckSquare,
   Building2,
   Calendar,
-  AlertCircle,
-  Plus,
-  Minus
+  AlertCircle
 } from "lucide-react";
+import { WorkingMode } from "../../../types/WorkingMode";
 
 export default function JobRequestEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,7 +37,7 @@ export default function JobRequestEditPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);

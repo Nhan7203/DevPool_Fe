@@ -1,20 +1,40 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
-import { jobRequestService } from "../../../services/JobRequest";
+import { jobRequestService, type JobRequestStatus } from "../../../services/JobRequest";
+import { WorkingMode } from "../../../types/WorkingMode";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { jobRoleService } from "../../../services/JobRole";
 import { skillService, type Skill } from "../../../services/Skill";
+import { locationService } from "../../../services/location";
+import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
+import { 
+  ArrowLeft, 
+  CheckCircle, 
+  XCircle, 
+  Building2, 
+  Briefcase, 
+  Users, 
+  DollarSign, 
+  Calendar, 
+  FileText, 
+  Target,
+  Clock,
+  AlertCircle,
+  Sparkles
+} from "lucide-react";
 
 interface JobRequestDetail {
     id: number;
     jobRoleLevelId: number;
     projectId: number;
+    applyProcessTemplateId?: number | null;
     clientCompanyCVTemplateId: number;
     title: string;
     projectName?: string;
@@ -24,6 +44,8 @@ interface JobRequestDetail {
     quantity: number;
     budgetPerMonth?: number | null;
     status: string;
+    workingMode?: number;
+    locationId?: number | null;
     description?: string;
     requirements?: string;
     clientCompanyCVTemplateName?: string;
@@ -35,20 +57,18 @@ export default function JobRequestDetailHRPage() {
     const navigate = useNavigate();
     const [jobRequest, setJobRequest] = useState<JobRequestDetail | null>(null);
     const [jobSkills, setJobSkills] = useState<{ id: number; name: string }[]>([]);
+    const [jobRoleName, setJobRoleName] = useState<string>("—");
+    const [locationName, setLocationName] = useState<string>("—");
+    const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
 
-    const levelLabels: Record<number, string> = {
-        0: "Junior",
-        1: "Middle",
-        2: "Senior",
-        3: "Lead",
-    };
-
-    const statusLabels: Record<number, string> = {
-        0: "Chờ duyệt",
-        1: "Đã duyệt",
-        2: "Đã từ chối",
+    const workingModeLabels: Record<number, string> = {
+        0: "Không xác định",
+        1: "Onsite",
+        2: "Remote",
+        4: "Hybrid",
+        8: "Linh hoạt",
     };
 
     useEffect(() => {
@@ -84,6 +104,27 @@ export default function JobRequestDetailHRPage() {
                     templateName = matched ? matched.templateName : "—";
                 }
 
+                if (position) {
+                    try {
+                        const role = await jobRoleService.getById(position.jobRoleId);
+                        setJobRoleName(role?.name ?? "—");
+                    } catch {}
+                }
+
+                if (jobReqData.locationId) {
+                    try {
+                        const loc = await locationService.getById(jobReqData.locationId);
+                        setLocationName(loc?.name ?? "—");
+                    } catch {}
+                }
+
+                if (jobReqData.applyProcessTemplateId) {
+                    try {
+                        const apt = await applyProcessTemplateService.getById(jobReqData.applyProcessTemplateId);
+                        setApplyProcessTemplateName(apt?.name ?? "—");
+                    } catch {}
+                }
+
                 const jobReqWithExtra: JobRequestDetail = {
                     ...jobReqData,
                     projectName: project?.name || "—",
@@ -113,7 +154,7 @@ export default function JobRequestDetailHRPage() {
         fetchData();
     }, [id]);
 
-    const handleApprove = async (status: number) => {
+    const handleApprove = async (status: JobRequestStatus) => {
         if (!id || !jobRequest) return;
 
         // 🧩 Kiểm tra bắt buộc trước khi cập nhật
@@ -139,14 +180,19 @@ export default function JobRequestDetailHRPage() {
             await jobRequestService.update(Number(id), {
                 jobRoleLevelId: jobRequest.jobRoleLevelId,
                 projectId: jobRequest.projectId,
+                applyProcessTemplateId: jobRequest.applyProcessTemplateId,
                 clientCompanyCVTemplateId: jobRequest.clientCompanyCVTemplateId,
                 title: jobRequest.title,
                 description: jobRequest.description ?? "",
                 requirements: jobRequest.requirements ?? "",
+                quantity: jobRequest.quantity,
+                locationId: jobRequest.locationId,
+                workingMode: (jobRequest.workingMode ?? 0) as WorkingMode,
+                budgetPerMonth: jobRequest.budgetPerMonth,
                 skillIds: jobSkills.map((s) => s.id),
-                status,
+                status: status,
             });
-            alert("✅ Cập nhật trạng thái thành công!");
+            alert(`✅ ${status === 1 ? 'Đã duyệt' : 'Đã từ chối'} yêu cầu tuyển dụng thành công!`);
             navigate("/hr/job-requests");
         } catch (err) {
             console.error("❌ Lỗi cập nhật trạng thái:", err);
@@ -156,152 +202,308 @@ export default function JobRequestDetailHRPage() {
         }
     };
 
+    const handleMatchingCV = () => {
+        navigate(`/hr/job-requests/matching-cv?jobRequestId=${id}`);
+    };
+
     if (loading) {
         return (
-            <div className="flex justify-center items-center min-h-screen text-gray-500">
-                Đang tải dữ liệu yêu cầu tuyển dụng...
+            <div className="flex bg-gray-50 min-h-screen">
+                <Sidebar items={sidebarItems} title="HR Staff" />
+                <div className="flex-1 flex justify-center items-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                        <p className="text-gray-500">Đang tải dữ liệu yêu cầu tuyển dụng...</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (!jobRequest) {
         return (
-            <div className="flex justify-center items-center min-h-screen text-red-500">
-                Không tìm thấy yêu cầu tuyển dụng
+            <div className="flex bg-gray-50 min-h-screen">
+                <Sidebar items={sidebarItems} title="HR Staff" />
+                <div className="flex-1 flex justify-center items-center">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <XCircle className="w-8 h-8 text-red-500" />
+                        </div>
+                        <p className="text-red-500 text-lg font-medium">Không tìm thấy yêu cầu tuyển dụng</p>
+                        <Link 
+                            to="/hr/job-requests"
+                            className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
+                        >
+                            ← Quay lại danh sách
+                        </Link>
+                    </div>
+                </div>
             </div>
         );
     }
+
+    const getStatusConfig = (status: number) => {
+        switch (status) {
+            case 0:
+                return {
+                    label: "Chờ duyệt",
+                    color: "bg-yellow-100 text-yellow-800",
+                    icon: <Clock className="w-4 h-4" />,
+                    bgColor: "bg-yellow-50"
+                };
+            case 1:
+                return {
+                    label: "Đã duyệt",
+                    color: "bg-green-100 text-green-800",
+                    icon: <CheckCircle className="w-4 h-4" />,
+                    bgColor: "bg-green-50"
+                };
+            case 2:
+                return {
+                    label: "Đã từ chối",
+                    color: "bg-red-100 text-red-800",
+                    icon: <XCircle className="w-4 h-4" />,
+                    bgColor: "bg-red-50"
+                };
+            default:
+                return {
+                    label: "Không xác định",
+                    color: "bg-gray-100 text-gray-800",
+                    icon: <AlertCircle className="w-4 h-4" />,
+                    bgColor: "bg-gray-50"
+                };
+        }
+    };
+
+    const statusConfig = getStatusConfig(Number(jobRequest.status));
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
             <Sidebar items={sidebarItems} title="HR Staff" />
 
             <div className="flex-1 p-8">
-                {/* 🏷 Header */}
-                <div className="mb-8 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            {jobRequest.title}
-                        </h1>
-                        <p className="text-neutral-600 mt-1">
-                            Thông tin chi tiết yêu cầu tuyển dụng (HR xem & duyệt).
-                        </p>
+                {/* Header */}
+                <div className="mb-8 animate-slide-up">
+                    <div className="flex items-center gap-4 mb-6">
+                        <Link 
+                            to="/hr/job-requests"
+                            className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+                        >
+                            <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                            <span className="font-medium">Quay lại danh sách</span>
+                        </Link>
                     </div>
 
-                    {/* ✅ Nút chỉ cho phép duyệt / từ chối */}
-                    <div className="flex gap-3">
-                        <Button
-                            onClick={() => handleApprove(1)}
-                            disabled={updating || Number(jobRequest.status) === 1}
-                            className={`px-6 py-2.5 rounded-xl font-medium transition-all duration-300 shadow-sm ${Number(jobRequest.status) === 1
-                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                : "bg-green-600 hover:bg-green-700 text-white"
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{jobRequest.title}</h1>
+                            <p className="text-neutral-600 mb-4">
+                                Thông tin chi tiết yêu cầu tuyển dụng (HR xem & duyệt)
+                            </p>
+                            
+                            {/* Status Badge */}
+                            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
+                                {statusConfig.icon}
+                                <span className={`text-sm font-medium ${statusConfig.color}`}>
+                                    {statusConfig.label}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                onClick={handleMatchingCV}
+                                disabled={Number(jobRequest.status) !== 1}
+                                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                                    Number(jobRequest.status) !== 1
+                                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                                        : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
                                 }`}
-                        >
-                            Duyệt
-                        </Button>
-                        <Button
-                            onClick={() => handleApprove(2)}
-                            disabled={updating || Number(jobRequest.status) === 2}
-                            className={`px-6 py-2.5 rounded-xl font-medium transition-all duration-300 shadow-sm ${Number(jobRequest.status) === 2
-                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700 text-white"
+                                title={Number(jobRequest.status) !== 1 ? "Cần duyệt yêu cầu trước khi matching CV" : ""}
+                            >
+                                <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                Matching CV AI
+                            </Button>
+                            <Button
+                                onClick={() => handleApprove(1)}
+                                disabled={updating || Number(jobRequest.status) === 1}
+                                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                                    updating || Number(jobRequest.status) === 1
+                                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                                        : "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
                                 }`}
-                        >
-                            Từ chối
-                        </Button>
+                            >
+                                <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                Duyệt
+                            </Button>
+                            <Button
+                                onClick={() => handleApprove(2)}
+                                disabled={updating || Number(jobRequest.status) === 2 || Number(jobRequest.status) === 1}
+                                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                                    updating || Number(jobRequest.status) === 2 || Number(jobRequest.status) === 1
+                                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                                }`}
+                            >
+                                <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                Từ chối
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            
+                {/* Thông tin chung */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+                    <div className="p-6 border-b border-neutral-200">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-primary-100 rounded-lg">
+                                <FileText className="w-5 h-5 text-primary-600" />
+                            </div>
+                            <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <InfoItem 
+                                label="Công ty khách hàng" 
+                                value={jobRequest.clientCompanyName ?? "—"} 
+                                icon={<Building2 className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Dự án" 
+                                value={jobRequest.projectName ?? "—"} 
+                                icon={<Briefcase className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Vị trí tuyển dụng" 
+                                value={jobRequest.jobPositionName ?? "—"} 
+                                icon={<Users className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Loại vị trí tuyển dụng" 
+                                value={jobRoleName} 
+                                icon={<Users className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Ngân sách/tháng" 
+                                value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
+                                icon={<DollarSign className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Địa điểm (Location)" 
+                                value={locationName} 
+                                icon={<Building2 className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Chế độ làm việc" 
+                                value={workingModeLabels[Number(jobRequest.workingMode ?? 0)] ?? "—"} 
+                                icon={<Calendar className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Mẫu CV khách hàng" 
+                                value={jobRequest.clientCompanyCVTemplateName ?? "—"} 
+                                icon={<FileText className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Quy trình Apply" 
+                                value={applyProcessTemplateName} 
+                                icon={<FileText className="w-4 h-4" />}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* 📋 Thông tin chung */}
-                <div className="bg-white rounded-2xl shadow-soft p-6 mb-8">
-                    <h2 className="text-xl font-semibold mb-4 text-primary-700">
-                        Thông tin chung
-                    </h2>
-                    <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                        <InfoItem label="Công ty khách hàng" value={jobRequest.clientCompanyName ?? "—"} />
-                        <InfoItem label="Dự án" value={jobRequest.projectName ?? "—"} />
-                        <InfoItem label="Vị trí" value={jobRequest.jobPositionName ?? "—"} />
-                        <InfoItem label="Cấp độ" value={levelLabels[parseInt(jobRequest.level)]} />
-                        <InfoItem label="Số lượng cần tuyển" value={String(jobRequest.quantity)} />
-                        <InfoItem
-                            label="Ngân sách (VNĐ/tháng)"
-                            value={
-                                jobRequest.budgetPerMonth
-                                    ? jobRequest.budgetPerMonth.toLocaleString("vi-VN")
-                                    : "—"
-                            }
-                        />
-                        <InfoItem
-                            label="Trạng thái"
-                            value={statusLabels[parseInt(jobRequest.status)]}
-                        />
-                        <InfoItem
-                            label="CV Template khách hàng"
-                            value={jobRequest.clientCompanyCVTemplateName ?? "—"}
-                        />
+                {/* Mô tả & Yêu cầu */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+                    {/* Mô tả công việc */}
+                    <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+                        <div className="p-6 border-b border-neutral-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-secondary-100 rounded-lg">
+                                    <FileText className="w-5 h-5 text-secondary-600" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900">Mô tả công việc</h3>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <div className="prose prose-sm max-w-none">
+                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                                    {jobRequest.description || "Chưa có mô tả công việc cụ thể"}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Yêu cầu ứng viên */}
+                    <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+                        <div className="p-6 border-b border-neutral-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-accent-100 rounded-lg">
+                                    <Target className="w-5 h-5 text-accent-600" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <div className="prose prose-sm max-w-none">
+                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                                    {jobRequest.requirements || "Chưa có yêu cầu cụ thể cho ứng viên"}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* 🧾 Mô tả & Yêu cầu & Kỹ năng */}
-                <div className="bg-white rounded-2xl shadow-soft p-6 space-y-6">
-                    <div>
-                        <h3 className="text-lg font-semibold text-primary-700 mb-2">
-                            Mô tả công việc
-                        </h3>
-                        <p className="whitespace-pre-line text-gray-800">
-                            {jobRequest.description || "Chưa có mô tả"}
-                        </p>
+                {/* Kỹ năng yêu cầu */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mt-8 animate-fade-in">
+                    <div className="p-6 border-b border-neutral-200">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-warning-100 rounded-lg">
+                                <Briefcase className="w-5 h-5 text-warning-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
+                        </div>
                     </div>
-
-                    <div>
-                        <h3 className="text-lg font-semibold text-primary-700 mb-2">
-                            Yêu cầu ứng viên
-                        </h3>
-                        <p className="whitespace-pre-line text-gray-800">
-                            {jobRequest.requirements || "Chưa có yêu cầu cụ thể"}
-                        </p>
-                    </div>
-
-                    <div>
-                        <h3 className="text-lg font-semibold text-primary-700 mb-2">
-                            Kỹ năng yêu cầu
-                        </h3>
+                    <div className="p-6">
                         {jobSkills.length > 0 ? (
-                            <ul className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-3">
                                 {jobSkills.map((skill) => (
-                                    <li
+                                    <span
                                         key={skill.id}
-                                        className="bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm font-medium"
+                                        className="group inline-flex items-center gap-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 px-4 py-2 rounded-xl text-sm font-medium border border-primary-200 hover:from-primary-200 hover:to-primary-300 transition-all duration-300 hover:scale-105 transform"
                                     >
+                                        <Target className="w-3 h-3 group-hover:scale-110 transition-transform duration-300" />
                                         {skill.name}
-                                    </li>
+                                    </span>
                                 ))}
-                            </ul>
+                            </div>
                         ) : (
-                            <p className="text-gray-800">Chưa có kỹ năng yêu cầu</p>
+                            <div className="text-center py-8">
+                                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Briefcase className="w-8 h-8 text-neutral-400" />
+                                </div>
+                                <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng yêu cầu</p>
+                                <p className="text-neutral-400 text-sm mt-1">Thêm kỹ năng để tìm ứng viên phù hợp</p>
+                            </div>
                         )}
                     </div>
-                </div>
-
-                <div className="mt-8">
-                    <Link
-                        to="/hr/job-requests"
-                        className="text-primary-600 hover:underline text-sm"
-                    >
-                        ← Quay lại danh sách
-                    </Link>
                 </div>
             </div>
         </div>
     );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+
+function InfoItem({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
     return (
-        <div>
-            <p className="text-gray-500 text-sm">{label}</p>
-            <p className="text-gray-900 font-medium">{value || "—"}</p>
+        <div className="group">
+            <div className="flex items-center gap-2 mb-2">
+                {icon && <div className="text-neutral-400">{icon}</div>}
+                <p className="text-neutral-500 text-sm font-medium">{label}</p>
+            </div>
+            <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+                {value || "—"}
+            </p>
         </div>
     );
 }

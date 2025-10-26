@@ -12,7 +12,6 @@ import {
   Filter, 
   Eye, 
   Plus, 
-  TrendingUp, 
   Briefcase, 
   DollarSign,
   Calendar,
@@ -55,32 +54,24 @@ export default function JobRequestListPage() {
     {
       title: 'Tổng Yêu Cầu',
       value: requests.length.toString(),
-      change: '+12 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Briefcase className="w-6 h-6" />
     },
     {
       title: 'Đã Duyệt',
       value: requests.filter(r => r.status === JobRequestStatus.Approved).length.toString(),
-      change: '+8 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <Target className="w-6 h-6" />
     },
     {
       title: 'Chờ Duyệt',
       value: requests.filter(r => r.status === JobRequestStatus.Pending).length.toString(),
-      change: '+4 tuần này',
-      trend: 'up',
       color: 'orange',
       icon: <Calendar className="w-6 h-6" />
     },
     {
       title: 'Tổng Ngân Sách',
       value: requests.reduce((sum, r) => sum + (r.budgetPerMonth || 0), 0).toLocaleString('vi-VN'),
-      change: '+15% tháng này',
-      trend: 'up',
       color: 'purple',
       icon: <DollarSign className="w-6 h-6" />
     }
@@ -193,10 +184,6 @@ export default function JobRequestListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>

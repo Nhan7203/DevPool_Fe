@@ -14,11 +14,8 @@ import {
   MapPin, 
   User, 
   Briefcase, 
-  Calendar,
-  FileText,
   CheckCircle,
   XCircle,
-  TrendingUp
 } from "lucide-react";
 
 export default function ClientCompanyDetailPage() {
@@ -158,38 +155,6 @@ export default function ClientCompanyDetailPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-fade-in">
-          <StatCard
-            title="Ngày tạo"
-            value={new Date(company.createdAt).toLocaleDateString('vi-VN')}
-            icon={<Calendar className="w-6 h-6" />}
-            color="blue"
-            change="Tài khoản mới"
-          />
-          <StatCard
-            title="Cập nhật cuối"
-            value={company.updatedAt ? new Date(company.updatedAt).toLocaleDateString('vi-VN') : "Chưa có"}
-            icon={<TrendingUp className="w-6 h-6" />}
-            color="green"
-            change="Hoạt động gần đây"
-          />
-          <StatCard
-            title="Trạng thái"
-            value={company.isDeleted ? "Đã xóa" : "Hoạt động"}
-            icon={company.isDeleted ? <XCircle className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />}
-            color={company.isDeleted ? "red" : "green"}
-            change="Trạng thái hiện tại"
-          />
-          <StatCard
-            title="Thông tin"
-            value={`${company.taxCode ? 'Có MST' : 'Chưa có MST'}`}
-            icon={<FileText className="w-6 h-6" />}
-            color="purple"
-            change="Mức độ hoàn thiện"
-          />
-        </div>
-
         {/* Company Information */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
@@ -242,47 +207,6 @@ export default function ClientCompanyDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, icon, color, change }: { 
-  title: string; 
-  value: string; 
-  icon: React.ReactNode; 
-  color: string; 
-  change: string; 
-}) {
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case 'blue':
-        return 'bg-primary-100 text-primary-600 group-hover:bg-primary-200';
-      case 'green':
-        return 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200';
-      case 'purple':
-        return 'bg-accent-100 text-accent-600 group-hover:bg-accent-200';
-      case 'red':
-        return 'bg-red-100 text-red-600 group-hover:bg-red-200';
-      default:
-        return 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200';
-    }
-  };
-
-  return (
-    <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{value}</p>
-        </div>
-        <div className={`p-3 rounded-full ${getColorClasses(color)} transition-all duration-300`}>
-          {icon}
-        </div>
-      </div>
-      <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-        <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-        {change}
-      </p>
     </div>
   );
 }

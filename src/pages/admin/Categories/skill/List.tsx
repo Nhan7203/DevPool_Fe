@@ -10,7 +10,6 @@ import {
   Plus, 
   Eye, 
   Code, 
-  TrendingUp, 
   FileText,
   Building2
 } from "lucide-react";
@@ -27,8 +26,6 @@ export default function SkillListPage() {
     {
       title: 'Tổng Kỹ Năng',
       value: skills.length.toString(),
-      change: '+5 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <Code className="w-6 h-6" />
     },
@@ -36,24 +33,18 @@ export default function SkillListPage() {
     {
       title: 'Có Mô Tả',
       value: skills.filter(s => s.description && s.description.trim()).length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <FileText className="w-6 h-6" />
     },
     {
       title: 'Nhóm Kỹ Năng',
       value: skillGroups.length.toString(),
-      change: '+1 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <Building2 className="w-6 h-6" />
     },
     {
       title: 'Tỷ Lệ Có Mô Tả',
       value: `${Math.round((skills.filter(s => s.description && s.description.trim()).length / Math.max(skills.length, 1)) * 100)}%`,
-      change: '+3% tháng này',
-      trend: 'up',
       color: 'orange',
       icon: <Building2 className="w-6 h-6" />
     }
@@ -122,7 +113,7 @@ export default function SkillListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Kỹ năng tuyển dụng</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Kỹ năng tuyển dụng (Skills)</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các kỹ năng trong hệ thống</p>
             </div>
             <Link to="/admin/categories/skills/create">
@@ -150,10 +141,6 @@ export default function SkillListPage() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { jobRequestService, WorkingMode, JobRequestStatus } from "../../../services/JobRequest";
+import { jobRequestService, JobRequestStatus } from "../../../services/JobRequest";
 import { skillService, type Skill } from "../../../services/Skill";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
@@ -26,6 +26,7 @@ import {
   CheckCircle,
   X
 } from "lucide-react";
+import { WorkingMode } from "../../../types/WorkingMode";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();

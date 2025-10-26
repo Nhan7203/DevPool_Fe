@@ -1,16 +1,6 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
-
-export const WorkingMode = {
-  None: 0,
-  Onsite: 1,
-  Remote: 2,
-  Hybrid: 4,
-  Flexible: 8,
-
-} as const;
-
-export type WorkingMode = typeof WorkingMode[keyof typeof WorkingMode];
+import { WorkingMode } from "../types/WorkingMode";
 
 export const JobRequestStatus = {
   Pending: 0,

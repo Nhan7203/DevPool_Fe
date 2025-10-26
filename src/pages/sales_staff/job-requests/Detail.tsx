@@ -24,7 +24,6 @@ import {
   Calendar, 
   FileText, 
   Target,
-  TrendingUp,
   CheckCircle,
   Clock,
   XCircle,
@@ -311,32 +310,6 @@ export default function JobRequestDetailPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-fade-in">
-          <StatCard
-            title="Số lượng cần tuyển"
-            value={jobRequest.quantity.toString()}
-            icon={<Users className="w-6 h-6" />}
-            color="blue"
-            change="+2 tuần này"
-          />
-          <StatCard
-            title="Ngân sách/tháng"
-            value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString('vi-VN')} VNĐ` : "Chưa xác định"}
-            icon={<DollarSign className="w-6 h-6" />}
-            color="green"
-            change="+15% tháng này"
-          />
-          {/* Removed level card as requested */}
-          <StatCard
-            title="Kỹ năng yêu cầu"
-            value={`${jobSkills.length} kỹ năng`}
-            icon={<Briefcase className="w-6 h-6" />}
-            color="orange"
-            change="+3 kỹ năng"
-          />
-        </div>
-
         {/* Thông tin chung */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
@@ -475,47 +448,6 @@ export default function JobRequestDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, icon, color, change }: { 
-  title: string; 
-  value: string; 
-  icon: React.ReactNode; 
-  color: string; 
-  change: string; 
-}) {
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case 'blue':
-        return 'bg-primary-100 text-primary-600 group-hover:bg-primary-200';
-      case 'green':
-        return 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200';
-      case 'purple':
-        return 'bg-accent-100 text-accent-600 group-hover:bg-accent-200';
-      case 'orange':
-        return 'bg-warning-100 text-warning-600 group-hover:bg-warning-200';
-      default:
-        return 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200';
-    }
-  };
-
-  return (
-    <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{value}</p>
-        </div>
-        <div className={`p-3 rounded-full ${getColorClasses(color)} transition-all duration-300`}>
-          {icon}
-        </div>
-      </div>
-      <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-        <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-        {change}
-      </p>
     </div>
   );
 }

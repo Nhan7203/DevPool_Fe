@@ -1,7 +1,7 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
-// Model Industry
+//  Industry
 export interface Industry {
   id: number;
   name: string;

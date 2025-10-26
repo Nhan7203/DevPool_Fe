@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Building2, Mail, Phone, MapPin, User, FileText } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerService, type PartnerPayload } from '../../../services/Partner';
+import { ROUTES } from '../../../router/routes';
 
 export default function CreatePartner() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<PartnerPayload>({
     companyName: '',
@@ -26,14 +29,7 @@ export default function CreatePartner() {
     try {
       await partnerService.create(formData);
       alert('✅ Tạo đối tác thành công!');
-      setFormData({
-        companyName: '',
-        taxCode: '',
-        contactPerson: '',
-        email: '',
-        phone: '',
-        address: '',
-      });
+      navigate(ROUTES.HR_STAFF.PARTNERS.LIST);
     } catch (error) {
       console.error(error);
       alert('❌ Lỗi khi tạo đối tác!');
