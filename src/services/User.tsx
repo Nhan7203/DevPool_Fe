@@ -32,6 +32,15 @@ export interface UserUpdateRole {
   role: string;
 }
 
+export interface UserRegister {
+  email: string;
+  fullName: string;
+  phoneNumber?: string;
+  avatarUrl?: string;
+  address?: string;
+  role: string;
+}
+
 export interface UserFilter {
   name?: string;
   role?: string;
@@ -88,6 +97,17 @@ export const userService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tải thông tin người dùng" };
       throw { message: "Lỗi không xác định khi tải dữ liệu" };
+    }
+  },
+
+  async register(payload: UserRegister): Promise<User> {
+    try {
+      const response = await axios.post("/auth/register", payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể đăng ký người dùng mới" };
+      throw { message: "Lỗi không xác định khi đăng ký người dùng" };
     }
   },
 

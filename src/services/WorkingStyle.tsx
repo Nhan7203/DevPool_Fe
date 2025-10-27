@@ -32,8 +32,14 @@ export const workingStyleService = {
 
       return response.data;
     } catch (error: unknown) {
-      if (error instanceof AxiosError)
+      if (error instanceof AxiosError) {
+        // Nếu endpoint không tồn tại, trả về mảng rỗng thay vì throw error
+        if (error.response?.status === 404) {
+          console.warn("⚠️ WorkingStyle endpoint không tồn tại (404), trả về mảng rỗng");
+          return [];
+        }
         throw error.response?.data || { message: "Không thể tải danh sách phong cách làm việc" };
+      }
       throw { message: "Lỗi không xác định khi tải dữ liệu" };
     }
   },

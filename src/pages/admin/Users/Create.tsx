@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { User, Mail, Phone, Shield, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, Shield } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/admin/SidebarItems';
-import { userService, type UserCreateModel } from '../../../services/User';
+import { userService, type UserRegister } from '../../../services/User';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -10,16 +10,12 @@ export default function CreateAccount() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  
   // Static list of available roles (since backend doesn't have getRoles API yet)
   const availableRoles = [
-    'Admin',
     'Manager', 
     'HR',
     'Sale',
-    'Accountant',
-    'Dev'
+    'Accountant'
   ];
   
   // Form state
@@ -27,8 +23,7 @@ export default function CreateAccount() {
     fullName: '',
     email: '',
     phoneNumber: '',
-    password: '',
-    role: 'Dev'
+    role: 'HR'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -47,21 +42,26 @@ export default function CreateAccount() {
     setError(null);
 
     try {
-      const payload: UserCreateModel = {
+      const payload: UserRegister = {
         email: formData.email,
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber || undefined,
-        password: formData.password,
         role: formData.role
       };
 
-      await userService.create(payload);
+      await userService.register(payload);
       
       // Success - redirect to user list
       navigate('/admin/users');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("❌ Lỗi khi tạo người dùng:", err);
-      setError(err.message || "Không thể tạo người dùng. Vui lòng thử lại.");
+      // Hiển thị chi tiết lỗi từ backend nếu có
+      let errorMessage = "Không thể tạo người dùng. Vui lòng thử lại.";
+      if (err && typeof err === 'object') {
+        const error = err as { response?: { data?: { message?: string } }; message?: string };
+        errorMessage = error.response?.data?.message || error.message || errorMessage;
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -133,10 +133,8 @@ export default function CreateAccount() {
                 </div>
               </div>
 
-              {/* Grid for Phone and Password */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Số điện thoại */}
-                <div>
+              {/* Số điện thoại */}
+              <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Số điện thoại
                   </label>
@@ -153,34 +151,9 @@ export default function CreateAccount() {
                   </div>
                 </div>
 
-                {/* Mật khẩu */}
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Mật khẩu
-                  </label>
-                  <div className="relative group">
-                    <Shield className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 transition-colors duration-300 group-focus-within:text-primary-500" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      name="password"
-                      value={formData.password}
-                      onChange={handleInputChange}
-                      required
-                      minLength={6}
-                      className="w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 placeholder-neutral-500 border-neutral-300 focus:border-primary-500 hover:border-neutral-400"
-                      placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors duration-300"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
+                <p className="text-xs text-neutral-500 mt-2">
+                  Mật khẩu sẽ được tự động tạo và gửi qua email
+                </p>
               {/* Vai trò */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">
