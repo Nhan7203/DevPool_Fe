@@ -31,8 +31,15 @@ export default function CVMatchingPage() {
     const jobRequestId = searchParams.get("jobRequestId");
 
     const [matchResults, setMatchResults] = useState<EnrichedMatchResult[]>([]);
+    const [allMatchResults, setAllMatchResults] = useState<EnrichedMatchResult[]>([]);
     const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showFilters, setShowFilters] = useState(false);
+    
+    // Filter states
+    const [minScore, setMinScore] = useState(0);
+    const [showMissingSkillsOnly, setShowMissingSkillsOnly] = useState(false);
+    const [hideLowScore, setHideLowScore] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -73,6 +80,7 @@ export default function CVMatchingPage() {
                 );
 
                 console.log("✅ Final enriched matches:", enrichedMatches);
+                setAllMatchResults(enrichedMatches);
                 setMatchResults(enrichedMatches);
             } catch (err) {
                 console.error("❌ Lỗi khi tải danh sách CV matching:", err);
@@ -97,6 +105,32 @@ export default function CVMatchingPage() {
         if (score >= 60) return "Tốt";
         if (score >= 40) return "Trung bình";
         return "Thấp";
+    };
+
+    // Apply filters
+    useEffect(() => {
+        let filtered = [...allMatchResults];
+        
+        // Filter by min score
+        filtered = filtered.filter(r => r.matchScore >= minScore);
+        
+        // Filter by hiding low score
+        if (hideLowScore) {
+            filtered = filtered.filter(r => r.matchScore >= 60);
+        }
+        
+        // Filter by missing skills only
+        if (showMissingSkillsOnly) {
+            filtered = filtered.filter(r => r.missingSkills.length === 0);
+        }
+        
+        setMatchResults(filtered);
+    }, [minScore, showMissingSkillsOnly, hideLowScore, allMatchResults]);
+
+    const resetFilters = () => {
+        setMinScore(0);
+        setShowMissingSkillsOnly(false);
+        setHideLowScore(false);
     };
 
     const handleCreateApplication = async (match: EnrichedMatchResult) => {
@@ -184,6 +218,72 @@ export default function CVMatchingPage() {
                                 </span>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Filter Panel */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+                    <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900">Cấu hình lọc</h2>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={resetFilters}
+                                    className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-primary-600 transition-colors"
+                                >
+                                    Reset
+                                </button>
+                                <button
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                                >
+                                    {showFilters ? 'Ẩn' : 'Hiện'} Filter
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {showFilters && (
+                            <div className="space-y-4 pt-4 border-t border-neutral-200">
+                                {/* Min Score Slider */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Điểm tối thiểu: {minScore}%
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        value={minScore}
+                                        onChange={(e) => setMinScore(Number(e.target.value))}
+                                        className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                                
+                                {/* Checkboxes */}
+                                <div className="flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={hideLowScore}
+                                            onChange={(e) => setHideLowScore(e.target.checked)}
+                                            className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Ẩn CV có điểm thấp (&lt;60%)</span>
+                                    </label>
+                                    
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={showMissingSkillsOnly}
+                                            onChange={(e) => setShowMissingSkillsOnly(e.target.checked)}
+                                            className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Chỉ hiện CV đủ kỹ năng</span>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -75,6 +75,8 @@ export default function ApplyActivityDetailPage() {
   const navigate = useNavigate();
   const [activity, setActivity] = useState<ApplyActivityDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allActivities, setAllActivities] = useState<ApplyActivity[]>([]);
+  const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -86,10 +88,13 @@ export default function ApplyActivityDetailPage() {
         
         // Fetch process step name
         let processStepName = "—";
+        let stepOrder = 0;
         try {
           const step = await applyProcessStepService.getById(activityData.processStepId);
           processStepName = step.stepName;
+          stepOrder = step.stepOrder;
         } catch {}
+        setCurrentStepOrder(stepOrder);
 
         // Fetch application info
         let applicationInfo;
@@ -108,6 +113,14 @@ export default function ApplyActivityDetailPage() {
         };
 
         setActivity(activityWithExtra);
+
+        // Fetch all activities của application này để kiểm tra bước trước
+        try {
+          const activitiesData = await applyActivityService.getAll({ applyId: activityData.applyId });
+          setAllActivities(activitiesData);
+        } catch (err) {
+          console.error("❌ Lỗi tải activities:", err);
+        }
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết Apply Activity:", err);
       } finally {
@@ -147,6 +160,26 @@ export default function ApplyActivityDetailPage() {
     navigate(`/hr/apply-activities/edit/${id}`);
   };
 
+  // Kiểm tra xem bước trước đã pass chưa
+  const checkCanUpdateStep = async (stepOrder: number, processStepId: number): Promise<boolean> => {
+    if (stepOrder === 1) return true; // Bước đầu tiên luôn có thể cập nhật
+    
+    // Lấy tất cả process steps
+    const allSteps = await applyProcessStepService.getAll();
+    
+    // Tìm process step ID của bước trước
+    const previousStep = allSteps.find(step => step.stepOrder === stepOrder - 1);
+    if (!previousStep) return true; // Không tìm thấy bước trước thì cho phép
+    
+    // Tìm activity của bước trước
+    const previousStepActivity = allActivities.find(act => act.processStepId === previousStep.id);
+    
+    if (!previousStepActivity) return false; // Chưa có bước trước
+    
+    // Kiểm tra bước trước có đạt hay không
+    return previousStepActivity.status === ApplyActivityStatus.Passed;
+  };
+
   const getAllowedNextStatuses = (currentStatus: number): number[] => {
     // Nếu application status là Withdrawn thì không cho cập nhật
     if (activity?.applicationInfo?.status === 'Withdrawn') {
@@ -178,7 +211,22 @@ export default function ApplyActivityDetailPage() {
     if (!confirm) return;
 
     try {
+      // Kiểm tra xem bước trước đã pass chưa (chỉ khi đổi sang Completed hoặc Passed)
+      if ((newStatus === ApplyActivityStatus.Completed || newStatus === ApplyActivityStatus.Passed) && currentStepOrder > 1) {
+        const canUpdate = await checkCanUpdateStep(currentStepOrder, activity.processStepId);
+        if (!canUpdate) {
+          alert("⚠️ Không thể cập nhật! Bước trước chưa đạt. Vui lòng hoàn thành bước trước trước.");
+          return;
+        }
+      }
+
       await applyActivityService.updateStatus(Number(id), { status: newStatus });
+      
+      // Cập nhật activity status trong allActivities để theo dõi
+      const updatedActivities = allActivities.map(act => 
+        act.id === activity.id ? { ...act, status: newStatus } : act
+      );
+      setAllActivities(updatedActivities);
       setActivity({ ...activity, status: newStatus });
       
       // Nếu status là Completed, tự động cập nhật application status thành Interviewing
@@ -202,6 +250,43 @@ export default function ApplyActivityDetailPage() {
           }
         } catch (err) {
           console.error("❌ Lỗi cập nhật trạng thái application:", err);
+        }
+      }
+
+      // Kiểm tra nếu tất cả các bước đều pass, tự động chuyển application sang Offered
+      if (newStatus === ApplyActivityStatus.Passed && activity.applicationInfo) {
+        try {
+          // Lấy tất cả process steps
+          const allSteps = await applyProcessStepService.getAll();
+          
+          // Đếm số bước đã pass
+          let allStepsPassed = true;
+          for (const step of allSteps) {
+            const stepActivity = updatedActivities.find(act => act.processStepId === step.id);
+            if (stepActivity && stepActivity.status !== ApplyActivityStatus.Passed) {
+              allStepsPassed = false;
+              break;
+            }
+          }
+
+          // Nếu tất cả bước đều pass và application đang ở Interviewing, chuyển sang Offered
+          if (allStepsPassed && activity.applicationInfo.status === 'Interviewing') {
+            await applyService.updateStatus(activity.applicationInfo.id, { status: 'Offered' });
+            
+            // Cập nhật applicationInfo trong state
+            setActivity({
+              ...activity,
+              applicationInfo: {
+                ...activity.applicationInfo,
+                status: 'Offered'
+              }
+            });
+            
+            alert(`✅ Đã cập nhật trạng thái thành công!\n🎉 Tất cả các bước đã hoàn thành, tự động chuyển application sang trạng thái Offered!`);
+            return;
+          }
+        } catch (err) {
+          console.error("❌ Lỗi kiểm tra tất cả bước:", err);
         }
       }
       

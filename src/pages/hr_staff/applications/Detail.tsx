@@ -178,12 +178,19 @@ export default function TalentCVApplicationDetailPage() {
     return activities.some(activity => activity.status === ApplyActivityStatus.Passed);
   };
 
-  const hasApprovedActivity = () => {
-    return activities.some(activity => activity.status === ApplyActivityStatus.Approved);
-  };
+  // const hasApprovedActivity = () => {
+  //   return activities.some(activity_result => activity.status === ApplyActivityStatus.Approved);
+  // };
 
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, any> = {
+  interface StatusConfig {
+    label: string;
+    color: string;
+    icon: React.ReactNode;
+    bgColor: string;
+  }
+
+  const getStatusConfig = (status: string): StatusConfig => {
+    const configs: Record<string, StatusConfig> = {
       "Rejected": {
         label: "Đã từ chối",
         color: "bg-red-100 text-red-800",
@@ -340,15 +347,13 @@ export default function TalentCVApplicationDetailPage() {
                 </>
               ) : application.status === 'Offered' ? (
                 <>
-                  {hasApprovedActivity() && (
-                    <Button
-                      onClick={() => handleStatusUpdate('Hired')}
-                      className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
-                    >
-                      <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Đã tuyển
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() => handleStatusUpdate('Hired')}
+                    className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                  >
+                    <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Đã tuyển
+                  </Button>
                   <Button
                     onClick={() => handleStatusUpdate('Withdrawn')}
                     className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white"
@@ -525,7 +530,13 @@ export default function TalentCVApplicationDetailPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {activities.map((activity) => {
+                {[...activities].sort((a, b) => {
+                  // Sắp xếp theo ngày: nếu không có scheduledDate thì xếp xuống cuối
+                  if (!a.scheduledDate && !b.scheduledDate) return 0;
+                  if (!a.scheduledDate) return 1;
+                  if (!b.scheduledDate) return -1;
+                  return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+                }).map((activity) => {
                   const processStep = processSteps[activity.processStepId];
                   const formattedDate = activity.scheduledDate 
                     ? new Date(activity.scheduledDate).toLocaleDateString('vi-VN', {

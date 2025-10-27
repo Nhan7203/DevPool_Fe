@@ -65,6 +65,11 @@ export default function CreateTalent() {
     }
   };
 
+  // Clean phone number to digits only
+  const cleanPhoneNumber = (phone: string): string => {
+    return phone.replace(/\D/g, '');
+  };
+
   const handleExtractCV = async () => {
     if (!cvFile) {
       alert("Vui lòng chọn file CV trước!");
@@ -88,6 +93,12 @@ export default function CreateTalent() {
           }
           
           const parsedData = JSON.parse(cleanText);
+          
+          // Clean phone number to digits only
+          if (parsedData.phone) {
+            parsedData.phone = cleanPhoneNumber(parsedData.phone);
+          }
+          
           setExtractedData(parsedData);
           
           // Auto-fill form with extracted data (with safety checks)

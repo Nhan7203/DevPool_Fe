@@ -16,7 +16,9 @@ import {
   AlertCircle, 
   X,
   ExternalLink,
-  FileCheck
+  FileCheck,
+  Eye,
+  Sparkles
 } from "lucide-react";
 
 export default function TalentCVCreatePage() {
@@ -43,6 +45,28 @@ export default function TalentCVCreatePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // CV Extract states
+  const [extractingCV, setExtractingCV] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
+  
+  interface ExtractedCVData {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    dateOfBirth?: string;
+    skills?: string[];
+    workExperiences?: Array<{
+      position: string;
+      company: string;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    }>;
+    locationName?: string;
+  }
+  
+  const [extractedData, setExtractedData] = useState<ExtractedCVData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -65,12 +89,76 @@ export default function TalentCVCreatePage() {
     }));
   };
 
+  // Clean phone number to digits only
+  const cleanPhoneNumber = (phone: string): string => {
+    return phone.replace(/\D/g, '');
+  };
+
   // Handle file selection
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
       setError("");
+      // Create preview URL
+      const url = URL.createObjectURL(file);
+      setCvPreviewUrl(url);
+    }
+  };
+
+  // Handle CV extraction
+  const handleExtractCV = async () => {
+    if (!selectedFile) {
+      alert("Vui lòng chọn file CV trước!");
+      return;
+    }
+
+    try {
+      setExtractingCV(true);
+      const result = await talentCVService.extractFromPDF(selectedFile);
+      
+      if (result.isSuccess && result.generateText) {
+        try {
+          let cleanText = result.generateText.trim();
+          
+          if (cleanText.startsWith('```json')) {
+            cleanText = cleanText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanText.startsWith('```')) {
+            cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+          
+          const parsedData = JSON.parse(cleanText);
+          
+          // Clean phone number
+          if (parsedData.phone) {
+            parsedData.phone = cleanPhoneNumber(parsedData.phone);
+          }
+          
+          setExtractedData(parsedData);
+          
+          // Save to localStorage for use in other pages
+          if (talentId) {
+            localStorage.setItem(`talentCV_extracted_${talentId}`, JSON.stringify({
+              data: parsedData,
+              cvFileUrl: cvPreviewUrl,
+              fileName: selectedFile.name,
+              timestamp: Date.now()
+            }));
+          }
+          
+          alert("✅ Trích xuất thông tin CV thành công!");
+        } catch (parseError) {
+          console.error("Lỗi parse JSON:", parseError);
+          alert("❌ Lỗi khi phân tích dữ liệu CV!");
+        }
+      } else {
+        alert("❌ Không thể trích xuất thông tin từ CV!");
+      }
+    } catch (error) {
+      console.error("Lỗi extract CV:", error);
+      alert("❌ Lỗi khi trích xuất CV!");
+    } finally {
+      setExtractingCV(false);
     }
   };
 
@@ -295,6 +383,80 @@ export default function TalentCVCreatePage() {
                       )}
                     </label>
                   </div>
+
+                  {/* Extract CV and View CV Buttons */}
+                  {selectedFile && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Extract CV Button */}
+                      <button
+                        type="button"
+                        onClick={handleExtractCV}
+                        disabled={extractingCV}
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {extractingCV ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Đang trích xuất...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Trích xuất thông tin CV
+                          </>
+                        )}
+                      </button>
+
+                      {/* View CV Button */}
+                      {cvPreviewUrl && (
+                        <a
+                          href={cvPreviewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Xem CV
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Display Extracted Data */}
+                  {extractedData && (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-green-700">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-semibold">Đã trích xuất thành công! Thông tin đã được lưu.</span>
+                      </div>
+                      
+                      {extractedData.fullName && (
+                        <div className="text-sm text-green-800">
+                          <span className="font-medium">Tên:</span> {extractedData.fullName}
+                        </div>
+                      )}
+                      {extractedData.email && (
+                        <div className="text-sm text-green-800">
+                          <span className="font-medium">Email:</span> {extractedData.email}
+                        </div>
+                      )}
+                      {extractedData.phone && (
+                        <div className="text-sm text-green-800">
+                          <span className="font-medium">Điện thoại:</span> {extractedData.phone}
+                        </div>
+                      )}
+                      {extractedData.skills && extractedData.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          <span className="font-medium text-sm text-green-800">Kỹ năng:</span>
+                          {extractedData.skills.map((skill, index) => (
+                            <span key={index} className="px-2 py-1 bg-green-200 text-green-800 rounded-lg text-xs font-medium">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Upload Progress */}
                   {uploading && (

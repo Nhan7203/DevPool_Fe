@@ -4,6 +4,8 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivityCreate, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
+import { applyService } from "../../../services/Apply";
+import { jobRequestService } from "../../../services/JobRequest";
 import { 
   ArrowLeft, 
   Plus, 
@@ -37,14 +39,35 @@ export default function ApplyActivityCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const steps = await applyProcessStepService.getAll();
-        setProcessSteps(steps);
+        // Lấy application để có jobRequestId
+        if (applyId) {
+          const app = await applyService.getById(Number(applyId));
+          
+          // Lấy JobRequest để có applyProcessTemplateId
+          const jobRequest = await jobRequestService.getById(app.jobRequestId);
+          
+          // Nếu có template, chỉ lấy các steps từ template đó
+          if (jobRequest.applyProcessTemplateId) {
+            const steps = await applyProcessStepService.getAll({ 
+              templateId: jobRequest.applyProcessTemplateId 
+            });
+            setProcessSteps(steps);
+          } else {
+            // Nếu không có template, lấy tất cả steps
+            const steps = await applyProcessStepService.getAll();
+            setProcessSteps(steps);
+          }
+        } else {
+          // Nếu không có applyId, lấy tất cả steps
+          const steps = await applyProcessStepService.getAll();
+          setProcessSteps(steps);
+        }
       } catch (error) {
         console.error("❌ Error loading data", error);
       }
     };
     fetchData();
-  }, []);
+  }, [applyId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
