@@ -41,6 +41,74 @@ export interface TalentCreate {
   status: string;
 }
 
+// Interfaces for TalentWithRelatedDataCreateModel
+export interface TalentSkillCreateModel {
+  skillId: number;
+  level: string;
+  yearsExp: number;
+}
+
+export interface TalentWorkExperienceCreateModel {
+  company: string;
+  position: string;
+  startDate: string; // DateTime as ISO string
+  endDate?: string; // DateTime as ISO string
+  description: string;
+}
+
+export interface TalentProjectCreateModel {
+  projectName: string;
+  position: string;
+  technologies: string;
+  description: string;
+}
+
+export interface TalentCertificateCreateModel {
+  certificateTypeId: number;
+  issuedDate?: string; // DateTime as ISO string
+  isVerified: boolean;
+  imageUrl: string;
+}
+
+export interface TalentJobRoleLevelCreateModel {
+  jobRoleLevelId: number;
+  yearsOfExp: number;
+  ratePerMonth?: number;
+}
+
+export interface TalentCVCreateModel {
+  jobRoleId: number;
+  versionName: string;
+  cvFileUrl: string;
+  isActive: boolean;
+  summary: string;
+  isGeneratedFromTemplate: boolean;
+  sourceTemplateId?: number;
+}
+
+export interface TalentWithRelatedDataCreateModel {
+  // Thông tin cơ bản của Talent
+  currentPartnerId: number;
+  userId?: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string; // DateTime as ISO string
+  locationId?: number;
+  workingMode: WorkingMode;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  status?: string;
+
+  // Các dữ liệu liên quan (optional)
+  initialCV?: TalentCVCreateModel;
+  skills?: TalentSkillCreateModel[];
+  workExperiences?: TalentWorkExperienceCreateModel[];
+  projects?: TalentProjectCreateModel[];
+  certificates?: TalentCertificateCreateModel[];
+  jobRoleLevels?: TalentJobRoleLevelCreateModel[];
+}
+
 export const talentService = {
   async getAll(filter?: TalentFilter) {
     try {
@@ -81,6 +149,17 @@ export const talentService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to create new talent" };
       throw { message: "Unexpected error occurred during creation" };
+    }
+  },
+
+  async createWithRelatedData(payload: TalentWithRelatedDataCreateModel) {
+    try {
+      const response = await axios.post("/talent/with-related-data", payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to create talent with related data" };
+      throw { message: "Unexpected error occurred during creation with related data" };
     }
   },
 
