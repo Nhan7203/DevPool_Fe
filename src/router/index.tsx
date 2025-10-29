@@ -80,6 +80,8 @@ import InterviewList from '../pages/hr_staff/interviews/List';
 import InterviewHistory from '../pages/hr_staff/interviews/History';
 import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
 import ListContract from '../pages/hr_staff/contracts/List';
+import ContractDetailPageHR from '../pages/hr_staff/contracts/Detail';
+import CreatePartnerContractPage from '../pages/hr_staff/contracts/Create';
 import UploadContract from '../pages/hr_staff/contracts/Upload';
 
 // ========================================
@@ -131,6 +133,7 @@ import DeveloperStatus from '../pages/hr_staff/reports/Developer_status';
 import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
 import ContractDetailPage from '../pages/sales_staff/contracts/Detail';
 import ListClientContracts from '../pages/sales_staff/contracts/List';
+import CreateClientContractPage from '../pages/sales_staff/contracts/Create';
 import TalentDetailPage from '../pages/hr_staff/talents/Detail';
 import TalentEditPage from '../pages/hr_staff/talents/Edit';
 import TalentSkillCreatePage from '../pages/hr_staff/talent-skills/Create';
@@ -268,6 +271,8 @@ const AppRouter: React.FC = () => {
           
           {/* Contracts */}
           <Route path={ROUTES.HR_STAFF.CONTRACTS.LIST} element={<ListContract />} />
+          <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
+          <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
           <Route path={ROUTES.HR_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
           
           {/* Reports */}
@@ -285,6 +290,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
+          <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
           
           {/* Job Requests */}
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />

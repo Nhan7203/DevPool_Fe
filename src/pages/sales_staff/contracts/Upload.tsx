@@ -1,46 +1,90 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   Upload, 
   FileText, 
-  CheckCircle2, 
-  XCircle, 
-  FileSignature, 
+  CheckCircle, 
   ArrowLeft, 
   Save, 
   Building2, 
   Briefcase, 
-  CalendarDays, 
-  DollarSign, 
+  Calendar, 
   AlertCircle,
-  X
+  UserCheck
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
+import { clientContractService, type ClientContractPayload } from "../../../services/ClientContract";
+import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { projectService, type Project } from "../../../services/Project";
+import { talentService, type Talent } from "../../../services/Talent";
+import { uploadFile } from "../../../utils/firebaseStorage";
 
 export default function UploadClientContract() {
-  const [form, setForm] = useState({
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState<Partial<ClientContractPayload>>({
     contractNumber: "",
-    clientCompanyId: "",
-    projectId: "",
-    partnerId: "",
-    totalClientRatePerMonth: "",
-    totalDevRatePerMonth: "",
-    standardWorkingDays: 21,
-    hoursPerDay: 8,
+    clientCompanyId: undefined,
+    talentId: undefined,
+    projectId: undefined,
     startDate: "",
-    endDate: "",
-    status: "pending",
+    endDate: undefined,
+    status: "draft",
+    contractFileUrl: undefined,
   });
 
   const [clientFile, setClientFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  
+  const [clientCompanies, setClientCompanies] = useState<ClientCompany[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [talents, setTalents] = useState<Talent[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [clientsData, projectsData, talentsData] = await Promise.all([
+          clientCompanyService.getAll({ excludeDeleted: true }),
+          projectService.getAll({ excludeDeleted: true }),
+          talentService.getAll({ excludeDeleted: true })
+        ]);
+        setClientCompanies(clientsData);
+        setProjects(projectsData);
+        setTalents(talentsData);
+      } catch (err) {
+        console.error("❌ Lỗi tải dữ liệu:", err);
+        setError("Không thể tải danh sách công ty, dự án và nhân viên");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (form.clientCompanyId) {
+      const filtered = projects.filter(p => p.clientCompanyId === Number(form.clientCompanyId));
+      setFilteredProjects(filtered);
+    } else {
+      setFilteredProjects([]);
+    }
+  }, [form.clientCompanyId, projects]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === 'clientCompanyId' || name === 'projectId' || name === 'talentId'
+        ? (value ? Number(value) : undefined)
+        : value === '' && name === 'endDate'
+        ? undefined
+        : value
+    }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +103,13 @@ export default function UploadClientContract() {
     setError("");
     setSuccess(false);
 
+    // Validate required fields
+    if (!form.contractNumber || !form.clientCompanyId || !form.projectId || !form.talentId || !form.startDate) {
+      setError("⚠️ Vui lòng điền đầy đủ các trường bắt buộc");
+      setUploading(false);
+      return;
+    }
+
     if (!clientFile) {
       setError("⚠️ Vui lòng chọn file hợp đồng khách hàng");
       setUploading(false);
@@ -66,31 +117,42 @@ export default function UploadClientContract() {
     }
 
     try {
-      const formData = new FormData();
-      Object.entries(form).forEach(([key, value]) => formData.append(key, value.toString()));
-      formData.append("ClientContractFile", clientFile);
+      // Upload file to Firebase Storage
+      const fileUrl = await uploadFile(clientFile, `contracts/${form.contractNumber}-${Date.now()}`);
 
-      // ⚙️ Giả lập upload
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Create contract payload
+      const payload: ClientContractPayload = {
+        contractNumber: form.contractNumber,
+        clientCompanyId: form.clientCompanyId!,
+        talentId: form.talentId!,
+        projectId: form.projectId!,
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
+        status: "draft",
+        contractFileUrl: fileUrl,
+      };
+
+      await clientContractService.create(payload);
 
       setSuccess(true);
       setClientFile(null);
       setForm({
         contractNumber: "",
-        clientCompanyId: "",
-        projectId: "",
-        partnerId: "",
-        totalClientRatePerMonth: "",
-        totalDevRatePerMonth: "",
-        standardWorkingDays: 21,
-        hoursPerDay: 8,
+        clientCompanyId: undefined,
+        talentId: undefined,
+        projectId: undefined,
         startDate: "",
-        endDate: "",
-        status: "pending",
+        endDate: undefined,
+        status: "draft",
+        contractFileUrl: undefined,
       });
-      setTimeout(() => setSuccess(false), 3000);
-    } catch {
-      setError("❌ Không thể tải lên hợp đồng. Vui lòng thử lại.");
+      
+      setTimeout(() => {
+        navigate("/sales/contracts");
+      }, 2000);
+    } catch (err: any) {
+      console.error("❌ Lỗi upload hợp đồng:", err);
+      setError(err.message || "❌ Không thể tải lên hợp đồng. Vui lòng thử lại.");
     } finally {
       setUploading(false);
     }
@@ -113,25 +175,30 @@ export default function UploadClientContract() {
             </Link>
           </div>
 
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload hợp đồng khách hàng</h1>
-              <p className="text-neutral-600 mb-4">
-                Tải lên file hợp đồng đã ký giữa DevPool và công ty khách hàng
-              </p>
-              
-              {/* Status Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
-                <FileSignature className="w-4 h-4 text-primary-600" />
-                <span className="text-sm font-medium text-primary-800">
-                  Upload hợp đồng mới
-                </span>
-              </div>
-            </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Hợp Đồng Khách Hàng</h1>
+            <p className="text-neutral-600">Tải lên file hợp đồng đã ký giữa DevPool và công ty khách hàng</p>
           </div>
         </div>
 
+        {/* Success Message */}
+        {success && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <p className="text-green-700 font-medium">Upload hợp đồng thành công! Đang chuyển hướng...</p>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <p className="text-red-700 font-medium">{error}</p>
+          </div>
+        )}
+
         {/* Form */}
+        {!loading && (
         <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
           {/* Basic Information */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
@@ -148,7 +215,7 @@ export default function UploadClientContract() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mã hợp đồng
+                  Số hợp đồng <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -161,114 +228,88 @@ export default function UploadClientContract() {
                 />
               </div>
 
-              {/* Thông tin chọn liên quan */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Công ty khách hàng */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Công ty khách hàng
+                    Công ty khách hàng <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="clientCompanyId"
-                    value={form.clientCompanyId}
+                    value={form.clientCompanyId || ''}
                     onChange={handleChange}
+                    required
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   >
                     <option value="">-- Chọn công ty --</option>
-                    <option value="1">Tech Solutions Inc.</option>
-                    <option value="2">Digital Innovations Co.</option>
+                    {clientCompanies.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    Dự án
-                  </label>
-                  <select
-                    name="projectId"
-                    value={form.projectId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">-- Chọn dự án --</option>
-                    <option value="1">Website Redesign</option>
-                    <option value="2">Mobile App Development</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Đối tác (nếu có)
-                  </label>
-                  <select
-                    name="partnerId"
-                    value={form.partnerId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">-- Không có --</option>
-                    <option value="1">Partner A</option>
-                    <option value="2">Partner B</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Financial Information */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <DollarSign className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin tài chính</h2>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              {/* Giá trị */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Nhân viên */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Giá trị khách hàng trả (VNĐ/tháng)
+                    <UserCheck className="w-4 h-4" />
+                    Nhân viên <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    name="totalClientRatePerMonth"
-                    value={form.totalClientRatePerMonth}
+                  <select
+                    name="talentId"
+                    value={form.talentId || ''}
                     onChange={handleChange}
+                    required
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    placeholder="Nhập số tiền..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Giá trị trả cho Dev (VNĐ/tháng)
-                  </label>
-                  <input
-                    type="number"
-                    name="totalDevRatePerMonth"
-                    value={form.totalDevRatePerMonth}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    placeholder="Nhập số tiền..."
-                  />
+                  >
+                    <option value="">-- Chọn nhân viên --</option>
+                    {talents.map((talent) => (
+                      <option key={talent.id} value={talent.id}>
+                        {talent.fullName} ({talent.email})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Ngày bắt đầu / kết thúc */}
+              {/* Dự án */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Dự án <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="projectId"
+                  value={form.projectId || ''}
+                  onChange={handleChange}
+                  required
+                  disabled={!form.clientCompanyId}
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">-- Chọn dự án --</option>
+                  {filteredProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                {!form.clientCompanyId && (
+                  <p className="text-xs text-neutral-500 mt-2">Vui lòng chọn công ty khách hàng trước</p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
-                    Ngày bắt đầu
+                    <Calendar className="w-4 h-4" />
+                    Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
                     name="startDate"
-                    value={form.startDate}
+                    value={form.startDate || ''}
                     onChange={handleChange}
                     required
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
@@ -276,105 +317,86 @@ export default function UploadClientContract() {
                 </div>
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
+                    <Calendar className="w-4 h-4" />
                     Ngày kết thúc
                   </label>
                   <input
                     type="date"
                     name="endDate"
-                    value={form.endDate}
+                    value={form.endDate || ''}
                     onChange={handleChange}
-                    required
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
+                  <p className="text-xs text-neutral-500 mt-2">Để trống nếu hợp đồng không có thời hạn</p>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Upload File Hợp Đồng <span className="text-red-500">*</span>
+                </label>
+                <div className="border-2 border-dashed border-neutral-300 rounded-xl p-8 text-center hover:border-primary-500 transition-all duration-300 cursor-pointer bg-neutral-50 hover:bg-primary-50">
+                  {clientFile ? (
+                    <div className="flex flex-col items-center text-primary-700">
+                      <FileText className="w-8 h-8 mb-2" />
+                      <p className="font-medium">{clientFile.name}</p>
+                      <p className="text-sm text-neutral-600">{(clientFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <button
+                        type="button"
+                        onClick={() => setClientFile(null)}
+                        className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                      >
+                        Xóa file
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center text-neutral-500 cursor-pointer">
+                      <Upload className="w-12 h-12 mb-4" />
+                      <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây</span>
+                      <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* File Upload */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <Upload className="w-5 h-5 text-accent-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Upload file hợp đồng</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="border-2 border-dashed border-neutral-300 rounded-xl p-8 text-center hover:border-primary-500 transition-all duration-300 cursor-pointer bg-neutral-50 hover:bg-primary-50">
-                {clientFile ? (
-                  <div className="flex flex-col items-center text-primary-700">
-                    <FileText className="w-8 h-8 mb-2" />
-                    <p className="font-medium">{clientFile.name}</p>
-                    <p className="text-sm text-neutral-600">{(clientFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center text-neutral-500 cursor-pointer">
-                    <Upload className="w-12 h-12 mb-4" />
-                    <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây</span>
-                    <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Notifications */}
-          {(error || success) && (
-            <div className="animate-fade-in">
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                  <p className="text-red-700 font-medium">{error}</p>
-                </div>
-              )}
-              {success && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  <p className="text-green-700 font-medium">
-                    ✅ Tải lên hợp đồng thành công!
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-4 pt-6">
+          {/* Submit Button */}
+          <div className="flex items-center justify-end gap-4">
             <Link
               to="/sales/contracts"
-              className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
+              className="px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 font-medium transition-all duration-300"
             >
-              <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
               Hủy
             </Link>
             <button
               type="submit"
-              disabled={uploading}
-              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={uploading || success}
+              className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {uploading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Đang tải lên...
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Đang tải lên...</span>
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Tải lên hợp đồng
+                  <Save className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                  <span>Tải lên hợp đồng</span>
                 </>
               )}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

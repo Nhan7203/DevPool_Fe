@@ -52,6 +52,16 @@ export const sidebarItems = [
       { label: 'Mẫu Quy Trình Ứng Tuyển', href: '/hr/apply-process-templates' },
     ]
   },
+  {
+    label: 'Hợp Đồng Đối Tác',
+    href: '/hr/contracts',
+    icon: FileText,
+    subItems: [
+      { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
+      { label: 'Tạo Hợp Đồng Mới', href: '/hr/contracts/create' },
+      // { label: 'Upload File Hợp Đồng', href: '/hr/contracts/upload' },
+    ]
+  },
 
   // {
   //   label: 'Quản lý Template CV',
@@ -79,15 +89,6 @@ export const sidebarItems = [
   //     { label: 'Danh sách Phỏng Vấn', href: '/hr/interviews' },
   //     { label: 'Lịch Phỏng Vấn', href: '/hr/interviews/schedule' },
   //     { label: 'Lịch Sử Phỏng Vấn', href: '/hr/interviews/history' }
-  //   ]
-  // },
-  // {
-  //   label: 'Hợp Đồng Dev',
-  //   href: '/hr/contracts',
-  //   icon: FileText,
-  //   subItems: [
-  //     { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
-  //     { label: 'Upload File Hợp Đồng', href: '/hr/contracts/upload' },
   //   ]
   // },
   // {

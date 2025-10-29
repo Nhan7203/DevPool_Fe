@@ -133,6 +133,7 @@ export const ROUTES = {
     CONTRACTS: {
       LIST: '/hr/contracts',                     // Danh sách hợp đồng
       DETAIL: '/hr/contracts/:id',               // Chi tiết hợp đồng
+      CREATE: '/hr/contracts/create',            // Tạo hợp đồng mới
       UPLOAD: '/hr/contracts/upload',        // Upload file hợp đồng
     },
 
@@ -164,6 +165,7 @@ export const ROUTES = {
       LIST: '/sales/contracts',                     // Danh sách hợp đồng
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
       UPLOAD: '/sales/contracts/upload',        // Upload file hợp đồng
+      CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
     },
     JOB_REQUESTS: {
       LIST: '/sales/job-requests',

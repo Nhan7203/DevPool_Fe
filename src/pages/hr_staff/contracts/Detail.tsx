@@ -1,53 +1,48 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, Clock, Edit, Trash2, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, Clock, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { Button } from '../../../components/ui/button';
-
-interface Contract {
-    id: string;
-    contractNumber: string;
-    developerName: string;
-    companyName: string;
-    startDate: string;
-    endDate: string;
-    status: 'active' | 'pending' | 'completed' | 'terminated';
-    value: number;
-    type: string;
-    description?: string;
-}
+import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
+import { partnerService, type Partner } from '../../../services/Partner';
+import { talentService, type Talent } from '../../../services/Talent';
 
 export default function ContractDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const [contract, setContract] = useState<Contract | null>(null);
+    const [contract, setContract] = useState<PartnerContract | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [partner, setPartner] = useState<Partner | null>(null);
+    const [talent, setTalent] = useState<Talent | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
+            if (!id) return;
+            
             try {
                 setLoading(true);
-                // Mock data - replace with API call
-                const mockContract: Contract = {
-                    id: id || '1',
-                    contractNumber: 'CTR-2025-001',
-                    developerName: 'Nguyễn Văn A',
-                    companyName: 'Tech Solutions Inc.',
-                    startDate: '2025-01-01',
-                    endDate: '2025-12-31',
-                    status: 'active',
-                    value: 50000000,
-                    type: 'Full-time',
-                    description: 'Hợp đồng làm việc toàn thời gian với các điều khoản và điều kiện đã được thỏa thuận.'
-                };
-
-                setTimeout(() => {
-                    setContract(mockContract);
-                    setLoading(false);
-                }, 500);
-            } catch (err) {
+                setError('');
+                
+                // Fetch contract detail
+                const contractData = await partnerContractService.getById(Number(id));
+                setContract(contractData);
+                
+                // Fetch related partner and talent data
+                try {
+                    const [partnerData, talentData] = await Promise.all([
+                        partnerService.getAll().then(partners => partners.find((p: Partner) => p.id === contractData.partnerId)),
+                        talentService.getById(contractData.talentId)
+                    ]);
+                    setPartner(partnerData || null);
+                    setTalent(talentData);
+                } catch (err) {
+                    console.error("⚠️ Lỗi tải thông tin đối tác/talent:", err);
+                }
+            } catch (err: any) {
                 console.error("❌ Lỗi tải chi tiết hợp đồng:", err);
+                setError(err.message || "Không thể tải thông tin hợp đồng");
+            } finally {
                 setLoading(false);
             }
         };
@@ -65,6 +60,7 @@ export default function ContractDetailPage() {
                     bgColor: 'bg-green-50'
                 };
             case 'pending':
+            case 'draft':
                 return {
                     label: 'Chờ duyệt',
                     color: 'bg-yellow-100 text-yellow-800',
@@ -95,27 +91,29 @@ export default function ContractDetailPage() {
         }
     };
 
-    const formatCurrency = (value: number) => {
+    const formatCurrency = (value: number | null | undefined) => {
+        if (!value) return '—';
         return new Intl.NumberFormat('vi-VN', {
             style: 'currency',
             currency: 'VND'
         }).format(value);
     };
 
-    const handleDelete = async () => {
-        if (!id) return;
-        const confirm = window.confirm("⚠️ Bạn có chắc muốn xóa hợp đồng này?");
-        if (!confirm) return;
-
-        try {
-            // API call to delete
-            alert("✅ Đã xóa hợp đồng thành công!");
-            navigate("/hr/contracts");
-        } catch (err) {
-            console.error("❌ Lỗi khi xóa:", err);
-            alert("Không thể xóa hợp đồng!");
+    const getRateTypeText = (rateType: string) => {
+        switch (rateType) {
+            case 'Hourly':
+                return 'Theo giờ';
+            case 'Daily':
+                return 'Theo ngày';
+            case 'Monthly':
+                return 'Theo tháng';
+            case 'Fixed':
+                return 'Cố định';
+            default:
+                return rateType;
         }
     };
+
 
     if (loading) {
         return (
@@ -131,7 +129,7 @@ export default function ContractDetailPage() {
         );
     }
 
-    if (!contract) {
+    if (error || !contract) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
                 <Sidebar items={sidebarItems} title="HR Staff" />
@@ -140,7 +138,9 @@ export default function ContractDetailPage() {
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <AlertCircle className="w-8 h-8 text-red-500" />
                         </div>
-                        <p className="text-red-500 text-lg font-medium">Không tìm thấy hợp đồng</p>
+                        <p className="text-red-500 text-lg font-medium">
+                            {error || "Không tìm thấy hợp đồng"}
+                        </p>
                         <Link 
                             to="/hr/contracts"
                             className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
@@ -188,42 +188,28 @@ export default function ContractDetailPage() {
                             </div>
                         </div>
 
-                        <div className="flex gap-3">
-                            <Button
-                                onClick={() => navigate(`/hr/contracts/edit/${contract.id}`)}
-                                className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
-                            >
-                                <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                Sửa
-                            </Button>
-                            <Button
-                                onClick={handleDelete}
-                                className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                            >
-                                <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                Xóa
-                            </Button>
-                        </div>
                     </div>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in">
                     <StatCard
-                        title="Giá trị hợp đồng"
-                        value={formatCurrency(contract.value)}
+                        title="Mức Phí Dev"
+                        value={formatCurrency(contract.devRate)}
                         icon={<DollarSign className="w-6 h-6" />}
                         color="green"
                     />
                     <StatCard
                         title="Thời hạn"
-                        value={`${Math.ceil((new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime()) / (1000 * 60 * 60 * 24))} ngày`}
+                        value={contract.endDate 
+                            ? `${Math.ceil((new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime()) / (1000 * 60 * 60 * 24))} ngày`
+                            : 'Không giới hạn'}
                         icon={<Calendar className="w-6 h-6" />}
                         color="blue"
                     />
                     <StatCard
-                        title="Loại hợp đồng"
-                        value={contract.type}
+                        title="Loại Mức Phí"
+                        value={contract.rateType ? getRateTypeText(contract.rateType) : '—'}
                         icon={<FileText className="w-6 h-6" />}
                         color="orange"
                     />
@@ -247,18 +233,18 @@ export default function ContractDetailPage() {
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Loại hợp đồng" 
-                                value={contract.type} 
+                                label="Loại Mức Phí" 
+                                value={contract.rateType ? getRateTypeText(contract.rateType) : '—'} 
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Developer" 
-                                value={contract.developerName} 
+                                label="Nhân viên" 
+                                value={talent?.fullName || '—'} 
                                 icon={<UserCheck className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Công ty" 
-                                value={contract.companyName} 
+                                label="Đối tác" 
+                                value={partner?.companyName || '—'} 
                                 icon={<Building2 className="w-4 h-4" />}
                             />
                             <InfoItem 
@@ -268,12 +254,12 @@ export default function ContractDetailPage() {
                             />
                             <InfoItem 
                                 label="Ngày kết thúc" 
-                                value={new Date(contract.endDate).toLocaleDateString('vi-VN')} 
+                                value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'} 
                                 icon={<Calendar className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Giá trị/tháng" 
-                                value={formatCurrency(contract.value)} 
+                                label="Mức Phí Dev" 
+                                value={formatCurrency(contract.devRate)} 
                                 icon={<DollarSign className="w-4 h-4" />}
                             />
                             <InfoItem 
@@ -281,30 +267,26 @@ export default function ContractDetailPage() {
                                 value={statusConfig.label} 
                                 icon={<Clock className="w-4 h-4" />}
                             />
+                            {contract.contractFileUrl && (
+                                <InfoItem 
+                                    label="File hợp đồng" 
+                                    value={
+                                        <a 
+                                            href={contract.contractFileUrl} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-primary-600 hover:text-primary-800 underline"
+                                        >
+                                            Xem file
+                                        </a>
+                                    } 
+                                    icon={<FileText className="w-4 h-4" />}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* Mô tả */}
-                {contract.description && (
-                    <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
-                        <div className="p-6 border-b border-neutral-200">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-secondary-100 rounded-lg">
-                                    <FileText className="w-5 h-5 text-secondary-600" />
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Mô tả</h3>
-                            </div>
-                        </div>
-                        <div className="p-6">
-                            <div className="prose prose-sm max-w-none">
-                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                                    {contract.description}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

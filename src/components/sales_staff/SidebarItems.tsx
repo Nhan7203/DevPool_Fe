@@ -39,13 +39,13 @@ export const sidebarItems = [
       { label: 'Tạo dự án', href: '/sales/projects/create' },
     ]
   },
-  // {
-  //   label: 'Hợp Đồng KH',
-  //   href: '/sales/contracts',
-  //   icon: FileText, // hợp đồng
-  //   subItems: [
-  //     { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
-  //     { label: 'Tải lên Hợp Đồng', href: '/sales/contracts/upload' },
-  //   ]
-  // },
+  {
+    label: 'Hợp Đồng KH',
+    href: '/sales/contracts',
+    icon: FileText, // hợp đồng
+    subItems: [
+      { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
+      { label: 'Tải lên Hợp Đồng', href: '/sales/contracts/create' },
+    ]
+  },
 ];

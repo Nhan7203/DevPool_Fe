@@ -1,83 +1,90 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, FileText, Calendar, UserCheck, Clock, Eye, Edit, TrendingUp, Building2, DollarSign, CheckCircle } from 'lucide-react';
+import { Search, Filter, FileText, Calendar, UserCheck, Clock, Eye, Edit, TrendingUp, Building2, DollarSign, CheckCircle, Plus, AlertCircle } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-
-interface Contract {
-    id: string;
-    contractNumber: string;
-    developerName: string;
-    companyName: string;
-    startDate: string;
-    endDate: string;
-    status: 'active' | 'pending' | 'completed' | 'terminated';
-    value: number;
-    type: string;
-}
+import { partnerContractService, type PartnerContract, type PartnerContractFilter } from '../../../services/PartnerContract';
+import { partnerService, type Partner } from '../../../services/Partner';
+import { talentService, type Talent } from '../../../services/Talent';
 
 export default function ListContract() {
-    const [contracts, setContracts] = useState<Contract[]>([]);
-    const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
+    const [contracts, setContracts] = useState<PartnerContract[]>([]);
+    const [filteredContracts, setFilteredContracts] = useState<PartnerContract[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
     const [filterStatus, setFilterStatus] = useState('');
+    const [error, setError] = useState('');
+    
+    // Store partner and talent data for display
+    const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
+    const [talentsMap, setTalentsMap] = useState<Map<number, Talent>>(new Map());
 
-    // Mock data - replace with API call
     useEffect(() => {
-        const mockContracts: Contract[] = [
-            {
-                id: '1',
-                contractNumber: 'CTR-2025-001',
-                developerName: 'Nguyễn Văn A',
-                companyName: 'Tech Solutions Inc.',
-                startDate: '2025-01-01',
-                endDate: '2025-12-31',
-                status: 'active',
-                value: 50000000,
-                type: 'Full-time'
-            },
-            {
-                id: '2',
-                contractNumber: 'CTR-2025-002',
-                developerName: 'Trần Thị B',
-                companyName: 'Digital Innovations Co.',
-                startDate: '2025-02-01',
-                endDate: '2025-07-31',
-                status: 'pending',
-                value: 30000000,
-                type: 'Part-time'
-            },
-        ];
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                setError('');
+                
+                // Fetch contracts, partners, and talents in parallel
+                const [contractsData, partnersData, talentsData] = await Promise.all([
+                    partnerContractService.getAll({ excludeDeleted: true }),
+                    partnerService.getAll(),
+                    talentService.getAll({ excludeDeleted: true })
+                ]);
 
-        setTimeout(() => {
-            setContracts(mockContracts);
-            setFilteredContracts(mockContracts);
-            setLoading(false);
-        }, 1000);
+                setContracts(contractsData);
+                setFilteredContracts(contractsData);
+
+                // Create maps for quick lookup
+                const partnersMapData = new Map<number, Partner>();
+                partnersData.forEach((p: Partner) => {
+                    partnersMapData.set(p.id, p);
+                });
+                setPartnersMap(partnersMapData);
+
+                const talentsMapData = new Map<number, Talent>();
+                talentsData.forEach((t: Talent) => {
+                    talentsMapData.set(t.id, t);
+                });
+                setTalentsMap(talentsMapData);
+            } catch (err: any) {
+                console.error("❌ Lỗi tải danh sách hợp đồng:", err);
+                setError(err.message || "Không thể tải danh sách hợp đồng");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
     useEffect(() => {
         let filtered = [...contracts];
         if (searchTerm) {
-            filtered = filtered.filter(c => 
-                c.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                c.developerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                c.companyName.toLowerCase().includes(searchTerm.toLowerCase())
-            );
+            filtered = filtered.filter(c => {
+                const contractNumber = c.contractNumber?.toLowerCase() || '';
+                const talentName = talentsMap.get(c.talentId)?.fullName?.toLowerCase() || '';
+                const partnerName = partnersMap.get(c.partnerId)?.companyName?.toLowerCase() || '';
+                const searchLower = searchTerm.toLowerCase();
+                
+                return contractNumber.includes(searchLower) ||
+                       talentName.includes(searchLower) ||
+                       partnerName.includes(searchLower);
+            });
         }
         if (filterStatus) {
             filtered = filtered.filter(c => c.status === filterStatus);
         }
         setFilteredContracts(filtered);
-    }, [searchTerm, filterStatus, contracts]);
+    }, [searchTerm, filterStatus, contracts, partnersMap, talentsMap]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'active':
                 return 'bg-green-100 text-green-800';
             case 'pending':
+            case 'draft':
                 return 'bg-yellow-100 text-yellow-800';
             case 'completed':
                 return 'bg-blue-100 text-blue-800';
@@ -93,6 +100,7 @@ export default function ListContract() {
             case 'active':
                 return 'Đang hiệu lực';
             case 'pending':
+            case 'draft':
                 return 'Chờ duyệt';
             case 'completed':
                 return 'Đã hoàn thành';
@@ -103,11 +111,20 @@ export default function ListContract() {
         }
     };
 
-    const formatCurrency = (value: number) => {
+    const formatCurrency = (value: number | null | undefined) => {
+        if (!value) return '—';
         return new Intl.NumberFormat('vi-VN', {
             style: 'currency',
             currency: 'VND'
         }).format(value);
+    };
+
+    const getPartnerName = (partnerId: number) => {
+        return partnersMap.get(partnerId)?.companyName || '—';
+    };
+
+    const getTalentName = (talentId: number) => {
+        return talentsMap.get(talentId)?.fullName || '—';
     };
 
     const stats = [
@@ -137,7 +154,7 @@ export default function ListContract() {
         },
         {
             title: 'Tổng Giá Trị',
-            value: `${(contracts.reduce((sum, c) => sum + c.value, 0) / 1000000).toFixed(0)}M`,
+            value: `${(contracts.reduce((sum, c) => sum + (c.devRate || 0), 0) / 1000000).toFixed(0)}M`,
             change: '+20% tháng này',
             trend: 'up',
             color: 'purple',
@@ -159,6 +176,23 @@ export default function ListContract() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="flex bg-gray-50 min-h-screen">
+                <Sidebar items={sidebarItems} title="HR Staff" />
+                <div className="flex-1 flex justify-center items-center">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertCircle className="w-8 h-8 text-red-500" />
+                        </div>
+                        <p className="text-red-500 text-lg font-medium mb-2">Lỗi tải dữ liệu</p>
+                        <p className="text-gray-500">{error}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex bg-gray-50 min-h-screen">
             <Sidebar items={sidebarItems} title="HR Staff" />
@@ -168,9 +202,16 @@ export default function ListContract() {
                 <div className="mb-8 animate-slide-up">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng</h1>
-                            <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng làm việc</p>
+                            <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng Đối Tác</h1>
+                            <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng đối tác</p>
                         </div>
+                        <Link
+                            to="/hr/contracts/create"
+                            className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                        >
+                            <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                            <span>Tạo hợp đồng mới</span>
+                        </Link>
                     </div>
 
                     {/* Stats Cards */}
@@ -232,8 +273,8 @@ export default function ListContract() {
                                         className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                                     >
                                         <option value="">Tất cả trạng thái</option>
+                                        <option value="draft">Chờ duyệt</option>
                                         <option value="active">Đang hiệu lực</option>
-                                        <option value="pending">Chờ duyệt</option>
                                         <option value="completed">Đã hoàn thành</option>
                                         <option value="terminated">Đã chấm dứt</option>
                                     </select>
@@ -266,10 +307,11 @@ export default function ListContract() {
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số hợp đồng</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Developer</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Nhân viên</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Đối tác</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
-                                    <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Giá trị/tháng</th>
+                                    <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mức Phí Dev</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Loại Mức Phí</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                                 </tr>
@@ -277,7 +319,7 @@ export default function ListContract() {
                             <tbody className="divide-y divide-neutral-200">
                                 {filteredContracts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="text-center py-12">
+                                        <td colSpan={9} className="text-center py-12">
                                             <div className="flex flex-col items-center justify-center">
                                                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                                                     <FileText className="w-8 h-8 text-neutral-400" />
@@ -298,25 +340,24 @@ export default function ListContract() {
                                                 <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                                                     {contract.contractNumber}
                                                 </div>
-                                                <div className="text-xs text-neutral-500 mt-0.5">{contract.type}</div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <UserCheck className="w-4 h-4 text-neutral-400" />
-                                                    <span className="text-sm text-neutral-700">{contract.developerName}</span>
+                                                    <span className="text-sm text-neutral-700">{getTalentName(contract.talentId)}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <Building2 className="w-4 h-4 text-neutral-400" />
-                                                    <span className="text-sm text-neutral-700">{contract.companyName}</span>
+                                                    <span className="text-sm text-neutral-700">{getPartnerName(contract.partnerId)}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <Calendar className="w-4 h-4 text-neutral-400" />
                                                     <span className="text-sm text-neutral-700">
-                                                        {new Date(contract.startDate).toLocaleDateString('vi-VN')} - {new Date(contract.endDate).toLocaleDateString('vi-VN')}
+                                                        {new Date(contract.startDate).toLocaleDateString('vi-VN')} {contract.endDate ? `- ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
                                                     </span>
                                                 </div>
                                             </td>
@@ -324,9 +365,18 @@ export default function ListContract() {
                                                 <div className="flex items-center justify-end gap-1">
                                                     <DollarSign className="w-4 h-4 text-neutral-400" />
                                                     <span className="text-sm font-medium text-neutral-700">
-                                                        {formatCurrency(contract.value)}
+                                                        {formatCurrency(contract.devRate)}
                                                     </span>
                                                 </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <span className="text-sm text-neutral-700">
+                                                    {contract.rateType === 'Hourly' ? 'Theo giờ' :
+                                                     contract.rateType === 'Daily' ? 'Theo ngày' :
+                                                     contract.rateType === 'Monthly' ? 'Theo tháng' :
+                                                     contract.rateType === 'Fixed' ? 'Cố định' : 
+                                                     contract.rateType || '—'}
+                                                </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">
                                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
@@ -342,10 +392,6 @@ export default function ListContract() {
                                                         <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                                                         <span className="text-sm font-medium">Xem</span>
                                                     </Link>
-                                                    <button className="group inline-flex items-center gap-1 px-3 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-300 hover:scale-105 transform">
-                                                        <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                                        <span className="text-sm font-medium">Sửa</span>
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>

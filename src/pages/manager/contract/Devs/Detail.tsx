@@ -140,6 +140,21 @@ export default function DevDetailPage() {
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "draft":
+        return "Chờ duyệt";
+      case "active":
+        return "Đang hoạt động";
+      case "completed":
+        return "Đã hoàn thành";
+      case "terminateds":
+        return "Đã chấm dứt";
+      default:
+        return status;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -220,10 +235,10 @@ export default function DevDetailPage() {
                       className="px-3 py-1 border border-gray-300 rounded-lg focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                       disabled={isUpdating}
                     >
-                      <option value="Draft">Draft</option>
-                      <option value="Active">Active</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Terminateds">Terminateds</option>
+                      <option value="Draft">Chờ duyệt</option>
+                      <option value="Active">Đang hoạt động</option>
+                      <option value="Completed">Đã hoàn thành</option>
+                      <option value="Terminateds">Đã chấm dứt</option>
                     </select>
                     <button
                       onClick={handleUpdateStatus}
@@ -249,7 +264,7 @@ export default function DevDetailPage() {
                         contract.status
                       )}`}
                     >
-                      {contract.status}
+                      {getStatusText(contract.status)}
                     </span>
                     <button
                       onClick={() => setIsEditingStatus(true)}
