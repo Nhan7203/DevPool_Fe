@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   FileText,
   Calendar,
@@ -8,60 +9,91 @@ import {
   Link2,
   Filter,
   Search,
+  User,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
+import {
+  clientContractService,
+  type ClientContract,
+} from "../../../../services/ClientContract";
+import { clientCompanyService } from "../../../../services/ClientCompany";
+import { projectService } from "../../../../services/Project";
+import { talentService } from "../../../../services/Talent";
+import LoadingSpinner from "../../../../components/common/LoadingSpinner";
 
-interface ClientContract {
-  id: number;
-  contractNumber: string;
-  projectName: string;
-  partnerName: string;
-  totalClientRatePerMonth?: number;
-  startDate: string;
-  endDate: string;
-  status: string;
-  clientContractFileUrl?: string;
+interface EnrichedClientContract extends ClientContract {
+  clientCompanyName?: string;
+  projectName?: string;
+  talentName?: string;
 }
 
 export default function ClientContracts() {
-  const [contracts, setContracts] = useState<ClientContract[]>([]);
+  const [contracts, setContracts] = useState<EnrichedClientContract[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data – replace with API call later
   useEffect(() => {
-    const mock: ClientContract[] = [
-      {
-        id: 1,
-        contractNumber: "CL-2025-001",
-        projectName: "Dự án FinTech Pro",
-        partnerName: "DevPool Việt Nam",
-        totalClientRatePerMonth: 120_000_000,
-        startDate: "2025-02-01",
-        endDate: "2025-12-31",
-        status: "Active",
-        clientContractFileUrl: "https://example.com/contract1.pdf",
-      },
-      {
-        id: 2,
-        contractNumber: "CL-2025-002",
-        projectName: "Hệ thống ERP Cloud",
-        partnerName: "DevPool Việt Nam",
-        totalClientRatePerMonth: 85_000_000,
-        startDate: "2025-03-15",
-        endDate: "2025-09-30",
-        status: "Completed",
-        clientContractFileUrl: "https://example.com/contract2.pdf",
-      },
-    ];
+    const fetchContracts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    setTimeout(() => {
-      setContracts(mock);
-      setLoading(false);
-    }, 800);
-  }, []);
+        const filter: any = { excludeDeleted: true };
+        if (statusFilter) {
+          filter.status = statusFilter;
+        }
+
+        const contractsData = await clientContractService.getAll(filter);
+
+        // Enrich contracts with related data
+        const enrichedContracts = await Promise.all(
+          contractsData.map(async (contract: ClientContract) => {
+            const enriched: EnrichedClientContract = { ...contract };
+
+            try {
+              const clientCompany = await clientCompanyService.getById(
+                contract.clientCompanyId
+              );
+              enriched.clientCompanyName = clientCompany.name;
+            } catch (err) {
+              enriched.clientCompanyName = "N/A";
+            }
+
+            try {
+              const project = await projectService.getById(contract.projectId);
+              enriched.projectName = project.name;
+            } catch (err) {
+              enriched.projectName = "N/A";
+            }
+
+            try {
+              const talent = await talentService.getById(contract.talentId);
+              enriched.talentName = talent.fullName;
+            } catch (err) {
+              enriched.talentName = "N/A";
+            }
+
+            return enriched;
+          })
+        );
+
+        setContracts(enrichedContracts);
+      } catch (err: any) {
+        setError(
+          err.message || "Không thể tải danh sách hợp đồng khách hàng"
+        );
+        console.error("Error fetching contracts:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContracts();
+  }, [statusFilter]);
 
   const formatCurrency = (v?: number) =>
     v
@@ -73,14 +105,14 @@ export default function ClientContracts() {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
+      case "draft":
+        return "bg-gray-100 text-gray-700";
       case "active":
         return "bg-green-100 text-green-700";
       case "completed":
         return "bg-blue-100 text-blue-700";
-      case "terminated":
+      case "terminateds":
         return "bg-red-100 text-red-700";
-      case "pending":
-        return "bg-yellow-100 text-yellow-700";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -88,7 +120,7 @@ export default function ClientContracts() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Sales Staff" />
+      <Sidebar items={sidebarItems} title="Manager" />
 
       <div className="flex-1 p-8">
         <div className="mb-8">
@@ -107,7 +139,7 @@ export default function ClientContracts() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Tìm kiếm theo số hợp đồng, dự án..."
+                placeholder="Tìm kiếm theo số hợp đồng, dự án, talent..."
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -123,14 +155,44 @@ export default function ClientContracts() {
           </button>
         </div>
 
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mb-6 bg-white rounded-xl p-4 border border-gray-200">
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lọc theo trạng thái
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Active">Active</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Terminateds">Terminateds</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+            {error}
+          </div>
+        )}
+
         {/* List */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Đang tải hợp đồng...</p>
-          </div>
+          <LoadingSpinner />
         ) : contracts.length === 0 ? (
-          <p className="text-center text-gray-600">Không có hợp đồng nào.</p>
+          <p className="text-center text-gray-600 py-12">
+            Không có hợp đồng nào.
+          </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {contracts
@@ -139,7 +201,9 @@ export default function ClientContracts() {
                   c.contractNumber
                     .toLowerCase()
                     .includes(searchTerm.toLowerCase()) ||
-                  c.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+                  c.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  c.talentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  c.clientCompanyName?.toLowerCase().includes(searchTerm.toLowerCase())
               )
               .map((contract) => (
                 <div
@@ -171,55 +235,51 @@ export default function ClientContracts() {
 
                   <div className="space-y-3 text-gray-700">
                     <div className="flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-gray-500" />
-                      <span>Dự án: {contract.projectName}</span>
+                      <Building2 className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm">
+                        Công ty: {contract.clientCompanyName || "N/A"}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-gray-500" />
-                      <span>Đối tác: {contract.partnerName}</span>
+                      <Briefcase className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm">Dự án: {contract.projectName || "N/A"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm">Talent: {contract.talentName || "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-gray-500" />
-                      <span>
+                      <span className="text-sm">
                         {new Date(contract.startDate).toLocaleDateString(
                           "vi-VN"
                         )}{" "}
-                        -{" "}
-                        {new Date(contract.endDate).toLocaleDateString("vi-VN")}
+                        {contract.endDate
+                          ? `- ${new Date(contract.endDate).toLocaleDateString("vi-VN")}`
+                          : "- Đang diễn ra"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-gray-500" />
-                      <span>
-                        {formatCurrency(contract.totalClientRatePerMonth)}/tháng
-                      </span>
-                    </div>
-                    {contract.clientContractFileUrl && (
+                    {contract.contractFileUrl && (
                       <div className="flex items-center gap-2">
                         <Link2 className="w-4 h-4 text-gray-500" />
                         <a
-                          href={contract.clientContractFileUrl}
+                          href={contract.contractFileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary-600 hover:underline"
+                          className="text-primary-600 hover:underline text-sm"
                         >
                           Xem file hợp đồng
                         </a>
                       </div>
                     )}
                   </div>
-                  <div className="mt-4 text-right items-center gap-1 text-primary-600 hover:text-primary-800 transition">
-                    <a
-                      href={`/manager/contracts/clients/${contract.id}`}
-                      className="inline-block text-sm font-medium text-primary-600 hover:text-primary-800"
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    <Link
+                      to={`/manager/contracts/clients/${contract.id}`}
+                      className="px-4 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm font-medium"
                     >
-                      <button className="px-4 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
-                        Chi tiết
-                      </button>
-                    </a>
-                    <button className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
-                      Cập nhật
-                    </button>
+                      Chi tiết
+                    </Link>
                   </div>
                 </div>
               ))}
