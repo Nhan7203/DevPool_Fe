@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Phone, Briefcase, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Code, Award, BriefcaseIcon } from "lucide-react";
+import { User, Mail, Phone, Briefcase, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Code, Award, BriefcaseIcon, MapPin, Eye } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { 
@@ -14,12 +14,12 @@ import {
   talentService 
 } from "../../../services/Talent";
 import { type Partner, partnerService } from "../../../services/Partner";
-import { type User as UserType, userService } from "../../../services/User";
 import { talentCVService, type TalentCVExtractResponse } from "../../../services/TalentCV";
 import { type Skill, skillService } from "../../../services/Skill";
 import { type JobRole, jobRoleService } from "../../../services/JobRole";
 import { type CertificateType, certificateTypeService } from "../../../services/CertificateType";
 import { type JobRoleLevel, jobRoleLevelService } from "../../../services/JobRoleLevel";
+import { type Location, locationService } from "../../../services/location";
 import { WorkingMode } from "../../../types/WorkingMode";
 
 export default function CreateTalent() {
@@ -27,12 +27,13 @@ export default function CreateTalent() {
   const [loading, setLoading] = useState(false);
   const [extractingCV, setExtractingCV] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [users, setUsers] = useState<UserType[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<TalentWithRelatedDataCreateModel>>({
     currentPartnerId: 1,
@@ -78,22 +79,22 @@ export default function CreateTalent() {
     const fetchData = async () => {
       try {
         const [
-          partnersData, 
-          usersData, 
+          partnersData,
+          locationsData, 
           skillsData, 
           jobRolesData, 
           certificateTypesData,
           jobRoleLevelsData
         ] = await Promise.all([
           partnerService.getAll(),
-          userService.getAll({ excludeDeleted: true }),
+          locationService.getAll({ excludeDeleted: true }),
           skillService.getAll({ excludeDeleted: true }),
           jobRoleService.getAll({ excludeDeleted: true }),
           certificateTypeService.getAll({ excludeDeleted: true }),
           jobRoleLevelService.getAll({ excludeDeleted: true })
         ]);
         setPartners(partnersData);
-        setUsers(usersData.items);
+        setLocations(locationsData);
         setSkills(skillsData);
         setJobRoles(jobRolesData);
         setCertificateTypes(certificateTypesData);
@@ -104,6 +105,15 @@ export default function CreateTalent() {
     };
     fetchData();
   }, []);
+
+  // Cleanup URL object when component unmounts or cvPreviewUrl changes
+  useEffect(() => {
+    return () => {
+      if (cvPreviewUrl) {
+        URL.revokeObjectURL(cvPreviewUrl);
+      }
+    };
+  }, [cvPreviewUrl]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -118,7 +128,14 @@ export default function CreateTalent() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Revoke old URL if exists
+      if (cvPreviewUrl) {
+        URL.revokeObjectURL(cvPreviewUrl);
+      }
       setCvFile(file);
+      // Create preview URL for PDF
+      const url = URL.createObjectURL(file);
+      setCvPreviewUrl(url);
     }
   };
 
@@ -368,6 +385,16 @@ export default function CreateTalent() {
                       className="w-full px-4 py-3 border border-primary-300 rounded-lg bg-white/50 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                     />
                   </div>
+                  {cvPreviewUrl && (
+                    <button
+                      type="button"
+                      onClick={() => window.open(cvPreviewUrl, '_blank')}
+                      className="px-6 py-3 bg-secondary-600 text-white rounded-lg hover:bg-secondary-700 transition-all flex items-center gap-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Xem CV
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleExtractCV}
@@ -549,48 +576,46 @@ export default function CreateTalent() {
                 </div>
               </div>
 
-              {/* User + Partner */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-2">Người dùng</label>
-                  <div className="relative group">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
-                    <select
-                      name="userId"
-                      value={formData.userId}
-                      onChange={handleChange}
-                      required
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                    >
-                      <option value="">-- Chọn người dùng --</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.fullName} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-semibold text-neutral-700 mb-2">Khu vực làm việc</label>
+                <div className="relative group">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                  <select
+                    name="locationId"
+                    value={formData.locationId || ""}
+                    onChange={handleChange}
+                    className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                  >
+                    <option value="">-- Chọn khu vực làm việc --</option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-2">Đối tác</label>
-                  <div className="relative group">
-                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
-                    <select
-                      name="currentPartnerId"
-                      value={formData.currentPartnerId}
-                      onChange={handleChange}
-                      required
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                    >
-                      <option value="">-- Chọn đối tác --</option>
-                      {partners.map((partner) => (
-                        <option key={partner.id} value={partner.id}>
-                          {partner.companyName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Partner */}
+              <div>
+                <label className="block text-sm font-semibold text-neutral-700 mb-2">Đối tác</label>
+                <div className="relative group">
+                  <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                  <select
+                    name="currentPartnerId"
+                    value={formData.currentPartnerId}
+                    onChange={handleChange}
+                    required
+                    className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                  >
+                    <option value="">-- Chọn đối tác --</option>
+                    {partners.map((partner) => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.companyName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
