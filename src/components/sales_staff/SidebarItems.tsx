@@ -4,6 +4,7 @@ import {
   Layers, 
   FileText,
   Building,
+  FileUp
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -45,7 +46,8 @@ export const sidebarItems = [
     icon: FileText, // hợp đồng
     subItems: [
       { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
-      { label: 'Tải lên Hợp Đồng', href: '/sales/contracts/create' },
+      { label: 'Tạo Hợp Đồng', href: '/sales/contracts/create' },
+      { label: 'Tạo báo cáo công việc', href: '/sales/documents/upload', icon: FileUp },
     ]
   },
 ];

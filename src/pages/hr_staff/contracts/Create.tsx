@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContractPayload } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
+import { uploadFile } from '../../../utils/firebaseStorage';
 
 export default function CreatePartnerContractPage() {
     const navigate = useNavigate();
@@ -14,6 +15,7 @@ export default function CreatePartnerContractPage() {
     const [error, setError] = useState('');
     const [partners, setPartners] = useState<Partner[]>([]);
     const [talents, setTalents] = useState<Talent[]>([]);
+    const [contractFile, setContractFile] = useState<File | null>(null);
 
     const [form, setForm] = useState<PartnerContractPayload>({
         partnerId: 0,
@@ -56,6 +58,16 @@ export default function CreatePartnerContractPage() {
         }));
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.size <= 10 * 1024 * 1024) {
+            setContractFile(file);
+            setError('');
+        } else {
+            setError("❌ File quá lớn (tối đa 10MB)");
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -70,8 +82,23 @@ export default function CreatePartnerContractPage() {
                 return;
             }
 
-            await partnerContractService.create(form);
+            if (!contractFile) {
+                setError("⚠️ Vui lòng chọn file hợp đồng");
+                setLoading(false);
+                return;
+            }
+
+            // Upload contract file
+            const fileUrl = await uploadFile(contractFile, `partner-contracts/${form.contractNumber}-${Date.now()}`);
+
+            const payload: PartnerContractPayload = {
+                ...form,
+                contractFileUrl: fileUrl,
+            };
+
+            await partnerContractService.create(payload);
             setSuccess(true);
+            setContractFile(null);
             setTimeout(() => {
                 navigate("/hr/contracts");
             }, 1500);
@@ -149,7 +176,7 @@ export default function CreatePartnerContractPage() {
                                         onChange={handleChange}
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                        placeholder="VD: CTR-2025-001"
+                                        placeholder="VD: PCTR-2025-010"
                                     />
                                 </div>
 
@@ -275,20 +302,40 @@ export default function CreatePartnerContractPage() {
                                 </div>
                             </div>
 
-                            {/* URL File Hợp Đồng */}
+                            {/* Upload File Hợp Đồng */}
                             <div>
                                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                                    <FileText className="w-4 h-4" />
-                                    URL File Hợp Đồng
+                                    <Upload className="w-4 h-4" />
+                                    Upload File Hợp Đồng <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="url"
-                                    name="contractFileUrl"
-                                    value={form.contractFileUrl || ''}
-                                    onChange={handleChange}
-                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    placeholder="https://example.com/contract.pdf"
-                                />
+                                <div className="border-2 border-dashed border-neutral-300 rounded-xl p-8 text-center hover:border-primary-500 transition-all duration-300 cursor-pointer bg-neutral-50 hover:bg-primary-50">
+                                    {contractFile ? (
+                                        <div className="flex flex-col items-center text-primary-700">
+                                            <FileText className="w-8 h-8 mb-2" />
+                                            <p className="font-medium">{contractFile.name}</p>
+                                            <p className="text-sm text-neutral-600">{(contractFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setContractFile(null)}
+                                                className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                                            >
+                                                Xóa file
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex flex-col items-center text-neutral-500 cursor-pointer">
+                                            <Upload className="w-12 h-12 mb-4" />
+                                            <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây</span>
+                                            <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                                            <input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

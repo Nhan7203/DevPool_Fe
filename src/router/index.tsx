@@ -63,6 +63,8 @@ import WorkingStyleCreatePage from '../pages/admin/Categories/working-styles.tsx
 import WorkingStyleDetailPage from '../pages/admin/Categories/working-styles.tsx/Detail';
 import WorkingStyleEditPage from '../pages/admin/Categories/working-styles.tsx/Edit';
 import WorkingStyleListPage from '../pages/admin/Categories/working-styles.tsx/List';
+import DocumentTypeListPage from '../pages/admin/Categories/document-types/List';
+import DocumentTypeCreatePage from '../pages/admin/Categories/document-types/Create';
 
 // ========================================
 // HR STAFF PAGES
@@ -83,6 +85,7 @@ import ListContract from '../pages/hr_staff/contracts/List';
 import ContractDetailPageHR from '../pages/hr_staff/contracts/Detail';
 import CreatePartnerContractPage from '../pages/hr_staff/contracts/Create';
 import UploadContract from '../pages/hr_staff/contracts/Upload';
+import HrUploadPartnerDocument from '../pages/hr_staff/partner-documents/Upload';
 
 // ========================================
 // SALES STAFF PAGES
@@ -100,11 +103,14 @@ import ProjectListPage from '../pages/sales_staff/projects/List';
 import ProjectDetailPage from '../pages/sales_staff/projects/Detail';
 import ProjectEditPage from '../pages/sales_staff/projects/Edit';
 import ProjectCreatePage from '../pages/sales_staff/projects/Create';
+import SalesUploadClientDocument from '../pages/sales_staff/documents/Upload';
 
 // ========================================
 // ACCOUNTANT STAFF PAGES
 // ========================================
 import AccountantDashboard from '../pages/accountant_staff/Dashboard';
+import AccountantClientPeriods from '../pages/accountant_staff/payment-periods/ClientPeriods';
+import AccountantPartnerPeriods from '../pages/accountant_staff/payment-periods/PartnerPeriods';
 
 // ========================================
 // DEVELOPER PAGES
@@ -274,6 +280,9 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
           <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
           <Route path={ROUTES.HR_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
+
+          {/* Partner Documents Upload */}
+          <Route path="/hr/partner-documents/upload" element={<HrUploadPartnerDocument />} />
           
           {/* Reports */}
           <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
@@ -291,6 +300,9 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
+
+          {/* Client Documents Upload */}
+          <Route path="/sales/documents/upload" element={<SalesUploadClientDocument />} />
           
           {/* Job Requests */}
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
@@ -317,6 +329,8 @@ const AppRouter: React.FC = () => {
         {/* ======================================== */}
         <Route element={<ProtectedRoute requiredRole="Staff Accountant"><Outlet /></ProtectedRoute>}>
           <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
+          <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
+          <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
         </Route>
 
         {/* ======================================== */}
@@ -426,12 +440,10 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.DETAIL} element={<IndustryDetailPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.EDIT} element={<IndustryEditPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.INDUSTRIES.CREATE} element={<IndustryCreatePage />} />
-          
-          {/* Certificate Types */}
-          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.LIST} element={<CertificateTypeListPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.DETAIL} element={<CertificateTypeDetailPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.EDIT} element={<CertificateTypeEditPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.CREATE} element={<CertificateTypeCreatePage />} />
+
+          {/* Document Types */}
+          <Route path="/admin/categories/document-types" element={<DocumentTypeListPage />} />
+          <Route path="/admin/categories/document-types/create" element={<DocumentTypeCreatePage />} />
        
         </Route>
       </Route>

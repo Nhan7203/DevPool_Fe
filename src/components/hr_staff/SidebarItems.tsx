@@ -1,4 +1,4 @@
-import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase } from "lucide-react";
+import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase, FileUp } from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -58,8 +58,8 @@ export const sidebarItems = [
     icon: FileText,
     subItems: [
       { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
-      { label: 'Tạo Hợp Đồng Mới', href: '/hr/contracts/create' },
-      // { label: 'Upload File Hợp Đồng', href: '/hr/contracts/upload' },
+      { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
+      { label: 'Tạo báo cáo công việc', href: '/hr/partner-documents/upload', icon: FileUp },
     ]
   },
 

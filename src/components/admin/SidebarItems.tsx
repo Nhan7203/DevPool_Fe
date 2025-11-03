@@ -30,6 +30,7 @@ export const sidebarItems = [
       { label: 'Khu vực làm việc', href: '/admin/categories/locations' },
       { label: 'Thị trường', href: '/admin/categories/markets' },
       { label: 'Lĩnh vực', href: '/admin/categories/industries' },
+      { label: 'Loại tài liệu', href: '/admin/categories/document-types' },
     ]
   },
   {
