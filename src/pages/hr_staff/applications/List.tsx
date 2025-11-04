@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { applyService, type Apply } from "../../../services/Apply";
+import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { userService, type User } from "../../../services/User";
@@ -20,7 +20,7 @@ import {
   Send
 } from "lucide-react";
 
-type AugmentedApply = Apply & {
+type AugmentedTalentApplication = TalentApplication & {
   jobRequest?: {
     id: number;
     title: string;
@@ -70,8 +70,8 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export default function TalentCVApplicationPage() {
   const [loading, setLoading] = useState(true);
-  const [applications, setApplications] = useState<AugmentedApply[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<AugmentedApply[]>([]);
+  const [applications, setApplications] = useState<AugmentedTalentApplication[]>([]);
+  const [filteredApplications, setFilteredApplications] = useState<AugmentedTalentApplication[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -110,7 +110,15 @@ export default function TalentCVApplicationPage() {
         setLoading(true);
         
         // Fetch all applications
-        const applicationsData = await applyService.getAll() as Apply[];
+        const applicationsData = await talentApplicationService.getAll({ excludeDeleted: true });
+        
+        // Ensure applicationsData is an array
+        if (!Array.isArray(applicationsData)) {
+          console.error("❌ Response không phải là mảng:", applicationsData);
+          setApplications([]);
+          setFilteredApplications([]);
+          return;
+        }
         
         // Get unique IDs
         const jobRequestIds = [...new Set(applicationsData.map(a => a.jobRequestId))];
@@ -136,7 +144,7 @@ export default function TalentCVApplicationPage() {
         const userMap = new Map(usersData.filter((u): u is User => u !== null).map((u: User) => [u.id, u]));
 
         // Augment applications with related data
-        const augmented: AugmentedApply[] = applicationsData.map(app => {
+        const augmented: AugmentedTalentApplication[] = applicationsData.map(app => {
           const jobRequest = jobRequestMap.get(app.jobRequestId);
           const talentCV = cvMap.get(app.cvId);
           const submitter = userMap.get(app.submittedBy);
@@ -158,8 +166,18 @@ export default function TalentCVApplicationPage() {
 
         setApplications(augmented);
         setFilteredApplications(augmented);
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("❌ Lỗi khi tải danh sách Applications:", err);
+        if (err && typeof err === 'object' && 'message' in err) {
+          console.error("❌ Chi tiết lỗi:", {
+            message: (err as { message?: string }).message,
+            response: (err as { response?: { data?: unknown; status?: number } }).response?.data,
+            status: (err as { response?: { status?: number } }).response?.status,
+            url: (err as { config?: { url?: string } }).config?.url
+          });
+        }
+        setApplications([]);
+        setFilteredApplications([]);
       } finally {
         setLoading(false);
       }

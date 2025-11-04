@@ -1,5 +1,12 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
+import type { JobRequest } from "./JobRequest";
+import type { TalentCV } from "./TalentCV";
+import type { User } from "./User";
+import type { Talent } from "./Talent";
+import type { Project } from "./Project";
+import type { ClientCompany } from "./ClientCompany";
+import type { ApplyActivity } from "./ApplyActivity";
 
 export interface TalentApplication {
   id: number;
@@ -45,6 +52,37 @@ export interface TalentApplicationStatusTransitionResult {
   validationErrors: string[];
 }
 
+export interface TalentApplicationDetailed {
+  id: number;
+  jobRequestId: number;
+  cvId: number;
+  submittedBy: string;
+  status: string;
+  note: string;
+  convertedCVPath?: string | null;
+  createdAt: string; // ISO string
+  updatedAt?: string | null; // ISO string
+  
+  // Related Navigation Properties
+  jobRequest?: JobRequest | null;
+  cv?: TalentCV | null; // Note: API returns "CV" but we'll use "cv" for camelCase
+  submitter?: User | null;
+  
+  // Additional Related Data
+  talent?: Talent | null;
+  project?: Project | null;
+  clientCompany?: ClientCompany | null;
+  
+  // Related Collections
+  activities: ApplyActivity[];
+  
+  // Additional Display Properties
+  jobTitle?: string | null;
+  companyName?: string | null;
+  talentName?: string | null;
+  submitterName?: string | null;
+}
+
 export const talentApplicationService = {
   async getAll(filter?: TalentApplicationFilter) {
     try {
@@ -59,10 +97,28 @@ export const talentApplicationService = {
 
       const url = `/talentapplication${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
-      return response.data as TalentApplication[];
+      
+      // Ensure response.data is an array
+      const data = response.data;
+      if (Array.isArray(data)) {
+        return data as TalentApplication[];
+      } else if (data && Array.isArray(data.data)) {
+        // In case API returns { data: [...] }
+        return data.data as TalentApplication[];
+      } else {
+        console.warn("⚠️ Response không phải là mảng:", data);
+        return [] as TalentApplication[];
+      }
     } catch (error: unknown) {
-      if (error instanceof AxiosError)
+      if (error instanceof AxiosError) {
+        console.error("❌ Lỗi khi fetch TalentApplication:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
         throw error.response?.data || { message: "Không thể tải danh sách đơn ứng tuyển" };
+      }
       throw { message: "Lỗi không xác định khi tải danh sách đơn ứng tuyển" };
     }
   },
@@ -75,6 +131,34 @@ export const talentApplicationService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tải thông tin đơn ứng tuyển" };
       throw { message: "Lỗi không xác định khi tải dữ liệu" };
+    }
+  },
+
+  async getDetailedById(id: number) {
+    try {
+      const response = await axios.get(`/talentapplication/${id}/detailed`);
+      
+      // API trả về format: { success: true, message: "...", data: {...} }
+      const responseData = response.data;
+      
+      // Kiểm tra nếu có cấu trúc { success, message, data }
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        return responseData.data as TalentApplicationDetailed;
+      }
+      
+      // Nếu không có cấu trúc trên, trả về trực tiếp
+      return responseData as TalentApplicationDetailed;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        console.error("❌ Lỗi khi fetch TalentApplicationDetailed:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+        throw error.response?.data || { message: "Không thể tải thông tin chi tiết đơn ứng tuyển" };
+      }
+      throw { message: "Lỗi không xác định khi tải thông tin chi tiết" };
     }
   },
 
@@ -91,7 +175,6 @@ export const talentApplicationService = {
 
   async updateStatus(id: number, payload: TalentApplicationStatusUpdate) {
     try {
-      // Giả định endpoint cập nhật trạng thái
       const response = await axios.put(`/talentapplication/${id}/status`, payload);
       return response.data as TalentApplicationStatusTransitionResult;
     } catch (error: unknown) {
@@ -101,5 +184,4 @@ export const talentApplicationService = {
     }
   },
 };
-
 

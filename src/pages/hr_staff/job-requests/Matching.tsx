@@ -6,6 +6,8 @@ import { talentCVService, type TalentCVMatchResult } from "../../../services/Tal
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentService, type Talent } from "../../../services/Talent";
 import { applyService } from "../../../services/Apply";
+import { decodeJWT } from "../../../services/Auth";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
     ArrowLeft,
     Sparkles,
@@ -26,6 +28,7 @@ interface EnrichedMatchResult extends TalentCVMatchResult {
 }
 
 export default function CVMatchingPage() {
+    const { user } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const jobRequestId = searchParams.get("jobRequestId");
@@ -56,14 +59,23 @@ export default function CVMatchingPage() {
                 console.log("✅ Job Request loaded:", jobReq);
                 setJobRequest(jobReq);
 
+                // Tính số lượng match mong muốn: quantity + 5
+                const desiredMatchCount = jobReq.quantity ? jobReq.quantity + 5 : 5;
+
                 // Fetch matching CVs
                 console.log("🔍 Fetching matching CVs for Job Request ID:", jobRequestId);
+                console.log("📊 Desired match count:", desiredMatchCount, "(Quantity:", jobReq.quantity, "+ 5)");
                 const matches = await talentCVService.getMatchesForJobRequest({
                     jobRequestId: Number(jobRequestId),
                     excludeDeleted: true,
+                    maxResults: desiredMatchCount, // Gửi số lượng mong muốn cho backend
                 });
                 console.log("✅ Matching CVs received:", matches);
                 console.log("📊 Total matches found:", matches?.length || 0);
+                
+                // Nếu backend không hỗ trợ maxResults và chỉ trả về quantity kết quả,
+                // chúng ta vẫn giữ nguyên kết quả (backend đã limit rồi)
+                // Nếu backend hỗ trợ maxResults và trả về đúng số lượng mong muốn, thì không cần làm gì thêm
 
                 // Enrich with talent information
                 const enrichedMatches = await Promise.all(
@@ -145,7 +157,31 @@ export default function CVMatchingPage() {
         if (!confirm) return;
 
         try {
-            const submittedBy = match.talentInfo?.userId || "Unknown";
+            // Lấy userId từ token hoặc user context
+            let submittedBy: string | null = null;
+            
+            // Thử lấy từ user context trước
+            if (user?.id) {
+                submittedBy = user.id;
+            } else {
+                // Nếu không có, lấy từ token
+                const token = localStorage.getItem('accessToken');
+                if (token) {
+                    try {
+                        const decoded = decodeJWT(token);
+                        if (decoded) {
+                            // JWT payload có nameid là userId
+                            submittedBy = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+                        }
+                    } catch (error) {
+                        console.error('Error decoding JWT:', error);
+                    }
+                }
+            }
+            
+            if (!submittedBy) {
+                throw new Error('Không xác định được người dùng (submittedBy). Vui lòng đăng nhập lại.');
+            }
             
             await applyService.create({
                 jobRequestId: Number(jobRequestId),
@@ -214,7 +250,7 @@ export default function CVMatchingPage() {
                             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-50 border border-purple-200">
                                 <Target className="w-4 h-4 text-purple-600" />
                                 <span className="text-sm font-medium text-purple-800">
-                                    {totalMatched} CVs được tìm thấy từ {jobRequest?.quantity || 0} vị trí cần tuyển
+                                    {totalMatched} CVs được tìm thấy (yêu cầu: {jobRequest?.quantity || 0} vị trí, match: {jobRequest?.quantity ? jobRequest.quantity + 5 : 5} CVs)
                                 </span>
                             </div>
                         </div>
@@ -294,7 +330,7 @@ export default function CVMatchingPage() {
                         value={totalMatched.toString()}
                         icon={<FileText className="w-6 h-6" />}
                         color="blue"
-                        change={`Từ ${jobRequest?.quantity || 0} vị trí`}
+                        change={`Yêu cầu: ${jobRequest?.quantity || 0}, Match: ${jobRequest?.quantity ? jobRequest.quantity + 5 : 5}`}
                     />
                     <StatCard
                         title="Điểm Trung Bình"

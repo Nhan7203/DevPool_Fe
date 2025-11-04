@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { applyService, type Apply } from "../../../services/Apply";
-import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
-import { talentCVService, type TalentCV } from "../../../services/TalentCV";
-import { userService } from "../../../services/User";
+import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { applyActivityService, type ApplyActivity, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { Button } from "../../../components/ui/button";
@@ -20,7 +17,10 @@ import {
   Eye,
   AlertCircle,
   X,
-  Send
+  Send,
+  Building2,
+  Users,
+  MapPin
 } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
@@ -60,10 +60,7 @@ const getActivityStatusLabel = (status: number): string => {
 export default function TalentCVApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [application, setApplication] = useState<Apply | null>(null);
-  const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
-  const [talentCV, setTalentCV] = useState<TalentCV | null>(null);
-  const [submitterName, setSubmitterName] = useState<string>("");
+  const [application, setApplication] = useState<TalentApplicationDetailed | null>(null);
   const [activities, setActivities] = useState<ApplyActivity[]>([]);
   const [processSteps, setProcessSteps] = useState<Record<number, ApplyProcessStep>>({});
   const [loading, setLoading] = useState(true);
@@ -73,30 +70,15 @@ export default function TalentCVApplicationDetailPage() {
       try {
         setLoading(true);
         
-        // Fetch application
-        const appData = await applyService.getById(Number(id));
+        // Fetch detailed application data
+        const appData = await talentApplicationService.getDetailedById(Number(id));
         setApplication(appData);
 
-        // Fetch related data in parallel
-        const [jobReqData, cvData] = await Promise.all([
-          jobRequestService.getById(appData.jobRequestId),
-          talentCVService.getById(appData.cvId)
-        ]);
-
-        setJobRequest(jobReqData);
-        setTalentCV(cvData);
-
-        // Fetch submitter name
+        // Fetch activities (may already be in appData.activities, but fetch separately to ensure we have process steps)
         try {
-          const user = await userService.getById(appData.submittedBy);
-          setSubmitterName(user.fullName);
-        } catch {
-          setSubmitterName(appData.submittedBy);
-        }
-
-        // Fetch activities
-        try {
-          const activitiesData = await applyActivityService.getAll({ applyId: appData.id });
+          const activitiesData = appData.activities && appData.activities.length > 0 
+            ? appData.activities 
+            : await applyActivityService.getAll({ applyId: appData.id });
           setActivities(activitiesData);
           
           // Fetch process steps for activities
@@ -115,9 +97,20 @@ export default function TalentCVApplicationDetailPage() {
           }
         } catch (err) {
           console.error("❌ Lỗi tải activities:", err);
+          // Use activities from detailed response if available
+          if (appData.activities) {
+            setActivities(appData.activities);
+          }
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("❌ Lỗi tải chi tiết Application:", err);
+        if (err && typeof err === 'object' && 'message' in err) {
+          console.error("❌ Chi tiết lỗi:", {
+            message: (err as { message?: string }).message,
+            response: (err as { response?: { data?: unknown; status?: number } }).response?.data,
+            status: (err as { response?: { status?: number } }).response?.status,
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -130,7 +123,7 @@ export default function TalentCVApplicationDetailPage() {
     if (!id || !application) return;
 
     try {
-      await applyService.updateStatus(Number(id), { status: newStatus });
+      await talentApplicationService.updateStatus(Number(id), { newStatus });
       setApplication({ ...application, status: newStatus });
       
       // Nếu là Withdrawn, cập nhật tất cả activities thành NoShow
@@ -398,7 +391,7 @@ export default function TalentCVApplicationDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <InfoItem 
                 label="Người nộp" 
-                value={submitterName || application.submittedBy} 
+                value={application.submitterName || application.submitter?.fullName || application.submittedBy} 
                 icon={<UserIcon className="w-4 h-4" />}
               />
               <InfoItem 
@@ -425,7 +418,7 @@ export default function TalentCVApplicationDetailPage() {
         </div>
 
         {/* Yêu cầu tuyển dụng */}
-        {jobRequest && (
+        {application.jobRequest && (
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
@@ -439,23 +432,189 @@ export default function TalentCVApplicationDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem 
                   label="Tiêu đề" 
-                  value={jobRequest.title} 
+                  value={application.jobTitle || application.jobRequest.title} 
                   icon={<FileText className="w-4 h-4" />}
                 />
+                <InfoItem 
+                  label="Số lượng" 
+                  value={application.jobRequest.quantity.toString()} 
+                  icon={<Users className="w-4 h-4" />}
+                />
+                {application.jobRequest.budgetPerMonth && (
+                  <InfoItem 
+                    label="Ngân sách/tháng" 
+                    value={`${application.jobRequest.budgetPerMonth.toLocaleString('vi-VN')} VNĐ`} 
+                    icon={<Briefcase className="w-4 h-4" />}
+                  />
+                )}
+                {application.jobRequest.locationId && (
+                  <InfoItem 
+                    label="Địa điểm" 
+                    value="Đang tải..." 
+                    icon={<MapPin className="w-4 h-4" />}
+                  />
+                )}
                 <div className="md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-neutral-400" />
                     <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
                   </div>
-                  <p className="text-gray-700 leading-relaxed">{jobRequest.description}</p>
+                  <p className="text-gray-700 leading-relaxed">{application.jobRequest.description}</p>
                 </div>
+                {application.jobRequest.requirements && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-neutral-400" />
+                      <p className="text-neutral-500 text-sm font-medium">Yêu cầu</p>
+                    </div>
+                    <p className="text-gray-700 leading-relaxed">{application.jobRequest.requirements}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thông tin Talent */}
+        {application.talent && (
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <UserIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Thông tin ứng viên</h2>
+                </div>
+                {application.talent.id && (
+                  <Link
+                    to={`/hr/talents/${application.talent.id}`}
+                    className="text-primary-600 hover:text-primary-800 text-sm font-medium"
+                  >
+                    Xem chi tiết →
+                  </Link>
+                )}
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InfoItem 
+                  label="Tên ứng viên" 
+                  value={application.talentName || application.talent.fullName} 
+                  icon={<UserIcon className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Email" 
+                  value={application.talent.email} 
+                  icon={<FileText className="w-4 h-4" />}
+                />
+                {application.talent.phone && (
+                  <InfoItem 
+                    label="Số điện thoại" 
+                    value={application.talent.phone} 
+                    icon={<FileText className="w-4 h-4" />}
+                  />
+                )}
+                {application.talent.status && (
+                  <InfoItem 
+                    label="Trạng thái" 
+                    value={application.talent.status} 
+                    icon={<AlertCircle className="w-4 h-4" />}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thông tin Project */}
+        {application.project && (
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin dự án</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InfoItem 
+                  label="Tên dự án" 
+                  value={application.project.name} 
+                  icon={<Briefcase className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Trạng thái" 
+                  value={application.project.status} 
+                  icon={<AlertCircle className="w-4 h-4" />}
+                />
+                {application.project.description && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-neutral-400" />
+                      <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
+                    </div>
+                    <p className="text-gray-700 leading-relaxed">{application.project.description}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thông tin Client Company */}
+        {application.clientCompany && (
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-teal-100 rounded-lg">
+                  <Building2 className="w-5 h-5 text-teal-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin công ty khách hàng</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InfoItem 
+                  label="Tên công ty" 
+                  value={application.companyName || application.clientCompany.name} 
+                  icon={<Building2 className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Người liên hệ" 
+                  value={application.clientCompany.contactPerson} 
+                  icon={<UserIcon className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Email" 
+                  value={application.clientCompany.email} 
+                  icon={<FileText className="w-4 h-4" />}
+                />
+                {application.clientCompany.phone && (
+                  <InfoItem 
+                    label="Số điện thoại" 
+                    value={application.clientCompany.phone} 
+                    icon={<FileText className="w-4 h-4" />}
+                  />
+                )}
+                {application.clientCompany.address && (
+                  <div className="md:col-span-2">
+                    <InfoItem 
+                      label="Địa chỉ" 
+                      value={application.clientCompany.address} 
+                      icon={<MapPin className="w-4 h-4" />}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
         {/* Thông tin CV */}
-        {talentCV && (
+        {application.cv && (
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
@@ -469,20 +628,25 @@ export default function TalentCVApplicationDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem 
                   label="Phiên bản" 
-                  value={talentCV.versionName} 
+                  value={application.cv.versionName} 
                   icon={<FileText className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Trạng thái" 
+                  value={application.cv.isActive ? "Đang hoạt động" : "Không hoạt động"} 
+                  icon={<AlertCircle className="w-4 h-4" />}
                 />
                 <div className="md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-neutral-400" />
                     <p className="text-neutral-500 text-sm font-medium">Tóm tắt</p>
                   </div>
-                  <p className="text-gray-700 leading-relaxed">{talentCV.summary}</p>
+                  <p className="text-gray-700 leading-relaxed">{application.cv.summary}</p>
                 </div>
-                {talentCV.cvFileUrl && (
+                {application.cv.cvFileUrl && (
                   <div className="md:col-span-2">
                     <Button
-                      onClick={() => window.open(talentCV.cvFileUrl, '_blank')}
+                      onClick={() => window.open(application.cv!.cvFileUrl, '_blank')}
                       className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transform hover:scale-105"
                     >
                       <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

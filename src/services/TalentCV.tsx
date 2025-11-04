@@ -44,6 +44,7 @@ export interface TalentCVMatchResult {
 export interface TalentCVJobRequestFilter {
   jobRequestId: number;
   excludeDeleted?: boolean;
+  maxResults?: number; // Số lượng kết quả tối đa (nếu backend hỗ trợ)
 }
 
 export interface TalentCVExtractResponse {
@@ -124,6 +125,7 @@ export const talentCVService = {
       const params = new URLSearchParams();
       params.append("JobRequestId", filter.jobRequestId.toString());
       if (filter.excludeDeleted !== undefined) params.append("ExcludeDeleted", filter.excludeDeleted.toString());
+      if (filter.maxResults !== undefined) params.append("MaxResults", filter.maxResults.toString());
       const url = `/talentcv/filter-by-job-request${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
       return response.data;
