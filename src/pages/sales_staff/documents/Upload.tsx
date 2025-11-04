@@ -5,14 +5,19 @@ import { clientDocumentService } from "../../../services/ClientDocument";
 import { uploadFile } from "../../../utils/firebaseStorage";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems as salesSidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FileText, Upload, FileUp, ClipboardList, Save, AlertCircle, CheckCircle } from "lucide-react";
 
 const SalesUploadClientDocument: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const paymentIdFromUrl = searchParams.get('paymentId');
+  
   const [types, setTypes] = useState<DocumentType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
 
-  const [clientContractPaymentId, setClientContractPaymentId] = useState<number | "">("");
+  const [clientContractPaymentId, setClientContractPaymentId] = useState<number | "">(
+    paymentIdFromUrl ? Number(paymentIdFromUrl) : ""
+  );
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
@@ -58,15 +63,30 @@ const SalesUploadClientDocument: React.FC = () => {
     setError(null);
     setSuccess(false);
     try {
+      const token = localStorage.getItem('accessToken');
+      let uploadedByUserId: string | null = null;
+      if (token) {
+        try {
+          const payloadPart = token.split(".")[1];
+          const decoded = JSON.parse(atob(payloadPart.replace(/-/g, "+").replace(/_/g, "/")));
+          uploadedByUserId = decoded.sub || decoded.userId || decoded.uid || null;
+        } catch {
+          uploadedByUserId = null;
+        }
+      }
+      if (!uploadedByUserId) {
+        throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+      }
       const path = `client-documents/${clientContractPaymentId}/${Date.now()}_${file.name}`;
       const downloadURL = await uploadFile(file, path, setUploadProgress);
 
       const payload = {
         clientContractPaymentId: Number(clientContractPaymentId),
         documentTypeId: Number(documentTypeId),
+        referencedPartnerDocumentId: null,
         fileName: file.name,
         filePath: downloadURL,
-        uploadedByUserId: "current-user",
+        uploadedByUserId,
         description: description || undefined,
         source: source || undefined,
       } as const;
@@ -76,7 +96,11 @@ const SalesUploadClientDocument: React.FC = () => {
       setFile(null);
       setUploadProgress(0);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Có lỗi khi tải lên';
+      let msg = 'Có lỗi khi tải lên';
+      if (typeof err === 'object' && err !== null) {
+        const maybeErr = err as { response?: { data?: { message?: string } } ; message?: string };
+        msg = maybeErr.response?.data?.message || maybeErr.message || msg;
+      }
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -142,9 +166,10 @@ const SalesUploadClientDocument: React.FC = () => {
                     type="number"
                     value={clientContractPaymentId}
                     onChange={(e) => setClientContractPaymentId(e.target.value ? Number(e.target.value) : "")}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white disabled:bg-neutral-100 disabled:cursor-not-allowed"
                     placeholder="Nhập ID kỳ thanh toán hợp đồng khách hàng"
                     required
+                    disabled={!!paymentIdFromUrl}
                   />
                 </div>
 
@@ -200,7 +225,7 @@ const SalesUploadClientDocument: React.FC = () => {
                       <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
                       <input
                         type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                         className="hidden"
                         onChange={onFileChange}
                       />

@@ -71,86 +71,86 @@ export default function JobRequestDetailHRPage() {
         8: "Linh hoạt",
     };
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                const [jobReqData, allProjects, allCompanies, allPositions, allSkills] =
-                    await Promise.all([
-                        jobRequestService.getById(Number(id)),
-                        projectService.getAll() as Promise<Project[]>,
-                        clientCompanyService.getAll() as Promise<ClientCompany[]>,
-                        jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
-                        skillService.getAll() as Promise<Skill[]>,
-                    ]);
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [jobReqData, allProjects, allCompanies, allPositions, allSkills] =
+                await Promise.all([
+                    jobRequestService.getById(Number(id)),
+                    projectService.getAll() as Promise<Project[]>,
+                    clientCompanyService.getAll() as Promise<ClientCompany[]>,
+                    jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
+                    skillService.getAll() as Promise<Skill[]>,
+                ]);
 
-                const project = allProjects.find((p) => p.id === jobReqData.projectId);
-                const clientCompany = project
-                    ? allCompanies.find((c) => c.id === project.clientCompanyId)
-                    : null;
-                const position = allPositions.find(
-                    (pos) => pos.id === jobReqData.jobRoleLevelId
-                );
+            const project = allProjects.find((p) => p.id === jobReqData.projectId);
+            const clientCompany = project
+                ? allCompanies.find((c) => c.id === project.clientCompanyId)
+                : null;
+            const position = allPositions.find(
+                (pos) => pos.id === jobReqData.jobRoleLevelId
+            );
 
-                let templateName = "—";
-                if (clientCompany) {
-                    const templates =
-                        await clientCompanyCVTemplateService.listEffectiveTemplates(
-                            clientCompany.id
-                        );
-                    const matched = templates.find(
-                        (t) => t.templateId === jobReqData.clientCompanyCVTemplateId
+            let templateName = "—";
+            if (clientCompany) {
+                const templates =
+                    await clientCompanyCVTemplateService.listEffectiveTemplates(
+                        clientCompany.id
                     );
-                    templateName = matched ? matched.templateName : "—";
-                }
-
-                if (position) {
-                    try {
-                        const role = await jobRoleService.getById(position.jobRoleId);
-                        setJobRoleName(role?.name ?? "—");
-                    } catch {}
-                }
-
-                if (jobReqData.locationId) {
-                    try {
-                        const loc = await locationService.getById(jobReqData.locationId);
-                        setLocationName(loc?.name ?? "—");
-                    } catch {}
-                }
-
-                if (jobReqData.applyProcessTemplateId) {
-                    try {
-                        const apt = await applyProcessTemplateService.getById(jobReqData.applyProcessTemplateId);
-                        setApplyProcessTemplateName(apt?.name ?? "—");
-                    } catch {}
-                }
-
-                const jobReqWithExtra: JobRequestDetail = {
-                    ...jobReqData,
-                    projectName: project?.name || "—",
-                    clientCompanyName: clientCompany?.name || "—",
-                    jobPositionName: position?.name || "—",
-                    clientCompanyCVTemplateName: templateName,
-                };
-
-                const jobSkillData = (await jobSkillService.getAll({
-                    jobRequestId: Number(id),
-                })) as JobSkill[];
-
-                const skills = jobSkillData.map((js) => {
-                    const found = allSkills.find((s) => s.id === js.skillsId);
-                    return { id: js.skillsId, name: found?.name || "Không xác định" };
-                });
-
-                setJobRequest(jobReqWithExtra);
-                setJobSkills(skills);
-            } catch (err) {
-                console.error("❌ Lỗi tải chi tiết Job Request:", err);
-            } finally {
-                setLoading(false);
+                const matched = templates.find(
+                    (t) => t.templateId === jobReqData.clientCompanyCVTemplateId
+                );
+                templateName = matched ? matched.templateName : "—";
             }
-        };
 
+            if (position) {
+                try {
+                    const role = await jobRoleService.getById(position.jobRoleId);
+                    setJobRoleName(role?.name ?? "—");
+                } catch {}
+            }
+
+            if (jobReqData.locationId) {
+                try {
+                    const loc = await locationService.getById(jobReqData.locationId);
+                    setLocationName(loc?.name ?? "—");
+                } catch {}
+            }
+
+            if (jobReqData.applyProcessTemplateId) {
+                try {
+                    const apt = await applyProcessTemplateService.getById(jobReqData.applyProcessTemplateId);
+                    setApplyProcessTemplateName(apt?.name ?? "—");
+                } catch {}
+            }
+
+            const jobReqWithExtra: JobRequestDetail = {
+                ...jobReqData,
+                projectName: project?.name || "—",
+                clientCompanyName: clientCompany?.name || "—",
+                jobPositionName: position?.name || "—",
+                clientCompanyCVTemplateName: templateName,
+            };
+
+            const jobSkillData = (await jobSkillService.getAll({
+                jobRequestId: Number(id),
+            })) as JobSkill[];
+
+            const skills = jobSkillData.map((js) => {
+                const found = allSkills.find((s) => s.id === js.skillsId);
+                return { id: js.skillsId, name: found?.name || "Không xác định" };
+            });
+
+            setJobRequest(jobReqWithExtra);
+            setJobSkills(skills);
+        } catch (err) {
+            console.error("❌ Lỗi tải chi tiết Job Request:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, [id]);
 
@@ -193,7 +193,8 @@ export default function JobRequestDetailHRPage() {
                 status: status,
             });
             alert(`✅ ${status === 1 ? 'Đã duyệt' : 'Đã từ chối'} yêu cầu tuyển dụng thành công!`);
-            navigate("/hr/job-requests");
+            // Reload dữ liệu để cập nhật trạng thái mới
+            await fetchData();
         } catch (err) {
             console.error("❌ Lỗi cập nhật trạng thái:", err);
             alert("Không thể cập nhật trạng thái!");

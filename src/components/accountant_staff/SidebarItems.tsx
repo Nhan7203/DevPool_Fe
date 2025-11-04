@@ -1,4 +1,4 @@
-import { BarChart3, CalendarClock, Wallet } from "lucide-react";
+import { BarChart3, CalendarClock, Wallet} from "lucide-react";
 
 export const sidebarItems = [
   {

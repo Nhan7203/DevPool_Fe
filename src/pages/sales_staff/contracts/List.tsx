@@ -343,7 +343,7 @@ export default function ListClientContracts() {
                     )}
                   </div>
                   
-                  <div className="mt-6 flex items-center">
+                  <div className="mt-6 flex items-center justify-between">
                     <Link
                       to={`/sales/contracts/${contract.id}`}
                       className="group flex items-center gap-2 text-primary-600 hover:text-primary-800 transition-colors duration-300"

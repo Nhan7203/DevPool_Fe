@@ -78,56 +78,56 @@ export default function ApplyActivityDetailPage() {
   const [allActivities, setAllActivities] = useState<ApplyActivity[]>([]);
   const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      if (!id) return;
+
+      const activityData = await applyActivityService.getById(Number(id));
+      
+      // Fetch process step name
+      let processStepName = "—";
+      let stepOrder = 0;
       try {
-        setLoading(true);
-        if (!id) return;
+        const step = await applyProcessStepService.getById(activityData.processStepId);
+        processStepName = step.stepName;
+        stepOrder = step.stepOrder;
+      } catch {}
+      setCurrentStepOrder(stepOrder);
 
-        const activityData = await applyActivityService.getById(Number(id));
-        
-        // Fetch process step name
-        let processStepName = "—";
-        let stepOrder = 0;
-        try {
-          const step = await applyProcessStepService.getById(activityData.processStepId);
-          processStepName = step.stepName;
-          stepOrder = step.stepOrder;
-        } catch {}
-        setCurrentStepOrder(stepOrder);
-
-        // Fetch application info
-        let applicationInfo;
-        try {
-          const app = await applyService.getById(activityData.applyId);
-          applicationInfo = {
-            id: app.id,
-            status: app.status
-          };
-        } catch {}
-
-        const activityWithExtra: ApplyActivityDetail = {
-          ...activityData,
-          processStepName,
-          applicationInfo
+      // Fetch application info
+      let applicationInfo;
+      try {
+        const app = await applyService.getById(activityData.applyId);
+        applicationInfo = {
+          id: app.id,
+          status: app.status
         };
+      } catch {}
 
-        setActivity(activityWithExtra);
+      const activityWithExtra: ApplyActivityDetail = {
+        ...activityData,
+        processStepName,
+        applicationInfo
+      };
 
-        // Fetch all activities của application này để kiểm tra bước trước
-        try {
-          const activitiesData = await applyActivityService.getAll({ applyId: activityData.applyId });
-          setAllActivities(activitiesData);
-        } catch (err) {
-          console.error("❌ Lỗi tải activities:", err);
-        }
+      setActivity(activityWithExtra);
+
+      // Fetch all activities của application này để kiểm tra bước trước
+      try {
+        const activitiesData = await applyActivityService.getAll({ applyId: activityData.applyId });
+        setAllActivities(activitiesData);
       } catch (err) {
-        console.error("❌ Lỗi tải chi tiết Apply Activity:", err);
-      } finally {
-        setLoading(false);
+        console.error("❌ Lỗi tải activities:", err);
       }
-    };
+    } catch (err) {
+      console.error("❌ Lỗi tải chi tiết Apply Activity:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, [id]);
 
@@ -222,13 +222,6 @@ export default function ApplyActivityDetailPage() {
 
       await applyActivityService.updateStatus(Number(id), { status: newStatus });
       
-      // Cập nhật activity status trong allActivities để theo dõi
-      const updatedActivities = allActivities.map(act => 
-        act.id === activity.id ? { ...act, status: newStatus } : act
-      );
-      setAllActivities(updatedActivities);
-      setActivity({ ...activity, status: newStatus });
-      
       // Nếu status là Completed, tự động cập nhật application status thành Interviewing
       if (newStatus === ApplyActivityStatus.Completed && activity.applicationInfo) {
         try {
@@ -236,17 +229,6 @@ export default function ApplyActivityDetailPage() {
           // Chỉ cập nhật nếu application chưa ở trạng thái Interviewing hoặc sau đó
           if (currentAppStatus !== 'Interviewing' && currentAppStatus !== 'Offered' && currentAppStatus !== 'Hired' && currentAppStatus !== 'Rejected' && currentAppStatus !== 'Withdrawn') {
             await applyService.updateStatus(activity.applicationInfo.id, { status: 'Interviewing' });
-            
-            // Cập nhật applicationInfo trong state
-            if (activity.applicationInfo) {
-              setActivity({
-                ...activity,
-                applicationInfo: {
-                  ...activity.applicationInfo,
-                  status: 'Interviewing'
-                }
-              });
-            }
           }
         } catch (err) {
           console.error("❌ Lỗi cập nhật trạng thái application:", err);
@@ -256,13 +238,17 @@ export default function ApplyActivityDetailPage() {
       // Kiểm tra nếu tất cả các bước đều pass, tự động chuyển application sang Offered
       if (newStatus === ApplyActivityStatus.Passed && activity.applicationInfo) {
         try {
+          // Reload activities để lấy dữ liệu mới nhất
+          const activitiesData = await applyActivityService.getAll({ applyId: activity.applyId });
+          setAllActivities(activitiesData);
+          
           // Lấy tất cả process steps
           const allSteps = await applyProcessStepService.getAll();
           
           // Đếm số bước đã pass
           let allStepsPassed = true;
           for (const step of allSteps) {
-            const stepActivity = updatedActivities.find(act => act.processStepId === step.id);
+            const stepActivity = activitiesData.find(act => act.processStepId === step.id);
             if (stepActivity && stepActivity.status !== ApplyActivityStatus.Passed) {
               allStepsPassed = false;
               break;
@@ -273,16 +259,9 @@ export default function ApplyActivityDetailPage() {
           if (allStepsPassed && activity.applicationInfo.status === 'Interviewing') {
             await applyService.updateStatus(activity.applicationInfo.id, { status: 'Offered' });
             
-            // Cập nhật applicationInfo trong state
-            setActivity({
-              ...activity,
-              applicationInfo: {
-                ...activity.applicationInfo,
-                status: 'Offered'
-              }
-            });
-            
             alert(`✅ Đã cập nhật trạng thái thành công!\n🎉 Tất cả các bước đã hoàn thành, tự động chuyển application sang trạng thái Offered!`);
+            // Reload dữ liệu để cập nhật UI
+            await fetchData();
             return;
           }
         } catch (err) {
@@ -290,6 +269,8 @@ export default function ApplyActivityDetailPage() {
         }
       }
       
+      // Reload dữ liệu để cập nhật UI, đặc biệt quan trọng cho bước đầu tiên
+      await fetchData();
       alert(`✅ Đã cập nhật trạng thái thành công!`);
     } catch (err) {
       console.error("❌ Lỗi cập nhật trạng thái:", err);
