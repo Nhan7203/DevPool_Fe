@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { authService, getRoleFromToken, authenticateWithFirebase } from '../../services/Auth';
 
 
 export default function LoginForm() {
@@ -13,36 +14,67 @@ export default function LoginForm() {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
+  // Validate email format
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    // Validate input
     if (!email || !password) {
       setError('Vui lòng nhập đầy đủ thông tin');
       return;
     }
 
-    try {
-      // For demo, determine role based on email domain
-      let role = '';
-      if (email.includes('staff_hr') || email.includes('hr')) {
-        role = 'Staff HR';
-      } else if (email.includes('staff_accountant') || email.includes('accountant')) {
-        role = 'Staff Accountant';
-      } else if (email.includes('staff_sales') || email.includes('sales')) {
-        role = 'Staff Sales';
-      } else if (email.includes('developer') || email.includes('dev')) {
-        role = 'Developer';
-      } else if (email.includes('manager')) {
-        role = 'Manager';
-      } else if (email.includes('admin')) {
-        role = 'Admin';
-      }
+    // Validate email format
+    if (!validateEmail(email)) {
+      setError('Email không hợp lệ. Vui lòng nhập đúng định dạng email');
+      return;
+    }
 
-      await login(email, password, role as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin');
+    try {
+      // Gọi API login
+      const response = await authService.login({ email, password });
+      
+      // Lưu tokens vào localStorage
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      
+      // Lấy role từ JWT token
+      const frontendRole = getRoleFromToken(response.accessToken);
+      
+      if (!frontendRole) {
+        setError('Không thể xác định quyền người dùng');
+        return;
+      }
+      
+      // Authenticate với Firebase để có quyền truy cập Firestore/Storage
+      // Cần role để sync vào Firestore
+      await authenticateWithFirebase(response, email, password, frontendRole);
+      
+      // Lưu thông tin user vào localStorage
+      const userData = {
+        id: response.userID,
+        email: response.email,
+        name: response.fullName,
+        role: frontendRole,
+        avatar: undefined
+      };
+      localStorage.setItem('devpool_user', JSON.stringify(userData));
+      
+      // Gọi login từ AuthContext để lưu thông tin user
+      await login(
+        response.email,
+        '', // Không cần password nữa vì đã có token
+        frontendRole as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin'
+      );
 
       // Redirect based on role
-      switch (role) {
+      switch (frontendRole) {
         case 'Staff HR':
           navigate('/hr/dashboard');
           break;
@@ -64,8 +96,19 @@ export default function LoginForm() {
         default:
           navigate('/');
       }
-    } catch {
-      setError('Email hoặc mật khẩu không chính xác');
+    } catch (error: any) {
+      // Xử lý lỗi từ API
+      let errorMessage = 'Email hoặc mật khẩu không chính xác';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -99,7 +142,10 @@ export default function LoginForm() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(''); // Clear error when user types
+              }}
               className="w-full pl-12 pr-4 py-3.5 border border-neutral-300 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300 hover:border-neutral-400 hover:shadow-soft text-neutral-900 placeholder-neutral-500"
               placeholder="Nhập email của bạn"
               required
@@ -224,13 +270,11 @@ export default function LoginForm() {
           Tài khoản demo:
         </h4>
         <div className="text-sm text-neutral-600 space-y-2 font-medium">
-          <div>Nhân viên HR: staff_hr@demo.com / 123</div>
-          <div>Nhân viên kinh doanh: sales@demo.com / 123</div>
-          <div>Nhân viên kế toán: accountant@demo.com / 123</div>
-          <div>Quản lý: manager@demo.com / 123</div>
-          <div>Admin: admin@demo.com / 123</div>
-          <div>Lập trình viên: dev@demo.com / 123</div>
-
+          <div><span className="font-semibold">HR</span>: hr@example.com / string</div>
+          <div><span className="font-semibold">Sales</span>: sale@example.com / string</div>
+          <div><span className="font-semibold">Accountant</span>: accountant@example.com / string</div>
+          <div><span className="font-semibold">Manager</span>: manager@example.com / string</div>
+          <div><span className="font-semibold">Admin</span>: admin@example.com / string</div>
         </div>
       </div>
     </div>

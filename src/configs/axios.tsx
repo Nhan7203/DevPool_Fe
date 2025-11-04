@@ -30,6 +30,8 @@ axiosInstance.interceptors.response.use(
         if (status === 401) {
             console.warn('🔒 Token expired or unauthorized.');
             localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('devpool_user');
             window.location.href = '/login';
         } else if (status >= 400 && status < 500) {
             console.error('⚠️ Client Error:', error.response?.data || error.message);
