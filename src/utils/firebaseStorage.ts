@@ -1,5 +1,6 @@
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../configs/firebase';
+import { storage, auth } from '../configs/firebase';
+import { ensureFirebaseAuth } from '../services/Auth';
 
 /**
  * Upload CV file to Firebase Storage
@@ -15,6 +16,20 @@ export const uploadTalentCV = async (
   versionName: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
+  // Kiểm tra Firebase authentication
+  const isAuthenticated = await ensureFirebaseAuth();
+  const currentUser = auth.currentUser;
+  
+  if (!isAuthenticated || !currentUser) {
+    console.error('Firebase auth: No current user');
+    throw new Error('Bạn chưa đăng nhập Firebase. Vui lòng đăng nhập lại để có quyền upload file.');
+  }
+  
+  console.log('Firebase auth: User authenticated', {
+    uid: currentUser.uid,
+    email: currentUser.email
+  });
+
   // Validate file type
   const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   if (!allowedTypes.includes(file.type)) {
@@ -94,6 +109,21 @@ export const uploadFile = async (
   path: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
+  // Kiểm tra Firebase authentication
+  const isAuthenticated = await ensureFirebaseAuth();
+  const currentUser = auth.currentUser;
+  
+  if (!isAuthenticated || !currentUser) {
+    console.error('Firebase auth: No current user');
+    throw new Error('Bạn chưa đăng nhập Firebase. Vui lòng đăng nhập lại để có quyền upload file.');
+  }
+  
+  console.log('Firebase auth: User authenticated', {
+    uid: currentUser.uid,
+    email: currentUser.email,
+    path
+  });
+
   // Validate file size (max 10MB)
   const maxSize = 10 * 1024 * 1024; // 10MB
   if (file.size > maxSize) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, User, Bell, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getDashboardRoute } from '../../router/routes';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,19 +13,6 @@ export default function Header() {
   const handleLogout = () => {
     logout();
     navigate('/');
-  };
-
-  const getDashboardRoute = () => {
-    if (!user) return '/login';
-    switch (user.role) {
-      case 'Staff HR': return '/staff_hr/dashboard';
-      case 'Staff Accountant': return '/staff_accountant/dashboard';
-      case 'Staff Sales': return '/staff_sales/dashboard';
-      case 'Developer': return '/developer/dashboard';
-      case 'Manager': return '/manager/dashboard';
-      case 'Admin': return '/admin/dashboard';
-      default: return '/';
-    }
   };
 
   return (
@@ -102,7 +90,7 @@ export default function Header() {
                   {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-medium py-2 z-50 border border-neutral-200 animate-slide-down">
                       <Link
-                        to={getDashboardRoute()}
+                        to={user ? getDashboardRoute(user.role) : '/login'}
                         className="group flex items-center px-4 py-2 text-neutral-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-300"
                         onClick={() => setIsUserMenuOpen(false)}
                       >
@@ -185,7 +173,7 @@ export default function Header() {
               {user ? (
                 <div className="pt-3 border-t border-neutral-200">
                   <Link
-                    to={getDashboardRoute()}
+                    to={getDashboardRoute(user.role)}
                     className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300 block"
                     onClick={() => setIsMenuOpen(false)}
                   >

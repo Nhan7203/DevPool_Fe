@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { authService } from '../services/Auth';
+import { auth, onAuthStateChanged } from '../configs/firebase';
 
 type Role =
   | 'Staff HR'
@@ -53,17 +55,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Restore user từ localStorage
     const storedUser = localStorage.getItem(STORAGE_KEY);
-    if (storedUser) setUser(JSON.parse(storedUser));
-    setIsLoading(false);
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+      }
+    }
+
+    // Kiểm tra Firebase auth state
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        console.log('Firebase auth state restored:', {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email
+        });
+      } else {
+        console.warn('Firebase auth state: No user authenticated');
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const login: AuthContextType['login'] = async (email, _password, role) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
+    
+    // Lấy thông tin user từ localStorage (đã được lưu trong LoginForm)
+    const accessToken = localStorage.getItem('accessToken');
+    const storedUser = localStorage.getItem(STORAGE_KEY);
+    
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setIsLoading(false);
+        return;
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+      }
+    }
 
-    const mockUser: User = {
-      id: '1',
+    // Nếu không có stored user, tạo user từ thông tin login
+    const user: User = {
+      id: accessToken || '1', // Có thể lấy từ token hoặc API
       email,
       name: roleDisplayName(role, email),
       role,
@@ -71,8 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop',
     };
 
-    setUser(mockUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
+    setUser(user);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     setIsLoading(false);
   };
 
@@ -92,9 +130,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Logout Firebase
+    await authService.logoutFirebase();
+    
+    // Clear user state và localStorage
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   };
 
   return (
