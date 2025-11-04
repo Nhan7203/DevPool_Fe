@@ -84,8 +84,7 @@ import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
 import ListContract from '../pages/hr_staff/contracts/List';
 import ContractDetailPageHR from '../pages/hr_staff/contracts/Detail';
 import CreatePartnerContractPage from '../pages/hr_staff/contracts/Create';
-import UploadContract from '../pages/hr_staff/contracts/Upload';
-import HrUploadPartnerDocument from '../pages/hr_staff/partner-documents/Upload';
+import HRPartnerPeriods from '../pages/hr_staff/payment-periods/PartnerPeriods';
 
 // ========================================
 // SALES STAFF PAGES
@@ -103,7 +102,7 @@ import ProjectListPage from '../pages/sales_staff/projects/List';
 import ProjectDetailPage from '../pages/sales_staff/projects/Detail';
 import ProjectEditPage from '../pages/sales_staff/projects/Edit';
 import ProjectCreatePage from '../pages/sales_staff/projects/Create';
-import SalesUploadClientDocument from '../pages/sales_staff/documents/Upload';
+import SalesClientPeriods from '../pages/sales_staff/payment-periods/ClientPeriods';
 
 // ========================================
 // ACCOUNTANT STAFF PAGES
@@ -282,10 +281,9 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.CONTRACTS.LIST} element={<ListContract />} />
           <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
           <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
-          <Route path={ROUTES.HR_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
 
-          {/* Partner Documents Upload */}
-          <Route path="/hr/partner-documents/upload" element={<HrUploadPartnerDocument />} />
+          {/* Payment Periods - Partner */}
+          <Route path="/hr/payment-periods/partners" element={<HRPartnerPeriods />} />
           
           {/* Reports */}
           <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
@@ -301,12 +299,10 @@ const AppRouter: React.FC = () => {
           {/* Contracts */}
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.CONTRACTS.UPLOAD} element={<UploadContract />} />
           <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
 
-          {/* Client Documents Upload */}
-          <Route path="/sales/documents/upload" element={<SalesUploadClientDocument />} />
-
+          {/* Payment Periods - Client */}
+          <Route path="/sales/payment-periods/clients" element={<SalesClientPeriods />} />
           
           {/* Job Requests */}
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />

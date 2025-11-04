@@ -47,7 +47,11 @@ export const sidebarItems = [
     subItems: [
       { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
       { label: 'Tạo Hợp Đồng', href: '/sales/contracts/create' },
-      { label: 'Tạo báo cáo công việc', href: '/sales/documents/upload', icon: FileUp },
     ]
+  },
+  {
+    label: 'Tạo tài liệu khách hàng',
+    href: '/sales/payment-periods/clients',
+    icon: FileUp
   },
 ];

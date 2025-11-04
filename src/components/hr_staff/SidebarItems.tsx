@@ -59,8 +59,12 @@ export const sidebarItems = [
     subItems: [
       { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
       { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
-      { label: 'Tạo báo cáo công việc', href: '/hr/partner-documents/upload', icon: FileUp },
     ]
+  },
+  {
+    label: 'Tạo tài liệu đối tác',
+    href: '/hr/payment-periods/partners',
+    icon: FileUp
   },
 
   // {
