@@ -100,5 +100,17 @@ export const clientContractPaymentService = {
       throw { message: "Lỗi không xác định khi tạo thanh toán hợp đồng khách hàng" };
     }
   },
+
+  // Cập nhật ClientContractPayment
+  async update(id: number, payload: Partial<ClientContractPaymentCreate>) {
+    try {
+      const response = await axios.put(`/clientcontractpayment/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật thanh toán hợp đồng khách hàng" };
+      throw { message: "Lỗi không xác định khi cập nhật thanh toán hợp đồng khách hàng" };
+    }
+  },
 };
 

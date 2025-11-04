@@ -7,7 +7,7 @@ import { clientCompanyService, type ClientCompany } from "../../../services/Clie
 import { clientContractService, type ClientContract } from "../../../services/ClientContract";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
-import { Building2, Plus, Calendar } from "lucide-react";
+import { Building2, Plus, Calendar, X, Save, Edit, CheckCircle, XCircle, Calculator } from "lucide-react";
 
 const AccountantClientPeriods: React.FC = () => {
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
@@ -23,6 +23,39 @@ const AccountantClientPeriods: React.FC = () => {
   const [payments, setPayments] = useState<ClientContractPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | 'ALL'>('ALL');
+
+  // Modal tạo payment
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [contracts, setContracts] = useState<ClientContract[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [createPaymentError, setCreatePaymentError] = useState<string | null>(null);
+  const [createPaymentSuccess, setCreatePaymentSuccess] = useState(false);
+
+  // Trạng thái cập nhật
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
+  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
+
+  // Tính toán (Calculate)
+  const [calculating, setCalculating] = useState(false);
+  const [calculateError, setCalculateError] = useState<string | null>(null);
+  const [calculateSuccess, setCalculateSuccess] = useState(false);
+  
+  // Form data
+  const [formData, setFormData] = useState({
+    clientPeriodId: 0,
+    clientContractId: 0,
+    billableHours: 0,
+    calculatedAmount: 0,
+    invoicedAmount: 0,
+    receivedAmount: 0,
+    invoiceNumber: "",
+    invoiceDate: "",
+    paymentDate: "",
+    status: "PendingCalculation",
+    notes: ""
+  });
 
   // Lấy danh sách công ty có hợp đồng
   useEffect(() => {
@@ -199,6 +232,8 @@ const AccountantClientPeriods: React.FC = () => {
         excludeDeleted: true 
       });
       setPayments(data?.items ?? data ?? []);
+      // Kiểm tra và cập nhật Overdue sau khi load
+      setTimeout(() => checkAndUpdateOverdue(), 500);
     } catch (e) {
       console.error(e);
     } finally {
@@ -206,19 +241,293 @@ const AccountantClientPeriods: React.FC = () => {
     }
   };
 
-  // Mapping tiến trình theo status (tham chiếu luồng nghiệp vụ)
-  const stageOrder: Record<string, number> = {
-    WorkReportUploaded: 1,
-    WorkReportApproved: 2,
-    CostCalculated: 3,
-    InvoiceDraft: 4,
-    InvoiceApproved: 5,
-    InvoiceIssued: 6,
-    Paid: 7,
-    Overdue: 6,
+  // Load contracts khi mở modal
+  const handleOpenCreateModal = async () => {
+    if (!selectedCompanyId) return;
+    setShowCreateModal(true);
+    setCreatePaymentError(null);
+    setCreatePaymentSuccess(false);
+    setFormData({
+      clientPeriodId: activePeriodId || 0,
+      clientContractId: 0,
+      billableHours: 0,
+      calculatedAmount: 0,
+      invoicedAmount: 0,
+      receivedAmount: 0,
+      invoiceNumber: "",
+      invoiceDate: "",
+      paymentDate: "",
+      status: "PendingCalculation",
+      notes: ""
+    });
+
+    // Load contracts của công ty
+    setLoadingContracts(true);
+    try {
+      const contractsData = await clientContractService.getAll({ 
+        clientCompanyId: selectedCompanyId,
+        excludeDeleted: true 
+      });
+      setContracts(contractsData?.items ?? contractsData ?? []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingContracts(false);
+    }
   };
 
-  const maxStage = 7;
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false);
+    setCreatePaymentError(null);
+    setCreatePaymentSuccess(false);
+  };
+
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'clientPeriodId' || name === 'clientContractId' || name === 'billableHours' 
+        || name === 'calculatedAmount' || name === 'invoicedAmount' || name === 'receivedAmount'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+  const handleCreatePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activePeriodId) return;
+
+    setSubmitting(true);
+    setCreatePaymentError(null);
+    setCreatePaymentSuccess(false);
+
+    try {
+      const payload = {
+        clientPeriodId: activePeriodId,
+        clientContractId: formData.clientContractId,
+        billableHours: formData.billableHours,
+        calculatedAmount: formData.calculatedAmount || null,
+        invoicedAmount: formData.invoicedAmount || null,
+        receivedAmount: formData.receivedAmount || null,
+        invoiceNumber: formData.invoiceNumber || null,
+        invoiceDate: formData.invoiceDate || null,
+        paymentDate: formData.paymentDate || null,
+        status: "PendingCalculation", // Luôn là PendingCalculation khi tạo mới
+        notes: formData.notes || null
+      };
+
+      await clientContractPaymentService.create(payload);
+      setCreatePaymentSuccess(true);
+
+      // Reload payments
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      setPayments(data?.items ?? data ?? []);
+
+      // Close modal after 1 second
+      setTimeout(() => {
+        handleCloseCreateModal();
+      }, 1000);
+    } catch (err: any) {
+      setCreatePaymentError(err.response?.data?.message || err.message || 'Không thể tạo thanh toán');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
+  // Hàm tính toán (Calculate) - chuyển từ PendingCalculation sang ReadyForInvoice
+  const handleCalculate = async (payment: ClientContractPayment) => {
+    if (payment.status !== 'PendingCalculation') return;
+
+    setCalculating(true);
+    setCalculateError(null);
+    setCalculateSuccess(false);
+
+    try {
+      await clientContractPaymentService.update(payment.id, {
+        clientPeriodId: payment.clientPeriodId,
+        clientContractId: payment.clientContractId,
+        billableHours: payment.billableHours,
+        calculatedAmount: payment.calculatedAmount ?? null,
+        invoicedAmount: payment.invoicedAmount ?? null,
+        receivedAmount: payment.receivedAmount ?? null,
+        invoiceNumber: payment.invoiceNumber ?? null,
+        invoiceDate: payment.invoiceDate ?? null,
+        paymentDate: payment.paymentDate ?? null,
+        status: 'ReadyForInvoice',
+        notes: payment.notes ?? null
+      });
+      
+      setCalculateSuccess(true);
+
+      // Reload payments
+      if (activePeriodId) {
+        const data = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(data?.items ?? data ?? []);
+      }
+
+      setTimeout(() => {
+        setCalculateSuccess(false);
+      }, 3000);
+    } catch (err: any) {
+      setCalculateError(err.response?.data?.message || err.message || 'Không thể tính toán');
+      setTimeout(() => setCalculateError(null), 5000);
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  // Hàm đã thanh toán (Paid) - Accountant
+  const handleMarkAsPaid = async (payment: ClientContractPayment) => {
+    setUpdatingStatus(true);
+    setStatusUpdateError(null);
+    setStatusUpdateSuccess(false);
+
+    try {
+      await clientContractPaymentService.update(payment.id, {
+        clientPeriodId: payment.clientPeriodId,
+        clientContractId: payment.clientContractId,
+        billableHours: payment.billableHours,
+        calculatedAmount: payment.calculatedAmount ?? null,
+        invoicedAmount: payment.invoicedAmount ?? null,
+        receivedAmount: payment.receivedAmount ?? null,
+        invoiceNumber: payment.invoiceNumber ?? null,
+        invoiceDate: payment.invoiceDate ?? null,
+        paymentDate: payment.paymentDate ?? null,
+        status: 'Paid',
+        notes: payment.notes ?? null
+      });
+      
+      setStatusUpdateSuccess(true);
+
+      // Reload payments
+      if (activePeriodId) {
+        const data = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(data?.items ?? data ?? []);
+      }
+
+      setTimeout(() => setStatusUpdateSuccess(false), 3000);
+    } catch (err: any) {
+      setStatusUpdateError(err.response?.data?.message || err.message || 'Không thể đánh dấu đã thanh toán');
+      setTimeout(() => setStatusUpdateError(null), 5000);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  // Kiểm tra và tự động chuyển Invoiced → Overdue nếu quá 1 tuần
+  const checkAndUpdateOverdue = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const paymentsData = data?.items ?? data ?? [];
+      
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 ngày trước
+
+      const overduePayments = paymentsData.filter((p: ClientContractPayment) => {
+        if (p.status !== 'Invoiced' || !p.invoiceDate) return false;
+        const invoiceDate = new Date(p.invoiceDate);
+        return invoiceDate < oneWeekAgo;
+      });
+
+      // Cập nhật các payment quá hạn
+      for (const payment of overduePayments) {
+        try {
+          await clientContractPaymentService.update(payment.id, {
+            clientPeriodId: payment.clientPeriodId,
+            clientContractId: payment.clientContractId,
+            billableHours: payment.billableHours,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            invoicedAmount: payment.invoicedAmount ?? null,
+            receivedAmount: payment.receivedAmount ?? null,
+            invoiceNumber: payment.invoiceNumber ?? null,
+            invoiceDate: payment.invoiceDate ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Overdue',
+            notes: payment.notes ?? null
+          });
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Overdue:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (overduePayments.length > 0) {
+        const updatedData = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+      }
+    } catch (err) {
+      console.error('Error checking overdue payments:', err);
+    }
+  };
+
+  // Mapping tiến trình theo status
+  const stageOrder: Record<string, number> = {
+    PendingCalculation: 1,
+    ReadyForInvoice: 2,
+    Cancelled: 0,
+    Invoiced: 3,
+    Overdue: 3,
+    Paid: 4,
+  };
+
+  const maxStage = 4;
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PendingCalculation':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'ReadyForInvoice':
+        return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'Cancelled':
+        return 'bg-red-50 text-red-700 border-red-200';
+      case 'Invoiced':
+        return 'bg-green-50 text-green-700 border-green-200';
+      case 'Overdue':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'Paid':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
+  // Hàm chuyển đổi trạng thái sang tiếng Việt
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'PendingCalculation':
+        return 'Chờ tính toán';
+      case 'ReadyForInvoice':
+        return 'Sẵn sàng xuất hóa đơn';
+      case 'Cancelled':
+        return 'Đã hủy';
+      case 'Invoiced':
+        return 'Đã xuất hóa đơn';
+      case 'Overdue':
+        return 'Quá hạn';
+      case 'Paid':
+        return 'Đã thanh toán';
+      default:
+        return status;
+    }
+  };
 
   const filteredPayments = (statusFilter === 'ALL')
     ? payments
@@ -380,8 +689,17 @@ const AccountantClientPeriods: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Chi tiết thanh toán</h2>
-              {payments.length > 0 && (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {activePeriodId && (
+                  <button
+                    onClick={handleOpenCreateModal}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 shadow-soft flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tạo thanh toán
+                  </button>
+                )}
+                {payments.length > 0 && (
                   <select
                     className="px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm"
                     value={statusFilter}
@@ -389,12 +707,22 @@ const AccountantClientPeriods: React.FC = () => {
                   >
                     <option value="ALL">Tất cả trạng thái</option>
                     {Object.keys(statusCounts).map(s => (
-                      <option key={s} value={s}>{s} ({statusCounts[s]})</option>
+                      <option key={s} value={s}>{getStatusLabel(s)} ({statusCounts[s]})</option>
                     ))}
                   </select>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+            {calculateSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700">
+                Tính toán thành công! Trạng thái đã chuyển sang ReadyForInvoice.
+              </div>
+            )}
+            {calculateError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
+                {calculateError}
+              </div>
+            )}
             {!activePeriodId ? (
               <div className="text-gray-500 text-sm">Chọn một kỳ thanh toán để xem chi tiết</div>
             ) : loadingPayments ? (
@@ -417,42 +745,293 @@ const AccountantClientPeriods: React.FC = () => {
                       <th className="p-3 border-b text-left">Received</th>
                       <th className="p-3 border-b text-left">Trạng thái</th>
                       <th className="p-3 border-b text-left">Tiến độ</th>
+                      <th className="p-3 border-b text-left">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredPayments.map(p => (
-                      <tr key={p.id} className="hover:bg-gray-50">
-                        <td className="p-3">{p.id}</td>
-                        <td className="p-3">{p.clientContractId}</td>
-                        <td className="p-3">{p.billableHours}</td>
-                        <td className="p-3">{p.calculatedAmount ?? "-"}</td>
-                        <td className="p-3">{p.invoicedAmount ?? "-"}</td>
-                        <td className="p-3">{p.receivedAmount ?? "-"}</td>
-                        <td className="p-3">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">{p.status}</span>
-                        </td>
-                        <td className="p-3">
-                          {(() => {
-                            const current = stageOrder[p.status] ?? 0;
-                            const percent = Math.round((current / maxStage) * 100);
-                            return (
-                              <div className="w-40">
-                                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                  <div className="h-full bg-primary-500" style={{ width: `${percent}%` }} />
+                    {filteredPayments.map(p => {
+                      return (
+                        <tr key={p.id} className="hover:bg-gray-50">
+                          <td className="p-3">{p.id}</td>
+                          <td className="p-3">{p.clientContractId}</td>
+                          <td className="p-3">{p.billableHours}</td>
+                          <td className="p-3">{p.calculatedAmount ?? "-"}</td>
+                          <td className="p-3">{p.invoicedAmount ?? "-"}</td>
+                          <td className="p-3">{p.receivedAmount ?? "-"}</td>
+                          <td className="p-3">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
+                              {getStatusLabel(p.status)}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {(() => {
+                              const current = stageOrder[p.status] ?? 0;
+                              const percent = current > 0 ? Math.round((current / maxStage) * 100) : 0;
+                              return (
+                                <div className="w-40">
+                                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary-500" style={{ width: `${percent}%` }} />
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 mt-1">{percent}%</div>
                                 </div>
-                                <div className="text-[11px] text-gray-500 mt-1">{percent}%</div>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      </tr>
-                    ))}
+                              );
+                            })()}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              {p.status === 'PendingCalculation' && (
+                                <button
+                                  onClick={() => handleCalculate(p)}
+                                  disabled={calculating}
+                                  className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Calculator className="w-4 h-4" />
+                                  {calculating ? 'Đang tính...' : 'Tính toán'}
+                                </button>
+                              )}
+                              {(p.status === 'Invoiced' || p.status === 'Overdue') && (
+                                <button
+                                  onClick={() => handleMarkAsPaid(p)}
+                                  disabled={updatingStatus}
+                                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  {updatingStatus ? 'Đang xử lý...' : 'Đã thanh toán'}
+                                </button>
+                              )}
+                              {p.status !== 'PendingCalculation' && p.status !== 'Invoiced' && p.status !== 'Overdue' && (
+                                <span className="text-gray-400 text-xs">Không thể đổi</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
           </div>
         )}
+
+        {/* Modal tạo payment */}
+        {showCreateModal && activePeriodId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Tạo thanh toán mới</h2>
+                <button
+                  onClick={handleCloseCreateModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {createPaymentSuccess && (
+                <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700">
+                  Tạo thanh toán thành công!
+                </div>
+              )}
+
+              {createPaymentError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
+                  {createPaymentError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreatePayment} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="clientContractId"
+                      value={formData.clientContractId}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      disabled={loadingContracts}
+                    >
+                      <option value="0">-- Chọn hợp đồng --</option>
+                      {contracts.map(contract => (
+                        <option key={contract.id} value={contract.id}>
+                          {contract.contractNumber} - {contract.status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Giờ bill <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="billableHours"
+                      value={formData.billableHours}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      min="0"
+                      step="0.1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền tính toán
+                    </label>
+                    <input
+                      type="number"
+                      name="calculatedAmount"
+                      value={formData.calculatedAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền hóa đơn
+                    </label>
+                    <input
+                      type="number"
+                      name="invoicedAmount"
+                      value={formData.invoicedAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền đã nhận
+                    </label>
+                    <input
+                      type="number"
+                      name="receivedAmount"
+                      value={formData.receivedAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số hóa đơn
+                    </label>
+                    <input
+                      type="text"
+                      name="invoiceNumber"
+                      value={formData.invoiceNumber}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ngày hóa đơn
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="invoiceDate"
+                      value={formData.invoiceDate}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ngày thanh toán
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="paymentDate"
+                      value={formData.paymentDate}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Trạng thái <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={getStatusLabel(formData.status)}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Trạng thái mặc định khi tạo mới</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ghi chú
+                  </label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseCreateModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang tạo...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Tạo thanh toán
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+            {statusUpdateSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700">
+                Đã đánh dấu thanh toán thành công!
+              </div>
+            )}
+            {statusUpdateError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
+                {statusUpdateError}
+              </div>
+            )}
       </div>
     </div>
   );

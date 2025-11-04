@@ -3,7 +3,9 @@ import {
   Settings, 
   LineChart, 
   Users, 
-  DollarSign 
+  DollarSign,
+  CalendarClock,
+  Wallet
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -50,6 +52,15 @@ export const sidebarItems = [
       { label: 'Dòng tiền', href: '/manager/finance/cashflow' },
       { label: 'Công nợ', href: '/manager/finance/debt' },
       { label: 'Lợi nhuận', href: '/manager/finance/profit' }
+    ]
+  },
+  {
+    label: 'Kỳ Thanh Toán',
+    href: '/manager/payment-periods',
+    icon: CalendarClock,
+    subItems: [
+      { label: 'Khách hàng', href: '/manager/payment-periods/clients', icon: Wallet },
+      { label: 'Đối tác', href: '/manager/payment-periods/partners', icon: Wallet },
     ]
   },
   {

@@ -95,5 +95,17 @@ export const partnerContractPaymentService = {
       throw { message: "Lỗi không xác định khi tạo thanh toán hợp đồng đối tác" };
     }
   },
+
+  // Cập nhật PartnerContractPayment
+  async update(id: number, payload: Partial<PartnerContractPaymentCreate>) {
+    try {
+      const response = await axios.put(`/partnercontractpayment/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật thanh toán hợp đồng đối tác" };
+      throw { message: "Lỗi không xác định khi cập nhật thanh toán hợp đồng đối tác" };
+    }
+  },
 };
 

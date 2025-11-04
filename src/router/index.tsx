@@ -111,6 +111,7 @@ import SalesUploadClientDocument from '../pages/sales_staff/documents/Upload';
 import AccountantDashboard from '../pages/accountant_staff/Dashboard';
 import AccountantClientPeriods from '../pages/accountant_staff/payment-periods/ClientPeriods';
 import AccountantPartnerPeriods from '../pages/accountant_staff/payment-periods/PartnerPeriods';
+import AccountantDocumentsList from '../pages/accountant_staff/documents/List';
 
 // ========================================
 // DEVELOPER PAGES
@@ -127,6 +128,8 @@ import DevContracts from '../pages/manager/contract/Devs/List';
 import DevDetailPage from '../pages/manager/contract/Devs/Detail';
 import BusinessOverview from '../pages/manager/business/Overview';
 import Revenue from '../pages/manager/business/Revenue';
+import ManagerClientPeriods from '../pages/manager/payment-periods/ClientPeriods';
+import ManagerPartnerPeriods from '../pages/manager/payment-periods/PartnerPeriods';
 import HROverview from '../pages/manager/hr/Overview';
 import HRPerformance from '../pages/manager/hr/Performance';
 import HRDevelopers from '../pages/manager/hr/Dev';
@@ -332,6 +335,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
           <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
           <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
+          <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
         </Route>
 
         {/* ======================================== */}
@@ -368,6 +372,10 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.MANAGER.FINANCE.CASHFLOW} element={<CashFlow />} />
           <Route path={ROUTES.MANAGER.FINANCE.DEBT} element={<Debt />} />
           <Route path={ROUTES.MANAGER.FINANCE.PROFIT} element={<Profit />} />
+          
+          {/* Payment Periods */}
+          <Route path="/manager/payment-periods/clients" element={<ManagerClientPeriods />} />
+          <Route path="/manager/payment-periods/partners" element={<ManagerPartnerPeriods />} />
         </Route>
       </Route>
 

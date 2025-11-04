@@ -1,4 +1,4 @@
-import { BarChart3, CalendarClock, Wallet} from "lucide-react";
+import { BarChart3, CalendarClock, Wallet, FileText} from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -14,5 +14,10 @@ export const sidebarItems = [
       { label: 'Khách hàng', href: '/accountant/payment-periods/clients', icon: Wallet },
       { label: 'Đối tác', href: '/accountant/payment-periods/partners', icon: Wallet },
     ]
+  },
+  {
+    label: 'Danh sách tài liệu',
+    href: '/accountant/documents',
+    icon: FileText
   },
 ];
