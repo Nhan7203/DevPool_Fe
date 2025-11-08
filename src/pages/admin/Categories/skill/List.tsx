@@ -11,7 +11,9 @@ import {
   Eye, 
   Code, 
   FileText,
-  Building2
+  Building2,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 export default function SkillListPage() {
@@ -20,6 +22,10 @@ export default function SkillListPage() {
   const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
   const [filteredSkills, setFilteredSkills] = useState<Skill[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Stats data
   const stats = [
@@ -76,6 +82,7 @@ export default function SkillListPage() {
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredSkills(skills);
+      setCurrentPage(1);
       return;
     }
 
@@ -83,7 +90,16 @@ export default function SkillListPage() {
       s.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredSkills(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, skills]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredSkills.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSkills = filteredSkills.slice(startIndex, endIndex);
+  const startItem = filteredSkills.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredSkills.length);
 
   // Helper function to get skill group name
   const getSkillGroupName = (skillGroupId: number) => {
@@ -165,19 +181,51 @@ export default function SkillListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách kỹ năng</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredSkills.length} kỹ năng</span>
+              <div className="flex items-center gap-4">
+                {filteredSkills.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredSkills.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 kỹ năng</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên kỹ năng</th>
@@ -200,12 +248,12 @@ export default function SkillListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSkills.map((s, i) => (
+                  paginatedSkills.map((s, i) => (
                     <tr
                       key={s.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <Code className="w-4 h-4 text-neutral-400" />

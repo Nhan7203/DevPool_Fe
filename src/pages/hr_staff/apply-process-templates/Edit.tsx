@@ -56,6 +56,12 @@ export default function ApplyProcessTemplateEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     if (!formData.name.trim()) {
       alert("⚠️ Vui lòng nhập tên template!");
       return;

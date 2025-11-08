@@ -26,6 +26,7 @@ export default function ApplyActivityCreatePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
+  const [existingActivities, setExistingActivities] = useState<number[]>([]);
   
   const [form, setForm] = useState({
     applyId: Number(applyId) || 0,
@@ -57,10 +58,20 @@ export default function ApplyActivityCreatePage() {
             const steps = await applyProcessStepService.getAll();
             setProcessSteps(steps);
           }
+
+          // Lấy danh sách activity hiện có để tránh trùng bước
+          try {
+            const activities = await applyActivityService.getAll({ applyId: Number(applyId) });
+            setExistingActivities(activities.map(activity => activity.processStepId).filter(id => id > 0));
+          } catch (activityErr) {
+            console.error("❌ Lỗi tải danh sách hoạt động hiện có:", activityErr);
+            setExistingActivities([]);
+          }
         } else {
           // Nếu không có applyId, lấy tất cả steps
           const steps = await applyProcessStepService.getAll();
           setProcessSteps(steps);
+          setExistingActivities([]);
         }
       } catch (error) {
         console.error("❌ Error loading data", error);
@@ -91,6 +102,12 @@ export default function ApplyActivityCreatePage() {
       return;
     }
 
+    if (form.processStepId === 0) {
+      setError("⚠️ Vui lòng chọn bước quy trình.");
+      setLoading(false);
+      return;
+    }
+
     if (!form.applyId) {
       setError("⚠️ Không tìm thấy thông tin hồ sơ ứng tuyển.");
       setLoading(false);
@@ -102,6 +119,15 @@ export default function ApplyActivityCreatePage() {
       let scheduledDateUTC: string | undefined = undefined;
       if (form.scheduledDate) {
         const localDate = new Date(form.scheduledDate);
+        const minAllowed = new Date();
+        minAllowed.setDate(minAllowed.getDate() + 1);
+
+        if (localDate.getTime() < minAllowed.getTime()) {
+          setError("⚠️ Ngày lên lịch phải từ ngày mai trở đi.");
+          setLoading(false);
+          return;
+        }
+
         const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
         scheduledDateUTC = utcDate.toISOString();
       }
@@ -116,6 +142,15 @@ export default function ApplyActivityCreatePage() {
       };
       console.log("ccc", payload);
       await applyActivityService.create(payload);
+
+      // Sau khi tạo hoạt động đầu tiên, cập nhật trạng thái hồ sơ ứng tuyển
+      try {
+        if (form.applyId) {
+          await applyService.updateStatus(form.applyId, { status: "InterviewScheduled" });
+        }
+      } catch (statusErr) {
+        console.error("❌ Lỗi cập nhật trạng thái hồ sơ ứng tuyển:", statusErr);
+      }
       setSuccess(true);
       setTimeout(() => navigate(`/hr/applications/${form.applyId}`), 1500);
     } catch (err) {
@@ -188,10 +223,8 @@ export default function ApplyActivityCreatePage() {
                   required
                 >
                   <option value="">-- Chọn loại hoạt động --</option>
-                  <option value="0">Interview - Phỏng vấn</option>
-                  <option value="1">Test - Kiểm tra</option>
-                  <option value="2">Meeting - Gặp mặt</option>
-                  <option value="3">Review - Đánh giá</option>
+                  <option value={ApplyActivityType.Online}>Online - Trực tuyến</option>
+                  <option value={ApplyActivityType.Offline}>Offline - Trực tiếp</option>
                 </select>
               </div>
 
@@ -199,20 +232,30 @@ export default function ApplyActivityCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Bước quy trình
+                  Bước quy trình <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="processStepId"
                   value={form.processStepId}
                   onChange={handleChange}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  required
                 >
                   <option value="0">-- Không chọn bước --</option>
-                  {processSteps.map(step => (
-                    <option key={step.id} value={step.id.toString()}>
-                      {step.stepOrder}. {step.stepName}
-                    </option>
-                  ))}
+                  {processSteps.map(step => {
+                    const isDisabled = existingActivities.includes(step.id);
+                    return (
+                      <option
+                        key={step.id}
+                        value={step.id.toString()}
+                        disabled={isDisabled}
+                        className={isDisabled ? "text-neutral-400" : ""}
+                      >
+                        {step.stepOrder}. {step.stepName}
+                        {isDisabled ? " (đã chọn)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -233,8 +276,7 @@ export default function ApplyActivityCreatePage() {
                   <option value="1">Completed - Hoàn thành</option>
                   <option value="2">Passed - Đạt</option>
                   <option value="3">Failed - Không đạt</option>
-                  <option value="4">Approved - Đã duyệt</option>
-                  <option value="5">NoShow - Không tham gia</option>
+                  <option value="4">NoShow - Không có mặt</option>
                 </select>
               </div>
             </div>
@@ -255,7 +297,7 @@ export default function ApplyActivityCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  Ngày đã lên lịch
+                  Ngày lên lịch
                 </label>
                 <input
                   type="datetime-local"
@@ -263,6 +305,12 @@ export default function ApplyActivityCreatePage() {
                   value={form.scheduledDate}
                   onChange={handleChange}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  min={(() => {
+                    const minDate = new Date();
+                    minDate.setDate(minDate.getDate() + 1);
+                    const tzOffset = minDate.getTimezoneOffset() * 60000;
+                    return new Date(minDate.getTime() - tzOffset).toISOString().slice(0, 16);
+                  })()}
                 />
               </div>
             </div>

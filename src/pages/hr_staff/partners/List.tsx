@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Building2, X, Plus, Users, Mail, Phone, MapPin } from 'lucide-react';
+import { Search, Filter, Building2, Plus, Users, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { Button } from '../../../components/ui/button';
-import { partnerService, type Partner, type PartnerPayload } from '../../../services/Partner';
-import EditForm from './Edit';
+import { partnerService, type Partner } from '../../../services/Partner';
 import { ROUTES } from '../../../router/routes'; 
 
 export default function ListPartner() {
@@ -15,10 +14,12 @@ export default function ListPartner() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
-  const [tab, setTab] = useState<'info' | 'edit'>('info');
   const [filterCompany, setFilterCompany] = useState('');
   const [filterTaxCode, setFilterTaxCode] = useState('');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Stats data
   const stats = [
@@ -72,39 +73,21 @@ export default function ListPartner() {
     if (filterCompany) filtered = filtered.filter((p) => p.companyName?.toLowerCase().includes(filterCompany.toLowerCase()));
     if (filterTaxCode) filtered = filtered.filter((p) => p.taxCode?.includes(filterTaxCode));
     setFilteredPartners(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterCompany, filterTaxCode, partners]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredPartners.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPartners = filteredPartners.slice(startIndex, endIndex);
+  const startItem = filteredPartners.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredPartners.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
     setFilterCompany("");
     setFilterTaxCode("");
-  };
-
-  const handleUpdate = async (payload: PartnerPayload) => {
-    try {
-      if (!selectedPartner) return;
-      await partnerService.update(selectedPartner.id, payload);
-      alert("✅ Cập nhật thành công!");
-      fetchPartners();
-      setSelectedPartner(null);
-    } catch (err) {
-      console.error(err);
-      alert("❌ Lỗi khi cập nhật!");
-    }
-  };
-
-  const handleDelete = async (id: number, name: string) => {
-    if (confirm(`Bạn có chắc muốn xoá đối tác ${name}?`)) {
-      try {
-        await partnerService.deleteById(id);
-        alert("Đã xoá đối tác thành công!");
-        setSelectedPartner(null);
-        fetchPartners();
-      } catch (error) {
-        console.error(error);
-        alert("Xoá thất bại!");
-      }
-    }
   };
 
 
@@ -222,19 +205,51 @@ export default function ListPartner() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách đối tác</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredPartners.length} đối tác</span>
+              <div className="flex items-center gap-4">
+                {filteredPartners.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredPartners.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 đối tác</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên công ty</th>
@@ -259,12 +274,12 @@ export default function ListPartner() {
                     </td>
                   </tr>
                 ) : (
-                  filteredPartners.map((p, i) => (
+                  paginatedPartners.map((p, i) => (
                     <tr
                       key={p.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -298,9 +313,10 @@ export default function ListPartner() {
                       </td>
                       <td className="py-4 px-6 text-center">
                         <button
-                          onClick={() => setSelectedPartner(p)}
+                          onClick={() => navigate(`${ROUTES.HR_STAFF.PARTNERS.LIST}/${p.id}`)}
                           className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                         >
+                          <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                           <span className="text-sm font-medium">Xem</span>
                         </button>
                       </td>
@@ -312,71 +328,6 @@ export default function ListPartner() {
           </div>
         </div>
       </div>
-
-      {/* Modal chi tiết */}
-      {selectedPartner && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-lg w-[90%] max-w-2xl p-6 relative">
-            <button
-              onClick={() => setSelectedPartner(null)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Tabs */}
-            <div className="flex gap-6 mb-6 border-b pb-2">
-              <button
-                className={`pb-2 font-medium text-lg ${tab === 'info'
-                  ? 'border-b-2 border-primary-600 text-primary-600'
-                  : 'text-gray-500'
-                  }`}
-                onClick={() => setTab('info')}
-              >
-                Thông tin
-              </button>
-              <button
-                className={`pb-2 font-medium text-lg ${tab === 'edit'
-                  ? 'border-b-2 border-primary-600 text-primary-600'
-                  : 'text-gray-500'
-                  }`}
-                onClick={() => setTab('edit')}
-              >
-                Chỉnh sửa
-              </button>
-            </div>
-
-            {/* Tab content */}
-            {tab === 'info' ? (
-              <div className="space-y-2 text-gray-700">
-                <p><strong>Tên công ty:</strong> {selectedPartner.companyName}</p>
-                <p><strong>Mã số thuế:</strong> {selectedPartner.taxCode || '—'}</p>
-                <p><strong>Người liên hệ:</strong> {selectedPartner.contactPerson || '—'}</p>
-                <p><strong>Email:</strong> {selectedPartner.email || '—'}</p>
-                <p><strong>Điện thoại:</strong> {selectedPartner.phone || '—'}</p>
-                <p><strong>Địa chỉ:</strong> {selectedPartner.address || '—'}</p>
-              </div>
-            ) : (
-              <EditForm partner={selectedPartner} onSave={handleUpdate} />
-            )}
-
-            <div className="mt-6 flex justify-between">
-              <button
-                className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg"
-                onClick={() => handleDelete(selectedPartner.id, selectedPartner.companyName)}
-              >
-                Xoá
-              </button>
-              <button
-                onClick={() => setSelectedPartner(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

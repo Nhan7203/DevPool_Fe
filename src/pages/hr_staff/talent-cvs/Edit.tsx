@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentCVService, type TalentCVCreate } from "../../../services/TalentCV";
+import { talentCVService, type TalentCVCreate, type TalentCVFieldsUpdateModel } from "../../../services/TalentCV";
 import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -34,6 +34,13 @@ export default function TalentCVEditPage() {
     sourceTemplateId: undefined,
   });
 
+  const [editableFields, setEditableFields] = useState<TalentCVFieldsUpdateModel>({
+    talentId: 0,
+    summary: "",
+    isActive: true,
+    isGeneratedFromTemplate: false,
+  });
+
   const [loading, setLoading] = useState(true);
 
   // 🧭 Load dữ liệu Talent CV
@@ -52,6 +59,12 @@ export default function TalentCVEditPage() {
           summary: data.summary,
           isGeneratedFromTemplate: data.isGeneratedFromTemplate,
           sourceTemplateId: data.sourceTemplateId,
+        });
+        setEditableFields({
+          talentId: data.talentId,
+          summary: data.summary,
+          isActive: data.isActive,
+          isGeneratedFromTemplate: data.isGeneratedFromTemplate,
         });
         setTalentId(data.talentId);
       } catch (err) {
@@ -83,11 +96,18 @@ export default function TalentCVEditPage() {
   ) => {
     const { name, value, type } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
-              name === "jobRoleId" || name === "sourceTemplateId" ? Number(value) : value,
-    }));
+    const newValue = type === 'checkbox'
+      ? (e.target as HTMLInputElement).checked
+      : name === "jobRoleId" || name === "sourceTemplateId"
+      ? Number(value)
+      : value;
+
+    if (name === "summary" || name === "isActive" || name === "isGeneratedFromTemplate") {
+      setEditableFields((prev) => ({
+        ...prev,
+        [name]: newValue,
+      }));
+    }
   };
 
   // 💾 Gửi form
@@ -95,37 +115,51 @@ export default function TalentCVEditPage() {
     e.preventDefault();
     if (!id) return;
 
-    if (!formData.jobRoleId || formData.jobRoleId === 0) {
-      alert("⚠️ Vui lòng chọn vị trí công việc trước khi lưu!");
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
       return;
     }
 
-    if (!formData.versionName.trim()) {
-      alert("⚠️ Vui lòng nhập tên phiên bản CV!");
-      return;
-    }
-
-    if (!formData.cvFileUrl.trim()) {
-      alert("⚠️ Vui lòng nhập URL file CV!");
-      return;
-    }
-
-    if (!formData.summary.trim()) {
+    if (!editableFields.summary || !editableFields.summary.trim()) {
       alert("⚠️ Vui lòng nhập tóm tắt CV!");
       return;
     }
 
-    // Validate URL format
     try {
-      new URL(formData.cvFileUrl);
-    } catch {
-      alert("⚠️ URL file CV không hợp lệ!");
-      return;
-    }
+      const payload: TalentCVFieldsUpdateModel = {
+        talentId,
+        summary: editableFields.summary,
+        isActive: editableFields.isActive ?? false,
+        isGeneratedFromTemplate: editableFields.isGeneratedFromTemplate ?? false,
+      };
 
-    try {
-      console.log("Payload gửi đi:", formData);
-      await talentCVService.update(Number(id), formData);
+      if (payload.isActive) {
+        try {
+          const existingActiveCVs = await talentCVService.getAll({
+            talentId,
+            jobRoleId: formData.jobRoleId,
+            isActive: true,
+            excludeDeleted: true,
+          });
+
+          const otherActiveCVs = (existingActiveCVs || [])
+            .filter((cv: any) => cv.id !== Number(id));
+
+          await Promise.all(
+            otherActiveCVs.map((cv: any) =>
+              talentCVService.updateFields(cv.id, {
+                talentId: cv.talentId,
+                isActive: false,
+              })
+            )
+          );
+        } catch (deactivateError) {
+          console.warn("Không thể hạ cấp CV đang active khác:", deactivateError);
+        }
+      }
+
+      await talentCVService.updateFields(Number(id), payload);
 
       alert("✅ Cập nhật CV thành công!");
       navigate(`/hr/developers/${talentId}`);
@@ -200,14 +234,15 @@ export default function TalentCVEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Briefcase className="w-4 h-4" />
-                  Vị trí công việc
+                  Vị trí công việc <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
                     name="jobRoleId"
                     value={formData.jobRoleId}
                     onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    disabled
+                    className="w-full border border-neutral-300 bg-neutral-50 rounded-xl px-4 py-3 cursor-not-allowed opacity-75"
                     required
                   >
                     <option value="0">-- Chọn vị trí công việc --</option>
@@ -221,6 +256,9 @@ export default function TalentCVEditPage() {
                     Đã chọn: <span className="font-medium text-neutral-700">
                       {allJobRoles.find(jr => jr.id === formData.jobRoleId)?.name || "Không xác định"}
                     </span>
+                    <span className="block mt-1 text-amber-600">
+                      ⚠️ Không thể thay đổi vị trí công việc khi chỉnh sửa CV
+                    </span>
                   </p>
                 )}
               </div>
@@ -230,7 +268,7 @@ export default function TalentCVEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Tên phiên bản CV
+                    Tên phiên bản CV <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="versionName"
@@ -238,15 +276,19 @@ export default function TalentCVEditPage() {
                     onChange={handleChange}
                     placeholder="VD: CV v1.0, CV Frontend Developer..."
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    disabled
+                    className="w-full border-neutral-300 bg-neutral-50 rounded-xl cursor-not-allowed opacity-75"
                   />
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Không thể thay đổi tên phiên bản CV khi chỉnh sửa
+                  </p>
                 </div>
 
                 {/* URL file CV */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Upload className="w-4 h-4" />
-                    URL file CV
+                    URL file CV <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="cvFileUrl"
@@ -254,10 +296,11 @@ export default function TalentCVEditPage() {
                     onChange={handleChange}
                     placeholder="https://example.com/cv-file.pdf"
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    disabled
+                    className="w-full border-neutral-300 bg-neutral-50 rounded-xl cursor-not-allowed opacity-75"
                   />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Nhập URL đầy đủ của file CV (PDF)
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Không thể thay đổi URL file CV khi chỉnh sửa
                   </p>
                   {formData.cvFileUrl && (
                     <div className="mt-2">
@@ -279,17 +322,20 @@ export default function TalentCVEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tóm tắt CV
+                  Tóm tắt CV <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="summary"
-                  value={formData.summary}
+                  value={editableFields.summary ?? ""}
                   onChange={handleChange}
-                  placeholder="Mô tả ngắn gọn về nội dung CV, kinh nghiệm chính..."
+                  placeholder="Mô tả ngắn gọn về nội dung CV, bao gồm: tên ứng viên, vị trí công việc, kinh nghiệm làm việc, kỹ năng chính, dự án nổi bật, chứng chỉ (nếu có)..."
                   rows={4}
                   required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
+                <p className="text-xs text-neutral-500 mt-1">
+                  💡 Tóm tắt nên bao gồm: Tên ứng viên, Vị trí công việc, Kinh nghiệm làm việc, Kỹ năng chính, Dự án nổi bật, Chứng chỉ (nếu có).
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -303,7 +349,7 @@ export default function TalentCVEditPage() {
                     <input
                       type="checkbox"
                       name="isActive"
-                      checked={formData.isActive}
+                      checked={editableFields.isActive ?? false}
                       onChange={handleChange}
                       className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                     />
@@ -326,7 +372,7 @@ export default function TalentCVEditPage() {
                     <input
                       type="checkbox"
                       name="isGeneratedFromTemplate"
-                      checked={formData.isGeneratedFromTemplate}
+                      checked={editableFields.isGeneratedFromTemplate ?? false}
                       onChange={handleChange}
                       className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                     />

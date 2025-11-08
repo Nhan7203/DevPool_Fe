@@ -59,7 +59,7 @@ export const ROUTES = {
       EDIT: '/hr/talent-job-role-levels/edit/:id',
       CREATE: '/hr/talent-job-role-levels/create',
     },
-    
+
     TALENT_PROJECTS: {
       LIST: '/hr/talent-projects',
       EDIT: '/hr/talent-projects/edit/:id',
@@ -77,11 +77,11 @@ export const ROUTES = {
     },
 
     JOB_REQUESTS: {
-      LIST: '/hr/job-requests',                 
+      LIST: '/hr/job-requests',
       DETAIL: '/hr/job-requests/:id',
       MATCHING: '/hr/job-requests/matching-cv', // Matching CV với yêu cầu
     },
-    
+
     APPLICATIONS: {
       LIST: '/hr/applications',
       DETAIL: '/hr/applications/:id',
@@ -93,23 +93,9 @@ export const ROUTES = {
       EDIT: '/hr/apply-activities/edit/:id',
       CREATE: '/hr/apply-activities/create',
     },
-    
-    APPLY_PROCESS_STEPS: {
-      LIST: '/hr/apply-process-steps',
-      DETAIL: '/hr/apply-process-steps/:id',
-      EDIT: '/hr/apply-process-steps/edit/:id',
-      CREATE: '/hr/apply-process-steps/create',
-    },
-
-    APPLY_PROCESS_TEMPLATES: {
-      LIST: '/hr/apply-process-templates',
-      DETAIL: '/hr/apply-process-templates/:id',
-      EDIT: '/hr/apply-process-templates/edit/:id',
-      CREATE: '/hr/apply-process-templates/create',
-    },
 
     TEMPLATES: {
-      LIST: '/hr/templates',    
+      LIST: '/hr/templates',
       CREATE: '/hr/templates/create',
       Assign: '/hr/templates/assgin',
     },
@@ -117,6 +103,7 @@ export const ROUTES = {
     PARTNERS: {
       LIST: '/hr/partners',
       DETAIL: '/hr/partners/:id',
+      EDIT: '/hr/partners/edit/:id',
       CREATE: '/hr/partners/create',
     },
     ASSIGNMENTS: '/hr/assignments',                // staffTalentAssignments
@@ -167,6 +154,22 @@ export const ROUTES = {
       UPLOAD: '/sales/contracts/upload',        // Upload file hợp đồng
       CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
     },
+    APPLICATIONS: {
+      LIST: '/sales/applications',
+      DETAIL: '/sales/applications/:id',
+    },
+    APPLY_PROCESS_TEMPLATES: {
+      LIST: '/sales/apply-process-templates',
+      DETAIL: '/sales/apply-process-templates/:id',
+      EDIT: '/sales/apply-process-templates/edit/:id',
+      CREATE: '/sales/apply-process-templates/create',
+    },
+    APPLY_PROCESS_STEPS: {
+      LIST: '/sales/apply-process-steps',
+      DETAIL: '/sales/apply-process-steps/:id',
+      EDIT: '/sales/apply-process-steps/edit/:id',
+      CREATE: '/sales/apply-process-steps/create',
+    },
     JOB_REQUESTS: {
       LIST: '/sales/job-requests',
       DETAIL: '/sales/job-requests/:id',
@@ -184,7 +187,7 @@ export const ROUTES = {
       DETAIL: '/sales/projects/:id',
       EDIT: '/sales/projects/edit/:id',
       CREATE: '/sales/projects/create',
-    },    
+    },
     MARKETS: {
       LIST: '/sales/markets',
       DETAIL: '/sales/markets/:id',
@@ -300,9 +303,9 @@ export const ROUTES = {
     },
     CONTRACT: {
       CLIENTS: '/manager/contracts/clients',
-      CLIENT_DETAIL:'/manager/contracts/clients/:id',
+      CLIENT_DETAIL: '/manager/contracts/clients/:id',
       DEVS: '/manager/contracts/developers',
-      DEV_DETAIL:'/manager/contracts/developers/:id',
+      DEV_DETAIL: '/manager/contracts/developers/:id',
     },
     HUMAN_RESOURCES: {
       OVERVIEW: '/manager/hr/overview',
@@ -339,7 +342,7 @@ export const ROUTES = {
     // Danh mục
     CATEGORIES: {
       SKILLS: {
-        LIST: '/admin/categories/skills',          
+        LIST: '/admin/categories/skills',
         DETAIL: '/admin/categories/skills/:id',
         EDIT: '/admin/categories/skills/edit/:id',
         CREATE: '/admin/categories/skills/create',
@@ -363,13 +366,13 @@ export const ROUTES = {
         CREATE: '/admin/categories/cv-templates/create',
       },
       JOB_ROLE_LEVELS: {
-        LIST: '/admin/categories/job-role-levels',    
+        LIST: '/admin/categories/job-role-levels',
         DETAIL: '/admin/categories/job-role-levels/:id',
         EDIT: '/admin/categories/job-role-levels/edit/:id',
         CREATE: '/admin/categories/job-role-levels/create',
       },
       JOB_ROLES: {
-        LIST: '/admin/categories/job-roles',      
+        LIST: '/admin/categories/job-roles',
         DETAIL: '/admin/categories/job-roles/:id',
         EDIT: '/admin/categories/job-roles/edit/:id',
         CREATE: '/admin/categories/job-roles/create',
@@ -391,8 +394,8 @@ export const ROUTES = {
         DETAIL: '/admin/categories/markets/:id',
         EDIT: '/admin/categories/markets/edit/:id',
         CREATE: '/admin/categories/markets/create',
-      },     
-      INDUSTRIES: 
+      },
+      INDUSTRIES:
       {
         LIST: '/admin/categories/industries',
         DETAIL: '/admin/categories/industries/:id',
@@ -452,7 +455,9 @@ export const ROUTES = {
 
 } as const;
 
-export type UserRole = 
+export const NOTIFICATION_CENTER_ROUTE = '/notifications' as const;
+
+export type UserRole =
   | 'Staff HR'
   | 'Staff Accountant'
   | 'Staff Sales'

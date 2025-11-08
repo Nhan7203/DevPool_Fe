@@ -13,7 +13,9 @@ import {
   Building2, 
   CalendarDays, 
   CheckCircle,
-  TrendingUp
+  TrendingUp,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -25,6 +27,10 @@ export default function ProjectListPage() {
   const [filterCompany, setFilterCompany] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Stats data
   const stats = [
@@ -96,7 +102,16 @@ export default function ProjectListPage() {
     }
 
     setFilteredProjects(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterCompany, filterStatus, projects, companies]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
+  const startItem = filteredProjects.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredProjects.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -228,19 +243,51 @@ export default function ProjectListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách dự án</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredProjects.length} dự án</span>
+              <div className="flex items-center gap-4">
+                {filteredProjects.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredProjects.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 dự án</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên dự án</th>
@@ -265,14 +312,14 @@ export default function ProjectListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredProjects.map((p, i) => {
+                  paginatedProjects.map((p, i) => {
                     const company = companies.find(c => c.id === p.clientCompanyId);
                     return (
                       <tr
                         key={p.id}
                         className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                       >
-                        <td className="py-4 px-4 text-sm font-medium text-neutral-900">{i + 1}</td>
+                        <td className="py-4 px-4 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
                             <Briefcase className="w-4 h-4 text-neutral-400" />

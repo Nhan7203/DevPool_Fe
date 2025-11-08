@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { jobRequestService, type JobRequestStatus } from "../../../services/JobRequest";
-import { WorkingMode } from "../../../types/WorkingMode";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
@@ -13,6 +12,7 @@ import { applyProcessTemplateService } from "../../../services/ApplyProcessTempl
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
+import { talentApplicationService, TalentApplicationStatusConstants } from "../../../services/TalentApplication";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { 
   ArrowLeft, 
@@ -29,6 +29,9 @@ import {
   AlertCircle,
   Sparkles
 } from "lucide-react";
+import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
+import { userService } from "../../../services/User";
+import { decodeJWT } from "../../../services/Auth";
 
 interface JobRequestDetail {
     id: number;
@@ -60,14 +63,17 @@ export default function JobRequestDetailHRPage() {
     const [jobRoleName, setJobRoleName] = useState<string>("—");
     const [locationName, setLocationName] = useState<string>("—");
     const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
+    const [hiredCount, setHiredCount] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
+    const [showRejectDialog, setShowRejectDialog] = useState(false);
+    const [rejectNote, setRejectNote] = useState("");
 
     const workingModeLabels: Record<number, string> = {
         0: "Không xác định",
-        1: "Onsite",
-        2: "Remote",
-        4: "Hybrid",
+        1: "Tại công ty",
+        2: "Từ xa",
+        4: "Kết hợp",
         8: "Linh hoạt",
     };
 
@@ -143,6 +149,20 @@ export default function JobRequestDetailHRPage() {
 
             setJobRequest(jobReqWithExtra);
             setJobSkills(skills);
+
+            // Fetch số lượng hồ sơ ở trạng thái "Hired" cho job request này
+            try {
+                const applications = await talentApplicationService.getAll({ 
+                    jobRequestId: Number(id),
+                    status: TalentApplicationStatusConstants.Hired,
+                    excludeDeleted: true 
+                });
+                const applicationsArray = Array.isArray(applications) ? applications : [];
+                setHiredCount(applicationsArray.length);
+            } catch (err) {
+                console.error("❌ Lỗi tải số lượng hồ sơ đã tuyển:", err);
+                setHiredCount(0);
+            }
         } catch (err) {
             console.error("❌ Lỗi tải chi tiết Job Request:", err);
         } finally {
@@ -154,45 +174,30 @@ export default function JobRequestDetailHRPage() {
         fetchData();
     }, [id]);
 
-    const handleApprove = async (status: JobRequestStatus) => {
+    const statusCodeToName: Record<JobRequestStatus, string> = {
+        0: "Pending",
+        1: "Approved",
+        2: "Closed",
+        3: "Rejected",
+    };
+
+    const handleApprove = async (status: JobRequestStatus, options: { notes?: string } = {}) => {
         if (!id || !jobRequest) return;
 
-        // 🧩 Kiểm tra bắt buộc trước khi cập nhật
-        if (
-            !jobRequest.title?.trim() ||
-            !jobRequest.description?.trim() ||
-            !jobRequest.requirements?.trim() ||
-            jobSkills.length === 0
-        ) {
-            alert(
-                "⚠️ Không thể cập nhật trạng thái!\n\n" +
-                "Vui lòng đảm bảo các trường sau không bị trống:\n" +
-                "• Tiêu đề (Title)\n" +
-                "• Mô tả công việc (Description)\n" +
-                "• Yêu cầu ứng viên (Requirements)\n" +
-                "• Danh sách kỹ năng (SkillIds)"
-            );
+        const trimmedNote = options.notes?.trim();
+        if (status === 3 && !trimmedNote) {
+            alert("⚠️ Vui lòng nhập lý do từ chối");
             return;
         }
 
         setUpdating(true);
         try {
-            await jobRequestService.update(Number(id), {
-                jobRoleLevelId: jobRequest.jobRoleLevelId,
-                projectId: jobRequest.projectId,
-                applyProcessTemplateId: jobRequest.applyProcessTemplateId,
-                clientCompanyCVTemplateId: jobRequest.clientCompanyCVTemplateId,
-                title: jobRequest.title,
-                description: jobRequest.description ?? "",
-                requirements: jobRequest.requirements ?? "",
-                quantity: jobRequest.quantity,
-                locationId: jobRequest.locationId,
-                workingMode: (jobRequest.workingMode ?? 0) as WorkingMode,
-                budgetPerMonth: jobRequest.budgetPerMonth,
-                skillIds: jobSkills.map((s) => s.id),
-                status: status,
+            await jobRequestService.changeStatus(Number(id), {
+                newStatus: statusCodeToName[status] ?? "Pending",
+                ...(status === 3 ? { notes: trimmedNote } : {}),
             });
-            alert(`✅ ${status === 1 ? 'Đã duyệt' : 'Đã từ chối'} yêu cầu tuyển dụng thành công!`);
+            const statusMessage = status === 1 ? 'Đã duyệt' : status === 3 ? 'Đã từ chối' : status === 2 ? 'Đã đóng' : 'Cập nhật';
+            alert(`✅ ${statusMessage} yêu cầu tuyển dụng thành công!`);
             // Reload dữ liệu để cập nhật trạng thái mới
             await fetchData();
         } catch (err) {
@@ -201,6 +206,78 @@ export default function JobRequestDetailHRPage() {
         } finally {
             setUpdating(false);
         }
+    };
+
+    const handleApproveWithConfirm = () => {
+        if (!jobRequest) return;
+        const confirmApprove = window.confirm(`✅ Bạn có chắc muốn duyệt yêu cầu tuyển dụng "${jobRequest.title}"?`);
+        if (!confirmApprove) return;
+        void handleApprove(1);
+    };
+
+    const quickRejectNotes = [
+        "Mô tả công việc chưa đầy đủ thông tin.",
+        "Yêu cầu kỹ năng chưa rõ ràng, cần bổ sung.",
+        "Thiếu danh sách kỹ năng bắt buộc cho vị trí này.",
+        "Chưa có thông tin ngân sách hoặc quyền lợi cụ thể.",
+    ];
+
+    const sendRejectionNotification = useCallback(async (note: string) => {
+        if (!jobRequest) return;
+        try {
+            const salesUsers = await userService.getAll({ role: "Sale", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+            const salesUserIds = (salesUsers.items || [])
+                .filter((u) => (u.roles || []).some((role) => role === "Sale" || role === "Staff Sales"))
+                .map((u) => u.id)
+                .filter(Boolean);
+
+            if (!salesUserIds.length) return;
+
+            const token = localStorage.getItem("accessToken");
+            const decoded = token ? decodeJWT(token) : null;
+            const hrName = decoded?.unique_name || decoded?.email || decoded?.name || "HR Staff";
+
+            await notificationService.create({
+                title: `Yêu cầu tuyển dụng bị từ chối`,
+                message: note || `Yêu cầu "${jobRequest.title}" đã bị từ chối bởi ${hrName}.`,
+                type: NotificationType.JobStatusChanged,
+                priority: NotificationPriority.High,
+                userIds: salesUserIds as string[],
+                entityType: "JobRequest",
+                entityId: jobRequest.id,
+                actionUrl: `/sales/job-requests/${jobRequest.id}`,
+                metaData: {
+                    jobTitle: jobRequest.title,
+                    status: "Rejected",
+                    rejectedBy: hrName,
+                },
+            });
+        } catch (error) {
+            console.error("Không thể gửi thông báo tới Sales:", error);
+        }
+    }, [jobRequest]);
+
+    const handleOpenRejectDialog = () => {
+        if (updating || Number(jobRequest?.status) === 3 || Number(jobRequest?.status) === 1) return;
+        setRejectNote("");
+        setShowRejectDialog(true);
+    };
+
+    const handleConfirmReject = async () => {
+        const note = rejectNote.trim();
+        if (!note) {
+            alert("⚠️ Vui lòng ghi rõ lý do từ chối");
+            return;
+        }
+        await handleApprove(3, { notes: note });
+        await sendRejectionNotification(note);
+        setShowRejectDialog(false);
+        setRejectNote("");
+    };
+
+    const handleCancelReject = () => {
+        setShowRejectDialog(false);
+        setRejectNote("");
     };
 
     const handleMatchingCV = () => {
@@ -261,6 +338,13 @@ export default function JobRequestDetailHRPage() {
                 };
             case 2:
                 return {
+                    label: "Đã đóng",
+                    color: "bg-gray-100 text-gray-800",
+                    icon: <AlertCircle className="w-4 h-4" />,
+                    bgColor: "bg-gray-50"
+                };
+            case 3:
+                return {
                     label: "Đã từ chối",
                     color: "bg-red-100 text-red-800",
                     icon: <XCircle className="w-4 h-4" />,
@@ -313,23 +397,35 @@ export default function JobRequestDetailHRPage() {
 
                         <div className="flex gap-3">
                             <Button
-                                onClick={handleMatchingCV}
-                                disabled={Number(jobRequest.status) !== 1}
+                    onClick={handleMatchingCV}
+                                disabled={Number(jobRequest.status) !== 1 || hiredCount >= jobRequest.quantity}
                                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                    Number(jobRequest.status) !== 1
+                                    Number(jobRequest.status) !== 1 || hiredCount >= jobRequest.quantity
                                         ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                                         : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
                                 }`}
-                                title={Number(jobRequest.status) !== 1 ? "Cần duyệt yêu cầu trước khi matching CV" : ""}
+                                title={
+                                    Number(jobRequest.status) !== 1 
+                                        ? "Cần duyệt yêu cầu trước khi matching CV" 
+                                        : hiredCount >= jobRequest.quantity
+                                        ? `Đã đủ số lượng tuyển dụng (${hiredCount}/${jobRequest.quantity})`
+                                        : ""
+                                }
                             >
                                 <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                                 Matching CV AI
                             </Button>
                             <Button
-                                onClick={() => handleApprove(1)}
-                                disabled={updating || Number(jobRequest.status) === 1}
+                    onClick={handleApproveWithConfirm}
+                                disabled={
+                                    updating ||
+                                    Number(jobRequest.status) === 1 ||
+                                    Number(jobRequest.status) === 3
+                                }
                                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                    updating || Number(jobRequest.status) === 1
+                                    updating ||
+                                    Number(jobRequest.status) === 1 ||
+                                    Number(jobRequest.status) === 3
                                         ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                                         : "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
                                 }`}
@@ -338,10 +434,10 @@ export default function JobRequestDetailHRPage() {
                                 Duyệt
                             </Button>
                             <Button
-                                onClick={() => handleApprove(2)}
-                                disabled={updating || Number(jobRequest.status) === 2 || Number(jobRequest.status) === 1}
+                                onClick={handleOpenRejectDialog}
+                                disabled={updating || Number(jobRequest.status) === 3 || Number(jobRequest.status) === 1}
                                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                    updating || Number(jobRequest.status) === 2 || Number(jobRequest.status) === 1
+                                    updating || Number(jobRequest.status) === 3 || Number(jobRequest.status) === 1
                                         ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                                         : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
                                 }`}
@@ -374,15 +470,20 @@ export default function JobRequestDetailHRPage() {
                                 label="Dự án" 
                                 value={jobRequest.projectName ?? "—"} 
                                 icon={<Briefcase className="w-4 h-4" />}
-                            />
+                            />                          
                             <InfoItem 
                                 label="Vị trí tuyển dụng" 
+                                value={jobRoleName} 
+                                icon={<Users className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Cấp độ chuyên môn" 
                                 value={jobRequest.jobPositionName ?? "—"} 
                                 icon={<Users className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Loại vị trí tuyển dụng" 
-                                value={jobRoleName} 
+                                label="Số lượng tuyển dụng" 
+                                value={jobRequest.quantity?.toString() || "—"} 
                                 icon={<Users className="w-4 h-4" />}
                             />
                             <InfoItem 
@@ -391,7 +492,7 @@ export default function JobRequestDetailHRPage() {
                                 icon={<DollarSign className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Địa điểm (Location)" 
+                                label="Khu vực làm việc" 
                                 value={locationName} 
                                 icon={<Building2 className="w-4 h-4" />}
                             />
@@ -490,6 +591,62 @@ export default function JobRequestDetailHRPage() {
                     </div>
                 </div>
             </div>
+            {showRejectDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+                        <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-gray-900">Ghi rõ lý do từ chối yêu cầu tuyển dụng</h3>
+                            <button
+                                onClick={handleCancelReject}
+                                className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                                aria-label="Đóng"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="px-6 py-4 space-y-4">
+                            <p className="text-sm text-neutral-600">
+                                Vui lòng nhập lý do để các bộ phận liên quan dễ dàng xử lý và điều chỉnh thông tin job request.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {quickRejectNotes.map((note) => (
+                                    <button
+                                        key={note}
+                                        type="button"
+                                        onClick={() => setRejectNote((prev) => (prev ? `${prev}\n${note}` : note))}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors"
+                                    >
+                                        {note}
+                                    </button>
+                                ))}
+                            </div>
+                            <textarea
+                                value={rejectNote}
+                                onChange={(e) => setRejectNote(e.target.value)}
+                                rows={4}
+                                placeholder="Nhập lý do từ chối..."
+                                className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-800 focus:border-red-500 focus:ring-2 focus:ring-red-200 resize-none"
+                            />
+                        </div>
+                        <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={handleCancelReject}
+                                className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition-colors"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmReject}
+                                className="px-4 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+                            >
+                                Xác nhận từ chối
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -6,6 +6,7 @@ import { talentCVService, type TalentCVMatchResult } from "../../../services/Tal
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentService, type Talent } from "../../../services/Talent";
 import { applyService } from "../../../services/Apply";
+import { talentApplicationService, TalentApplicationStatusConstants, type TalentApplication } from "../../../services/TalentApplication";
 import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -19,13 +20,29 @@ import {
     Award,
     Eye,
     FileText,
-    Calendar,
+    Phone,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
+import { WorkingMode } from "../../../types/WorkingMode";
 
 interface EnrichedMatchResult extends TalentCVMatchResult {
     talentInfo?: Talent;
 }
+
+const WORKING_MODE_OPTIONS = [
+    { value: WorkingMode.Onsite, label: "Làm việc tại văn phòng" },
+    { value: WorkingMode.Remote, label: "Làm việc từ xa" },
+    { value: WorkingMode.Hybrid, label: "Hybrid (kết hợp tại văn phòng và từ xa)" },
+    { value: WorkingMode.Flexible, label: "Linh hoạt theo thỏa thuận" },
+];
+
+const formatWorkingMode = (mode?: number) => {
+    if (!mode || mode === WorkingMode.None) return "";
+    const labels = WORKING_MODE_OPTIONS
+        .filter((option) => (mode & option.value) !== 0)
+        .map((option) => option.label);
+    return labels.join(", ");
+};
 
 export default function CVMatchingPage() {
     const { user } = useAuth();
@@ -73,13 +90,36 @@ export default function CVMatchingPage() {
                 console.log("✅ Matching CVs received:", matches);
                 console.log("📊 Total matches found:", matches?.length || 0);
                 
-                // Nếu backend không hỗ trợ maxResults và chỉ trả về quantity kết quả,
-                // chúng ta vẫn giữ nguyên kết quả (backend đã limit rồi)
-                // Nếu backend hỗ trợ maxResults và trả về đúng số lượng mong muốn, thì không cần làm gì thêm
+                // Lấy danh sách đơn ứng tuyển đã tồn tại cho job request này để loại bỏ các CV đã nộp
+                const existingApplications = await talentApplicationService.getAll({
+                    jobRequestId: Number(jobRequestId),
+                    excludeDeleted: true,
+                }) as TalentApplication[];
+                const excludedStatuses = new Set<string>([
+                    TalentApplicationStatusConstants.Hired,
+                ]);
+                const excludedCvIds = new Set(
+                    existingApplications
+                        .filter((app) => excludedStatuses.has(app.status))
+                        .map((app) => app.cvId)
+                );
+
+                const filteredMatches = matches.filter((match: TalentCVMatchResult) => {
+                    const alreadyApplied = excludedCvIds.has(match.talentCV.id);
+                    if (alreadyApplied) {
+                        console.log(
+                            "ℹ️ Bỏ qua CV có hồ sơ ứng tuyển ở trạng thái Hired:",
+                            match.talentCV.id,
+                            match.talentCV.versionName
+                        );
+                    }
+                    return !alreadyApplied;
+                });
+                console.log("📉 Số CV sau khi loại trừ đã ứng tuyển:", filteredMatches.length);
 
                 // Enrich with talent information
                 const enrichedMatches = await Promise.all(
-                    matches.map(async (match: TalentCVMatchResult) => {
+                    filteredMatches.map(async (match: TalentCVMatchResult) => {
                         try {
                             const talent = await talentService.getById(match.talentCV.talentId);
                             console.log("✅ Talent info loaded for ID:", match.talentCV.talentId, talent);
@@ -369,7 +409,54 @@ export default function CVMatchingPage() {
                                                       
                         </div>
                     ) : (
-                        matchResults.map((match, index) => (
+                        matchResults.map((match, index) => {
+                            const totalRequiredSkills = match.matchedSkills.length + match.missingSkills.length;
+                            const skillMatchPercent = totalRequiredSkills > 0
+                                ? Math.round((match.matchedSkills.length / totalRequiredSkills) * 100)
+                                : 100;
+
+                            const jobWorkingMode = jobRequest?.workingMode ?? WorkingMode.None;
+                            const talentWorkingMode = match.talentInfo?.workingMode ?? WorkingMode.None;
+                            const workingModeRequired = jobWorkingMode !== WorkingMode.None;
+                            const workingModeMatch = workingModeRequired
+                                ? (talentWorkingMode !== WorkingMode.None && (talentWorkingMode & jobWorkingMode) !== 0)
+                                : true;
+                            const isRemoteOrFlexible = workingModeRequired && (jobWorkingMode & (WorkingMode.Remote | WorkingMode.Hybrid)) !== 0;
+
+                            const locationRequired = !!jobRequest?.locationId;
+                            const talentLocationId = match.talentInfo?.locationId ?? null;
+                            const locationMatch = locationRequired ? talentLocationId === jobRequest?.locationId : true;
+
+                            const workingModeRequirementText = workingModeRequired ? formatWorkingMode(jobWorkingMode) : "";
+                            const talentWorkingModeText = talentWorkingMode !== WorkingMode.None ? formatWorkingMode(talentWorkingMode) : "";
+
+                            const workingModeAnalysis = workingModeRequired
+                                ? `Chế độ làm việc yêu cầu: ${workingModeRequirementText}. ${talentWorkingModeText ? `Talent sẵn sàng: ${talentWorkingModeText}.` : "Talent chưa cập nhật chế độ làm việc."} ${workingModeMatch ? "Hai bên tương thích." : "Chưa tương thích, cần trao đổi thêm."}`
+                                : "Job không yêu cầu chế độ làm việc cụ thể, mọi chế độ đều được chấp nhận.";
+
+                            const locationAnalysis = isRemoteOrFlexible
+                                ? "Job cho phép làm Remote/Hybrid nên không yêu cầu talent cố định địa điểm."
+                                : locationRequired
+                                    ? talentLocationId
+                                        ? locationMatch
+                                            ? "Talent đang ở đúng địa điểm yêu cầu."
+                                            : "Talent ở khác địa điểm yêu cầu, cần cân nhắc."
+                                        : "Job yêu cầu địa điểm cụ thể nhưng talent chưa cập nhật thông tin địa điểm."
+                                    : "Job không yêu cầu địa điểm cụ thể.";
+
+                            const analysisPoints = [
+                                `Điểm tổng hợp: ${match.matchScore}/100.`,
+                                totalRequiredSkills > 0
+                                    ? `Kỹ năng: ${match.matchedSkills.length}/${totalRequiredSkills} (${skillMatchPercent}%) kỹ năng yêu cầu đã đáp ứng${match.missingSkills.length ? `. Cần bổ sung: ${match.missingSkills.join(", ")}` : "."}`
+                                    : "Kỹ năng: Yêu cầu tuyển dụng không chỉ định kỹ năng cụ thể, talent được tính 100%.",
+                                workingModeAnalysis,
+                                locationAnalysis,
+                                match.levelMatch
+                                    ? "Cấp độ/kinh nghiệm: Talent phù hợp với cấp độ mà yêu cầu tuyển dụng mong muốn."
+                                    : "Cấp độ/kinh nghiệm: Talent khác cấp độ yêu cầu, nên trao đổi thêm trước khi gửi khách hàng."
+                            ].filter(Boolean);
+
+                            return (
                             <div
                                 key={match.talentCV.id}
                                 className="group bg-white rounded-2xl shadow-soft hover:shadow-medium border border-neutral-100 hover:border-primary-200 p-6 transition-all duration-300 transform hover:-translate-y-1"
@@ -404,7 +491,7 @@ export default function CVMatchingPage() {
                                                     )}
                                                     {match.talentInfo?.phone && (
                                                         <span className="flex items-center gap-1">
-                                                            <Calendar className="w-4 h-4" />
+                                                            <Phone className="w-4 h-4" />
                                                             {match.talentInfo.phone}
                                                         </span>
                                                     )}
@@ -441,8 +528,16 @@ export default function CVMatchingPage() {
                                         </div>
 
                                         {/* Match Summary */}
-                                        <div className="mb-4 p-3 bg-neutral-50 rounded-lg">
-                                            <p className="text-sm text-neutral-700">{match.matchSummary}</p>
+                                        <div className="mb-4 p-4 bg-neutral-50 border border-neutral-200 rounded-xl">
+                                            <p className="text-sm font-semibold text-neutral-800 mb-2">Phân tích mức độ phù hợp</p>
+                                            <ul className="space-y-2 text-sm text-neutral-700">
+                                                {analysisPoints.map((point, idx) => (
+                                                    <li key={idx} className="flex items-start gap-2">
+                                                        <span className="mt-1 flex h-1.5 w-1.5 rounded-full bg-primary-500"></span>
+                                                        <span>{point}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
 
                                         {/* Skills */}
@@ -521,7 +616,8 @@ export default function CVMatchingPage() {
                                     </div>
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </div>

@@ -47,10 +47,6 @@ export const sidebarItems = [
     label: 'Hồ Sơ Ứng Tuyển',
     href: '/hr/applications',
     icon: ClipboardList,
-    subItems: [
-      { label: 'Danh Sách Hồ Sơ Ứng Tuyển', href: '/hr/applications' },
-      { label: 'Mẫu Quy Trình Ứng Tuyển', href: '/hr/apply-process-templates' },
-    ]
   },
   {
     label: 'Hợp Đồng Đối Tác',

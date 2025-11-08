@@ -68,6 +68,12 @@ export default function SkillEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSuccess(false);

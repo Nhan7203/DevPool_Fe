@@ -9,6 +9,9 @@ import {
   Globe,
   Eye,
   Plus,
+  ChevronLeft,
+  ChevronRight,
+  XCircle,
 } from "lucide-react";
 
 import Sidebar from "../../../components/common/Sidebar";
@@ -20,10 +23,25 @@ import { WorkingMode } from "../../../types/WorkingMode";
 // Mapping WorkingMode values to Vietnamese names
 const workingModeLabels: Record<number, string> = {
   [WorkingMode.None]: "Không xác định",
-  [WorkingMode.Onsite]: "Tại văn phòng",
-  [WorkingMode.Remote]: "Làm việc từ xa",
+  [WorkingMode.Onsite]: "Tại công ty",
+  [WorkingMode.Remote]: "Từ xa",
   [WorkingMode.Hybrid]: "Kết hợp",
   [WorkingMode.Flexible]: "Linh hoạt",
+};
+
+const statusLabels: Record<string, { label: string; badgeClass: string }> = {
+  Available: {
+    label: "Đang rảnh",
+    badgeClass: "bg-green-100 text-green-800",
+  },
+  Busy: {
+    label: "Đang bận",
+    badgeClass: "bg-yellow-100 text-yellow-800",
+  },
+  Unavailable: {
+    label: "Tạm ngưng",
+    badgeClass: "bg-gray-100 text-gray-700",
+  },
 };
 import { locationService, type Location } from "../../../services/location";
 
@@ -39,6 +57,10 @@ export default function ListDev() {
   const [filterLocation, setFilterLocation] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterWorkingMode, setFilterWorkingMode] = useState("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Thống kê
   const stats = [
@@ -61,12 +83,12 @@ export default function ListDev() {
       icon: <MapPin className="w-6 h-6" />,
     },
     {
-      title: "Làm việc từ xa (Remote)",
+      title: "Tạm ngưng (Unavailable)",
       value: talents
-        .filter((t) => t.workingMode === WorkingMode.Remote)
+        .filter((t) => t.status === "Unavailable")
         .length.toString(),
-      color: "purple",
-      icon: <Globe className="w-6 h-6" />,
+      color: "gray",
+      icon: <XCircle className="w-6 h-6" />,
     },
   ];
 
@@ -118,7 +140,16 @@ export default function ListDev() {
       );
 
     setFilteredTalents(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterLocation, filterStatus, filterWorkingMode, talents, locations]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredTalents.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTalents = filteredTalents.slice(startIndex, endIndex);
+  const startItem = filteredTalents.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredTalents.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -175,7 +206,8 @@ export default function ListDev() {
                   <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
                       stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
                         stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                          stat.color === 'gray' ? 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200' :
+                            'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
                     } transition-all duration-300`}>
                     {stat.icon}
                   </div>
@@ -228,7 +260,7 @@ export default function ListDev() {
                     <option value="">Tất cả trạng thái</option>
                     <option value="Available">Available</option>
                     <option value="Busy">Busy</option>
-                    <option value="Inactive">Inactive</option>
+                    <option value="Unavailable">Unavailable</option>
                   </select>
                   <select
                     value={filterWorkingMode}
@@ -254,18 +286,50 @@ export default function ListDev() {
         </div>
 
         {/* Bảng danh sách */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách Talent</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredTalents.length} người</span>
+              <div className="flex items-center gap-4">
+                {filteredTalents.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredTalents.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 người</span>
+                )}
               </div>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
                     #
@@ -304,7 +368,7 @@ export default function ListDev() {
                     </td>
                   </tr>
                 ) : (
-                  filteredTalents.map((t, i) => {
+                  paginatedTalents.map((t, i) => {
                     const locationName =
                       locations.find((loc) => loc.id === t.locationId)?.name ||
                       "—";
@@ -313,7 +377,7 @@ export default function ListDev() {
                         key={t.id}
                         className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                       >
-                        <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                        <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                         <td className="py-4 px-6">
                           <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                             {t.fullName}
@@ -338,17 +402,19 @@ export default function ListDev() {
                           </div>
                         </td>
                         <td className="py-4 px-6 text-center">
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                              t.status === "Available"
-                                ? "bg-green-100 text-green-800"
-                                : t.status === "Busy"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            {t.status}
-                          </span>
+                          {(() => {
+                            const statusInfo = statusLabels[t.status] || {
+                              label: t.status,
+                              badgeClass: "bg-gray-100 text-gray-700",
+                            };
+                            return (
+                              <span
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.badgeClass}`}
+                              >
+                                {statusInfo.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-4 px-6 text-center">
                           <Link

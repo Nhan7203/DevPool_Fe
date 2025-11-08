@@ -1,0 +1,505 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCircle, Filter, Loader2, RefreshCcw, Search } from 'lucide-react';
+import {
+  notificationService,
+  type Notification,
+  type NotificationListResult,
+  NotificationPriority,
+  NotificationType,
+} from '../../../services/Notification';
+import { useAuth } from '../../../contexts/AuthContext';
+import { decodeJWT } from '../../../services/Auth';
+
+type StatusFilter = 'all' | 'unread' | 'read';
+
+const notificationTypeOptions = Object.entries(NotificationType)
+  .filter(([, value]) => typeof value === 'number')
+  .map(([label, value]) => ({ label, value }));
+
+function getPriorityLabel(priority?: NotificationPriority) {
+  switch (priority) {
+    case NotificationPriority.Urgent:
+      return 'Khẩn cấp';
+    case NotificationPriority.High:
+      return 'Cao';
+    case NotificationPriority.Medium:
+      return 'Trung bình';
+    default:
+      return 'Thấp';
+  }
+}
+
+function getPriorityBadge(priority?: NotificationPriority) {
+  switch (priority) {
+    case NotificationPriority.Urgent:
+      return 'bg-red-100 text-red-700 border border-red-200';
+    case NotificationPriority.High:
+      return 'bg-orange-100 text-orange-700 border border-orange-200';
+    case NotificationPriority.Medium:
+      return 'bg-primary-100 text-primary-700 border border-primary-200';
+    default:
+      return 'bg-neutral-100 text-neutral-600 border border-neutral-200';
+  }
+}
+
+function getTypeLabel(type: NotificationType) {
+  const entry = notificationTypeOptions.find((item) => item.value === type);
+  if (!entry) return 'Khác';
+  switch (entry.label) {
+    case 'ApplicationStatusChanged':
+      return 'Trạng thái hồ sơ';
+    case 'InterviewScheduled':
+      return 'Lịch phỏng vấn';
+    case 'InterviewRescheduled':
+      return 'Dời lịch phỏng vấn';
+    case 'InterviewCompleted':
+      return 'Hoàn tất phỏng vấn';
+    case 'InterviewResultPassed':
+      return 'Đậu phỏng vấn';
+    case 'InterviewResultFailed':
+      return 'Rớt phỏng vấn';
+    case 'ApplicationOffered':
+      return 'Đề nghị mới';
+    case 'ApplicationHired':
+      return 'Đã tuyển';
+    case 'ApplicationRejected':
+      return 'Từ chối ứng viên';
+    case 'ApplicationWithdrawn':
+      return 'Ứng viên rút';
+    case 'NewJobPosted':
+      return 'Job mới';
+    case 'JobStatusChanged':
+      return 'Trạng thái job';
+    case 'ContractCreated':
+      return 'Hợp đồng mới';
+    case 'ContractPendingApproval':
+      return 'Hợp đồng chờ duyệt';
+    case 'ContractActivated':
+      return 'Hợp đồng kích hoạt';
+    case 'ContractExpiringSoon':
+      return 'Hợp đồng sắp hết';
+    case 'ContractExpired':
+      return 'Hợp đồng hết hạn';
+    case 'ContractTerminated':
+      return 'Hợp đồng chấm dứt';
+    case 'TalentStatusChanged':
+      return 'Trạng thái talent';
+    case 'TalentHired':
+      return 'Talent nhận việc';
+    case 'DocumentUploaded':
+      return 'Tài liệu mới';
+    default:
+      return entry.label;
+  }
+}
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+const NotificationCenterPage = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const resolvedUserId = useMemo(() => {
+    if (!user) return null;
+    const token = localStorage.getItem('accessToken');
+    if (!token) return user.id;
+    const decoded = decodeJWT(token);
+    const idFromToken = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid;
+    return idFromToken || user.id;
+  }, [user]);
+
+  const totalPages = useMemo(() => {
+    return totalCount > 0 ? Math.ceil(totalCount / pageSize) : 1;
+  }, [totalCount, pageSize]);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!resolvedUserId) return;
+    try {
+      setIsLoading(true);
+      const filter: Parameters<typeof notificationService.getAll>[0] = {
+        userId: resolvedUserId,
+        pageNumber,
+        pageSize,
+      };
+
+      if (statusFilter === 'unread') filter.isRead = false;
+      if (statusFilter === 'read') filter.isRead = true;
+      if (typeFilter !== 'all') filter.type = Number(typeFilter) as NotificationType;
+      if (searchKeyword.trim()) filter.title = searchKeyword.trim();
+
+      const result = (await notificationService.getAll(filter)) as NotificationListResult;
+      setNotifications(result.notifications || []);
+      setTotalCount(result.totalCount ?? 0);
+      setUnreadCount(result.unreadCount ?? 0);
+    } catch (error) {
+      console.error('Không thể tải danh sách thông báo:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [resolvedUserId, pageNumber, pageSize, statusFilter, typeFilter, searchKeyword]);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const handleStatusChange = (value: StatusFilter) => {
+    setStatusFilter(value);
+    setPageNumber(1);
+  };
+
+  const handleTypeChange = (value: string) => {
+    setTypeFilter(value);
+    setPageNumber(1);
+  };
+
+  const handlePageSizeChange = (value: number) => {
+    setPageSize(value);
+    setPageNumber(1);
+  };
+
+  const handleMarkAsRead = async (notification: Notification) => {
+    if (notification.isRead) return;
+    try {
+      await notificationService.markAsRead(notification.id);
+      fetchNotifications();
+    } catch (error) {
+      console.error('Không thể đánh dấu thông báo đã đọc:', error);
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notification.id
+            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            : item
+        )
+      );
+      setUnreadCount((prev) => Math.max(prev - 1, 0));
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!resolvedUserId || unreadCount === 0) return;
+    try {
+      await notificationService.markAllAsRead(resolvedUserId);
+      fetchNotifications();
+    } catch (error) {
+      console.error('Không thể đánh dấu tất cả thông báo đã đọc:', error);
+    }
+  };
+
+  const handleNavigate = async (notification: Notification) => {
+    await handleMarkAsRead(notification);
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+    }
+  };
+
+  const handleSearch = () => {
+    setPageNumber(1);
+    fetchNotifications();
+  };
+
+  const unreadPercentage = totalCount > 0 ? Math.round((unreadCount / totalCount) * 100) : 0;
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-10">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary-100 text-primary-700">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-neutral-900">Trung tâm thông báo</h1>
+                <p className="text-sm text-neutral-500">Xem và quản lý tất cả thông báo của bạn theo thời gian thực.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full md:w-auto">
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Tổng thông báo</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{totalCount}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-primary-100 text-primary-600 group-hover:bg-primary-200 transition-all duration-300">
+                    <Bell className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+              </div>
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-secondary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Chưa đọc</p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <p className="text-3xl font-bold text-primary-600 group-hover:text-primary-700 transition-colors duration-300">{unreadCount}</p>
+                      <span className="text-xs text-neutral-500">
+                        ({unreadPercentage}% tổng số)
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-full bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200 transition-all duration-300">
+                    <CheckCircle className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+              </div>
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-warning-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Trang hiện tại</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{pageNumber}/{totalPages}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-warning-100 text-warning-600 group-hover:bg-warning-200 transition-all duration-300">
+                    <Filter className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          <aside className="lg:col-span-1 bg-white rounded-2xl border border-neutral-100 shadow-soft p-6 h-max lg:sticky lg:top-24">
+            <div className="flex items-center gap-2 bg-neutral-100 rounded-xl px-3 py-2 text-neutral-600 mb-4">
+              <Filter className="w-4 h-4" />
+              <span className="text-sm font-medium">Bộ lọc</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-neutral-500 uppercase mb-2">Trạng thái</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => handleStatusChange('all')}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      statusFilter === 'all'
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    Tất cả
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange('unread')}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      statusFilter === 'unread'
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    Chưa đọc
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange('read')}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      statusFilter === 'read'
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    Đã đọc
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-neutral-500 uppercase mb-2">Loại thông báo</p>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="all">Tất cả</option>
+                  {notificationTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{getTypeLabel(option.value as NotificationType)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-neutral-500 uppercase mb-2">Tìm kiếm</p>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                  <input
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    placeholder="Tìm theo tiêu đề..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSearch();
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={handleSearch}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-all"
+                >
+                  <Search className="w-4 h-4" />
+                  Tìm kiếm
+                </button>
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setTypeFilter('all');
+                    setSearchKeyword('');
+                    setPageNumber(1);
+                    handleSearch();
+                  }}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-100 transition-all"
+                >
+                  <RefreshCcw className="w-4 h-4" />
+                  Đặt lại
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          <div className="lg:col-span-3 bg-white rounded-2xl border border-neutral-100 shadow-soft">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-b border-neutral-200">
+              <div>
+                <p className="text-sm font-semibold text-neutral-800">Danh sách thông báo</p>
+                <p className="text-xs text-neutral-500">Thông báo được sắp theo thời gian mới nhất.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size} / trang</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleMarkAllAsRead}
+                  disabled={unreadCount === 0}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-primary-200 text-sm font-medium text-primary-600 hover:bg-primary-50 disabled:text-neutral-300 disabled:border-neutral-200 disabled:bg-neutral-50"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Đánh dấu tất cả đã đọc
+                </button>
+              </div>
+            </div>
+
+            <div className="divide-y divide-neutral-100">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-16 text-neutral-500">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Đang tải dữ liệu...
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+                  <Bell className="w-10 h-10 text-neutral-300 mb-3" />
+                  <p className="text-sm">Không có thông báo nào phù hợp với bộ lọc hiện tại.</p>
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`px-6 py-5 transition-all ${
+                      notification.isRead ? 'bg-white' : 'bg-primary-50/60'
+                    }`}
+                  >
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium ${getPriorityBadge(notification.priority)}`}>
+                            {getPriorityLabel(notification.priority)}
+                          </span>
+                          <span className="text-xs text-neutral-400">
+                            {new Date(notification.createdAt).toLocaleString('vi-VN')}
+                          </span>
+                          <span className="text-xs text-neutral-400">• {getTypeLabel(notification.type)}</span>
+                        </div>
+                        <h3 className="text-base font-semibold text-neutral-900">{notification.title}</h3>
+                        <p className="text-sm text-neutral-600 leading-relaxed whitespace-pre-wrap">
+                          {notification.message}
+                        </p>
+                        {notification.metaData && Object.keys(notification.metaData).length > 0 && (
+                          <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-2">Thông tin liên quan</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-neutral-700">
+                              {Object.entries(notification.metaData).map(([key, value]) => (
+                                <div key={key} className="flex items-center justify-between">
+                                  <span className="text-neutral-500">{key}</span>
+                                  <span className="font-medium text-neutral-800">{String(value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-stretch gap-2 w-full md:w-48">
+                        <button
+                          onClick={() => handleMarkAsRead(notification)}
+                          className={`inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            notification.isRead
+                              ? 'border-neutral-200 text-neutral-400 cursor-default'
+                              : 'border-primary-200 text-primary-600 hover:bg-primary-50'
+                          }`}
+                          disabled={notification.isRead}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          {notification.isRead ? 'Đã đọc' : 'Đánh dấu đã đọc'}
+                        </button>
+                        {notification.actionUrl && (
+                          <button
+                            onClick={() => handleNavigate(notification)}
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-all"
+                          >
+                            Xem chi tiết
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-t border-neutral-200 bg-neutral-50">
+              <div className="text-sm text-neutral-500">
+                Hiển thị {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + 1)}-
+                {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + notifications.length)} trong tổng số {totalCount} thông báo
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
+                  disabled={pageNumber === 1}
+                  className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
+                >
+                  Trước
+                </button>
+                <span className="text-sm text-neutral-600">
+                  Trang {pageNumber} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPageNumber((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={pageNumber === totalPages}
+                  className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NotificationCenterPage;
+

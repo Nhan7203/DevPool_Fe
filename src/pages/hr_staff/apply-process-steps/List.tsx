@@ -10,11 +10,12 @@ import {
   Filter, 
   Eye, 
   Plus, 
-  TrendingUp, 
   FileText, 
   Calendar,
   Building2,
-  Hash
+  Hash,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 type AugmentedStep = ApplyProcessStep & {
@@ -29,34 +30,10 @@ export default function ApplyProcessStepListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTemplate, setFilterTemplate] = useState("");
   const [templates, setTemplates] = useState<ApplyProcessTemplate[]>([]);
-
-  // Stats data
-  const stats = [
-    {
-      title: 'Tổng bước quy trình',
-      value: steps.length.toString(),
-      change: '+12 tuần này',
-      trend: 'up',
-      color: 'blue',
-      icon: <FileText className="w-6 h-6" />
-    },
-    {
-      title: 'Mẫu quy trình',
-      value: templates.length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
-      color: 'green',
-      icon: <Building2 className="w-6 h-6" />
-    },
-    {
-      title: 'Tổng ngày ước tính',
-      value: steps.reduce((sum, s) => sum + s.estimatedDays, 0).toString(),
-      change: '+15% tháng này',
-      trend: 'up',
-      color: 'orange',
-      icon: <Calendar className="w-6 h-6" />
-    },
-  ];
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -93,7 +70,16 @@ export default function ApplyProcessStepListPage() {
     if (searchTerm) filtered = filtered.filter((s) => s.stepName.toLowerCase().includes(searchTerm.toLowerCase()));
     if (filterTemplate) filtered = filtered.filter((s) => s.templateId === Number(filterTemplate));
     setFilteredSteps(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterTemplate, steps]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredSteps.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSteps = filteredSteps.slice(startIndex, endIndex);
+  const startItem = filteredSteps.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredSteps.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -130,32 +116,6 @@ export default function ApplyProcessStepListPage() {
                 Tạo bước mới
               </Button>
             </Link>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
-                  </div>
-                  <div className={`p-3 rounded-full ${
-                    stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                    stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                    stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                    'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                  } transition-all duration-300`}>
-                    {stat.icon}
-                  </div>
-                </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -212,19 +172,51 @@ export default function ApplyProcessStepListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách bước quy trình</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredSteps.length} bước</span>
+              <div className="flex items-center gap-4">
+                {filteredSteps.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredSteps.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 bước</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên bước</th>
@@ -248,12 +240,12 @@ export default function ApplyProcessStepListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSteps.map((s, i) => (
+                  paginatedSteps.map((s, i) => (
                     <tr
                       key={s.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                           {s.stepName}

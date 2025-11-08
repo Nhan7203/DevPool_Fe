@@ -2,21 +2,18 @@ import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
 export const ApplyActivityType = {
-    Interview: 0,
-    Test: 1,
-    Meeting: 2,
-    Review: 3,
-};
+    Online: 0,
+    Offline: 1,
+} as const;
 
-export type ApplyActivityType = number;
+export type ApplyActivityType = typeof ApplyActivityType[keyof typeof ApplyActivityType];
 
 export const ApplyActivityStatus = {
     Scheduled: 0,
     Completed: 1,
     Passed: 2,
     Failed: 3,
-    Approved: 4,
-    NoShow: 5,
+    NoShow: 4,
 };
 
 export type ApplyActivityStatus = number;

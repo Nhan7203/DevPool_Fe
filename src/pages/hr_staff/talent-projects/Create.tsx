@@ -62,6 +62,13 @@ export default function TalentProjectCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm dự án cho talent không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -148,7 +155,7 @@ export default function TalentProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent
+                  CV của Talent <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="talentCVId"
@@ -175,7 +182,7 @@ export default function TalentProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Briefcase className="w-4 h-4" />
-                  Tên dự án
+                  Tên dự án <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="projectName"
@@ -192,7 +199,7 @@ export default function TalentProjectCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Target className="w-4 h-4" />
-                    Vị trí trong dự án
+                    Vị trí trong dự án <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="position"

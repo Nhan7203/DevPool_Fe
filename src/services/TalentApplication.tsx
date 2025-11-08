@@ -50,7 +50,58 @@ export interface TalentApplicationStatusTransitionResult {
   oldStatus?: string | null;
   newStatus?: string | null;
   validationErrors: string[];
+  talentStatusUpdated?: boolean;
+  contractsCreated?: boolean;
 }
+
+export interface TalentApplicationUpdate {
+  status?: string;
+  note?: string;
+  convertedCVPath?: string;
+}
+
+// Status Constants
+export const TalentApplicationStatusConstants = {
+  InterviewScheduled: "InterviewScheduled",
+  Interviewing: "Interviewing",
+  Offered: "Offered",
+  Hired: "Hired",
+  Rejected: "Rejected",
+  Withdrawn: "Withdrawn",
+
+  AllStatuses: [
+    "InterviewScheduled",
+    "Interviewing",
+    "Offered",
+    "Hired",
+    "Rejected",
+    "Withdrawn"
+  ] as const,
+
+  isValidStatus: (status: string): boolean => {
+    return TalentApplicationStatusConstants.AllStatuses.includes(status as any);
+  },
+
+  AllowedTransitions: {
+    InterviewScheduled: ["Interviewing", "Rejected", "Withdrawn"],
+    Interviewing: ["Offered", "Rejected", "Withdrawn"],
+    Offered: ["Hired", "Rejected", "Withdrawn"],
+    Hired: [] as string[], // Terminal state
+    Rejected: [] as string[], // Terminal state
+    Withdrawn: [] as string[] // Terminal state
+  },
+
+  isTerminalStatus: (status: string): boolean => {
+    return status === TalentApplicationStatusConstants.Hired ||
+           status === TalentApplicationStatusConstants.Rejected ||
+           status === TalentApplicationStatusConstants.Withdrawn;
+  },
+
+  isTransitionAllowed: (fromStatus: string, toStatus: string): boolean => {
+    const allowed = TalentApplicationStatusConstants.AllowedTransitions[fromStatus as keyof typeof TalentApplicationStatusConstants.AllowedTransitions];
+    return allowed ? allowed.includes(toStatus) : false;
+  }
+};
 
 export interface TalentApplicationDetailed {
   id: number;
@@ -81,6 +132,17 @@ export interface TalentApplicationDetailed {
   companyName?: string | null;
   talentName?: string | null;
   submitterName?: string | null;
+}
+
+export interface TalentApplicationsByJobRequestResponse {
+  success: boolean;
+  message: string;
+  data: {
+    jobRequestId: number;
+    filterStatus: string;
+    totalApplications: number;
+    applications: TalentApplicationDetailed[];
+  };
 }
 
 export const talentApplicationService = {
@@ -173,14 +235,51 @@ export const talentApplicationService = {
     }
   },
 
+  async update(id: number, payload: TalentApplicationUpdate) {
+    try {
+      const response = await axios.put(`/talentapplication/${id}`, payload);
+      return response.data as TalentApplication;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật đơn ứng tuyển" };
+      throw { message: "Lỗi không xác định khi cập nhật đơn ứng tuyển" };
+    }
+  },
+
   async updateStatus(id: number, payload: TalentApplicationStatusUpdate) {
     try {
-      const response = await axios.put(`/talentapplication/${id}/status`, payload);
+      const response = await axios.patch(`/talentapplication/${id}/change-status`, payload);
       return response.data as TalentApplicationStatusTransitionResult;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể cập nhật trạng thái đơn ứng tuyển" };
       throw { message: "Lỗi không xác định khi cập nhật trạng thái" };
+    }
+  },
+
+  async getByJobRequest(jobRequestId: number, status?: string) {
+    try {
+      const params = new URLSearchParams();
+      if (status) params.append("status", status);
+
+      const url = `/talentapplication/by-jobrequest/${jobRequestId}${params.toString() ? `?${params}` : ""}`;
+      const response = await axios.get(url);
+
+      const data = response.data as TalentApplicationsByJobRequestResponse;
+      if (!data || !data.success) {
+        console.warn("⚠️ Response getByJobRequest không thành công:", response.data);
+      }
+      return data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        console.error("❌ Lỗi khi gọi getByJobRequest:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+        });
+        throw error.response?.data || { message: "Không thể tải danh sách hồ sơ ứng tuyển theo job request" };
+      }
+      throw { message: "Lỗi không xác định khi tải danh sách hồ sơ ứng tuyển theo job request" };
     }
   },
 };

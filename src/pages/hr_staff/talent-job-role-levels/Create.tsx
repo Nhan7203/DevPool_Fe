@@ -31,6 +31,7 @@ export default function TalentJobRoleLevelCreatePage() {
   });
 
   const [allJobRoleLevels, setAllJobRoleLevels] = useState<JobRoleLevel[]>([]);
+  const [existingJobRoleLevelIds, setExistingJobRoleLevelIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -44,6 +45,21 @@ export default function TalentJobRoleLevelCreatePage() {
     fetchData();
   }, []);
 
+  // Fetch existing job role levels for this talent to disable them in dropdown
+  useEffect(() => {
+    const fetchExistingJobRoleLevels = async () => {
+      if (!talentId) return;
+      try {
+        const existingJobRoleLevels = await talentJobRoleLevelService.getAll({ talentId: Number(talentId), excludeDeleted: true });
+        const jobRoleLevelIds = existingJobRoleLevels.map(jrl => jrl.jobRoleLevelId).filter(id => id > 0);
+        setExistingJobRoleLevelIds(jobRoleLevelIds);
+      } catch (error) {
+        console.error("❌ Error loading existing job role levels", error);
+      }
+    };
+    fetchExistingJobRoleLevels();
+  }, [talentId]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ 
@@ -55,6 +71,13 @@ export default function TalentJobRoleLevelCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm vị trí công việc cho talent không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -141,7 +164,7 @@ export default function TalentJobRoleLevelCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Target className="w-4 h-4" />
-                  Vị trí công việc
+                  Vị trí công việc <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="jobRoleLevelId"
@@ -151,11 +174,19 @@ export default function TalentJobRoleLevelCreatePage() {
                   required
                 >
                   <option value="0">-- Chọn vị trí công việc --</option>
-                  {allJobRoleLevels.map(jobRoleLevel => (
-                    <option key={jobRoleLevel.id} value={jobRoleLevel.id}>
-                      {jobRoleLevel.name} - Level {jobRoleLevel.level}
-                    </option>
-                  ))}
+                  {allJobRoleLevels.map(jobRoleLevel => {
+                    const isDisabled = existingJobRoleLevelIds.includes(jobRoleLevel.id);
+                    return (
+                      <option 
+                        key={jobRoleLevel.id} 
+                        value={jobRoleLevel.id}
+                        disabled={isDisabled}
+                        style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                      >
+                        {jobRoleLevel.name} - Level {jobRoleLevel.level}{isDisabled ? ' (đã chọn)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {form.jobRoleLevelId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">

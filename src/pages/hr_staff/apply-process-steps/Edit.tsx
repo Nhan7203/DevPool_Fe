@@ -81,6 +81,12 @@ export default function ApplyProcessStepEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     if (!formData.templateId || formData.templateId === 0) {
       alert("⚠️ Vui lòng chọn mẫu quy trình trước khi lưu!");
       return;

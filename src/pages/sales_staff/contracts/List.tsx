@@ -5,15 +5,13 @@ import {
   Calendar, 
   Building2, 
   Briefcase, 
-  DollarSign, 
   Link2, 
   Filter, 
   Search, 
   Plus,
   Eye,
-  TrendingUp,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/sales_staff/SidebarItems';
@@ -29,7 +27,7 @@ export default function ListClientContracts() {
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+    
   // Store client company and project data for display
   const [clientsMap, setClientsMap] = useState<Map<number, ClientCompany>>(new Map());
   const [projectsMap, setProjectsMap] = useState<Map<number, Project>>(new Map());
@@ -39,32 +37,24 @@ export default function ListClientContracts() {
     {
       title: 'Tổng Hợp Đồng',
       value: contracts.length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'blue',
       icon: <FileText className="w-6 h-6" />
     },
     {
       title: 'Đang Hoạt Động',
       value: contracts.filter(c => c.status?.toLowerCase() === 'active').length.toString(),
-      change: '+1 tuần này',
-      trend: 'up',
       color: 'green',
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
       title: 'Đã Hoàn Thành',
       value: contracts.filter(c => c.status?.toLowerCase() === 'completed').length.toString(),
-      change: '+3 tuần này',
-      trend: 'up',
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
     },
     {
       title: 'Chờ Duyệt',
       value: contracts.filter(c => c.status?.toLowerCase() === 'pending' || c.status?.toLowerCase() === 'draft').length.toString(),
-      change: '+2 tuần này',
-      trend: 'up',
       color: 'orange',
       icon: <CheckCircle className="w-6 h-6" />
     }
@@ -128,11 +118,7 @@ export default function ListClientContracts() {
     }
     setFilteredContracts(filtered);
   }, [searchTerm, filterStatus, contracts, clientsMap, projectsMap]);
-
-  const formatCurrency = (v?: number) =>
-    v
-      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v)
-      : '-';
+  
 
   const getClientName = (clientCompanyId: number) => {
     return clientsMap.get(clientCompanyId)?.name || '—';
@@ -195,10 +181,6 @@ export default function ListClientContracts() {
                     {stat.icon}
                   </div>
                 </div>
-                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                  {stat.change}
-                </p>
               </div>
             ))}
           </div>

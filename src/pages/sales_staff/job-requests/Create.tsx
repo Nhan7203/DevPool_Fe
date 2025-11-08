@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
@@ -21,15 +21,20 @@ import {
   FileText, 
   CheckSquare, 
   Building2, 
-  Calendar, 
   AlertCircle, 
   CheckCircle,
-  X
+  X,
+  Search
 } from "lucide-react";
 import { WorkingMode } from "../../../types/WorkingMode";
+import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
+import { userService } from "../../../services/User";
+import { decodeJWT } from "../../../services/Auth";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -58,6 +63,42 @@ export default function JobRequestCreatePage() {
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
+  const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+
+  const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
+    try {
+      const hrUsersResponse = await userService.getAll({ role: "HR", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+      const hrUserIds = (hrUsersResponse.items || [])
+        .filter((u) => (u.roles || []).some((role) => role === "HR" || role === "Staff HR"))
+        .map((u) => u.id)
+        .filter(Boolean);
+
+      if (!hrUserIds.length) {
+        return;
+      }
+
+      const token = localStorage.getItem("accessToken");
+      const decoded = token ? decodeJWT(token) : null;
+      const creatorName = user?.name || decoded?.unique_name || decoded?.email || "Nhân viên Sales";
+
+      await notificationService.create({
+        title: "Yêu cầu tuyển dụng mới",
+        message: `${creatorName} vừa tạo yêu cầu tuyển dụng "${jobTitle}". Vui lòng kiểm tra và duyệt yêu cầu này.`,
+        type: NotificationType.JobStatusChanged,
+        priority: NotificationPriority.Medium,
+        userIds: hrUserIds,
+        entityType: "JobRequest",
+        entityId: jobRequestId ?? undefined,
+        actionUrl: jobRequestId ? `/hr/job-requests/${jobRequestId}` : undefined,
+        metaData: {
+          jobTitle,
+          createdBy: creatorName?.toString() ?? "Sales",
+        },
+      });
+    } catch (notifyError) {
+      console.error("Không thể gửi thông báo tới HR:", notifyError);
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -116,12 +157,25 @@ export default function JobRequestCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo yêu cầu tuyển dụng mới không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
 
     if (!form.clientCompanyCVTemplateId || form.clientCompanyCVTemplateId === 0) {
       setError("⚠️ Vui lòng chọn mẫu CV của khách hàng trước khi tạo yêu cầu.");
+      setLoading(false);
+      return;
+    }
+
+    if (!form.skillIds || form.skillIds.length === 0) {
+      setError("⚠️ Vui lòng chọn ít nhất một kỹ năng yêu cầu.");
       setLoading(false);
       return;
     }
@@ -143,7 +197,13 @@ export default function JobRequestCreatePage() {
         skillIds: form.skillIds,
       };
 
-      await jobRequestService.create(payload);
+      const createdJobRequest = await jobRequestService.create(payload);
+
+      if (createdJobRequest?.id) {
+        await sendNotificationToHR(createdJobRequest.id, payload.title);
+      } else {
+        await sendNotificationToHR(null, payload.title);
+      }
       setSuccess(true);
       setTimeout(() => navigate("/sales/job-requests"), 1500);
     } catch (err) {
@@ -206,7 +266,7 @@ export default function JobRequestCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tiêu đề yêu cầu
+                  Tiêu đề yêu cầu <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="title"
@@ -223,7 +283,7 @@ export default function JobRequestCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Briefcase className="w-4 h-4" />
-                    Dự án
+                    Dự án <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="projectId"
@@ -243,7 +303,7 @@ export default function JobRequestCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Vị trí tuyển dụng
+                    Cấp độ chuyên môn <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="jobRoleLevelId"
@@ -260,23 +320,15 @@ export default function JobRequestCreatePage() {
                 </div>
 
                 {/* Job Role (chỉ hiển thị khi đã chọn Job Role Level) */}
-                {form.jobRoleLevelId && (
+                {form.jobRoleLevelId && selectedJobRoleId !== 0 && (
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                       <Users className="w-4 h-4" />
-                      Kiểu vị trí tuyển dụng
+                      Vị trí tuyển dụng
                     </label>
-                    <select
-                      name="jobRoleId"
-                      value={selectedJobRoleId ? selectedJobRoleId.toString() : ""}
-                      onChange={(e) => setSelectedJobRoleId(e.target.value ? Number(e.target.value) : 0)}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    >
-                      <option value="">-- Chọn Job Role --</option>
-                      {jobRoles.map(r => (
-                        <option key={r.id} value={r.id.toString()}>{r.name}</option>
-                      ))}
-                    </select>
+                    <div className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-50 text-neutral-700">
+                      {jobRoles.find(r => r.id === selectedJobRoleId)?.name || "Không xác định"}
+                    </div>
                   </div>
                 )}
               </div>
@@ -300,7 +352,7 @@ export default function JobRequestCreatePage() {
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Mẫu CV khách hàng
+                      Mẫu CV khách hàng <span className="text-red-500">*</span>
                     </label>
                     <select
                       name="clientCompanyCVTemplateId"
@@ -309,7 +361,7 @@ export default function JobRequestCreatePage() {
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                       required
                     >
-                      <option value="0">
+                      <option value="">
                         {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
                       </option>
                       {clientTemplates.map(t => (
@@ -322,7 +374,7 @@ export default function JobRequestCreatePage() {
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                       <Target className="w-4 h-4" />
-                      Chế độ làm việc
+                      Chế độ làm việc <span className="text-red-500">*</span>
                     </label>
                     <select
                       name="workingMode"
@@ -332,8 +384,8 @@ export default function JobRequestCreatePage() {
                       required
                     >
                       <option value={WorkingMode.None}>Không xác định</option>
-                      <option value={WorkingMode.Onsite}>Tại văn phòng</option>
-                      <option value={WorkingMode.Remote}>Làm việc từ xa</option>
+                      <option value={WorkingMode.Onsite}>Tại công ty</option>
+                      <option value={WorkingMode.Remote}>Từ xa</option>
                       <option value={WorkingMode.Hybrid}>Kết hợp</option>
                       <option value={WorkingMode.Flexible}>Linh hoạt</option>
                     </select>
@@ -359,7 +411,7 @@ export default function JobRequestCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Số lượng
+                    Số lượng <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -372,11 +424,11 @@ export default function JobRequestCreatePage() {
                   />
                 </div>
 
-                {/* Địa điểm */}
+                {/* Khu vực làm việc */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Địa điểm
+                    Khu vực làm việc
                   </label>
                   <select
                     name="locationId"
@@ -384,7 +436,7 @@ export default function JobRequestCreatePage() {
                     onChange={handleChange}
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   >
-                    <option value="">-- Chọn địa điểm --</option>
+                    <option value="">-- Chọn khu vực làm việc --</option>
                     {locations.map(l => (
                       <option key={l.id} value={l.id.toString()}>{l.name}</option>
                     ))}
@@ -423,7 +475,6 @@ export default function JobRequestCreatePage() {
                     onChange={handleChange}
                     placeholder="Nhập ngân sách..."
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
                   />
                 </div>
 
@@ -485,7 +536,7 @@ export default function JobRequestCreatePage() {
                 <div className="p-2 bg-warning-100 rounded-lg">
                   <CheckSquare className="w-5 h-5 text-warning-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu <span className="text-red-500">*</span></h3>
                 <div className="ml-auto">
                   <span className="text-sm text-neutral-500">
                     Đã chọn: {form.skillIds.length} kỹ năng
@@ -494,8 +545,27 @@ export default function JobRequestCreatePage() {
               </div>
             </div>
             <div className="p-6">
+              {/* Search Box */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={skillSearchQuery}
+                    onChange={(e) => setSkillSearchQuery(e.target.value)}
+                    placeholder="Tìm kiếm kỹ năng..."
+                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Filtered Skills Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                {allSkills.map(skill => (
+                {allSkills
+                  .filter(skill => 
+                    skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
+                  )
+                  .map(skill => (
                   <label
                     key={skill.id}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${
@@ -523,7 +593,7 @@ export default function JobRequestCreatePage() {
                       {skill.name}
                     </span>
                   </label>
-                ))}
+                  ))}
               </div>
 
               {allSkills.length === 0 && (
@@ -533,6 +603,18 @@ export default function JobRequestCreatePage() {
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Không có kỹ năng nào</p>
                   <p className="text-neutral-400 text-sm mt-1">Liên hệ admin để thêm kỹ năng mới</p>
+                </div>
+              )}
+
+              {allSkills.length > 0 && allSkills.filter(skill => 
+                skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
+              ).length === 0 && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Không tìm thấy kỹ năng nào</p>
+                  <p className="text-neutral-400 text-sm mt-1">Thử tìm kiếm với từ khóa khác</p>
                 </div>
               )}
             </div>

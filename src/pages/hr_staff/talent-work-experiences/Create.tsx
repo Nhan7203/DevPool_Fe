@@ -50,8 +50,56 @@ export default function TalentWorkExperienceCreatePage() {
     fetchData();
   }, [talentId]);
 
+  // Validate start date similar to talents/Create.tsx
+  const validateStartDate = (date: string): boolean => {
+    if (!date) return false;
+    const startDate = new Date(date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (startDate > today) return false;
+    const hundredYearsAgo = new Date();
+    hundredYearsAgo.setFullYear(today.getFullYear() - 100);
+    return startDate >= hundredYearsAgo;
+  };
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+
+    // realtime validation for dates
+    if (name === 'startDate') {
+      const newErrors = { ...fieldErrors };
+      if (value && !validateStartDate(value)) {
+        newErrors.startDate = 'Ngày bắt đầu không hợp lệ (không sau hiện tại, không quá 100 năm trước)';
+      } else {
+        delete newErrors.startDate;
+        // if endDate exists, ensure end > start
+        if (form.endDate) {
+          if (new Date(form.endDate) <= new Date(value)) {
+            newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+          } else {
+            delete newErrors.endDate;
+          }
+        }
+      }
+      setFieldErrors(newErrors);
+    }
+
+    if (name === 'endDate') {
+      const newErrors = { ...fieldErrors };
+      if (value && form.startDate) {
+        if (new Date(value) <= new Date(form.startDate)) {
+          newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+        } else {
+          delete newErrors.endDate;
+        }
+      } else {
+        delete newErrors.endDate;
+      }
+      setFieldErrors(newErrors);
+    }
+
     setForm(prev => ({ 
       ...prev, 
       [name]: name === "talentCVId" ? Number(value) : value 
@@ -60,6 +108,13 @@ export default function TalentWorkExperienceCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm kinh nghiệm làm việc cho talent không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -84,6 +139,11 @@ export default function TalentWorkExperienceCreatePage() {
 
     if (!form.startDate) {
       setError("⚠️ Vui lòng chọn ngày bắt đầu.");
+      setLoading(false);
+      return;
+    }
+    if (!validateStartDate(form.startDate)) {
+      setError("⚠️ Ngày bắt đầu không hợp lệ (không sau hiện tại, không quá 100 năm trước).");
       setLoading(false);
       return;
     }
@@ -172,7 +232,7 @@ export default function TalentWorkExperienceCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent
+                  CV của Talent <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="talentCVId"
@@ -200,7 +260,7 @@ export default function TalentWorkExperienceCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Công ty
+                    Công ty <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="company"
@@ -216,7 +276,7 @@ export default function TalentWorkExperienceCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Workflow className="w-4 h-4" />
-                    Vị trí
+                    Vị trí <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="position"
@@ -234,7 +294,7 @@ export default function TalentWorkExperienceCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    Ngày bắt đầu
+                    Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -242,8 +302,13 @@ export default function TalentWorkExperienceCreatePage() {
                     value={form.startDate}
                     onChange={handleChange}
                     required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      fieldErrors.startDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
+                  {fieldErrors.startDate && (
+                    <p className="mt-1 text-xs text-red-500">{fieldErrors.startDate}</p>
+                  )}
                 </div>
 
                 {/* Ngày kết thúc */}
@@ -257,8 +322,13 @@ export default function TalentWorkExperienceCreatePage() {
                     name="endDate"
                     value={form.endDate}
                     onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      fieldErrors.endDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
+                  {fieldErrors.endDate && (
+                    <p className="mt-1 text-xs text-red-500">{fieldErrors.endDate}</p>
+                  )}
                   <p className="text-xs text-neutral-500 mt-1">
                     Để trống nếu vẫn đang làm việc
                   </p>
@@ -269,7 +339,7 @@ export default function TalentWorkExperienceCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mô tả công việc
+                  Mô tả công việc <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="description"

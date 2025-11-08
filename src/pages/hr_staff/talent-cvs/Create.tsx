@@ -40,11 +40,14 @@ export default function TalentCVCreatePage() {
   });
 
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
+  const [existingCVs, setExistingCVs] = useState<any[]>([]);
+  const [versionNameError, setVersionNameError] = useState<string>("");
   
   // File upload states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploadedFromFirebase, setIsUploadedFromFirebase] = useState(false);
   
   // CV Extract states
   const [extractingCV, setExtractingCV] = useState(false);
@@ -80,8 +83,168 @@ export default function TalentCVCreatePage() {
     fetchData();
   }, []);
 
+  // Fetch CV cùng jobRoleId khi jobRoleId thay đổi
+  useEffect(() => {
+    const fetchCVsByJobRole = async () => {
+      if (talentId && form.jobRoleId && form.jobRoleId > 0) {
+        try {
+          const cvs = await talentCVService.getAll({ 
+            talentId: Number(talentId), 
+            jobRoleId: form.jobRoleId,
+            excludeDeleted: true 
+          });
+          setExistingCVs(cvs || []);
+        } catch (error) {
+          console.error("❌ Error loading CVs by job role", error);
+          setExistingCVs([]);
+        }
+      } else {
+        setExistingCVs([]);
+        setVersionNameError("");
+      }
+    };
+    fetchCVsByJobRole();
+  }, [talentId, form.jobRoleId]);
+
+  // Validate lại tên phiên bản khi existingCVs thay đổi
+  useEffect(() => {
+    if (form.versionName.trim() && form.jobRoleId > 0 && existingCVs.length > 0) {
+      const error = validateVersionName(form.versionName, form.jobRoleId, existingCVs);
+      setVersionNameError(error);
+    } else if (existingCVs.length === 0) {
+      setVersionNameError("");
+    }
+  }, [existingCVs, form.versionName, form.jobRoleId]);
+
+  // Cảnh báo khi user cố gắng rời khỏi trang sau khi đã upload CV lên Firebase nhưng chưa lưu
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isUploadedFromFirebase && !success) {
+        e.preventDefault();
+        e.returnValue = "Bạn đã upload CV lên Firebase nhưng chưa lưu. Bạn có chắc chắn muốn rời khỏi trang không?";
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isUploadedFromFirebase, success]);
+
+  // Validate tên phiên bản CV không trùng với CV cùng jobRoleId
+  const validateVersionName = (versionName: string, jobRoleId: number, existingCVsList: any[]): string => {
+    if (!versionName.trim()) {
+      return "";
+    }
+    
+    if (jobRoleId === 0 || existingCVsList.length === 0) {
+      return "";
+    }
+    
+    // Normalize version name để so sánh (loại bỏ khoảng trắng, chuyển lowercase)
+    const normalizeVersion = (v: string): string => {
+      return v.trim().toLowerCase().replace(/\s+/g, '');
+    };
+    
+    // Extract số từ chuỗi (có thể có chữ cái phía trước/sau)
+    // Ví dụ: "CV 1.0" -> "1.0", "1.0.0" -> "1.0.0", "1" -> "1"
+    const extractNumber = (v: string): string | null => {
+      const normalized = normalizeVersion(v);
+      // Tìm pattern số: có thể là số thuần (1, 2, 3...) hoặc số thập phân (1.0, 1.0.0, 1.1.2...)
+      const numberMatch = normalized.match(/(\d+(?:\.\d+)*)/);
+      if (numberMatch) {
+        return numberMatch[1];
+      }
+      return null;
+    };
+    
+    // Normalize số để so sánh (1 = 1.0 = 1.0.0)
+    // Chuyển tất cả về dạng major.minor (1 -> 1.0, 1.0 -> 1.0, 1.0.0 -> 1.0, 1.1.2 -> 1.1)
+    const normalizeNumber = (numStr: string): string => {
+      const parts = numStr.split('.');
+      const major = parts[0];
+      const minor = parts[1] || '0';
+      // Chỉ lấy major.minor, bỏ phần sau
+      return `${major}.${minor}`;
+    };
+    
+    const normalizedInput = normalizeVersion(versionName);
+    const extractedInputNumber = extractNumber(versionName);
+    const normalizedInputNumber = extractedInputNumber ? normalizeNumber(extractedInputNumber) : null;
+    
+    // Kiểm tra trùng với các CV cùng jobRoleId
+    const duplicateCV = existingCVsList.find((cv: any) => {
+      const normalizedExisting = normalizeVersion(cv.versionName);
+      
+      // So sánh exact match (bao gồm cả chữ cái)
+      if (normalizedExisting === normalizedInput) {
+        return true;
+      }
+      
+      // So sánh số - nếu cả hai đều có số và số trùng thì không cho đặt
+      if (normalizedInputNumber !== null) {
+        const extractedExistingNumber = extractNumber(cv.versionName);
+        if (extractedExistingNumber !== null) {
+          const normalizedExistingNumber = normalizeNumber(extractedExistingNumber);
+          if (normalizedExistingNumber === normalizedInputNumber) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
+    
+    if (duplicateCV) {
+      // Gợi ý tên mới
+      let suggestedName = "";
+      const extractedNum = extractNumber(versionName);
+      
+      if (extractedNum) {
+        // Nếu có số trong tên, tăng số lên
+        const normalizedNum = normalizeNumber(extractedNum);
+        const parts = normalizedNum.split('.');
+        const major = parseInt(parts[0]);
+        const minor = parseFloat(parts[1] || '0');
+        
+        // Tăng minor lên 0.1
+        const newMinor = minor + 0.1;
+        const newNumber = `${major}.${newMinor.toFixed(1)}`;
+        
+        // Thay thế số cũ bằng số mới trong tên
+        suggestedName = versionName.replace(extractedNum, newNumber);
+      } else {
+        // Nếu không có số, thêm số vào cuối
+        suggestedName = `${versionName} 2.0`;
+      }
+      
+      return `Tên phiên bản "${versionName}" đã tồn tại cho vị trí công việc này. Vui lòng chọn tên khác (ví dụ: ${suggestedName}).`;
+    }
+    
+    return "";
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    // Validate tên phiên bản khi user nhập
+    if (name === "versionName") {
+      const error = validateVersionName(value, form.jobRoleId, existingCVs);
+      setVersionNameError(error);
+    }
+    
+    // Clear error khi jobRoleId thay đổi (sẽ validate lại khi user nhập versionName)
+    if (name === "jobRoleId") {
+      setVersionNameError("");
+    }
+    
+    // Nếu user nhập URL thủ công, reset flag Firebase upload
+    if (name === "cvFileUrl") {
+      setIsUploadedFromFirebase(false);
+    }
+    
     setForm(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
@@ -92,6 +255,79 @@ export default function TalentCVCreatePage() {
   // Clean phone number to digits only
   const cleanPhoneNumber = (phone: string): string => {
     return phone.replace(/\D/g, '');
+  };
+
+  // Tạo tóm tắt CV từ dữ liệu trích xuất
+  const generateSummaryFromExtractedData = (data: any): string => {
+    const parts: string[] = [];
+    
+    // Thông tin cơ bản
+    if (data.fullName) {
+      parts.push(`Tên: ${data.fullName}`);
+    }
+    
+    // Vị trí công việc (jobRoleLevels)
+    if (data.jobRoleLevels && Array.isArray(data.jobRoleLevels) && data.jobRoleLevels.length > 0) {
+      const positions = data.jobRoleLevels
+        .map((jrl: any) => jrl.position || jrl.jobRole)
+        .filter((p: string) => p)
+        .slice(0, 3);
+      if (positions.length > 0) {
+        parts.push(`Vị trí: ${positions.join(', ')}`);
+      }
+    }
+    
+    // Kinh nghiệm làm việc
+    if (data.workExperiences && Array.isArray(data.workExperiences) && data.workExperiences.length > 0) {
+      const totalExp = data.workExperiences.length;
+      const companies = data.workExperiences
+        .map((we: any) => we.company)
+        .filter((c: string) => c)
+        .slice(0, 3);
+      if (companies.length > 0) {
+        parts.push(`Kinh nghiệm: ${totalExp} vị trí tại ${companies.join(', ')}`);
+      }
+    }
+    
+    // Kỹ năng chính
+    if (data.skills && Array.isArray(data.skills) && data.skills.length > 0) {
+      const skillNames = data.skills
+        .map((skill: any) => typeof skill === 'string' ? skill : skill.skillName || skill.name)
+        .filter((s: string) => s)
+        .slice(0, 7);
+      if (skillNames.length > 0) {
+        parts.push(`Kỹ năng: ${skillNames.join(', ')}`);
+      }
+    }
+    
+    // Dự án nổi bật
+    if (data.projects && Array.isArray(data.projects) && data.projects.length > 0) {
+      const projectNames = data.projects
+        .map((proj: any) => proj.projectName || proj.name)
+        .filter((p: string) => p)
+        .slice(0, 2);
+      if (projectNames.length > 0) {
+        parts.push(`Dự án: ${projectNames.join(', ')}`);
+      }
+    }
+    
+    // Chứng chỉ
+    if (data.certificates && Array.isArray(data.certificates) && data.certificates.length > 0) {
+      const certNames = data.certificates
+        .map((cert: any) => cert.certificateName || cert.name)
+        .filter((c: string) => c)
+        .slice(0, 3);
+      if (certNames.length > 0) {
+        parts.push(`Chứng chỉ: ${certNames.join(', ')}`);
+      }
+    }
+    
+    // Nếu không có dữ liệu, tạo tóm tắt mặc định
+    if (parts.length === 0) {
+      return "CV đã được trích xuất. Vui lòng xem chi tiết trong phần dữ liệu đã trích xuất.";
+    }
+    
+    return parts.join('. ') + '.';
   };
 
   // Handle file selection
@@ -136,6 +372,10 @@ export default function TalentCVCreatePage() {
           
           setExtractedData(parsedData);
           
+          // Tự động tạo và điền tóm tắt CV
+          const summary = generateSummaryFromExtractedData(parsedData);
+          setForm(prev => ({ ...prev, summary }));
+          
           // Save to localStorage for use in other pages
           if (talentId) {
             localStorage.setItem(`talentCV_extracted_${talentId}`, JSON.stringify({
@@ -146,7 +386,7 @@ export default function TalentCVCreatePage() {
             }));
           }
           
-          alert("✅ Trích xuất thông tin CV thành công!");
+          alert("✅ Trích xuất thông tin CV thành công! Tóm tắt CV đã được tự động điền.");
         } catch (parseError) {
           console.error("Lỗi parse JSON:", parseError);
           alert("❌ Lỗi khi phân tích dữ liệu CV!");
@@ -179,6 +419,17 @@ export default function TalentCVCreatePage() {
       return;
     }
 
+    // Xác nhận trước khi upload
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn upload file "${selectedFile.name}" lên Firebase không?\n\n` +
+      `Tên phiên bản: ${form.versionName}\n` +
+      `Kích thước file: ${(selectedFile.size / 1024).toFixed(2)} KB`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+
     setUploading(true);
     setError("");
     setUploadProgress(0);
@@ -193,6 +444,7 @@ export default function TalentCVCreatePage() {
 
       // Update form with the download URL
       setForm(prev => ({ ...prev, cvFileUrl: downloadURL }));
+      setIsUploadedFromFirebase(true); // Đánh dấu URL từ Firebase upload
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -204,8 +456,25 @@ export default function TalentCVCreatePage() {
     }
   };
 
+  // Handler cho link "Quay lại" và "Hủy" - cảnh báo nếu đã upload CV nhưng chưa lưu
+  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isUploadedFromFirebase && !success) {
+      const confirmed = window.confirm(
+        "⚠️ Bạn đã upload CV lên Firebase nhưng chưa lưu.\n\n" +
+        "Nếu bạn rời khỏi trang này, file đã upload sẽ không được lưu vào hệ thống.\n\n" +
+        "Bạn có chắc chắn muốn rời khỏi trang không?"
+      );
+      if (!confirmed) {
+        e.preventDefault();
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -222,8 +491,17 @@ export default function TalentCVCreatePage() {
       return;
     }
 
-    if (!form.cvFileUrl.trim()) {
-      setError("⚠️ Vui lòng upload file CV hoặc nhập URL file CV.");
+    // Validate tên phiên bản không trùng
+    const versionNameError = validateVersionName(form.versionName, form.jobRoleId, existingCVs);
+    if (versionNameError) {
+      setVersionNameError(versionNameError);
+      setError("⚠️ " + versionNameError);
+      setLoading(false);
+      return;
+    }
+
+    if (!isUploadedFromFirebase || !form.cvFileUrl.trim()) {
+      setError("⚠️ Vui lòng upload file CV lên Firebase trước khi tạo.");
       setLoading(false);
       return;
     }
@@ -235,7 +513,45 @@ export default function TalentCVCreatePage() {
     }
 
     try {
-      await talentCVService.create(form);
+      // Kiểm tra CV active cùng vị trí công việc
+      let finalForm = { ...form };
+      // Đảm bảo CV mới luôn active khi tạo
+      finalForm.isActive = true;
+      
+      if (talentId) {
+        const existingCVs = await talentCVService.getAll({ 
+          talentId: Number(talentId), 
+          excludeDeleted: true 
+        });
+        const activeCVWithSameJobRole = existingCVs.find(
+          (cv: any) => cv.isActive && cv.jobRoleId === form.jobRoleId
+        );
+
+        if (activeCVWithSameJobRole) {
+          const jobRoleName = allJobRoles.find(jr => jr.id === form.jobRoleId)?.name || "vị trí này";
+          const confirmed = window.confirm(
+            `⚠️ Bạn đang có CV active với vị trí công việc "${jobRoleName}".\n\n` +
+            `CV mới sẽ được set active và CV cũ sẽ bị set inactive.\n\n` +
+            `Bạn có chắc chắn muốn upload CV này không?`
+          );
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
+          // Set CV cũ inactive trước khi tạo CV mới
+          // console.log("finalForm", finalForm);
+          await talentCVService.deactivate(activeCVWithSameJobRole.id);
+        } else {
+          // Nếu không trùng, CV mới active (đã set ở trên)
+          const confirmed = window.confirm("Bạn có chắc chắn muốn tạo CV mới cho talent không?");
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      
+      await talentCVService.create(finalForm);
       setSuccess(true);
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
@@ -256,6 +572,7 @@ export default function TalentCVCreatePage() {
           <div className="flex items-center gap-4 mb-6">
             <Link 
               to={`/hr/developers/${talentId}`}
+              onClick={handleNavigation}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -298,13 +615,18 @@ export default function TalentCVCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Briefcase className="w-4 h-4" />
-                  Vị trí công việc
+                  Vị trí công việc <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="jobRoleId"
                   value={form.jobRoleId}
                   onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  disabled={isUploadedFromFirebase}
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    isUploadedFromFirebase 
+                      ? 'border-green-300 bg-green-50 cursor-not-allowed' 
+                      : 'border-neutral-200 focus:border-primary-500'
+                  }`}
                   required
                 >
                   <option value="0">-- Chọn vị trí công việc --</option>
@@ -312,7 +634,12 @@ export default function TalentCVCreatePage() {
                     <option key={jobRole.id} value={jobRole.id}>{jobRole.name}</option>
                   ))}
                 </select>
-                {form.jobRoleId > 0 && (
+                {isUploadedFromFirebase && (
+                  <p className="text-xs text-green-600 mt-2">
+                    File đã được upload lên Firebase, không thể thay đổi vị trí công việc
+                  </p>
+                )}
+                {form.jobRoleId > 0 && !isUploadedFromFirebase && (
                   <p className="text-xs text-neutral-500 mt-2">
                     Đã chọn: <span className="font-medium text-neutral-700">
                       {allJobRoles.find(jr => jr.id === form.jobRoleId)?.name || "Không xác định"}
@@ -325,7 +652,7 @@ export default function TalentCVCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên phiên bản CV
+                  Tên phiên bản CV <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="versionName"
@@ -333,11 +660,32 @@ export default function TalentCVCreatePage() {
                   onChange={handleChange}
                   placeholder="VD: CV v1.0, CV Frontend Developer..."
                   required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  disabled={isUploadedFromFirebase}
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    isUploadedFromFirebase
+                      ? 'border-green-300 bg-green-50 cursor-not-allowed'
+                      : versionNameError 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-neutral-200 focus:border-primary-500'
+                  }`}
                 />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Tên này sẽ được sử dụng để đặt tên file khi upload
-                </p>
+                {isUploadedFromFirebase && (
+                  <p className="text-xs text-green-600 mt-1">
+                    File đã được upload lên Firebase, không thể thay đổi tên phiên bản CV
+                  </p>
+                )}
+                {versionNameError && !isUploadedFromFirebase ? (
+                  <p className="text-xs text-red-500 mt-1">{versionNameError}</p>
+                ) : !isUploadedFromFirebase && (
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Tên này sẽ được sử dụng để đặt tên file khi upload
+                    {existingCVs.length > 0 && (
+                      <span className="block mt-1">
+                        Các phiên bản hiện có: {existingCVs.map((cv: any) => cv.versionName).join(', ')}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
 
               {/* Upload File Section */}
@@ -356,56 +704,75 @@ export default function TalentCVCreatePage() {
                       onChange={handleFileSelect}
                       className="hidden"
                       id="cv-file-input"
-                      disabled={uploading}
+                      disabled={uploading || isUploadedFromFirebase}
                     />
-                    <label
-                      htmlFor="cv-file-input"
-                      className={`flex items-center justify-center gap-3 w-full px-4 py-4 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                        selectedFile
-                          ? 'border-green-400 bg-green-50'
-                          : 'border-primary-300 bg-white hover:bg-primary-50'
-                      } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {selectedFile ? (
-                        <>
-                          <FileCheck className="w-5 h-5 text-green-600" />
-                          <span className="text-sm font-medium text-green-700">
-                            {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-5 h-5 text-primary-600" />
-                          <span className="text-sm font-medium text-primary-700">
-                            Chọn file CV (PDF, DOC, DOCX - Max 10MB)
-                          </span>
-                        </>
-                      )}
-                    </label>
-                  </div>
-
-                  {/* Extract CV and View CV Buttons */}
-                  {selectedFile && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Extract CV Button */}
-                      <button
-                        type="button"
-                        onClick={handleExtractCV}
-                        disabled={extractingCV}
-                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                    {isUploadedFromFirebase ? (
+                      <div className="flex items-center justify-center gap-3 w-full px-4 py-4 border-2 border-green-400 bg-green-50 rounded-xl">
+                        <FileCheck className="w-5 h-5 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">
+                          {selectedFile?.name || 'File đã upload'} ({(selectedFile?.size ? (selectedFile.size / 1024).toFixed(2) : '0')} KB) - Đã upload lên Firebase
+                        </span>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor="cv-file-input"
+                        className={`flex items-center justify-center gap-3 w-full px-4 py-4 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
+                          selectedFile
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-primary-300 bg-white hover:bg-primary-50'
+                        } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {extractingCV ? (
+                        {selectedFile ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Đang trích xuất...
+                            <FileCheck className="w-5 h-5 text-green-600" />
+                            <span className="text-sm font-medium text-green-700">
+                              {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
+                            </span>
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-4 h-4" />
-                            Trích xuất thông tin CV
+                            <Upload className="w-5 h-5 text-primary-600" />
+                            <span className="text-sm font-medium text-primary-700">
+                              Chọn file CV (PDF, DOC, DOCX - Max 10MB)
+                            </span>
                           </>
                         )}
-                      </button>
+                      </label>
+                    )}
+                    {isUploadedFromFirebase && (
+                      <p className="text-xs text-green-600 mt-2 text-center">
+                        File đã được upload lên Firebase, không thể chọn file khác
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Extract CV and View CV Buttons */}
+                  {selectedFile && !isUploadedFromFirebase && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Extract CV Button */}
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleExtractCV}
+                          disabled={extractingCV}
+                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {extractingCV ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang trích xuất...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              Trích xuất thông tin CV
+                            </>
+                          )}
+                        </button>
+                        <p className="text-xs text-green-700 text-center">
+                          💡 Nhấn trích xuất sẽ tự động điền tóm tắt CV từ dữ liệu đã trích xuất
+                        </p>
+                      </div>
 
                       {/* View CV Button */}
                       {cvPreviewUrl && (
@@ -419,6 +786,21 @@ export default function TalentCVCreatePage() {
                           Xem CV
                         </a>
                       )}
+                    </div>
+                  )}
+
+                  {/* View CV from Firebase Button */}
+                  {isUploadedFromFirebase && form.cvFileUrl && (
+                    <div className="flex justify-center">
+                      <a
+                        href={form.cvFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Xem CV từ Firebase
+                      </a>
                     </div>
                   )}
 
@@ -448,11 +830,14 @@ export default function TalentCVCreatePage() {
                       {extractedData.skills && extractedData.skills.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           <span className="font-medium text-sm text-green-800">Kỹ năng:</span>
-                          {extractedData.skills.map((skill, index) => (
-                            <span key={index} className="px-2 py-1 bg-green-200 text-green-800 rounded-lg text-xs font-medium">
-                              {skill}
-                            </span>
-                          ))}
+                          {extractedData.skills.map((skill: any, index: number) => {
+                            const skillName = typeof skill === 'string' ? skill : (skill?.skillName || skill?.name || '');
+                            return (
+                              <span key={index} className="px-2 py-1 bg-green-200 text-green-800 rounded-lg text-xs font-medium">
+                                {skillName}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -474,24 +859,32 @@ export default function TalentCVCreatePage() {
                   )}
 
                   {/* Upload Button */}
-                  <button
-                    type="button"
-                    onClick={handleFileUpload}
-                    disabled={!selectedFile || uploading || !form.versionName}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {uploading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Đang upload...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        Upload lên Firebase
-                      </>
-                    )}
-                  </button>
+                  {!isUploadedFromFirebase && (
+                    <button
+                      type="button"
+                      onClick={handleFileUpload}
+                      disabled={!selectedFile || uploading || !form.versionName}
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Đang upload...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          Upload lên Firebase
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {isUploadedFromFirebase && (
+                    <div className="w-full flex items-center justify-center gap-2 bg-green-100 text-green-700 px-4 py-3 rounded-xl font-medium">
+                      <CheckCircle className="w-4 h-4" />
+                      Đã upload lên Firebase thành công
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -499,7 +892,7 @@ export default function TalentCVCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <ExternalLink className="w-4 h-4" />
-                  URL file CV {form.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
+                  URL file CV <span className="text-red-500">*</span> {form.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
                 </label>
                 <input
                   name="cvFileUrl"
@@ -507,11 +900,17 @@ export default function TalentCVCreatePage() {
                   onChange={handleChange}
                   placeholder="https://example.com/cv-file.pdf hoặc tự động từ Firebase"
                   required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  readOnly={uploading}
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    isUploadedFromFirebase 
+                      ? 'border-green-300 bg-green-50 cursor-not-allowed' 
+                      : 'border-neutral-200 focus:border-primary-500'
+                  }`}
+                  readOnly={uploading || isUploadedFromFirebase}
                 />
                 <p className="text-xs text-neutral-500 mt-1">
-                  URL sẽ tự động điền sau khi upload, hoặc bạn có thể nhập thủ công
+                  {isUploadedFromFirebase 
+                    ? "URL đã được upload lên Firebase, không thể chỉnh sửa" 
+                    : "URL sẽ tự động điền sau khi upload, hoặc bạn có thể nhập thủ công"}
                 </p>
                 {form.cvFileUrl && (
                   <div className="mt-2">
@@ -532,17 +931,29 @@ export default function TalentCVCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tóm tắt CV
+                  Tóm tắt CV <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="summary"
                   value={form.summary}
                   onChange={handleChange}
-                  placeholder="Mô tả ngắn gọn về nội dung CV, kinh nghiệm chính..."
+                  placeholder="Mô tả ngắn gọn về nội dung CV, bao gồm: tên ứng viên, vị trí công việc, kinh nghiệm làm việc, kỹ năng chính, dự án nổi bật, chứng chỉ (nếu có)..."
                   rows={4}
                   required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
+                <p className="text-xs text-neutral-500 mt-1">
+                  {!form.summary && (
+                    <span className="block mt-1 text-green-600">
+                      ✓ Tóm tắt sẽ được tự động điền khi nhấn "Trích xuất thông tin CV"
+                    </span>
+                  )}
+                  {form.summary && (
+                    <span className="block mt-1 text-green-600">
+                      ✓ Tóm tắt đã được điền (có thể chỉnh sửa thủ công nếu cần)
+                    </span>
+                  )}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -558,14 +969,15 @@ export default function TalentCVCreatePage() {
                       name="isActive"
                       checked={form.isActive}
                       onChange={handleChange}
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                      disabled
+                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2 cursor-not-allowed opacity-60"
                     />
                     <span className="text-sm text-gray-700">
                       {form.isActive ? "Đang hoạt động" : "Không hoạt động"}
                     </span>
                   </div>
                   <p className="text-xs text-neutral-500 mt-1">
-                    Đánh dấu nếu CV này đang được sử dụng
+                    CV mới sẽ mặc định ở trạng thái "Đang hoạt động" (không thể thay đổi khi tạo mới)
                   </p>
                 </div>
 
@@ -619,6 +1031,7 @@ export default function TalentCVCreatePage() {
           <div className="flex justify-end gap-4 pt-6">
             <Link
               to={`/hr/developers/${talentId}`}
+              onClick={handleNavigation}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

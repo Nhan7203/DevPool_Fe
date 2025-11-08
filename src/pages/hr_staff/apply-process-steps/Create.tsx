@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { applyProcessStepService, type ApplyProcessStepCreate } from "../../../services/ApplyProcessStep";
+import { applyProcessStepService, type ApplyProcessStepCreate, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
 import { 
   ArrowLeft, 
@@ -25,6 +25,7 @@ export default function ApplyProcessStepCreatePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [templates, setTemplates] = useState<ApplyProcessTemplate[]>([]);
+  const [isFetchingSteps, setIsFetchingSteps] = useState(false);
   
   const [form, setForm] = useState({
     templateId: templateIdFromUrl ? Number(templateIdFromUrl) : 0,
@@ -46,13 +47,55 @@ export default function ApplyProcessStepCreatePage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const fetchStepsForTemplate = async () => {
+      if (!form.templateId) {
+        setForm(prev => ({ ...prev, stepOrder: 1 }));
+        return;
+      }
+
+      try {
+        setIsFetchingSteps(true);
+        const steps = await applyProcessStepService.getAll({ templateId: form.templateId, excludeDeleted: true });
+        const castSteps = (steps ?? []) as ApplyProcessStep[];
+        const nextOrder = castSteps.length > 0
+          ? Math.max(...castSteps.map(step => step.stepOrder)) + 1
+          : 1;
+        setForm(prev => ({ ...prev, stepOrder: nextOrder }));
+      } catch (err) {
+        console.error("❌ Error loading steps for template", err);
+        setForm(prev => ({ ...prev, stepOrder: 1 }));
+      } finally {
+        setIsFetchingSteps(false);
+      }
+    };
+
+    void fetchStepsForTemplate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.templateId]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === "templateId") {
+      setForm(prev => ({
+        ...prev,
+        templateId: Number(value),
+      }));
+      return;
+    }
+
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo bước quy trình mới không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -197,9 +240,14 @@ export default function ApplyProcessStepCreatePage() {
                     value={form.stepOrder}
                     onChange={handleChange}
                     min={1}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-100 cursor-not-allowed"
+                    disabled
                   />
+                  <p className="text-xs text-neutral-500 mt-2">
+                    {isFetchingSteps
+                      ? "Đang tính toán thứ tự kế tiếp..."
+                      : "Thứ tự được tự động xác định dựa trên số bước hiện có."}
+                  </p>
                 </div>
 
                 {/* Ngày ước tính */}

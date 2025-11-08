@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import PublicLayout from '../components/layouts/PublicLayout';
 import AdminLayout from '../components/layouts/AdminLayout';
 import ProtectedRoute from './ProtectedRoute';
-import { ROUTES, getDashboardRoute } from './routes';
+import { ROUTES, getDashboardRoute, NOTIFICATION_CENTER_ROUTE } from './routes';
 
 // ========================================
 // PUBLIC PAGES (Client)
@@ -65,6 +65,7 @@ import WorkingStyleEditPage from '../pages/admin/Categories/working-styles.tsx/E
 import WorkingStyleListPage from '../pages/admin/Categories/working-styles.tsx/List';
 import DocumentTypeListPage from '../pages/admin/Categories/document-types/List';
 import DocumentTypeCreatePage from '../pages/admin/Categories/document-types/Create';
+import NotificationCenterPage from '../pages/common/notifications/List';
 
 // ========================================
 // HR STAFF PAGES
@@ -74,6 +75,8 @@ import ListDev from '../pages/hr_staff/talents/List';
 import CreateTalent from '../pages/hr_staff/talents/Create';
 import MatchingCVPage from '../pages/hr_staff/job-requests/Matching';
 import ListPartner from '../pages/hr_staff/partners/List';
+import PartnerDetailPage from '../pages/hr_staff/partners/Detail';
+import PartnerEditPage from '../pages/hr_staff/partners/Edit';
 import CreatePartner from '../pages/hr_staff/partners/Create';
 import Assignments from '../pages/hr_staff/assignments';
 import ListRequest from '../pages/hr_staff/job-requests/List';
@@ -103,6 +106,16 @@ import ProjectDetailPage from '../pages/sales_staff/projects/Detail';
 import ProjectEditPage from '../pages/sales_staff/projects/Edit';
 import ProjectCreatePage from '../pages/sales_staff/projects/Create';
 import SalesClientPeriods from '../pages/sales_staff/payment-periods/ClientPeriods';
+import SalesApplicationListPage from '../pages/sales_staff/applications/List';
+import SalesApplicationDetailPage from '../pages/sales_staff/applications/Detail';
+import SalesApplyProcessTemplateListPage from '../pages/sales_staff/apply-process-templates/List';
+import SalesApplyProcessTemplateDetailPage from '../pages/sales_staff/apply-process-templates/Detail';
+import SalesApplyProcessTemplateCreatePage from '../pages/sales_staff/apply-process-templates/Create';
+import SalesApplyProcessTemplateEditPage from '../pages/sales_staff/apply-process-templates/Edit';
+import SalesApplyProcessStepListPage from '../pages/sales_staff/apply-process-steps/List';
+import SalesApplyProcessStepDetailPage from '../pages/sales_staff/apply-process-steps/Detail';
+import SalesApplyProcessStepCreatePage from '../pages/sales_staff/apply-process-steps/Create';
+import SalesApplyProcessStepEditPage from '../pages/sales_staff/apply-process-steps/Edit';
 
 // ========================================
 // ACCOUNTANT STAFF PAGES
@@ -163,15 +176,6 @@ import TalentCVApplicationPage from '../pages/hr_staff/applications/List';
 import ApplyActivityCreatePage from '../pages/hr_staff/apply-activities/Create';
 import ApplyActivityDetailPage from '../pages/hr_staff/apply-activities/Detail';
 import ApplyActivityEditPage from '../pages/hr_staff/apply-activities/Edit';
-import ApplyProcessStepCreatePage from '../pages/hr_staff/apply-process-steps/Create';
-import ApplyProcessStepDetailPage from '../pages/hr_staff/apply-process-steps/Detail';
-import ApplyProcessStepListPage from '../pages/hr_staff/apply-process-steps/List';
-import ApplyProcessStepEditPage from '../pages/hr_staff/apply-process-steps/Edit';
-import ApplyProcessTemplateCreatePage from '../pages/hr_staff/apply-process-templates/Create';
-import ApplyProcessTemplateDetailPage from '../pages/hr_staff/apply-process-templates/Detail';
-import ApplyProcessTemplateListPage from '../pages/hr_staff/apply-process-templates/List';
-import ApplyProcessTemplateEditPage from '../pages/hr_staff/apply-process-templates/Edit';
-
 
 
 const AppRouter: React.FC = () => {
@@ -198,6 +202,11 @@ const AppRouter: React.FC = () => {
           path={ROUTES.REGISTER} 
           element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />} 
         />
+
+        {/* Thông báo chung cho tất cả vai trò */}
+        <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+          <Route path={NOTIFICATION_CENTER_ROUTE} element={<NotificationCenterPage />} />
+        </Route>
 
         {/* ======================================== */}
         {/* HR STAFF ROUTES */}
@@ -241,6 +250,8 @@ const AppRouter: React.FC = () => {
   
           {/* Partners */}
           <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
+          <Route path={ROUTES.HR_STAFF.PARTNERS.DETAIL} element={<PartnerDetailPage />} />
+          <Route path={ROUTES.HR_STAFF.PARTNERS.EDIT} element={<PartnerEditPage />} />
           <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
           
           {/* Assignments */}
@@ -259,18 +270,6 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.DETAIL} element={<ApplyActivityDetailPage />} />
           <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.EDIT} element={<ApplyActivityEditPage />} />
           <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.CREATE} element={<ApplyActivityCreatePage />} />
-          
-          {/* Apply Process Steps */}
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.LIST} element={<ApplyProcessStepListPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.DETAIL} element={<ApplyProcessStepDetailPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<ApplyProcessStepEditPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<ApplyProcessStepCreatePage />} />
-  
-          {/* Apply Process Templates */}
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.LIST} element={<ApplyProcessTemplateListPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.DETAIL} element={<ApplyProcessTemplateDetailPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.EDIT} element={<ApplyProcessTemplateEditPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_PROCESS_TEMPLATES.CREATE} element={<ApplyProcessTemplateCreatePage />} />
 
           {/* Interviews */}
           <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
@@ -309,6 +308,22 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailPage />} />
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.EDIT} element={<JobRequestEditPage />} />
           <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
+
+          {/* Apply Process Templates */}
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.LIST} element={<SalesApplyProcessTemplateListPage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.DETAIL} element={<SalesApplyProcessTemplateDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.CREATE} element={<SalesApplyProcessTemplateCreatePage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.EDIT} element={<SalesApplyProcessTemplateEditPage />} />
+
+          {/* Apply Process Steps */}
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.LIST} element={<SalesApplyProcessStepListPage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.DETAIL} element={<SalesApplyProcessStepDetailPage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<SalesApplyProcessStepCreatePage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<SalesApplyProcessStepEditPage />} />
+
+          {/* Applications */}
+          <Route path={ROUTES.SALES_STAFF.APPLICATIONS.LIST} element={<SalesApplicationListPage />} />
+          <Route path={ROUTES.SALES_STAFF.APPLICATIONS.DETAIL} element={<SalesApplicationDetailPage />} />
           
           {/* Clients */}
           <Route path={ROUTES.SALES_STAFF.CLIENTS.LIST} element={<ClientCompanyListPage />} />

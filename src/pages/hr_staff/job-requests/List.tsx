@@ -9,17 +9,20 @@ import {
     Building2,
     Target,
     Eye,
-    Plus
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    XCircle
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { Button } from "../../../components/ui/button";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
 
 interface HRJobRequest {
     id: number;
@@ -32,19 +35,20 @@ interface HRJobRequest {
     workingMode: string;
     status: string;
     skills: string[];
+    applicationCount: number; // Số lượng hồ sơ ứng tuyển
 }
 
 const workingModeLabels: Record<number, string> = {
-    0: "None",
-    1: "Onsite", 
-    2: "Remote",
-    4: "Hybrid",
-    8: "Flexible"
+    0: "Không xác định",
+    1: "Tại công ty",
+    2: "Từ xa",
+    4: "Kết hợp",
+    8: "Linh hoạt"
 };
 
 const statusLabels: Record<number, string> = {
     0: "Pending",
-    1: "Approved", 
+    1: "Approved",
     2: "Closed",
     3: "Rejected"
 };
@@ -62,6 +66,10 @@ export default function HRJobRequestList() {
     const [filterPosition, setFilterPosition] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
 
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
     // Stats data
     const stats = [
         {
@@ -77,16 +85,16 @@ export default function HRJobRequestList() {
             icon: <Target className="w-6 h-6" />
         },
         {
-            title: 'Có Kỹ Năng',
-            value: requests.filter(r => r.skills.length > 0).length.toString(),
-            color: 'green',
-            icon: <GraduationCap className="w-6 h-6" />
-        },
-        {
             title: 'Đã Duyệt',
             value: requests.filter(r => r.status === 'Approved').length.toString(),
             color: 'purple',
             icon: <Users className="w-6 h-6" />
+        },
+        {
+            title: 'Đã từ chối',
+            value: requests.filter(r => r.status === 'Rejected').length.toString(),
+            color: 'red',
+            icon: <XCircle className="w-6 h-6" />
         }
     ];
 
@@ -94,7 +102,7 @@ export default function HRJobRequestList() {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const [jobReqs, companies, projects, positions, jobSkills, skills] =
+                const [jobReqs, companies, projects, positions, jobSkills, skills, applications] =
                     await Promise.all([
                         jobRequestService.getAll() as Promise<JobRequest[]>,
                         clientCompanyService.getAll() as Promise<ClientCompany[]>,
@@ -102,6 +110,7 @@ export default function HRJobRequestList() {
                         jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
                         jobSkillService.getAll() as Promise<JobSkill[]>,
                         skillService.getAll() as Promise<Skill[]>,
+                        talentApplicationService.getAll({ excludeDeleted: true }) as Promise<TalentApplication[]>,
                     ]);
 
                 // Lấy tất cả yêu cầu
@@ -126,6 +135,17 @@ export default function HRJobRequestList() {
                     groupedJobSkills[js.jobRequestId].push(skillDict[js.skillsId] || "—");
                 });
 
+                // Đếm số lượng hồ sơ ứng tuyển cho mỗi job request
+                const applicationCountMap: Record<number, number> = {};
+                if (Array.isArray(applications)) {
+                    applications.forEach((app: TalentApplication) => {
+                        if (!applicationCountMap[app.jobRequestId]) {
+                            applicationCountMap[app.jobRequestId] = 0;
+                        }
+                        applicationCountMap[app.jobRequestId]++;
+                    });
+                }
+
                 const mapped: HRJobRequest[] = filteredReqs.map((r) => {
                     const project = projectDict[r.projectId];
                     const company = project ? companyDict[project.clientCompanyId] : undefined;
@@ -141,6 +161,7 @@ export default function HRJobRequestList() {
                         workingMode: workingModeLabels[r.workingMode] ?? "—",
                         status: statusLabels[r.status] ?? "—",
                         skills: groupedJobSkills[r.id] ?? [],
+                        applicationCount: applicationCountMap[r.id] || 0,
                     };
                 });
 
@@ -182,7 +203,16 @@ export default function HRJobRequestList() {
             filtered = filtered.filter((r) => r.status === filterStatus);
 
         setFilteredRequests(filtered);
+        setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
     }, [searchTerm, filterCompany, filterProject, filterPosition, filterStatus, requests]);
+
+    // Tính toán pagination
+    const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedRequests = filteredRequests.slice(startIndex, endIndex);
+    const startItem = filteredRequests.length > 0 ? startIndex + 1 : 0;
+    const endItem = Math.min(endIndex, filteredRequests.length);
 
     const handleResetFilters = () => {
         setSearchTerm("");
@@ -230,7 +260,8 @@ export default function HRJobRequestList() {
                                     <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
                                         stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
                                             stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                                                'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                                                stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
+                                                    'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
                                         } transition-all duration-300`}>
                                         {stat.icon}
                                     </div>
@@ -321,25 +352,56 @@ export default function HRJobRequestList() {
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-                    <div className="p-6 border-b border-neutral-200">
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+                    <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
                         <div className="flex items-center justify-between">
                             <h2 className="text-lg font-semibold text-gray-900">Danh sách yêu cầu tuyển dụng</h2>
-                            <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                <span>Tổng: {filteredRequests.length} yêu cầu</span>
+                            <div className="flex items-center gap-4">
+                                {filteredRequests.length > 0 ? (
+                                    <>
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                            disabled={currentPage === 1}
+                                            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${currentPage === 1
+                                                    ? 'text-neutral-300 cursor-not-allowed'
+                                                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                                }`}
+                                        >
+                                            <ChevronLeft className="w-5 h-5" />
+                                        </button>
+
+                                        <span className="text-sm text-neutral-600">
+                                            {startItem}-{endItem} trong số {filteredRequests.length}
+                                        </span>
+
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${currentPage === totalPages
+                                                    ? 'text-neutral-300 cursor-not-allowed'
+                                                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                                }`}
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-sm text-neutral-600">Tổng: 0 yêu cầu</span>
+                                )}
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+                            <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tiêu đề</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Vị trí</th>
+                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ ứng tuyển</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Chế độ</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
@@ -348,7 +410,7 @@ export default function HRJobRequestList() {
                             <tbody className="divide-y divide-neutral-200">
                                 {filteredRequests.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="text-center py-12">
+                                        <td colSpan={9} className="text-center py-12">
                                             <div className="flex flex-col items-center justify-center">
                                                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                                                     <Briefcase className="w-8 h-8 text-neutral-400" />
@@ -359,12 +421,12 @@ export default function HRJobRequestList() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredRequests.map((req, i) => (
+                                    paginatedRequests.map((req, i) => (
                                         <tr
                                             key={req.id}
                                             className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                                         >
-                                            <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                                            <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                                             <td className="py-4 px-6">
                                                 <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                                                     {req.title || "(Chưa có tiêu đề)"}
@@ -389,16 +451,29 @@ export default function HRJobRequestList() {
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                                                    req.status === 'Pending' ? 'bg-warning-100 text-warning-700' :
-                                                    req.status === 'Approved' ? 'bg-secondary-100 text-secondary-700' :
-                                                    req.status === 'Closed' ? 'bg-neutral-100 text-neutral-700' :
-                                                    'bg-red-100 text-red-700'
-                                                }`}>
+                                                <Link
+                                                    to={`/hr/applications?jobRequestId=${req.id}`}
+                                                    className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 hover:scale-105 transform ${req.applicationCount > 0
+                                                            ? 'bg-primary-100 text-primary-700 hover:bg-primary-200'
+                                                            : 'bg-neutral-100 text-neutral-500'
+                                                        }`}
+                                                >
+                                                    <FileText className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                    <span>{req.applicationCount}</span>
+                                                </Link>
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${req.status === 'Pending' ? 'bg-warning-100 text-warning-700' :
+                                                        req.status === 'Approved' ? 'bg-secondary-100 text-secondary-700' :
+                                                            req.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                                                req.status === 'Closed' ? 'bg-neutral-100 text-neutral-700' :
+                                                                    'bg-gray-100 text-gray-700'
+                                                    }`}>
                                                     {req.status === 'Pending' ? '⏳ Chờ duyệt' :
-                                                     req.status === 'Approved' ? '✅ Đã duyệt' :
-                                                     req.status === 'Closed' ? '🔒 Đã đóng' :
-                                                     '❌ Từ chối'}
+                                                        req.status === 'Approved' ? '✅ Đã duyệt' :
+                                                            req.status === 'Rejected' ? '❌ Từ chối' :
+                                                                req.status === 'Closed' ? '🔒 Đã đóng' :
+                                                                    '❓ Không xác định'}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">
@@ -415,7 +490,7 @@ export default function HRJobRequestList() {
                                                     >
                                                         <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                                                         <span className="text-sm font-medium">Xem</span>
-                                                    </Link>                                                 
+                                                    </Link>
                                                 </div>
                                             </td>
                                         </tr>

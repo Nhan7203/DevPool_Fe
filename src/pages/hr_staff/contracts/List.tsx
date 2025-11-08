@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, FileText, Calendar, UserCheck, Clock, Eye, Edit, TrendingUp, Building2, DollarSign, CheckCircle, Plus, AlertCircle } from 'lucide-react';
+import { Search, Filter, FileText, Calendar, UserCheck, Clock, Eye, Building2, DollarSign, CheckCircle, Plus, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerContractService, type PartnerContract, type PartnerContractFilter } from '../../../services/PartnerContract';
+import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
 
@@ -15,6 +15,10 @@ export default function ListContract() {
     const [showFilters, setShowFilters] = useState(false);
     const [filterStatus, setFilterStatus] = useState('');
     const [error, setError] = useState('');
+    
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     
     // Store partner and talent data for display
     const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
@@ -77,7 +81,16 @@ export default function ListContract() {
             filtered = filtered.filter(c => c.status === filterStatus);
         }
         setFilteredContracts(filtered);
+        setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
     }, [searchTerm, filterStatus, contracts, partnersMap, talentsMap]);
+    
+    // Tính toán pagination
+    const totalPages = Math.ceil(filteredContracts.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedContracts = filteredContracts.slice(startIndex, endIndex);
+    const startItem = filteredContracts.length > 0 ? startIndex + 1 : 0;
+    const endItem = Math.min(endIndex, filteredContracts.length);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -131,32 +144,24 @@ export default function ListContract() {
         {
             title: 'Tổng Hợp Đồng',
             value: contracts.length.toString(),
-            change: '+5 tuần này',
-            trend: 'up',
             color: 'blue',
             icon: <FileText className="w-6 h-6" />
         },
         {
             title: 'Đang Hiệu Lực',
             value: contracts.filter(c => c.status === 'active').length.toString(),
-            change: '+2 tuần này',
-            trend: 'up',
             color: 'green',
             icon: <CheckCircle className="w-6 h-6" />
         },
         {
             title: 'Chờ Duyệt',
             value: contracts.filter(c => c.status === 'pending').length.toString(),
-            change: '+1 tuần này',
-            trend: 'up',
             color: 'orange',
             icon: <Clock className="w-6 h-6" />
         },
         {
             title: 'Tổng Giá Trị',
             value: `${(contracts.reduce((sum, c) => sum + (c.devRate || 0), 0) / 1000000).toFixed(0)}M`,
-            change: '+20% tháng này',
-            trend: 'up',
             color: 'purple',
             icon: <DollarSign className="w-6 h-6" />
         }
@@ -231,10 +236,6 @@ export default function ListContract() {
                                         {stat.icon}
                                     </div>
                                 </div>
-                                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-                                    <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                                    {stat.change}
-                                </p>
                             </div>
                         ))}
                     </div>
@@ -291,19 +292,51 @@ export default function ListContract() {
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-                    <div className="p-6 border-b border-neutral-200">
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+                    <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
                         <div className="flex items-center justify-between">
                             <h2 className="text-lg font-semibold text-gray-900">Danh sách hợp đồng</h2>
-                            <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                <span>Tổng: {filteredContracts.length} hợp đồng</span>
+                            <div className="flex items-center gap-4">
+                                {filteredContracts.length > 0 ? (
+                                    <>
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                            disabled={currentPage === 1}
+                                            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                                                currentPage === 1
+                                                    ? 'text-neutral-300 cursor-not-allowed'
+                                                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                            }`}
+                                        >
+                                            <ChevronLeft className="w-5 h-5" />
+                                        </button>
+                                        
+                                        <span className="text-sm text-neutral-600">
+                                            {startItem}-{endItem} trong số {filteredContracts.length}
+                                        </span>
+                                        
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                                                currentPage === totalPages
+                                                    ? 'text-neutral-300 cursor-not-allowed'
+                                                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                            }`}
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-sm text-neutral-600">Tổng: 0 hợp đồng</span>
+                                )}
                             </div>
                         </div>
                     </div>
                     
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+                            <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số hợp đồng</th>
@@ -330,12 +363,12 @@ export default function ListContract() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredContracts.map((contract, i) => (
+                                    paginatedContracts.map((contract, i) => (
                                         <tr
                                             key={contract.id}
                                             className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                                         >
-                                            <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                                            <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                                             <td className="py-4 px-6">
                                                 <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                                                     {contract.contractNumber}

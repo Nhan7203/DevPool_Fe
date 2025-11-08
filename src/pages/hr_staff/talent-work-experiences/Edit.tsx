@@ -76,11 +76,57 @@ export default function TalentWorkExperienceEditPage() {
     fetchCVs();
   }, [talentId]);
 
+  // Validate start date similar to talents/Create.tsx
+  const validateStartDate = (date: string): boolean => {
+    if (!date) return false;
+    const startDate = new Date(date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (startDate > today) return false;
+    const hundredYearsAgo = new Date();
+    hundredYearsAgo.setFullYear(today.getFullYear() - 100);
+    return startDate >= hundredYearsAgo;
+  };
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+
+    // realtime validation for dates
+    if (name === 'startDate') {
+      const newErrors = { ...fieldErrors };
+      if (value && !validateStartDate(value)) {
+        newErrors.startDate = 'Ngày bắt đầu không hợp lệ (không sau hiện tại, không quá 100 năm trước)';
+      } else {
+        delete newErrors.startDate;
+        if (formData.endDate) {
+          if (new Date(formData.endDate) <= new Date(value)) {
+            newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+          } else {
+            delete newErrors.endDate;
+          }
+        }
+      }
+      setFieldErrors(newErrors);
+    }
+
+    if (name === 'endDate') {
+      const newErrors = { ...fieldErrors };
+      if (value && formData.startDate) {
+        if (new Date(value) <= new Date(formData.startDate)) {
+          newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+        } else {
+          delete newErrors.endDate;
+        }
+      } else {
+        delete newErrors.endDate;
+      }
+      setFieldErrors(newErrors);
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -92,6 +138,12 @@ export default function TalentWorkExperienceEditPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
 
     if (!formData.talentCVId || formData.talentCVId === 0) {
       alert("⚠️ Vui lòng chọn CV trước khi lưu!");
@@ -110,6 +162,10 @@ export default function TalentWorkExperienceEditPage() {
 
     if (!formData.startDate) {
       alert("⚠️ Vui lòng chọn ngày bắt đầu!");
+      return;
+    }
+    if (!validateStartDate(formData.startDate)) {
+      alert("⚠️ Ngày bắt đầu không hợp lệ (không sau hiện tại, không quá 100 năm trước)!");
       return;
     }
 
@@ -208,7 +264,7 @@ export default function TalentWorkExperienceEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent
+                  CV của Talent <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -238,7 +294,7 @@ export default function TalentWorkExperienceEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Công ty
+                    Công ty <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="company"
@@ -254,7 +310,7 @@ export default function TalentWorkExperienceEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Workflow className="w-4 h-4" />
-                    Vị trí
+                    Vị trí <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="position"
@@ -272,7 +328,7 @@ export default function TalentWorkExperienceEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    Ngày bắt đầu
+                    Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="date"
@@ -280,8 +336,13 @@ export default function TalentWorkExperienceEditPage() {
                     value={formData.startDate}
                     onChange={handleChange}
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      fieldErrors.startDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
+                  {fieldErrors.startDate && (
+                    <p className="mt-1 text-xs text-red-500">{fieldErrors.startDate}</p>
+                  )}
                 </div>
 
                 {/* Ngày kết thúc */}
@@ -295,8 +356,13 @@ export default function TalentWorkExperienceEditPage() {
                     name="endDate"
                     value={formData.endDate}
                     onChange={handleChange}
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      fieldErrors.endDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
+                  {fieldErrors.endDate && (
+                    <p className="mt-1 text-xs text-red-500">{fieldErrors.endDate}</p>
+                  )}
                   <p className="text-xs text-neutral-500 mt-1">
                     Để trống nếu vẫn đang làm việc
                   </p>
@@ -307,7 +373,7 @@ export default function TalentWorkExperienceEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mô tả công việc
+                  Mô tả công việc <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="description"

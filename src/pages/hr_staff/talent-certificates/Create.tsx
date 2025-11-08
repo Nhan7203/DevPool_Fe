@@ -33,6 +33,7 @@ export default function TalentCertificateCreatePage() {
   });
 
   const [allCertificateTypes, setAllCertificateTypes] = useState<CertificateType[]>([]);
+  const [existingCertificateTypeIds, setExistingCertificateTypeIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,6 +47,21 @@ export default function TalentCertificateCreatePage() {
     fetchData();
   }, []);
 
+  // Fetch existing certificates for this talent to disable them in dropdown
+  useEffect(() => {
+    const fetchExistingCertificates = async () => {
+      if (!talentId) return;
+      try {
+        const existingCertificates = await talentCertificateService.getAll({ talentId: Number(talentId), excludeDeleted: true });
+        const certificateTypeIds = existingCertificates.map(cert => cert.certificateTypeId).filter(id => id > 0);
+        setExistingCertificateTypeIds(certificateTypeIds);
+      } catch (error) {
+        console.error("❌ Error loading existing certificates", error);
+      }
+    };
+    fetchExistingCertificates();
+  }, [talentId]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setForm(prev => ({ 
@@ -57,6 +73,13 @@ export default function TalentCertificateCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm chứng chỉ cho talent không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -146,7 +169,7 @@ export default function TalentCertificateCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Award className="w-4 h-4" />
-                  Loại chứng chỉ
+                  Loại chứng chỉ <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="certificateTypeId"
@@ -156,9 +179,19 @@ export default function TalentCertificateCreatePage() {
                   required
                 >
                   <option value="0">-- Chọn loại chứng chỉ --</option>
-                  {allCertificateTypes.map(certType => (
-                    <option key={certType.id} value={certType.id}>{certType.name}</option>
-                  ))}
+                  {allCertificateTypes.map(certType => {
+                    const isDisabled = existingCertificateTypeIds.includes(certType.id);
+                    return (
+                      <option 
+                        key={certType.id} 
+                        value={certType.id}
+                        disabled={isDisabled}
+                        style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                      >
+                        {certType.name}{isDisabled ? ' (đã chọn)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {form.certificateTypeId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">
