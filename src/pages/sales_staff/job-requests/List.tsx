@@ -6,22 +6,27 @@ import { Button } from "../../../components/ui/button";
 import { jobRequestService, type JobRequest, JobRequestStatus } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectService, type Project } from "../../../services/Project";
-import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
-import { 
-  Search, 
-  Filter, 
-  Eye, 
-  Plus, 
-  Briefcase, 
-  DollarSign,
+import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
+import {
+  Search,
+  Filter,
+  Eye,
+  Plus,
+  Briefcase,
   Calendar,
   Building2,
-  Target
+  Target,
+  ChevronLeft,
+  ChevronRight,
+  XCircle,
+  DollarSign,
+  FileText,
 } from "lucide-react";
 
 type AugmentedJobRequest = JobRequest & {
   projectName: string;
   clientCompanyName: string;
+  applicationCount: number;
 };
 
 const statusLabels: Record<number, string> = {
@@ -48,6 +53,10 @@ export default function JobRequestListPage() {
   const [filterProject, setFilterProject] = useState("");
   const [filterJobRoleLevel, setFilterJobRoleLevel] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Stats data
   const stats = [
@@ -70,10 +79,10 @@ export default function JobRequestListPage() {
       icon: <Calendar className="w-6 h-6" />
     },
     {
-      title: 'Tổng Ngân Sách',
-      value: requests.reduce((sum, r) => sum + (r.budgetPerMonth || 0), 0).toLocaleString('vi-VN'),
-      color: 'purple',
-      icon: <DollarSign className="w-6 h-6" />
+      title: 'Bị Từ Chối',
+      value: requests.filter(r => r.status === JobRequestStatus.Rejected).length.toString(),
+      color: 'red',
+      icon: <XCircle className="w-6 h-6" />
     }
   ];
 
@@ -81,11 +90,11 @@ export default function JobRequestListPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [reqRes, companyRes, projectRes, positionRes] = await Promise.all([
+        const [reqRes, companyRes, projectRes, applicationsRes] = await Promise.all([
           jobRequestService.getAll() as Promise<JobRequest[]>,
           clientCompanyService.getAll() as Promise<ClientCompany[]>,
           projectService.getAll() as Promise<Project[]>,
-          jobRoleLevelService.getAll() as Promise<JobRoleLevel[]>,
+          talentApplicationService.getAll({ excludeDeleted: true }) as Promise<TalentApplication[]>,
         ]);
 
         const companyDict: Record<number, string> = {};
@@ -95,7 +104,15 @@ export default function JobRequestListPage() {
         projectRes.forEach((p) => {
           projectDict[p.id] = { name: p.name, clientCompanyId: p.clientCompanyId };
         });
-        
+
+        const applicationCountMap: Record<number, number> = {};
+        if (Array.isArray(applicationsRes)) {
+          applicationsRes.forEach((app) => {
+            const key = app.jobRequestId;
+            applicationCountMap[key] = (applicationCountMap[key] ?? 0) + 1;
+          });
+        }
+
         const merged: AugmentedJobRequest[] = reqRes.map((r) => {
           const projectInfo = projectDict[r.projectId];
           const clientCompanyName = projectInfo ? companyDict[projectInfo.clientCompanyId] ?? "—" : "—";
@@ -103,6 +120,7 @@ export default function JobRequestListPage() {
             ...r,
             projectName: projectInfo?.name ?? "—",
             clientCompanyName,
+            applicationCount: applicationCountMap[r.id] ?? 0,
           };
         });
 
@@ -125,7 +143,16 @@ export default function JobRequestListPage() {
     if (filterProject) filtered = filtered.filter((r) => r.projectName.toLowerCase().includes(filterProject.toLowerCase()));
     if (filterStatus) filtered = filtered.filter((r) => r.status === Number(filterStatus));
     setFilteredRequests(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterCompany, filterProject, filterJobRoleLevel, filterStatus, requests]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex);
+  const startItem = filteredRequests.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredRequests.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -179,7 +206,8 @@ export default function JobRequestListPage() {
                   <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
                       stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
                         stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                          stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
+                            'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
                     } transition-all duration-300`}>
                     {stat.icon}
                   </div>
@@ -245,6 +273,7 @@ export default function JobRequestListPage() {
                     <option value="0">Chưa duyệt</option>
                     <option value="1">Đã duyệt</option>
                     <option value="2">Đã đóng</option>
+                    <option value="3">Bị từ chối</option>
                   </select>
                   <button
                     onClick={handleResetFilters}
@@ -259,24 +288,57 @@ export default function JobRequestListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách yêu cầu</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredRequests.length} yêu cầu</span>
+              <div className="flex items-center gap-4">
+                {filteredRequests.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredRequests.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 yêu cầu</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tiêu đề</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty KH</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số lượng</th>
                   <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngân sách</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
@@ -286,7 +348,7 @@ export default function JobRequestListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-12">
+                    <td colSpan={9} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Briefcase className="w-8 h-8 text-neutral-400" />
@@ -297,12 +359,12 @@ export default function JobRequestListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRequests.map((r, i) => (
+                  paginatedRequests.map((r, i) => (
                     <tr
                       key={r.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                           {r.title}
@@ -319,7 +381,20 @@ export default function JobRequestListPage() {
                           <Briefcase className="w-4 h-4 text-neutral-400" />
                           <span className="text-sm text-neutral-700">{r.projectName}</span>
                         </div>
-                      </td>                    
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <Link
+                          to={`/sales/applications?jobRequestId=${r.id}`}
+                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 hover:scale-105 transform ${
+                            r.applicationCount > 0
+                              ? "bg-primary-100 text-primary-700 hover:bg-primary-200"
+                              : "bg-neutral-100 text-neutral-500"
+                          }`}
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>{r.applicationCount}</span>
+                        </Link>
+                      </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm font-medium text-neutral-700">{r.quantity}</span>
                       </td>

@@ -62,11 +62,88 @@ export default function TalentAvailableTimeEditPage() {
     fetchData();
   }, [id]);
 
+  // Validation functions
+  const validateStartTime = (dateTime: string): boolean => {
+    if (!dateTime) return false;
+    const startDateTime = new Date(dateTime);
+    const now = new Date();
+    
+    // Không được quá xa trong quá khứ (ví dụ: không quá 1 năm trước)
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    
+    if (startDateTime < oneYearAgo) return false;
+    
+    // Không được quá xa trong tương lai (ví dụ: không quá 2 năm sau)
+    const twoYearsLater = new Date();
+    twoYearsLater.setFullYear(now.getFullYear() + 2);
+    
+    if (startDateTime > twoYearsLater) return false;
+    
+    return true;
+  };
+
+  const validateEndTime = (startDateTime: string, endDateTime: string | undefined): boolean => {
+    if (!endDateTime) return true; // End time is optional
+    
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    // End time phải sau start time
+    if (end <= start) return false;
+    
+    // End time không được quá xa trong tương lai (ví dụ: không quá 2 năm sau)
+    const now = new Date();
+    const twoYearsLater = new Date();
+    twoYearsLater.setFullYear(now.getFullYear() + 2);
+    
+    if (end > twoYearsLater) return false;
+    
+    return true;
+  };
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    const newErrors = { ...errors };
+    
+    // Validate startTime
+    if (name === 'startTime') {
+      if (value && !validateStartTime(value)) {
+        newErrors.startTime = 'Thời gian bắt đầu không hợp lệ (phải trong khoảng 1 năm trước đến 2 năm sau)';
+      } else {
+        delete newErrors.startTime;
+      }
+      // Re-validate endTime if startTime changes
+      if (formData.endTime && value) {
+        if (!validateEndTime(value, formData.endTime)) {
+          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau';
+        } else {
+          delete newErrors.endTime;
+        }
+      }
+    }
+    
+    // Validate endTime
+    if (name === 'endTime') {
+      if (value && formData.startTime) {
+        if (!validateEndTime(formData.startTime, value)) {
+          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau';
+        } else {
+          delete newErrors.endTime;
+        }
+      } else if (value && !formData.startTime) {
+        newErrors.endTime = 'Vui lòng chọn thời gian bắt đầu trước';
+      } else {
+        delete newErrors.endTime;
+      }
+    }
+    
+    setErrors(newErrors);
 
     setFormData((prev) => ({
       ...prev,
@@ -79,6 +156,12 @@ export default function TalentAvailableTimeEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     // Validate talentId
     if (!talentId || talentId === 0) {
       alert("⚠️ Không tìm thấy thông tin talent. Vui lòng quay lại trang trước.");
@@ -90,14 +173,15 @@ export default function TalentAvailableTimeEditPage() {
       return;
     }
 
-    if (!formData.notes.trim()) {
-      alert("⚠️ Vui lòng nhập ghi chú!");
+    // Validate startTime hợp lý
+    if (!validateStartTime(formData.startTime)) {
+      alert("⚠️ Thời gian bắt đầu không hợp lệ (phải trong khoảng 1 năm trước đến 2 năm sau)!");
       return;
     }
 
-    // Validate date logic
-    if (formData.endTime && new Date(formData.endTime) <= new Date(formData.startTime)) {
-      alert("⚠️ Thời gian kết thúc phải sau thời gian bắt đầu!");
+    // Validate endTime hợp lý
+    if (formData.endTime && !validateEndTime(formData.startTime, formData.endTime)) {
+      alert("⚠️ Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau!");
       return;
     }
 
@@ -186,7 +270,7 @@ export default function TalentAvailableTimeEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    Thời gian bắt đầu
+                    Thời gian bắt đầu <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="datetime-local"
@@ -194,11 +278,18 @@ export default function TalentAvailableTimeEditPage() {
                     value={formData.startTime}
                     onChange={handleChange}
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      errors.startTime ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Chọn ngày và giờ bắt đầu có sẵn
-                  </p>
+                  {errors.startTime && (
+                    <p className="mt-1 text-xs text-red-500">{errors.startTime}</p>
+                  )}
+                  {!errors.startTime && (
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Chọn ngày và giờ bắt đầu có sẵn (trong khoảng 1 năm trước đến 2 năm sau)
+                    </p>
+                  )}
                 </div>
 
                 {/* Thời gian kết thúc */}
@@ -212,11 +303,18 @@ export default function TalentAvailableTimeEditPage() {
                     name="endTime"
                     value={formData.endTime}
                     onChange={handleChange}
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      errors.endTime ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Để trống nếu không có thời gian kết thúc cụ thể
-                  </p>
+                  {errors.endTime && (
+                    <p className="mt-1 text-xs text-red-500">{errors.endTime}</p>
+                  )}
+                  {!errors.endTime && (
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Để trống nếu không có thời gian kết thúc cụ thể
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -232,7 +330,6 @@ export default function TalentAvailableTimeEditPage() {
                   onChange={handleChange}
                   placeholder="Mô tả chi tiết về thời gian có sẵn, điều kiện đặc biệt..."
                   rows={4}
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
               </div>

@@ -13,14 +13,18 @@ import {
   Star, 
   Target, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Search
 } from "lucide-react";
 
 export default function TalentSkillEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [skillSearchQuery, setSkillSearchQuery] = useState("");
   const [talentId, setTalentId] = useState<number>(0);
+  const [existingSkillIds, setExistingSkillIds] = useState<number[]>([]);
+  const [currentSkillId, setCurrentSkillId] = useState<number>(0);
   const [formData, setFormData] = useState<TalentSkillCreate>({
     talentId: 0,
     skillId: 0,
@@ -44,6 +48,7 @@ export default function TalentSkillEditPage() {
           yearsExp: data.yearsExp,
         });
         setTalentId(data.talentId);
+        setCurrentSkillId(data.skillId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin Talent Skill!");
@@ -67,6 +72,24 @@ export default function TalentSkillEditPage() {
     fetchSkills();
   }, []);
 
+  // Fetch existing skills for this talent to disable them in dropdown (except current one)
+  useEffect(() => {
+    const fetchExistingSkills = async () => {
+      if (!talentId) return;
+      try {
+        const existingSkills = await talentSkillService.getAll({ talentId: talentId, excludeDeleted: true });
+        // Exclude current skill ID from disabled list
+        const skillIds = existingSkills
+          .map(skill => skill.skillId)
+          .filter(id => id > 0 && id !== currentSkillId);
+        setExistingSkillIds(skillIds);
+      } catch (error) {
+        console.error("❌ Error loading existing skills", error);
+      }
+    };
+    fetchExistingSkills();
+  }, [talentId, currentSkillId]);
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -85,6 +108,12 @@ export default function TalentSkillEditPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
 
     if (!formData.skillId || formData.skillId === 0) {
       alert("⚠️ Vui lòng chọn kỹ năng trước khi lưu!");
@@ -178,9 +207,41 @@ export default function TalentSkillEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Star className="w-4 h-4" />
-                  Kỹ năng
+                  Kỹ năng <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                
+                {/* Search Box */}
+                <div className="mb-3">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={skillSearchQuery}
+                      onChange={(e) => setSkillSearchQuery(e.target.value)}
+                      placeholder="Tìm kiếm để lọc danh sách kỹ năng..."
+                      className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    />
+                  </div>
+                  {/* Hint text */}
+                  <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
+                    <Search className="w-3 h-3" />
+                    Nhập từ khóa để tìm kiếm và lọc danh sách kỹ năng bên dưới
+                    {skillSearchQuery && (
+                      <span className="ml-1 text-primary-600 font-medium">
+                        ({allSkills.filter(skill => 
+                          skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                          skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
+                        ).length} kết quả)
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Filtered Skills Dropdown */}
+                {allSkills.filter(skill => 
+                  skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                  skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
+                ).length > 0 ? (
                   <select
                     name="skillId"
                     value={formData.skillId}
@@ -189,11 +250,31 @@ export default function TalentSkillEditPage() {
                     required
                   >
                     <option value="0">-- Chọn kỹ năng --</option>
-                    {allSkills.map(skill => (
-                      <option key={skill.id} value={skill.id}>{skill.name}</option>
-                    ))}
+                    {allSkills
+                      .filter(skill => 
+                        skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                        skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
+                      )
+                      .map(skill => {
+                        const isDisabled = existingSkillIds.includes(skill.id);
+                        return (
+                          <option 
+                            key={skill.id} 
+                            value={skill.id}
+                            disabled={isDisabled}
+                            style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                          >
+                            {skill.name}{isDisabled ? ' (đã chọn)' : ''}
+                          </option>
+                        );
+                      })}
                   </select>
-                </div>
+                ) : (
+                  <div className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-50 text-neutral-500 text-center">
+                    Không tìm thấy kỹ năng nào
+                  </div>
+                )}
+                
                 {formData.skillId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">
                     Mô tả: <span className="font-medium text-neutral-700">

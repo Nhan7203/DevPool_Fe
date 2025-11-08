@@ -4,13 +4,17 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
-import { Search, Plus, FileText } from "lucide-react";
+import { Search, Plus, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function DocumentTypeListPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<DocumentType[]>([]);
   const [filtered, setFiltered] = useState<DocumentType[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -33,11 +37,21 @@ export default function DocumentTypeListPage() {
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFiltered(items);
+      setCurrentPage(1);
       return;
     }
     const term = searchTerm.toLowerCase();
     setFiltered(items.filter(x => x.typeName.toLowerCase().includes(term)));
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, items]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedItems = filtered.slice(startIndex, endIndex);
+  const startItem = filtered.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filtered.length);
 
   if (loading) {
     return (
@@ -86,17 +100,51 @@ export default function DocumentTypeListPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách loại tài liệu</h2>
-              <div className="text-sm text-neutral-600">Tổng: {filtered.length}</div>
+              <div className="flex items-center gap-4">
+                {filtered.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filtered.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0</span>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-neutral-50">
+              <thead className="bg-neutral-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên</th>
@@ -117,9 +165,9 @@ export default function DocumentTypeListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((x, idx) => (
+                  paginatedItems.map((x, idx) => (
                     <tr key={x.id}>
-                      <td className="py-4 px-6 text-sm">{idx + 1}</td>
+                      <td className="py-4 px-6 text-sm">{startIndex + idx + 1}</td>
                       <td className="py-4 px-6 font-semibold">{x.typeName}</td>
                       <td className="py-4 px-6 text-sm text-neutral-700">{x.description || "—"}</td>
                     </tr>

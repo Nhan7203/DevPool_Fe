@@ -10,8 +10,9 @@ import {
   Eye, 
   Layers, 
   FileText,
-  
-  Building2
+  Building2,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 export default function JobRoleListPage() {
@@ -19,6 +20,10 @@ export default function JobRoleListPage() {
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [filteredJobRoles, setFilteredJobRoles] = useState<JobRole[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Stats data
   const stats = [
@@ -65,6 +70,7 @@ export default function JobRoleListPage() {
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredJobRoles(jobRoles);
+      setCurrentPage(1);
       return;
     }
 
@@ -72,7 +78,16 @@ export default function JobRoleListPage() {
       jr.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredJobRoles(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, jobRoles]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredJobRoles.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedJobRoles = filteredJobRoles.slice(startIndex, endIndex);
+  const startItem = filteredJobRoles.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredJobRoles.length);
 
   if (loading) {
     return (
@@ -148,19 +163,51 @@ export default function JobRoleListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách loại vị trí</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredJobRoles.length} loại vị trí</span>
+              <div className="flex items-center gap-4">
+                {filteredJobRoles.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredJobRoles.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 loại vị trí</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên loại vị trí</th>
@@ -182,12 +229,12 @@ export default function JobRoleListPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredJobRoles.map((jr, i) => (
+                  paginatedJobRoles.map((jr, i) => (
                     <tr
                       key={jr.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <Layers className="w-4 h-4 text-neutral-400" />

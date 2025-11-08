@@ -21,6 +21,8 @@ export default function TalentJobRoleLevelEditPage() {
   const navigate = useNavigate();
   const [allJobRoleLevels, setAllJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [talentId, setTalentId] = useState<number>(0);
+  const [existingJobRoleLevelIds, setExistingJobRoleLevelIds] = useState<number[]>([]);
+  const [currentJobRoleLevelId, setCurrentJobRoleLevelId] = useState<number>(0);
   const [formData, setFormData] = useState<TalentJobRoleLevelCreate>({
     talentId: 0,
     jobRoleLevelId: 0,
@@ -44,6 +46,7 @@ export default function TalentJobRoleLevelEditPage() {
           ratePerMonth: data.ratePerMonth,
         });
         setTalentId(data.talentId);
+        setCurrentJobRoleLevelId(data.jobRoleLevelId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin vị trí công việc!");
@@ -67,6 +70,24 @@ export default function TalentJobRoleLevelEditPage() {
     fetchJobRoleLevels();
   }, []);
 
+  // Fetch existing job role levels for this talent to disable them in dropdown (except current one)
+  useEffect(() => {
+    const fetchExistingJobRoleLevels = async () => {
+      if (!talentId) return;
+      try {
+        const existingJobRoleLevels = await talentJobRoleLevelService.getAll({ talentId: talentId, excludeDeleted: true });
+        // Exclude current job role level ID from disabled list
+        const jobRoleLevelIds = existingJobRoleLevels
+          .map(jrl => jrl.jobRoleLevelId)
+          .filter(id => id > 0 && id !== currentJobRoleLevelId);
+        setExistingJobRoleLevelIds(jobRoleLevelIds);
+      } catch (error) {
+        console.error("❌ Error loading existing job role levels", error);
+      }
+    };
+    fetchExistingJobRoleLevels();
+  }, [talentId, currentJobRoleLevelId]);
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -84,6 +105,12 @@ export default function TalentJobRoleLevelEditPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
 
     if (!formData.jobRoleLevelId || formData.jobRoleLevelId === 0) {
       alert("⚠️ Vui lòng chọn vị trí công việc trước khi lưu!");
@@ -177,7 +204,7 @@ export default function TalentJobRoleLevelEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Target className="w-4 h-4" />
-                  Vị trí công việc
+                  Vị trí công việc <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -188,11 +215,19 @@ export default function TalentJobRoleLevelEditPage() {
                     required
                   >
                     <option value="0">-- Chọn vị trí công việc --</option>
-                    {allJobRoleLevels.map(jobRoleLevel => (
-                      <option key={jobRoleLevel.id} value={jobRoleLevel.id}>
-                        {jobRoleLevel.name} - Level {jobRoleLevel.level}
-                      </option>
-                    ))}
+                    {allJobRoleLevels.map(jobRoleLevel => {
+                      const isDisabled = existingJobRoleLevelIds.includes(jobRoleLevel.id);
+                      return (
+                        <option 
+                          key={jobRoleLevel.id} 
+                          value={jobRoleLevel.id}
+                          disabled={isDisabled}
+                          style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                        >
+                          {jobRoleLevel.name} - Level {jobRoleLevel.level}{isDisabled ? ' (đã chọn)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 {formData.jobRoleLevelId > 0 && (

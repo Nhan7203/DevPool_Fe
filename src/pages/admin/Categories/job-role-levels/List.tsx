@@ -5,7 +5,7 @@ import { Button } from "../../../../components/ui/button";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../../services/JobRoleLevel";
 import { jobRoleService, type JobRole } from "../../../../services/JobRole";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function JobRoleLevelListPage() {
   const [loading, setLoading] = useState(true);
@@ -17,6 +17,10 @@ export default function JobRoleLevelListPage() {
   const [filterRole, setFilterRole] = useState<number | "">("");
 
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,7 +57,16 @@ export default function JobRoleLevelListPage() {
     }
 
     setFilteredPositions(filtered);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterRole, positions]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredPositions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPositions = filteredPositions.slice(startIndex, endIndex);
+  const startItem = filteredPositions.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredPositions.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -120,18 +133,50 @@ export default function JobRoleLevelListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách vị trí</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredPositions.length} vị trí</span>
+              <div className="flex items-center gap-4">
+                {filteredPositions.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredPositions.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 vị trí</span>
+                )}
               </div>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên vị trí</th>
@@ -143,11 +188,11 @@ export default function JobRoleLevelListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
-                {filteredPositions.map((p, i) => {
+                {paginatedPositions.map((p, i) => {
                   const role = jobRoles.find(r => r.id === p.jobRoleId);
                   return (
                     <tr key={p.id} className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300">
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                           {p.name}

@@ -177,6 +177,12 @@ export default function JobRequestEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     if (!Number(formData.projectId)) {
       alert("⚠️ Vui lòng chọn Dự án trước khi lưu!");
       return;
@@ -464,8 +470,8 @@ export default function JobRequestEditPage() {
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                     >
                       <option value={0}>Không xác định</option>
-                      <option value={1}>Tại văn phòng</option>
-                      <option value={2}>Làm việc từ xa</option>
+                      <option value={1}>Tại công ty</option>
+                      <option value={2}>Từ xa</option>
                       <option value={4}>Kết hợp</option>
                       <option value={8}>Linh hoạt</option>
                     </select>

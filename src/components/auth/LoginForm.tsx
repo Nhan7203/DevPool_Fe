@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService, getRoleFromToken, authenticateWithFirebase } from '../../services/Auth';
 
@@ -11,6 +11,8 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -23,16 +25,20 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
+    setIsLoggingIn(true);
 
     // Validate input
     if (!email || !password) {
       setError('Vui lòng nhập đầy đủ thông tin');
+      setIsLoggingIn(false);
       return;
     }
 
     // Validate email format
     if (!validateEmail(email)) {
       setError('Email không hợp lệ. Vui lòng nhập đúng định dạng email');
+      setIsLoggingIn(false);
       return;
     }
 
@@ -49,6 +55,7 @@ export default function LoginForm() {
       
       if (!frontendRole) {
         setError('Không thể xác định quyền người dùng');
+        setIsLoggingIn(false);
         return;
       }
       
@@ -73,30 +80,38 @@ export default function LoginForm() {
         frontendRole as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin'
       );
 
-      // Redirect based on role
-      switch (frontendRole) {
-        case 'Staff HR':
-          navigate('/hr/dashboard');
-          break;
-        case 'Staff Accountant':
-          navigate('/accountant/dashboard');
-          break;
-        case 'Staff Sales':
-          navigate('/sales/dashboard');
-          break;
-        case 'Developer':
-          navigate('/developer/dashboard');
-          break;
-        case 'Manager':
-          navigate('/manager/dashboard');
-          break;
-        case 'Admin':
-          navigate('/admin/dashboard');
-          break;
-        default:
-          navigate('/');
-      }
+      // Hiển thị thông báo thành công
+      setSuccess(true);
+      setIsLoggingIn(false);
+
+      // Đợi 1.5 giây để người dùng thấy thông báo thành công trước khi redirect
+      setTimeout(() => {
+        // Redirect based on role
+        switch (frontendRole) {
+          case 'Staff HR':
+            navigate('/hr/dashboard');
+            break;
+          case 'Staff Accountant':
+            navigate('/accountant/dashboard');
+            break;
+          case 'Staff Sales':
+            navigate('/sales/dashboard');
+            break;
+          case 'Developer':
+            navigate('/developer/dashboard');
+            break;
+          case 'Manager':
+            navigate('/manager/dashboard');
+            break;
+          case 'Admin':
+            navigate('/admin/dashboard');
+            break;
+          default:
+            navigate('/');
+        }
+      }, 1500);
     } catch (error: any) {
+      setIsLoggingIn(false);
       // Xử lý lỗi từ API
       let errorMessage = 'Email hoặc mật khẩu không chính xác';
       
@@ -124,10 +139,17 @@ export default function LoginForm() {
         <p className="text-neutral-600 mt-2">Chào mừng bạn quay lại DevPool</p>
       </div>
 
-      {error && (
+      {error && !isLoggingIn && (
         <div className="mb-6 p-4 bg-gradient-to-r from-error-50 to-error-100 border border-error-200 rounded-xl flex items-center space-x-3 animate-slide-down shadow-soft">
           <AlertCircle className="w-5 h-5 text-error-500 flex-shrink-0 animate-pulse" />
           <span className="text-error-700 text-sm font-medium">{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-100 border border-green-200 rounded-xl flex items-center space-x-3 animate-slide-down shadow-soft">
+          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <span className="text-green-700 text-sm font-medium">✅ Đăng nhập thành công! Đang chuyển hướng...</span>
         </div>
       )}
 
@@ -203,10 +225,10 @@ export default function LoginForm() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoggingIn || isLoading}
           className="w-full bg-gradient-to-r from-primary-600 to-indigo-600 text-white py-3.5 px-6 rounded-xl hover:from-primary-700 hover:to-indigo-700 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-lg transform hover:scale-102 active:scale-98 disabled:transform-none"
         >
-          {isLoading ? (
+          {(isLoggingIn || isLoading) ? (
             <div className="flex items-center justify-center space-x-2">
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               <span>Đang xử lý...</span>

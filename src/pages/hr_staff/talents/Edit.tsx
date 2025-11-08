@@ -57,6 +57,29 @@ export default function TalentEditPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^[0-9]{10}$/;
+    return phoneRegex.test(phone.replace(/\D/g, ''));
+  };
+
+  const validateDateOfBirth = (date: string): boolean => {
+    if (!date) return false;
+    const birthDate = new Date(date);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      return age - 1 >= 18 && age - 1 <= 100;
+    }
+    return age >= 18 && age <= 100;
+  };
 
   // 🧭 Load dữ liệu Talent
   useEffect(() => {
@@ -65,13 +88,30 @@ export default function TalentEditPage() {
         if (!id) return;
         const data = await talentService.getById(Number(id));
 
+        // Convert dateOfBirth from ISO string to YYYY-MM-DD format for date input
+        let formattedDateOfBirth = "";
+        if (data.dateOfBirth) {
+          try {
+            const date = new Date(data.dateOfBirth);
+            if (!isNaN(date.getTime())) {
+              // Format to YYYY-MM-DD
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              formattedDateOfBirth = `${year}-${month}-${day}`;
+            }
+          } catch (e) {
+            console.error("Lỗi format ngày sinh:", e);
+          }
+        }
+
         setFormData({
           currentPartnerId: data.currentPartnerId,
           userId: data.userId,
           fullName: data.fullName,
           email: data.email,
           phone: data.phone,
-          dateOfBirth: data.dateOfBirth || "",
+          dateOfBirth: formattedDateOfBirth,
           locationId: data.locationId,
           workingMode: data.workingMode,
           githubUrl: data.githubUrl,
@@ -132,6 +172,67 @@ export default function TalentEditPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    const newErrors = { ...errors };
+    
+    // Validate fullName
+    if (name === 'fullName') {
+      if (value && value.trim() !== '') {
+        delete newErrors.fullName;
+      }
+    }
+    
+    // Validate email
+    if (name === 'email') {
+      if (value && validateEmail(value)) {
+        delete newErrors.email;
+      } else if (value && !validateEmail(value)) {
+        newErrors.email = 'Email không hợp lệ';
+      }
+    }
+    
+    // Validate phone
+    if (name === 'phone') {
+      if (value && validatePhone(value)) {
+        delete newErrors.phone;
+      } else if (value && !validatePhone(value)) {
+        newErrors.phone = 'Số điện thoại phải có đúng 10 chữ số';
+      }
+    }
+    
+    // Validate date of birth
+    if (name === 'dateOfBirth') {
+      if (value && validateDateOfBirth(value)) {
+        delete newErrors.dateOfBirth;
+      } else if (value && !validateDateOfBirth(value)) {
+        newErrors.dateOfBirth = 'Ngày sinh không hợp lệ (tuổi từ 18-100)';
+      }
+    }
+    
+    // Validate workingMode
+    if (name === 'workingMode') {
+      const numValue = Number(value);
+      if (numValue && numValue !== 0 && numValue !== WorkingMode.None) {
+        delete newErrors.workingMode;
+      }
+    }
+    
+    // Validate locationId
+    if (name === 'locationId') {
+      const numValue = Number(value);
+      if (numValue && numValue > 0) {
+        delete newErrors.locationId;
+      }
+    }
+    
+    // Validate currentPartnerId
+    if (name === 'currentPartnerId') {
+      const numValue = Number(value);
+      if (numValue && numValue > 0) {
+        delete newErrors.currentPartnerId;
+      }
+    }
+    
+    setErrors(newErrors);
 
     setFormData((prev) => ({
       ...prev,
@@ -146,18 +247,47 @@ export default function TalentEditPage() {
     e.preventDefault();
     if (!id) return;
 
-    if (!formData.fullName.trim()) {
-      alert("⚠️ Vui lòng nhập họ tên!");
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
       return;
     }
 
-    if (!formData.email.trim()) {
-      alert("⚠️ Vui lòng nhập email!");
-      return;
+    // Validate all required fields
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.fullName || formData.fullName.trim() === '') {
+      newErrors.fullName = 'Họ và tên là bắt buộc';
     }
-
-    if (!formData.phone.trim()) {
-      alert("⚠️ Vui lòng nhập số điện thoại!");
+    
+    if (!formData.email || !validateEmail(formData.email)) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+    
+    if (!formData.phone || !validatePhone(formData.phone)) {
+      newErrors.phone = 'Số điện thoại phải có đúng 10 chữ số';
+    }
+    
+    if (!formData.dateOfBirth || !validateDateOfBirth(formData.dateOfBirth)) {
+      newErrors.dateOfBirth = 'Ngày sinh không hợp lệ (tuổi từ 18-100)';
+    }
+    
+    if (formData.workingMode === undefined || (formData.workingMode as number) === 0) {
+      newErrors.workingMode = 'Vui lòng chọn chế độ làm việc';
+    }
+    
+    if (!formData.locationId) {
+      newErrors.locationId = 'Vui lòng chọn khu vực làm việc';
+    }
+    
+    if (!formData.currentPartnerId) {
+      newErrors.currentPartnerId = 'Vui lòng chọn đối tác';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors);
+      alert('⚠️ Vui lòng điền đầy đủ và chính xác các trường bắt buộc\n\n' + errorMessages.join('\n'));
       return;
     }
 
@@ -247,14 +377,16 @@ export default function TalentEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
-                    Công ty
+                    Công ty <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="currentPartnerId"
                       value={formData.currentPartnerId}
                       onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      className={`w-full border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                        errors.currentPartnerId ? 'border-red-500' : 'border-neutral-200'
+                      }`}
                     >
                       <option value="">-- Chọn công ty --</option>
                       {partners.map(partner => (
@@ -264,6 +396,9 @@ export default function TalentEditPage() {
                       ))}
                     </select>
                   </div>
+                  {errors.currentPartnerId && (
+                    <p className="mt-1 text-sm text-red-500">{errors.currentPartnerId}</p>
+                  )}
                 </div>
 
                 {/* Người dùng */}
@@ -294,7 +429,7 @@ export default function TalentEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  Họ và tên
+                  Họ và tên <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="fullName"
@@ -302,8 +437,13 @@ export default function TalentEditPage() {
                   onChange={handleChange}
                   placeholder="Nhập họ và tên..."
                   required
-                  className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                  className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${
+                    errors.fullName ? 'border-red-500' : ''
+                  }`}
                 />
+                {errors.fullName && (
+                  <p className="mt-1 text-sm text-red-500">{errors.fullName}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -311,7 +451,7 @@ export default function TalentEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Mail className="w-4 h-4" />
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="email"
@@ -320,15 +460,20 @@ export default function TalentEditPage() {
                     onChange={handleChange}
                     placeholder="Nhập email..."
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${
+                      errors.email ? 'border-red-500' : ''
+                    }`}
                   />
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+                  )}
                 </div>
 
                 {/* Số điện thoại */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Phone className="w-4 h-4" />
-                    Số điện thoại
+                    Số điện thoại <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="phone"
@@ -336,8 +481,13 @@ export default function TalentEditPage() {
                     onChange={handleChange}
                     placeholder="Nhập số điện thoại..."
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${
+                      errors.phone ? 'border-red-500' : ''
+                    }`}
                   />
+                  {errors.phone && (
+                    <p className="mt-1 text-sm text-red-500">{errors.phone}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -359,29 +509,36 @@ export default function TalentEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    Ngày sinh
+                    Ngày sinh <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="date"
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleChange}
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${
+                      errors.dateOfBirth ? 'border-red-500' : ''
+                    }`}
                   />
+                  {errors.dateOfBirth && (
+                    <p className="mt-1 text-sm text-red-500">{errors.dateOfBirth}</p>
+                  )}
                 </div>
 
                 {/* Khu vực */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
-                    Khu vực làm việc
+                    Khu vực làm việc <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="locationId"
                       value={formData.locationId || ""}
                       onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      className={`w-full border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                        errors.locationId ? 'border-red-500' : 'border-neutral-200'
+                      }`}
                     >
                       <option value="">-- Chọn khu vực --</option>
                       {locations.map(location => (
@@ -391,6 +548,9 @@ export default function TalentEditPage() {
                       ))}
                     </select>
                   </div>
+                  {errors.locationId && (
+                    <p className="mt-1 text-sm text-red-500">{errors.locationId}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -412,22 +572,27 @@ export default function TalentEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Globe className="w-4 h-4" />
-                    Chế độ làm việc
+                    Chế độ làm việc <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="workingMode"
                       value={formData.workingMode}
                       onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      className={`w-full border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                        errors.workingMode ? 'border-red-500' : 'border-neutral-200'
+                      }`}
                     >
                       <option value={WorkingMode.None}>Không xác định</option>
-                      <option value={WorkingMode.Onsite}>Tại văn phòng</option>
-                      <option value={WorkingMode.Remote}>Làm việc từ xa</option>
+                      <option value={WorkingMode.Onsite}>Tại công ty</option>
+                      <option value={WorkingMode.Remote}>Từ xa</option>
                       <option value={WorkingMode.Hybrid}>Kết hợp</option>
                       <option value={WorkingMode.Flexible}>Linh hoạt</option>
                     </select>
                   </div>
+                  {errors.workingMode && (
+                    <p className="mt-1 text-sm text-red-500">{errors.workingMode}</p>
+                  )}
                 </div>
 
                 {/* Trạng thái */}
@@ -445,7 +610,7 @@ export default function TalentEditPage() {
                     >
                       <option value="Available">Available</option>
                       <option value="Busy">Busy</option>
-                      <option value="Inactive">Inactive</option>
+                      <option value="Unavailable">Unavailable</option>
                     </select>
                   </div>
                 </div>

@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { ROUTES } from '../../router/routes';
 
 interface SubItem {
   label: string;
@@ -28,6 +29,11 @@ export default function Sidebar({ items, title }: SidebarProps) {
   const { logout } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const topAndHeightClass = isAdminRoute
+    ? 'top-0 h-screen'
+    : 'top-16 h-[calc(100vh-4rem)]';
+
   const toggleExpand = (href: string) => {
     setExpandedItems(prev =>
       prev.includes(href)
@@ -38,11 +44,11 @@ export default function Sidebar({ items, title }: SidebarProps) {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate(ROUTES.LOGIN);
   };
 
   return (
-    <div className="w-64 bg-white shadow-sm sticky top-0 overflow-y-auto z-10 flex-shrink-0">
+    <div className={`w-64 bg-white shadow-sm sticky ${topAndHeightClass} overflow-y-auto z-10 flex-shrink-0`}>
       <div className="p-6">
         <h2 className="font-semibold text-lg text-gray-900 mb-6">{title}</h2>
         <nav className="space-y-2">

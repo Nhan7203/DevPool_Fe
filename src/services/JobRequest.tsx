@@ -51,6 +51,11 @@ export interface JobRequestPayload {
   skillIds: number[];
 }
 
+export interface JobRequestStatusUpdateModel {
+  newStatus: string;
+  notes?: string;
+}
+
 export interface JobRequestFilter {
   projectId?: number;
   jobRoleLevelId?: number;
@@ -133,6 +138,17 @@ export const jobRequestService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể xóa yêu cầu tuyển dụng" };
       throw { message: "Lỗi không xác định khi xóa yêu cầu tuyển dụng" };
+    }
+  },
+
+  async changeStatus(id: number, payload: JobRequestStatusUpdateModel) {
+    try {
+      const response = await axios.patch(`/jobrequest/${id}/change-status`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật trạng thái yêu cầu tuyển dụng" };
+      throw { message: "Lỗi không xác định khi cập nhật trạng thái yêu cầu tuyển dụng" };
     }
   },
 };

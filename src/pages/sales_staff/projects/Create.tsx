@@ -79,6 +79,13 @@ export default function ProjectCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo dự án mới không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setFormLoading(true);
     setError("");
     setSuccess(false);

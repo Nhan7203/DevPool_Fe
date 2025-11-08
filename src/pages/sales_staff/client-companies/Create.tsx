@@ -39,6 +39,13 @@ export default function ClientCompanyCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Xác nhận trước khi tạo
+    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo công ty mới không?");
+    if (!confirmed) {
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess(false);

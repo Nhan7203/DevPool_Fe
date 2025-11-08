@@ -31,6 +31,7 @@ export default function ApplyActivityEditPage() {
     status: ApplyActivityStatus.Scheduled,
     notes: "",
   });
+  const [existingActivities, setExistingActivities] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,6 +62,18 @@ export default function ApplyActivityEditPage() {
         // Fetch process steps
         const steps = await applyProcessStepService.getAll();
         setProcessSteps(steps);
+
+        // Fetch existing activities of this applyId to disable used steps (excluding current activity's step)
+        try {
+          const activities = await applyActivityService.getAll({ applyId: activityData.applyId });
+          const usedSteps = activities
+            .filter(activity => activity.id !== activityData.id && activity.processStepId > 0)
+            .map(activity => activity.processStepId);
+          setExistingActivities(usedSteps);
+        } catch (err) {
+          console.error("❌ Lỗi tải danh sách hoạt động để disable bước:", err);
+          setExistingActivities([]);
+        }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin hoạt động!");
@@ -98,6 +111,15 @@ export default function ApplyActivityEditPage() {
       let scheduledDateUTC: string | undefined = undefined;
       if (form.scheduledDate) {
         const localDate = new Date(form.scheduledDate);
+        const minAllowed = new Date();
+        minAllowed.setDate(minAllowed.getDate() + 1);
+
+        if (localDate.getTime() < minAllowed.getTime()) {
+          setError("⚠️ Ngày lên lịch phải từ ngày mai trở đi.");
+          setSaving(false);
+          return;
+        }
+
         const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
         scheduledDateUTC = utcDate.toISOString();
       }
@@ -198,10 +220,8 @@ export default function ApplyActivityEditPage() {
                   required
                 >
                   <option value="">-- Chọn loại hoạt động --</option>
-                  <option value="0">Interview - Phỏng vấn</option>
-                  <option value="1">Test - Kiểm tra</option>
-                  <option value="2">Meeting - Gặp mặt</option>
-                  <option value="3">Review - Đánh giá</option>
+                  <option value={ApplyActivityType.Online}>Online - Trực tuyến</option>
+                  <option value={ApplyActivityType.Offline}>Offline - Trực tiếp</option>
                 </select>
               </div>
 
@@ -218,11 +238,20 @@ export default function ApplyActivityEditPage() {
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                 >
                   <option value="0">-- Không chọn bước --</option>
-                  {processSteps.map(step => (
-                    <option key={step.id} value={step.id.toString()}>
-                      {step.stepOrder}. {step.stepName}
-                    </option>
-                  ))}
+                  {processSteps.map(step => {
+                    const isDisabled = existingActivities.includes(step.id);
+                    return (
+                      <option
+                        key={step.id}
+                        value={step.id.toString()}
+                        disabled={isDisabled}
+                        className={isDisabled ? "text-neutral-400" : ""}
+                      >
+                        {step.stepOrder}. {step.stepName}
+                        {isDisabled ? " (đã chọn)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -243,8 +272,7 @@ export default function ApplyActivityEditPage() {
                   <option value="1">Completed - Hoàn thành</option>
                   <option value="2">Passed - Đạt</option>
                   <option value="3">Failed - Không đạt</option>
-                  <option value="4">Approved - Đã duyệt</option>
-                  <option value="5">NoShow - Không tham gia</option>
+                  <option value="4">NoShow - Không có mặt</option>
                 </select>
                 <p className="text-sm text-neutral-500 mt-2">
                   ⚠️ Trạng thái không thể chỉnh sửa. Vui lòng sử dụng trang chi tiết để thay đổi trạng thái.
@@ -276,6 +304,12 @@ export default function ApplyActivityEditPage() {
                   value={form.scheduledDate}
                   onChange={handleChange}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  min={(() => {
+                    const minDate = new Date();
+                    minDate.setDate(minDate.getDate() + 1);
+                    const tzOffset = minDate.getTimezoneOffset() * 60000;
+                    return new Date(minDate.getTime() - tzOffset).toISOString().slice(0, 16);
+                  })()}
                 />
               </div>
             </div>
@@ -355,4 +389,3 @@ export default function ApplyActivityEditPage() {
     </div>
   );
 }
-

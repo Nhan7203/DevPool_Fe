@@ -49,6 +49,7 @@ export interface TalentSkillCreateModel {
 }
 
 export interface TalentWorkExperienceCreateModel {
+  talentCVId?: number; // Optional when creating with initialCV - backend will assign from initialCV
   company: string;
   position: string;
   startDate: string; // DateTime as ISO string
@@ -57,6 +58,7 @@ export interface TalentWorkExperienceCreateModel {
 }
 
 export interface TalentProjectCreateModel {
+  talentCVId?: number; // Optional when creating with initialCV - backend will assign from initialCV
   projectName: string;
   position: string;
   technologies: string;

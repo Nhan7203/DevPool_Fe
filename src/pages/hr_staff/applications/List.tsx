@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
@@ -17,7 +17,9 @@ import {
   CheckCircle,
   XCircle,
   X,
-  Send
+  Send,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 type AugmentedTalentApplication = TalentApplication & {
@@ -39,7 +41,7 @@ const statusLabels: Record<string, string> = {
   "Rejected": "Đã từ chối",
   "Interview": "Phỏng vấn",
   "InterviewScheduled": "Đã lên lịch phỏng vấn",
-  "Submitted": "Đã lên lịch phỏng vấn",
+  "Submitted": "Đã nộp hồ sơ",
   "Interviewing": "Đang xem xét phỏng vấn",
   "Offered": "Đã đề xuất",
   "Hired": "Đã tuyển",
@@ -50,7 +52,7 @@ const statusColors: Record<string, string> = {
   "Rejected": "bg-red-100 text-red-800",
   "Interview": "bg-blue-100 text-blue-800",
   "InterviewScheduled": "bg-indigo-100 text-indigo-800",
-  "Submitted": "bg-indigo-100 text-indigo-800",
+  "Submitted": "bg-sky-100 text-sky-800",
   "Interviewing": "bg-cyan-100 text-cyan-800",
   "Hired": "bg-purple-100 text-purple-800",
   "Withdrawn": "bg-gray-100 text-gray-800",
@@ -61,7 +63,7 @@ const statusIcons: Record<string, React.ReactNode> = {
   "Rejected": <XCircle className="w-4 h-4" />,
   "Interview": <Calendar className="w-4 h-4" />,
   "InterviewScheduled": <Calendar className="w-4 h-4" />,
-  "Submitted": <Calendar className="w-4 h-4" />,
+  "Submitted": <FileText className="w-4 h-4" />,
   "Interviewing": <Eye className="w-4 h-4" />,
   "Hired": <CheckCircle className="w-4 h-4" />,
   "Withdrawn": <X className="w-4 h-4" />,
@@ -69,12 +71,21 @@ const statusIcons: Record<string, React.ReactNode> = {
 };
 
 export default function TalentCVApplicationPage() {
+  const [searchParams] = useSearchParams();
+  const jobRequestIdFromQuery = searchParams.get('jobRequestId');
+  
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState<AugmentedTalentApplication[]>([]);
   const [filteredApplications, setFilteredApplications] = useState<AugmentedTalentApplication[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterJobRequestId, setFilterJobRequestId] = useState<string>(jobRequestIdFromQuery || "");
+  const [jobRequestTitle, setJobRequestTitle] = useState<string>("");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Stats data
   const stats = [
@@ -144,7 +155,9 @@ export default function TalentCVApplicationPage() {
         const userMap = new Map(usersData.filter((u): u is User => u !== null).map((u: User) => [u.id, u]));
 
         // Augment applications with related data
-        const augmented: AugmentedTalentApplication[] = applicationsData.map(app => {
+        const augmented: AugmentedTalentApplication[] = applicationsData
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .map(app => {
           const jobRequest = jobRequestMap.get(app.jobRequestId);
           const talentCV = cvMap.get(app.cvId);
           const submitter = userMap.get(app.submittedBy);
@@ -186,6 +199,23 @@ export default function TalentCVApplicationPage() {
     fetchData();
   }, []);
 
+  // Fetch job request title if jobRequestId is provided in query string
+  useEffect(() => {
+    const fetchJobRequestTitle = async () => {
+      if (jobRequestIdFromQuery) {
+        try {
+          const jobRequest = await jobRequestService.getById(Number(jobRequestIdFromQuery));
+          setJobRequestTitle(jobRequest.title || "");
+        } catch (err) {
+          console.error("❌ Lỗi khi tải thông tin Job Request:", err);
+          setJobRequestTitle("");
+        }
+      }
+    };
+
+    fetchJobRequestTitle();
+  }, [jobRequestIdFromQuery]);
+
   useEffect(() => {
     let filtered = [...applications];
     if (searchTerm) {
@@ -195,12 +225,25 @@ export default function TalentCVApplicationPage() {
       );
     }
     if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
+    if (filterJobRequestId) {
+      filtered = filtered.filter((a) => a.jobRequestId === Number(filterJobRequestId));
+    }
     setFilteredApplications(filtered);
-  }, [searchTerm, filterStatus, applications]);
+    setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
+  }, [searchTerm, filterStatus, filterJobRequestId, applications]);
+  
+  // Tính toán pagination
+  const totalPages = Math.ceil(filteredApplications.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedApplications = filteredApplications.slice(startIndex, endIndex);
+  const startItem = filteredApplications.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredApplications.length);
 
   const handleResetFilters = () => {
     setSearchTerm("");
     setFilterStatus("");
+    setFilterJobRequestId("");
   };
 
   if (loading)
@@ -228,6 +271,31 @@ export default function TalentCVApplicationPage() {
               <p className="text-neutral-600 mt-1">Danh sách các hồ sơ ứng viên đã nộp</p>
             </div>
           </div>
+
+          {/* Filter Info Banner */}
+          {filterJobRequestId && jobRequestTitle && (
+            <div className="mb-6 bg-primary-50 border border-primary-200 rounded-xl p-4 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Briefcase className="w-5 h-5 text-primary-600" />
+                  <div>
+                    <p className="text-sm font-medium text-primary-900">
+                      Đang lọc theo yêu cầu tuyển dụng:
+                    </p>
+                    <p className="text-lg font-semibold text-primary-700 mt-1">
+                      {jobRequestTitle}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleResetFilters}
+                  className="px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 rounded-lg transition-all duration-300"
+                >
+                  Xóa bộ lọc
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
@@ -305,19 +373,51 @@ export default function TalentCVApplicationPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách hồ sơ</h2>
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <span>Tổng: {filteredApplications.length} hồ sơ</span>
+              <div className="flex items-center gap-4">
+                {filteredApplications.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === 1
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    
+                    <span className="text-sm text-neutral-600">
+                      {startItem}-{endItem} trong số {filteredApplications.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                        currentPage === totalPages
+                          ? 'text-neutral-300 cursor-not-allowed'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-neutral-600">Tổng: 0 hồ sơ</span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người nộp</th>
@@ -342,12 +442,12 @@ export default function TalentCVApplicationPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredApplications.map((app, i) => (
+                  paginatedApplications.map((app, i) => (
                     <tr
                       key={app.id}
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{i + 1}</td>
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <UserIcon className="w-4 h-4 text-neutral-400" />

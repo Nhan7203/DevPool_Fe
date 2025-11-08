@@ -2,15 +2,21 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
+import { applyService, type Apply } from "../../../services/Apply";
+import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
+import { talentCVService, type TalentCV } from "../../../services/TalentCV";
+import { userService } from "../../../services/User";
 import { applyActivityService, type ApplyActivity, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
+import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
+import { locationService } from "../../../services/location";
+import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
 import { Button } from "../../../components/ui/button";
-import { 
-  ArrowLeft, 
-  CheckCircle, 
-  XCircle, 
-  FileText, 
+import {
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
+  FileText,
   User as UserIcon,
   Calendar,
   Briefcase,
@@ -18,28 +24,34 @@ import {
   AlertCircle,
   X,
   Send,
-  Building2,
-  Users,
-  MapPin
+  Mail,
+  Phone
 } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
   "Rejected": "Đã từ chối",
   "Interview": "Phỏng vấn",
   "InterviewScheduled": "Đã lên lịch phỏng vấn",
-  "Submitted": "Đã lên lịch phỏng vấn",
+  "Submitted": "Đã nộp hồ sơ",
   "Interviewing": "Đang phỏng vấn",
   "Hired": "Đã tuyển",
   "Withdrawn": "Đã rút",
   "Offered": "Đã đề xuất"
 };
 
+const talentStatusLabels: Record<string, string> = {
+  "Available": "Đang rảnh",
+  "OnProject": "Đang tham gia dự án",
+  "Interviewing": "Đang phỏng vấn",
+  "OfferPending": "Đang chờ offer",
+  "Hired": "Đã tuyển",
+  "Inactive": "Không hoạt động",
+};
+
 const getActivityTypeLabel = (type: number): string => {
   const labels: Record<number, string> = {
-    0: "Phỏng vấn",   // Interview
-    1: "Kiểm tra",     // Test
-    2: "Cuộc họp",     // Meeting
-    3: "Đánh giá"      // Review
+    [ApplyActivityType.Online]: "Trực tuyến",
+    [ApplyActivityType.Offline]: "Trực tiếp"
   };
   return labels[type] || `Loại ${type}`;
 };
@@ -50,8 +62,7 @@ const getActivityStatusLabel = (status: number): string => {
     1: "Hoàn thành",    // Completed
     2: "Đạt",           // Passed
     3: "Không đạt",     // Failed
-    4: "Đã duyệt",  // Approved
-    5: "Không có mặt"    // NoShow
+    4: "Không có mặt"    // NoShow
   };
   return labels[status] || `Trạng thái ${status}`;
 };
@@ -60,33 +71,75 @@ const getActivityStatusLabel = (status: number): string => {
 export default function TalentCVApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [application, setApplication] = useState<TalentApplicationDetailed | null>(null);
+  const [application, setApplication] = useState<Apply | null>(null);
+  const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
+  const [talentCV, setTalentCV] = useState<TalentCV | null>(null);
+  const [submitterName, setSubmitterName] = useState<string>("");
   const [activities, setActivities] = useState<ApplyActivity[]>([]);
   const [processSteps, setProcessSteps] = useState<Record<number, ApplyProcessStep>>({});
+  const [detailedApplication, setDetailedApplication] = useState<TalentApplicationDetailed | null>(null);
+  const [talentLocationName, setTalentLocationName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch detailed application data
-        const appData = await talentApplicationService.getDetailedById(Number(id));
+
+        // Fetch application
+        const appData = await applyService.getById(Number(id));
         setApplication(appData);
 
-        // Fetch activities (may already be in appData.activities, but fetch separately to ensure we have process steps)
+        // Fetch related data in parallel
+        const [jobReqData, cvData] = await Promise.all([
+          jobRequestService.getById(appData.jobRequestId),
+          talentCVService.getById(appData.cvId)
+        ]);
+
+        setJobRequest(jobReqData);
+        setTalentCV(cvData);
+
+        // Fetch detailed application info (talent, project, client company)
         try {
-          const activitiesData = appData.activities && appData.activities.length > 0 
-            ? appData.activities 
-            : await applyActivityService.getAll({ applyId: appData.id });
+          const detailedResponse = await talentApplicationService.getByJobRequest(appData.jobRequestId);
+          const foundApplication = detailedResponse?.data?.applications?.find(app => app.id === appData.id) ?? null;
+          setDetailedApplication(foundApplication);
+
+          if (foundApplication?.talent?.locationId) {
+            try {
+              const location = await locationService.getById(foundApplication.talent.locationId);
+              setTalentLocationName(location.name);
+            } catch {
+              setTalentLocationName("—");
+            }
+          } else {
+            setTalentLocationName("—");
+          }
+        } catch (err) {
+          console.error("❌ Lỗi tải thông tin chi tiết ứng viên:", err);
+          setDetailedApplication(null);
+          setTalentLocationName("—");
+        }
+
+        // Fetch submitter name
+        try {
+          const user = await userService.getById(appData.submittedBy);
+          setSubmitterName(user.fullName);
+        } catch {
+          setSubmitterName(appData.submittedBy);
+        }
+
+        // Fetch activities
+        try {
+          const activitiesData = await applyActivityService.getAll({ applyId: appData.id });
           setActivities(activitiesData);
-          
+
           // Fetch process steps for activities
           const stepIds = [...new Set(activitiesData.map(a => a.processStepId).filter(id => id > 0))];
           if (stepIds.length > 0) {
             const stepPromises = stepIds.map(id => applyProcessStepService.getById(id).catch(() => null));
             const steps = await Promise.all(stepPromises);
-            
+
             const stepsMap: Record<number, ApplyProcessStep> = {};
             steps.forEach(step => {
               if (step) {
@@ -97,20 +150,9 @@ export default function TalentCVApplicationDetailPage() {
           }
         } catch (err) {
           console.error("❌ Lỗi tải activities:", err);
-          // Use activities from detailed response if available
-          if (appData.activities) {
-            setActivities(appData.activities);
-          }
         }
-      } catch (err: unknown) {
+      } catch (err) {
         console.error("❌ Lỗi tải chi tiết Application:", err);
-        if (err && typeof err === 'object' && 'message' in err) {
-          console.error("❌ Chi tiết lỗi:", {
-            message: (err as { message?: string }).message,
-            response: (err as { response?: { data?: unknown; status?: number } }).response?.data,
-            status: (err as { response?: { status?: number } }).response?.status,
-          });
-        }
       } finally {
         setLoading(false);
       }
@@ -123,23 +165,23 @@ export default function TalentCVApplicationDetailPage() {
     if (!id || !application) return;
 
     try {
-      await talentApplicationService.updateStatus(Number(id), { newStatus });
+      await applyService.updateStatus(Number(id), { status: newStatus });
       setApplication({ ...application, status: newStatus });
-      
+
       // Nếu là Withdrawn, cập nhật tất cả activities thành NoShow
       if (newStatus === 'Withdrawn') {
         try {
           const activitiesToUpdate = activities.filter(
             activity => activity.status !== ApplyActivityStatus.NoShow
           );
-          
+
           if (activitiesToUpdate.length > 0) {
             await Promise.all(
               activitiesToUpdate.map(activity =>
                 applyActivityService.updateStatus(activity.id, { status: ApplyActivityStatus.NoShow })
               )
             );
-            
+
             // Cập nhật state của activities
             setActivities(activities.map(activity => ({
               ...activity,
@@ -150,7 +192,7 @@ export default function TalentCVApplicationDetailPage() {
           console.error("❌ Lỗi cập nhật trạng thái activities:", err);
         }
       }
-      
+
       alert(`✅ Đã cập nhật trạng thái thành công!`);
     } catch (err) {
       console.error("❌ Lỗi cập nhật trạng thái:", err);
@@ -203,10 +245,10 @@ export default function TalentCVApplicationDetailPage() {
         bgColor: "bg-indigo-50"
       },
       "Submitted": {
-        label: "Đã lên lịch phỏng vấn",
-        color: "bg-indigo-100 text-indigo-800",
-        icon: <Calendar className="w-4 h-4" />,
-        bgColor: "bg-indigo-50"
+        label: "Đã nộp hồ sơ",
+        color: "bg-sky-100 text-sky-800",
+        icon: <FileText className="w-4 h-4" />,
+        bgColor: "bg-sky-50"
       },
       "Interviewing": {
         label: "Đang xem xét phỏng vấn",
@@ -261,7 +303,7 @@ export default function TalentCVApplicationDetailPage() {
               <XCircle className="w-8 h-8 text-red-500" />
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy hồ sơ ứng tuyển</p>
-            <Link 
+            <Link
               to="/hr/applications"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
@@ -275,6 +317,49 @@ export default function TalentCVApplicationDetailPage() {
 
   const statusConfig = getStatusConfig(application.status);
 
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return "—";
+    try {
+      return new Date(dateString).toLocaleDateString("vi-VN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getWorkingModeDisplay = (workingMode?: number) => {
+    if (!workingMode) return "—";
+    const labels: { value: number; label: string }[] = [
+      { value: WorkingModeEnum.Onsite, label: "Tại công ty" },
+      { value: WorkingModeEnum.Remote, label: "Làm từ xa" },
+      { value: WorkingModeEnum.Hybrid, label: "Kết hợp" },
+      { value: WorkingModeEnum.Flexible, label: "Linh hoạt" },
+    ];
+
+    const matched = labels
+      .filter(item => (workingMode & item.value) === item.value)
+      .map(item => item.label);
+
+    return matched.length > 0 ? matched.join(", ") : "—";
+  };
+
+  const getTalentStatusLabel = (status?: string | null) => {
+    if (!status) return "—";
+    return talentStatusLabels[status] ?? status;
+  };
+
+  const formatDateTime = (dateString?: string | null) => {
+    if (!dateString) return "—";
+    try {
+      return new Date(dateString).toLocaleString("vi-VN");
+    } catch {
+      return dateString;
+    }
+  };
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="HR Staff" />
@@ -283,7 +368,7 @@ export default function TalentCVApplicationDetailPage() {
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               to="/hr/applications"
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
@@ -298,7 +383,7 @@ export default function TalentCVApplicationDetailPage() {
               <p className="text-neutral-600 mb-4">
                 Thông tin chi tiết hồ sơ ứng viên
               </p>
-              
+
               {/* Status Badge */}
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
                 {statusConfig.icon}
@@ -313,13 +398,13 @@ export default function TalentCVApplicationDetailPage() {
               {application.status === 'Interviewing' ? (
                 <>
                   {hasFailedActivity() && (
-              <Button
-                onClick={() => handleStatusUpdate('Rejected')}
+                    <Button
+                      onClick={() => handleStatusUpdate('Rejected')}
                       className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-              >
-                <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                Từ chối
-              </Button>
+                    >
+                      <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                      Từ chối
+                    </Button>
                   )}
                   {hasPassedActivity() && (
                     <Button
@@ -361,11 +446,10 @@ export default function TalentCVApplicationDetailPage() {
                     <Button
                       onClick={() => handleStatusUpdate('Interviewing')}
                       disabled={application.status === 'Interviewing'}
-                      className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                        application.status === 'Interviewing'
-                          ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                          : "bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white"
-                      }`}
+                      className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${application.status === 'Interviewing'
+                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white"
+                        }`}
                     >
                       <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                       Đang xem xét phỏng vấn
@@ -389,36 +473,136 @@ export default function TalentCVApplicationDetailPage() {
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem 
-                label="Người nộp" 
-                value={application.submitterName || application.submitter?.fullName || application.submittedBy} 
+              <InfoItem
+                label="Mã hồ sơ"
+                value={application.id.toString()}
+                icon={<FileText className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Người nộp"
+                value={submitterName || application.submittedBy}
                 icon={<UserIcon className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Ngày nộp" 
-                value={new Date(application.createdAt).toLocaleString('vi-VN')} 
+              <InfoItem
+                label="Ngày nộp"
+                value={new Date(application.createdAt).toLocaleString('vi-VN')}
                 icon={<Calendar className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Trạng thái" 
-                value={statusLabels[application.status] ?? application.status} 
+              <InfoItem
+                label="Trạng thái"
+                value={statusLabels[application.status] ?? application.status}
                 icon={<AlertCircle className="w-4 h-4" />}
               />
-              {application.note && (
-                <div className="md:col-span-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-neutral-400" />
-                    <p className="text-neutral-500 text-sm font-medium">Ghi chú</p>
-                  </div>
-                  <p className="text-gray-900 font-semibold">{application.note}</p>
-                </div>
-              )}
+              <InfoItem
+                label="Vị trí ứng tuyển"
+                value={jobRequest?.title || "—"}
+                icon={<Briefcase className="w-4 h-4" />}
+              />
+              {/* Ghi chú */}
             </div>
           </div>
         </div>
 
+        {/* Thông tin ứng viên */}
+        {detailedApplication?.talent && (
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-secondary-100 rounded-lg">
+                  <UserIcon className="w-5 h-5 text-secondary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin ứng viên</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InfoItem
+                  label="Tên ứng viên"
+                  value={detailedApplication.talent.fullName}
+                  icon={<UserIcon className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Email"
+                  value={detailedApplication.talent.email}
+                  icon={<Mail className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Ngày sinh"
+                  value={formatDate(detailedApplication.talent.dateOfBirth)}
+                  icon={<Calendar className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Số điện thoại"
+                  value={detailedApplication.talent.phone || "—"}
+                  icon={<Phone className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Trạng thái"
+                  value={getTalentStatusLabel(detailedApplication.talent.status)}
+                  icon={<AlertCircle className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Chế độ làm việc"
+                  value={getWorkingModeDisplay(detailedApplication.talent.workingMode)}
+                  icon={<Briefcase className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Địa điểm mong muốn"
+                  value={talentLocationName}
+                  icon={<Briefcase className="w-4 h-4" />}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Thông tin CV */}
+        {talentCV && (
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-accent-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-accent-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin CV</h2>
+              </div>
+              {talentCV.cvFileUrl && (
+                <Button
+                  onClick={() => window.open(talentCV.cvFileUrl, '_blank')}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transform hover:scale-105"
+                >
+                  <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xem CV
+                </Button>
+              )}
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InfoItem
+                  label="Phiên bản"
+                  value={talentCV.versionName}
+                  icon={<FileText className="w-4 h-4" />}
+                />
+                <InfoItem
+                  label="Ngày cập nhật CV"
+                  value={formatDateTime((talentCV as { updatedAt?: string | null })?.updatedAt)}
+                  icon={<Calendar className="w-4 h-4" />}
+                />
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-neutral-400" />
+                    <p className="text-neutral-500 text-sm font-medium">Tóm tắt</p>
+                  </div>
+                  <p className="text-gray-700 leading-relaxed">{talentCV.summary}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Yêu cầu tuyển dụng */}
-        {application.jobRequest && (
+        {jobRequest && (
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
@@ -430,230 +614,18 @@ export default function TalentCVApplicationDetailPage() {
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem 
-                  label="Tiêu đề" 
-                  value={application.jobTitle || application.jobRequest.title} 
+                <InfoItem
+                  label="Tiêu đề"
+                  value={jobRequest.title}
                   icon={<FileText className="w-4 h-4" />}
                 />
-                <InfoItem 
-                  label="Số lượng" 
-                  value={application.jobRequest.quantity.toString()} 
-                  icon={<Users className="w-4 h-4" />}
-                />
-                {application.jobRequest.budgetPerMonth && (
-                  <InfoItem 
-                    label="Ngân sách/tháng" 
-                    value={`${application.jobRequest.budgetPerMonth.toLocaleString('vi-VN')} VNĐ`} 
-                    icon={<Briefcase className="w-4 h-4" />}
-                  />
-                )}
-                {application.jobRequest.locationId && (
-                  <InfoItem 
-                    label="Địa điểm" 
-                    value="Đang tải..." 
-                    icon={<MapPin className="w-4 h-4" />}
-                  />
-                )}
                 <div className="md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-neutral-400" />
                     <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
                   </div>
-                  <p className="text-gray-700 leading-relaxed">{application.jobRequest.description}</p>
+                  <p className="text-gray-700 leading-relaxed">{jobRequest.description}</p>
                 </div>
-                {application.jobRequest.requirements && (
-                  <div className="md:col-span-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="w-4 h-4 text-neutral-400" />
-                      <p className="text-neutral-500 text-sm font-medium">Yêu cầu</p>
-                    </div>
-                    <p className="text-gray-700 leading-relaxed">{application.jobRequest.requirements}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Thông tin Talent */}
-        {application.talent && (
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <UserIcon className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Thông tin ứng viên</h2>
-                </div>
-                {application.talent.id && (
-                  <Link
-                    to={`/hr/talents/${application.talent.id}`}
-                    className="text-primary-600 hover:text-primary-800 text-sm font-medium"
-                  >
-                    Xem chi tiết →
-                  </Link>
-                )}
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem 
-                  label="Tên ứng viên" 
-                  value={application.talentName || application.talent.fullName} 
-                  icon={<UserIcon className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Email" 
-                  value={application.talent.email} 
-                  icon={<FileText className="w-4 h-4" />}
-                />
-                {application.talent.phone && (
-                  <InfoItem 
-                    label="Số điện thoại" 
-                    value={application.talent.phone} 
-                    icon={<FileText className="w-4 h-4" />}
-                  />
-                )}
-                {application.talent.status && (
-                  <InfoItem 
-                    label="Trạng thái" 
-                    value={application.talent.status} 
-                    icon={<AlertCircle className="w-4 h-4" />}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Thông tin Project */}
-        {application.project && (
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-indigo-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin dự án</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem 
-                  label="Tên dự án" 
-                  value={application.project.name} 
-                  icon={<Briefcase className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Trạng thái" 
-                  value={application.project.status} 
-                  icon={<AlertCircle className="w-4 h-4" />}
-                />
-                {application.project.description && (
-                  <div className="md:col-span-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="w-4 h-4 text-neutral-400" />
-                      <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
-                    </div>
-                    <p className="text-gray-700 leading-relaxed">{application.project.description}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Thông tin Client Company */}
-        {application.clientCompany && (
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-teal-100 rounded-lg">
-                  <Building2 className="w-5 h-5 text-teal-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin công ty khách hàng</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem 
-                  label="Tên công ty" 
-                  value={application.companyName || application.clientCompany.name} 
-                  icon={<Building2 className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Người liên hệ" 
-                  value={application.clientCompany.contactPerson} 
-                  icon={<UserIcon className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Email" 
-                  value={application.clientCompany.email} 
-                  icon={<FileText className="w-4 h-4" />}
-                />
-                {application.clientCompany.phone && (
-                  <InfoItem 
-                    label="Số điện thoại" 
-                    value={application.clientCompany.phone} 
-                    icon={<FileText className="w-4 h-4" />}
-                  />
-                )}
-                {application.clientCompany.address && (
-                  <div className="md:col-span-2">
-                    <InfoItem 
-                      label="Địa chỉ" 
-                      value={application.clientCompany.address} 
-                      icon={<MapPin className="w-4 h-4" />}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Thông tin CV */}
-        {application.cv && (
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-accent-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin CV</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem 
-                  label="Phiên bản" 
-                  value={application.cv.versionName} 
-                  icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Trạng thái" 
-                  value={application.cv.isActive ? "Đang hoạt động" : "Không hoạt động"} 
-                  icon={<AlertCircle className="w-4 h-4" />}
-                />
-                <div className="md:col-span-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-neutral-400" />
-                    <p className="text-neutral-500 text-sm font-medium">Tóm tắt</p>
-                  </div>
-                  <p className="text-gray-700 leading-relaxed">{application.cv.summary}</p>
-                </div>
-                {application.cv.cvFileUrl && (
-                  <div className="md:col-span-2">
-                    <Button
-                      onClick={() => window.open(application.cv!.cvFileUrl, '_blank')}
-                      className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transform hover:scale-105"
-                    >
-                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Xem CV
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -672,11 +644,10 @@ export default function TalentCVApplicationDetailPage() {
               <Button
                 onClick={() => navigate(`/hr/apply-activities/create?applyId=${application.id}`)}
                 disabled={application.status === 'Interviewing' || application.status === 'Offered' || (application.status !== 'InterviewScheduled' && application.status !== 'Submitted')}
-                className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
-                  application.status === 'Interviewing' || application.status === 'Offered' || (application.status !== 'InterviewScheduled' && application.status !== 'Submitted')
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
-                }`}
+                className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${application.status === 'Interviewing' || application.status === 'Offered' || (application.status !== 'InterviewScheduled' && application.status !== 'Submitted')
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                  }`}
               >
                 <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Tạo hoạt động
@@ -694,49 +665,47 @@ export default function TalentCVApplicationDetailPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {[...activities].sort((a, b) => {
-                  // Sắp xếp theo ngày: nếu không có scheduledDate thì xếp xuống cuối
-                  if (!a.scheduledDate && !b.scheduledDate) return 0;
-                  if (!a.scheduledDate) return 1;
-                  if (!b.scheduledDate) return -1;
-                  return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
-                }).map((activity) => {
+                {[...activities]
+                  .sort((a, b) => a.id - b.id)
+                  .map((activity, index) => {
                   const processStep = processSteps[activity.processStepId];
-                  const formattedDate = activity.scheduledDate 
+                  const formattedDate = activity.scheduledDate
                     ? new Date(activity.scheduledDate).toLocaleDateString('vi-VN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
                     : null;
-                  
+
                   return (
-                    <Link 
-                      key={activity.id} 
+                    <Link
+                      key={activity.id}
                       to={`/hr/apply-activities/${activity.id}`}
                       className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium"
                     >
                       {/* Header với badges */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                          activity.activityType === ApplyActivityType.Interview ? 'bg-blue-100 text-blue-800' :
-                          activity.activityType === ApplyActivityType.Test ? 'bg-yellow-100 text-yellow-800' :
-                          activity.activityType === ApplyActivityType.Meeting ? 'bg-green-100 text-green-800' :
-                          'bg-purple-100 text-purple-800'
-                        }`}>
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">
+                            {index + 1}
+                          </span>
+                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.activityType === ApplyActivityType.Online
+                              ? 'bg-blue-100 text-blue-800'
+                              : activity.activityType === ApplyActivityType.Offline
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
                             {getActivityTypeLabel(activity.activityType)}
-                        </span>
-                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                          activity.status === ApplyActivityStatus.Scheduled ? 'bg-gray-100 text-gray-800' :
-                          activity.status === ApplyActivityStatus.Completed ? 'bg-blue-100 text-blue-800' :
-                          activity.status === ApplyActivityStatus.Passed ? 'bg-green-100 text-green-800' :
-                          activity.status === ApplyActivityStatus.Failed ? 'bg-red-100 text-red-800' :
-                          activity.status === ApplyActivityStatus.NoShow ? 'bg-orange-100 text-orange-800' :
-                          'bg-purple-100 text-purple-800'
-                        }`}>
+                          </span>
+                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.status === ApplyActivityStatus.Scheduled ? 'bg-gray-100 text-gray-800' :
+                            activity.status === ApplyActivityStatus.Completed ? 'bg-blue-100 text-blue-800' :
+                              activity.status === ApplyActivityStatus.Passed ? 'bg-green-100 text-green-800' :
+                                activity.status === ApplyActivityStatus.Failed ? 'bg-red-100 text-red-800' :
+                                  activity.status === ApplyActivityStatus.NoShow ? 'bg-orange-100 text-orange-800' :
+                                    'bg-purple-100 text-purple-800'
+                            }`}>
                             {getActivityStatusLabel(activity.status)}
                           </span>
                         </div>
@@ -745,7 +714,7 @@ export default function TalentCVApplicationDetailPage() {
                             <Calendar className="w-4 h-4 text-neutral-500" />
                             <span className="text-xs text-neutral-700 font-medium">
                               {formattedDate}
-                        </span>
+                            </span>
                           </div>
                         )}
                       </div>
@@ -760,11 +729,11 @@ export default function TalentCVApplicationDetailPage() {
                               <p className="text-sm text-blue-900 font-semibold">{processStep.stepName}</p>
                             </div>
                           </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
 
                       {/* Ghi chú */}
-                    {activity.notes && (
+                      {activity.notes && (
                         <div className="mt-3 pt-3 border-t border-neutral-200">
                           <p className="text-xs text-neutral-500 font-semibold mb-1.5 flex items-center gap-1">
                             <FileText className="w-3.5 h-3.5" />

@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { applyActivityService, type ApplyActivity, ApplyActivityStatus } from "../../../services/ApplyActivity";
-import { applyProcessStepService } from "../../../services/ApplyProcessStep";
+import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
+import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyService } from "../../../services/Apply";
 import { Button } from "../../../components/ui/button";
-import { 
-  ArrowLeft, 
-  Edit, 
-  Trash2, 
-  FileText, 
-  Calendar, 
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  FileText,
+  Calendar,
   AlertCircle,
   CheckCircle,
   Briefcase,
@@ -28,10 +28,8 @@ interface ApplyActivityDetail extends ApplyActivity {
 
 const getActivityTypeLabel = (type: number): string => {
   const labels: Record<number, string> = {
-    0: "Phỏng vấn",
-    1: "Kiểm tra",
-    2: "Cuộc họp",
-    3: "Đánh giá"
+    [ApplyActivityType.Online]: "Trực tuyến",
+    [ApplyActivityType.Offline]: "Trực tiếp"
   };
   return labels[type] || `Loại ${type}`;
 };
@@ -50,24 +48,10 @@ const getActivityStatusLabel = (status: number): string => {
 
 const getActivityTypeColor = (type: number): string => {
   const colors: Record<number, string> = {
-    0: "bg-blue-100 text-blue-800",
-    1: "bg-yellow-100 text-yellow-800",
-    2: "bg-green-100 text-green-800",
-    3: "bg-purple-100 text-purple-800"
+    [ApplyActivityType.Online]: "bg-blue-100 text-blue-800",
+    [ApplyActivityType.Offline]: "bg-green-100 text-green-800"
   };
   return colors[type] || "bg-gray-100 text-gray-800";
-};
-
-const getActivityStatusColor = (status: number): string => {
-  const colors: Record<number, string> = {
-    0: "bg-gray-100 text-gray-800",
-    1: "bg-blue-100 text-blue-800",
-    2: "bg-green-100 text-green-800",
-    3: "bg-red-100 text-red-800",
-    4: "bg-yellow-100 text-yellow-800",
-    5: "bg-orange-100 text-orange-800"
-  };
-  return colors[status] || "bg-gray-100 text-gray-800";
 };
 
 export default function ApplyActivityDetailPage() {
@@ -77,6 +61,7 @@ export default function ApplyActivityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [allActivities, setAllActivities] = useState<ApplyActivity[]>([]);
   const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
+  const [activityIndex, setActivityIndex] = useState<number | null>(null);
 
   const fetchData = async () => {
     try {
@@ -84,7 +69,7 @@ export default function ApplyActivityDetailPage() {
       if (!id) return;
 
       const activityData = await applyActivityService.getById(Number(id));
-      
+
       // Fetch process step name
       let processStepName = "—";
       let stepOrder = 0;
@@ -92,7 +77,7 @@ export default function ApplyActivityDetailPage() {
         const step = await applyProcessStepService.getById(activityData.processStepId);
         processStepName = step.stepName;
         stepOrder = step.stepOrder;
-      } catch {}
+      } catch { }
       setCurrentStepOrder(stepOrder);
 
       // Fetch application info
@@ -103,7 +88,7 @@ export default function ApplyActivityDetailPage() {
           id: app.id,
           status: app.status
         };
-      } catch {}
+      } catch { }
 
       const activityWithExtra: ApplyActivityDetail = {
         ...activityData,
@@ -117,8 +102,17 @@ export default function ApplyActivityDetailPage() {
       try {
         const activitiesData = await applyActivityService.getAll({ applyId: activityData.applyId });
         setAllActivities(activitiesData);
+
+        const sortedActivities = [...activitiesData].sort((a, b) => a.id - b.id);
+        const index = sortedActivities.findIndex(act => act.id === activityData.id);
+        if (index >= 0) {
+          setActivityIndex(index + 1);
+        } else {
+          setActivityIndex(null);
+        }
       } catch (err) {
         console.error("❌ Lỗi tải activities:", err);
+        setActivityIndex(null);
       }
     } catch (err) {
       console.error("❌ Lỗi tải chi tiết Apply Activity:", err);
@@ -133,12 +127,12 @@ export default function ApplyActivityDetailPage() {
 
   const handleDelete = async () => {
     if (!id) return;
-    
-    if (activity?.applicationInfo?.status !== 'InterviewScheduled' && activity?.applicationInfo?.status !== 'Submitted') {
-      alert("⚠️ Chỉ có thể xóa hoạt động khi đã lên lịch phỏng vấn!");
+
+    if (activity?.status !== ApplyActivityStatus.Scheduled || activity?.applicationInfo?.status !== 'InterviewScheduled') {
+      alert("⚠️ Chỉ có thể xóa hoạt động khi hoạt động đang ở trạng thái Đã lên lịch và hồ sơ ở trạng thái Đã lên lịch phỏng vấn!");
       return;
     }
-    
+
     const confirm = window.confirm("⚠️ Bạn có chắc muốn xóa hoạt động này?");
     if (!confirm) return;
 
@@ -161,21 +155,21 @@ export default function ApplyActivityDetailPage() {
   };
 
   // Kiểm tra xem bước trước đã pass chưa
-  const checkCanUpdateStep = async (stepOrder: number, processStepId: number): Promise<boolean> => {
+  const checkCanUpdateStep = async (stepOrder: number): Promise<boolean> => {
     if (stepOrder === 1) return true; // Bước đầu tiên luôn có thể cập nhật
-    
+
     // Lấy tất cả process steps
-    const allSteps = await applyProcessStepService.getAll();
-    
+    const allSteps = (await applyProcessStepService.getAll()) as ApplyProcessStep[];
+
     // Tìm process step ID của bước trước
     const previousStep = allSteps.find(step => step.stepOrder === stepOrder - 1);
     if (!previousStep) return true; // Không tìm thấy bước trước thì cho phép
-    
+
     // Tìm activity của bước trước
     const previousStepActivity = allActivities.find(act => act.processStepId === previousStep.id);
-    
+
     if (!previousStepActivity) return false; // Chưa có bước trước
-    
+
     // Kiểm tra bước trước có đạt hay không
     return previousStepActivity.status === ApplyActivityStatus.Passed;
   };
@@ -185,7 +179,7 @@ export default function ApplyActivityDetailPage() {
     if (activity?.applicationInfo?.status === 'Withdrawn') {
       return [];
     }
-    
+
     switch (currentStatus) {
       case ApplyActivityStatus.Scheduled: // 0
         return [ApplyActivityStatus.Completed]; // → 1
@@ -194,10 +188,8 @@ export default function ApplyActivityDetailPage() {
       case ApplyActivityStatus.Failed: // 3
         return []; // Không cho cập nhật
       case ApplyActivityStatus.Passed: // 2
-        return [ApplyActivityStatus.Approved]; // → 4
-      case ApplyActivityStatus.Approved: // 4
-        return []; // Không cho cập nhật
-      case ApplyActivityStatus.NoShow: // 5
+        return []; // Bước đã đạt, không cần cập nhật thêm
+      case ApplyActivityStatus.NoShow: // 4
         return []; // Không cho cập nhật
       default:
         return [];
@@ -213,7 +205,7 @@ export default function ApplyActivityDetailPage() {
     try {
       // Kiểm tra xem bước trước đã pass chưa (chỉ khi đổi sang Completed hoặc Passed)
       if ((newStatus === ApplyActivityStatus.Completed || newStatus === ApplyActivityStatus.Passed) && currentStepOrder > 1) {
-        const canUpdate = await checkCanUpdateStep(currentStepOrder, activity.processStepId);
+        const canUpdate = await checkCanUpdateStep(currentStepOrder);
         if (!canUpdate) {
           alert("⚠️ Không thể cập nhật! Bước trước chưa đạt. Vui lòng hoàn thành bước trước trước.");
           return;
@@ -221,7 +213,7 @@ export default function ApplyActivityDetailPage() {
       }
 
       await applyActivityService.updateStatus(Number(id), { status: newStatus });
-      
+
       // Nếu status là Completed, tự động cập nhật application status thành Interviewing
       if (newStatus === ApplyActivityStatus.Completed && activity.applicationInfo) {
         try {
@@ -241,10 +233,10 @@ export default function ApplyActivityDetailPage() {
           // Reload activities để lấy dữ liệu mới nhất
           const activitiesData = await applyActivityService.getAll({ applyId: activity.applyId });
           setAllActivities(activitiesData);
-          
+
           // Lấy tất cả process steps
           const allSteps = await applyProcessStepService.getAll();
-          
+
           // Đếm số bước đã pass
           let allStepsPassed = true;
           for (const step of allSteps) {
@@ -258,7 +250,7 @@ export default function ApplyActivityDetailPage() {
           // Nếu tất cả bước đều pass và application đang ở Interviewing, chuyển sang Offered
           if (allStepsPassed && activity.applicationInfo.status === 'Interviewing') {
             await applyService.updateStatus(activity.applicationInfo.id, { status: 'Offered' });
-            
+
             alert(`✅ Đã cập nhật trạng thái thành công!\n🎉 Tất cả các bước đã hoàn thành, tự động chuyển application sang trạng thái Offered!`);
             // Reload dữ liệu để cập nhật UI
             await fetchData();
@@ -268,7 +260,7 @@ export default function ApplyActivityDetailPage() {
           console.error("❌ Lỗi kiểm tra tất cả bước:", err);
         }
       }
-      
+
       // Reload dữ liệu để cập nhật UI, đặc biệt quan trọng cho bước đầu tiên
       await fetchData();
       alert(`✅ Đã cập nhật trạng thái thành công!`);
@@ -302,7 +294,7 @@ export default function ApplyActivityDetailPage() {
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy hoạt động</p>
-            <Link 
+            <Link
               to="/hr/applications"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
@@ -314,14 +306,14 @@ export default function ApplyActivityDetailPage() {
     );
   }
 
-  const formattedDate = activity.scheduledDate 
+  const formattedDate = activity.scheduledDate
     ? new Date(activity.scheduledDate).toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
     : null;
 
   return (
@@ -332,7 +324,7 @@ export default function ApplyActivityDetailPage() {
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               to={`/hr/applications/${activity.applyId}`}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
@@ -343,32 +335,41 @@ export default function ApplyActivityDetailPage() {
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Hoạt động #{activity.id}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Hoạt động {activityIndex ? `#${activityIndex}` : `#${activity.id}`}
+              </h1>
               <p className="text-neutral-600 mb-4">
                 Thông tin chi tiết hoạt động tuyển dụng
               </p>
-              
+
               {/* Status Badges */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityTypeColor(activity.activityType)}`}>
                   {getActivityTypeLabel(activity.activityType)}
                 </span>
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityStatusColor(activity.status)}`}>
+                {/* <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityStatusColor(activity.status)}`}>
                   {getActivityStatusLabel(activity.status)}
-                </span>
+                </span> */}
                 {activity.applicationInfo && (
-                  <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                    activity.applicationInfo.status === 'InterviewScheduled' || activity.applicationInfo.status === 'Submitted'
-                      ? 'bg-green-100 text-green-800' 
+                  <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.applicationInfo.status === 'InterviewScheduled' || activity.applicationInfo.status === 'Submitted'
+                      ? 'bg-green-100 text-green-800'
                       : activity.applicationInfo.status === 'Withdrawn'
-                      ? 'bg-gray-100 text-gray-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                        ? 'bg-gray-100 text-gray-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
                     {activity.applicationInfo.status === 'InterviewScheduled' || activity.applicationInfo.status === 'Submitted'
-                      ? '✓ Đã lên lịch' 
+                      ? '✓ Đã lên lịch'
                       : activity.applicationInfo.status === 'Withdrawn'
-                      ? '✗ Đã rút' 
-                      : '⏳ ' + activity.applicationInfo.status}
+                        ? '✗ Đã rút'
+                        : activity.applicationInfo.status === 'Interviewing'
+                          ? '⏳ Đang xem xét phỏng vấn'
+                          : activity.applicationInfo.status === 'Offered'
+                            ? '⏳ Đã đề xuất'
+                            : activity.applicationInfo.status === 'Rejected'
+                              ? '⏳ Đã từ chối'
+                              : activity.applicationInfo.status === 'Hired'
+                                ? '⏳ Đã tuyển'
+                                : `⏳ ${activity.applicationInfo.status}`}
                   </span>
                 )}
               </div>
@@ -377,68 +378,34 @@ export default function ApplyActivityDetailPage() {
             <div className="flex gap-3">
               <Button
                 onClick={handleEdit}
-                disabled={activity.applicationInfo?.status !== 'InterviewScheduled' && activity.applicationInfo?.status !== 'Submitted'}
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                  activity.applicationInfo?.status !== 'InterviewScheduled' && activity.applicationInfo?.status !== 'Submitted'
+                disabled={
+                  activity.status !== ApplyActivityStatus.Scheduled ||
+                  activity.applicationInfo?.status !== 'InterviewScheduled'
+                }
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
+                    activity.applicationInfo?.status !== 'InterviewScheduled'
                     ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
-                }`}
+                  }`}
               >
                 <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Sửa
               </Button>
               <Button
                 onClick={handleDelete}
-                disabled={activity.applicationInfo?.status !== 'InterviewScheduled' && activity.applicationInfo?.status !== 'Submitted'}
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                  activity.applicationInfo?.status !== 'InterviewScheduled' && activity.applicationInfo?.status !== 'Submitted'
+                disabled={
+                  activity.status !== ApplyActivityStatus.Scheduled ||
+                  activity.applicationInfo?.status !== 'InterviewScheduled'
+                }
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
+                    activity.applicationInfo?.status !== 'InterviewScheduled'
                     ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                }`}
+                  }`}
               >
                 <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Xóa
               </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Thông tin chung */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem 
-                label="Loại hoạt động" 
-                value={getActivityTypeLabel(activity.activityType)} 
-                icon={<Tag className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Trạng thái" 
-                value={getActivityStatusLabel(activity.status)} 
-                icon={<CheckCircle className="w-4 h-4" />}
-              />
-              {activity.processStepName && (
-                <InfoItem 
-                  label="Bước quy trình" 
-                  value={activity.processStepName} 
-                  icon={<Briefcase className="w-4 h-4" />}
-                />
-              )}
-              {formattedDate && (
-                <InfoItem 
-                  label="Ngày lên lịch" 
-                  value={formattedDate} 
-                  icon={<Calendar className="w-4 h-4" />}
-                />
-              )}
             </div>
           </div>
         </div>
@@ -456,12 +423,12 @@ export default function ApplyActivityDetailPage() {
           <div className="p-6">
             {(() => {
               const allowedStatuses = getAllowedNextStatuses(activity.status);
-              
+
               if (allowedStatuses.length === 0) {
                 const message = activity.applicationInfo?.status === 'Withdrawn'
                   ? "Không thể cập nhật trạng thái vì ứng viên đã rút khỏi quy trình tuyển dụng"
                   : "Không thể cập nhật trạng thái từ trạng thái hiện tại";
-                
+
                 return (
                   <div className="text-center py-4">
                     <p className="text-neutral-500 font-medium">{message}</p>
@@ -498,18 +465,58 @@ export default function ApplyActivityDetailPage() {
                       Không đạt
                     </button>
                   )}
-                  {allowedStatuses.includes(ApplyActivityStatus.Approved) && (
+                  {allowedStatuses.includes(ApplyActivityStatus.NoShow) && (
                     <button
-                      onClick={() => handleStatusUpdate(ApplyActivityStatus.Approved)}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                      onClick={() => handleStatusUpdate(ApplyActivityStatus.NoShow)}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white"
                     >
-                      <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Đã chấp nhận
+                      <AlertCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                      Không có mặt
                     </button>
                   )}
                 </div>
               );
             })()}
+          </div>
+        </div>
+
+        {/* Thông tin chung */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary-100 rounded-lg">
+                <FileText className="w-5 h-5 text-primary-600" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InfoItem
+                label="Loại hoạt động"
+                value={getActivityTypeLabel(activity.activityType)}
+                icon={<Tag className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Trạng thái"
+                value={getActivityStatusLabel(activity.status)}
+                icon={<CheckCircle className="w-4 h-4" />}
+              />
+              {activity.processStepName && (
+                <InfoItem
+                  label="Bước quy trình"
+                  value={activity.processStepName}
+                  icon={<Briefcase className="w-4 h-4" />}
+                />
+              )}
+              {formattedDate && (
+                <InfoItem
+                  label="Ngày lên lịch"
+                  value={formattedDate}
+                  icon={<Calendar className="w-4 h-4" />}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -551,4 +558,3 @@ function InfoItem({ label, value, icon }: { label: string; value: string; icon?:
     </div>
   );
 }
-

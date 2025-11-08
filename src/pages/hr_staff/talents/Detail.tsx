@@ -12,17 +12,18 @@ import { skillService, type Skill } from "../../../services/Skill";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
 import { talentJobRoleLevelService, type TalentJobRoleLevel } from "../../../services/TalentJobRoleLevel";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { talentCertificateService, type TalentCertificate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { talentAvailableTimeService, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { Button } from "../../../components/ui/button";
-import { 
-  ArrowLeft, 
-  Edit, 
-  Trash2, 
-  Briefcase, 
-  FileText, 
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Briefcase,
+  FileText,
   Target,
   CheckCircle,
   Clock,
@@ -42,13 +43,17 @@ import {
   Workflow,
   Plus,
   Upload,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
 const workingModeLabels: Record<number, string> = {
   [WorkingMode.None]: "Không xác định",
-  [WorkingMode.Onsite]: "Tại văn phòng",
-  [WorkingMode.Remote]: "Làm việc từ xa",
+  [WorkingMode.Onsite]: "Tại công ty",
+  [WorkingMode.Remote]: "Từ xa",
   [WorkingMode.Hybrid]: "Kết hợp",
   [WorkingMode.Flexible]: "Linh hoạt",
 };
@@ -59,7 +64,7 @@ export default function TalentDetailPage() {
   const [talent, setTalent] = useState<Talent | null>(null);
   const [locationName, setLocationName] = useState<string>("—");
   const [partnerName, setPartnerName] = useState<string>("—");
-  const [talentCVs, setTalentCVs] = useState<TalentCV[]>([]);
+  const [talentCVs, setTalentCVs] = useState<(TalentCV & { jobRoleName?: string })[]>([]);
   const [talentProjects, setTalentProjects] = useState<TalentProject[]>([]);
   const [talentSkills, setTalentSkills] = useState<(TalentSkill & { skillName: string })[]>([]);
   const [workExperiences, setWorkExperiences] = useState<TalentWorkExperience[]>([]);
@@ -67,7 +72,7 @@ export default function TalentDetailPage() {
   const [certificates, setCertificates] = useState<(TalentCertificate & { certificateTypeName: string })[]>([]);
   const [availableTimes, setAvailableTimes] = useState<TalentAvailableTime[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Multi-select states
   const [selectedCVs, setSelectedCVs] = useState<number[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<number[]>([]);
@@ -76,6 +81,25 @@ export default function TalentDetailPage() {
   const [selectedJobRoleLevels, setSelectedJobRoleLevels] = useState<number[]>([]);
   const [selectedCertificates, setSelectedCertificates] = useState<number[]>([]);
   const [selectedAvailableTimes, setSelectedAvailableTimes] = useState<number[]>([]);
+
+  // Pagination states for each section
+  const [pageCVs, setPageCVs] = useState(1);
+  const [pageProjects, setPageProjects] = useState(1);
+  const [pageSkills, setPageSkills] = useState(1);
+  const [pageExperiences, setPageExperiences] = useState(1);
+  const [pageJobRoleLevels, setPageJobRoleLevels] = useState(1);
+  const [pageCertificates, setPageCertificates] = useState(1);
+  const [pageAvailableTimes, setPageAvailableTimes] = useState(1);
+  const itemsPerPage = 10;
+
+  // Collapse/Expand states for each section
+  const [isCVsExpanded, setIsCVsExpanded] = useState(true);
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
+  const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
+  const [isExperiencesExpanded, setIsExperiencesExpanded] = useState(true);
+  const [isJobRoleLevelsExpanded, setIsJobRoleLevelsExpanded] = useState(true);
+  const [isCertificatesExpanded, setIsCertificatesExpanded] = useState(true);
+  const [isAvailableTimesExpanded, setIsAvailableTimesExpanded] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -89,7 +113,7 @@ export default function TalentDetailPage() {
           try {
             const location = await locationService.getById(talentData.locationId);
             setLocationName(location?.name ?? "—");
-          } catch {}
+          } catch { }
         }
 
         // Resolve partner name
@@ -97,7 +121,7 @@ export default function TalentDetailPage() {
           const partner = await partnerService.getAll();
           const talentPartner = partner.find((p: Partner) => p.id === talentData.currentPartnerId);
           setPartnerName(talentPartner?.companyName ?? "—");
-        } catch {}
+        } catch { }
 
         // Fetch all related data
         const [
@@ -118,10 +142,17 @@ export default function TalentDetailPage() {
           talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true })
         ]);
 
-        setTalentCVs(cvs);
         setTalentProjects(projects);
         setWorkExperiences(experiences);
         setAvailableTimes(availableTimesData);
+
+        // Fetch job roles and map with CVs
+        const allJobRoles = await jobRoleService.getAll({ excludeDeleted: true });
+        const cvsWithJobRoleNames = cvs.map((cv: TalentCV) => {
+          const jobRoleInfo = allJobRoles.find((jr: JobRole) => jr.id === cv.jobRoleId);
+          return { ...cv, jobRoleName: jobRoleInfo?.name ?? "Chưa xác định" };
+        });
+        setTalentCVs(cvsWithJobRoleNames);
 
         // Fetch skill names
         const allSkills = await skillService.getAll();
@@ -159,6 +190,35 @@ export default function TalentDetailPage() {
     fetchData();
   }, [id]);
 
+  // Reset pagination when data changes
+  useEffect(() => {
+    setPageCVs(1);
+  }, [talentCVs.length]);
+
+  useEffect(() => {
+    setPageProjects(1);
+  }, [talentProjects.length]);
+
+  useEffect(() => {
+    setPageSkills(1);
+  }, [talentSkills.length]);
+
+  useEffect(() => {
+    setPageExperiences(1);
+  }, [workExperiences.length]);
+
+  useEffect(() => {
+    setPageJobRoleLevels(1);
+  }, [jobRoleLevels.length]);
+
+  useEffect(() => {
+    setPageCertificates(1);
+  }, [certificates.length]);
+
+  useEffect(() => {
+    setPageAvailableTimes(1);
+  }, [availableTimes.length]);
+
   // 🗑️ Xóa talent
   const handleDelete = async () => {
     if (!id) return;
@@ -195,7 +255,12 @@ export default function TalentDetailPage() {
       setSelectedCVs([]);
       // Refresh data
       const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
-      setTalentCVs(cvs);
+      const allJobRoles = await jobRoleService.getAll({ excludeDeleted: true });
+      const cvsWithJobRoleNames = cvs.map((cv: TalentCV) => {
+        const jobRoleInfo = allJobRoles.find((jr: JobRole) => jr.id === cv.jobRoleId);
+        return { ...cv, jobRoleName: jobRoleInfo?.name ?? "Chưa xác định" };
+      });
+      setTalentCVs(cvsWithJobRoleNames);
     } catch (err) {
       console.error("❌ Lỗi khi xóa CV:", err);
       alert("Không thể xóa CV!");
@@ -367,7 +432,7 @@ export default function TalentDetailPage() {
               <XCircle className="w-8 h-8 text-red-500" />
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy talent</p>
-            <Link 
+            <Link
               to="/hr/developers"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
@@ -396,9 +461,9 @@ export default function TalentDetailPage() {
           icon: <Clock className="w-4 h-4" />,
           bgColor: "bg-yellow-50"
         };
-      case "Inactive":
+      case "Unavailable":
         return {
-          label: "Không hoạt động",
+          label: "Tạm ngưng",
           color: "bg-gray-100 text-gray-800",
           icon: <XCircle className="w-4 h-4" />,
           bgColor: "bg-gray-50"
@@ -414,7 +479,7 @@ export default function TalentDetailPage() {
   };
 
   const statusConfig = getStatusConfig(talent.status);
-  const isDisabled = talent.status === "Busy" || talent.status === "Inactive";
+  const isDisabled = false;
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -424,7 +489,7 @@ export default function TalentDetailPage() {
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               to="/hr/developers"
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
@@ -439,7 +504,7 @@ export default function TalentDetailPage() {
               <p className="text-neutral-600 mb-4">
                 Thông tin chi tiết talent trong hệ thống DevPool
               </p>
-              
+
               {/* Status Badge */}
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
                 {statusConfig.icon}
@@ -453,11 +518,10 @@ export default function TalentDetailPage() {
               <Button
                 onClick={handleEdit}
                 disabled={isDisabled}
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                  isDisabled
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
-                }`}
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isDisabled
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
+                  }`}
               >
                 <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Sửa
@@ -465,11 +529,10 @@ export default function TalentDetailPage() {
               <Button
                 onClick={handleDelete}
                 disabled={isDisabled}
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                  isDisabled
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                }`}
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isDisabled
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  }`}
               >
                 <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Xóa
@@ -490,176 +553,173 @@ export default function TalentDetailPage() {
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem 
-                label="Họ và tên" 
-                value={talent.fullName} 
+              <InfoItem
+                label="Họ và tên"
+                value={talent.fullName}
                 icon={<User className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Email" 
-                value={talent.email || "—"} 
+              <InfoItem
+                label="Email"
+                value={talent.email || "—"}
                 icon={<Mail className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Số điện thoại" 
-                value={talent.phone || "—"} 
+              <InfoItem
+                label="Số điện thoại"
+                value={talent.phone || "—"}
                 icon={<Phone className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Công ty" 
-                value={partnerName} 
+              <InfoItem
+                label="Ngày sinh"
+                value={talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
+                icon={<Calendar className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Công ty"
+                value={partnerName}
                 icon={<Building2 className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Khu vực làm việc" 
-                value={locationName} 
+              <InfoItem
+                label="Khu vực làm việc"
+                value={locationName}
                 icon={<MapPin className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Chế độ làm việc" 
-                value={workingModeLabels[talent.workingMode] || "Không xác định"} 
+              <InfoItem
+                label="Chế độ làm việc"
+                value={workingModeLabels[talent.workingMode] || "Không xác định"}
                 icon={<Globe className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Trạng thái" 
-                value={statusConfig.label} 
+              <InfoItem
+                label="Trạng thái"
+                value={statusConfig.label}
                 icon={<Target className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="GitHub"
+                value={talent.githubUrl ? (
+                  <a href={talent.githubUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
+                    {talent.githubUrl}
+                  </a>
+                ) : "Chưa có"}
+                icon={<ExternalLink className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Portfolio"
+                value={talent.portfolioUrl ? (
+                  <a href={talent.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
+                    {talent.portfolioUrl}
+                  </a>
+                ) : "Chưa có"}
+                icon={<ExternalLink className="w-4 h-4" />}
               />
             </div>
           </div>
         </div>
 
-        {/* Thông tin bổ sung */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-          {/* Thông tin cá nhân */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-secondary-600" />
+        {/* CV của Talent */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsCVsExpanded(!isCVsExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isCVsExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-accent-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-accent-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Thông tin cá nhân</h3>
+                <h2 className="text-xl font-semibold text-gray-900">CV của Talent</h2>
               </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-neutral-500 font-medium mb-1">Ngày sinh</p>
-                  <p className="text-gray-700">
-                    {talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500 font-medium mb-1">GitHub</p>
-                  <p className="text-gray-700">
-                    {talent.githubUrl ? (
-                      <a href={talent.githubUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
-                        {talent.githubUrl}
-                      </a>
-                    ) : "Chưa có"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500 font-medium mb-1">Portfolio</p>
-                  <p className="text-gray-700">
-                    {talent.portfolioUrl ? (
-                      <a href={talent.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
-                        {talent.portfolioUrl}
-                      </a>
-                    ) : "Chưa có"}
-                  </p>
-                </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
+                  <Button
+                    className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  >
+                    <Upload className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Tải lên CV
+                  </Button>
+                </Link>
+                <Button
+                  onClick={handleDeleteCVs}
+                  disabled={selectedCVs.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedCVs.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa CV ({selectedCVs.length})
+                </Button>
               </div>
             </div>
           </div>
-
-          {/* CV của Talent */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-accent-100 rounded-lg">
-                    <FileText className="w-5 h-5 text-accent-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900">CV của Talent</h3>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Upload className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Tải lên CV
-                    </Button>
-                  </Link>
-                  <Button
-                    onClick={handleDeleteCVs}
-                    disabled={selectedCVs.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedCVs.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa CV ({selectedCVs.length})
-                  </Button>
-                </div>
-              </div>
-            </div>
+          {isCVsExpanded && (
             <div className="p-6">
               {talentCVs.length > 0 ? (
-                <div className="space-y-4">
-                  {talentCVs.map((cv) => (
-                    <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
-                      <div className="flex items-center gap-3 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={selectedCVs.includes(cv.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedCVs([...selectedCVs, cv.id]);
-                            } else {
-                              setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                        />
-                        <div 
-                          className="flex items-center gap-3 flex-1 cursor-pointer"
-                          onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
-                        >
-                          <FileText className="w-5 h-5 text-primary-600" />
-                          <div>
-                            <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">{cv.versionName}</p>
-                            <p className="text-sm text-neutral-600">
-                              <span className="font-medium">Tóm tắt:</span> {cv.summary || "Không có tóm tắt"}
-                            </p>
-                            <p className="text-sm text-neutral-500">
-                              <span className="font-medium">Trạng thái:</span> {cv.isActive ? "Đang sử dụng" : "Không sử dụng"}
-                            </p>
+                <>
+                  <div className="space-y-4">
+                    {talentCVs
+                      .slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage)
+                      .map((cv) => (
+                        <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
+                          <div className="flex items-center gap-3 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={selectedCVs.includes(cv.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                if (e.target.checked) {
+                                  setSelectedCVs([...selectedCVs, cv.id]);
+                                } else {
+                                  setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
+                                }
+                              }}
+                              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                            <div
+                              className="flex items-center gap-3 flex-1 cursor-pointer"
+                              onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
+                            >
+                              <FileText className="w-5 h-5 text-primary-600" />
+                              <div>
+                                <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
+                                  {cv.jobRoleName ? `${cv.jobRoleName} ${cv.versionName}` : cv.versionName}
+                                </p>
+                                <p className="text-sm text-neutral-500">
+                                  <span className="font-medium">Trạng thái:</span> {cv.isActive ? "Đang hoạt động" : "Không hoạt động"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {cv.isActive ? (
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
+                            ) : (
+                              <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">Không hoạt động</span>
+                            )}
+                            <a
+                              href={cv.cvFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
+                            >
+                              <Download className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                              <span className="text-sm font-medium">Xem PDF</span>
+                            </a>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {cv.isActive && (
-                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Active</span>
-                        )}
-                        <a
-                          href={cv.cvFileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
-                        >
-                          <Download className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                          <span className="text-sm font-medium">Xem PDF</span>
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      ))}
+                  </div>
+                  <SectionPagination
+                    currentPage={pageCVs}
+                    totalItems={talentCVs.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageCVs}
+                  />
+                </>
               ) : (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -670,531 +730,691 @@ export default function TalentDetailPage() {
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Dự án của Talent */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <Briefcase className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Dự án của Talent</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isProjectsExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-primary-600" />
                 </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-projects/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Tạo dự án
-                    </Button>
-                  </Link>
+                <h2 className="text-xl font-semibold text-gray-900">Dự án của Talent</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-projects/create?talentId=${id}`}>
                   <Button
-                    onClick={handleDeleteProjects}
-                    disabled={selectedProjects.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedProjects.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
+                    className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                   >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa dự án ({selectedProjects.length})
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Tạo dự án
                   </Button>
-                </div>
-              </div>
-          </div>
-          <div className="p-6">
-            {talentProjects.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {talentProjects.map((project) => (
-                  <div key={project.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-projects/edit/${project.id}`)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedProjects.includes(project.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedProjects([...selectedProjects, project.id]);
-                            } else {
-                              setSelectedProjects(selectedProjects.filter(id => id !== project.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                        />
-                        <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{project.projectName}</h3>
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-2">
-                      <p className="text-sm text-primary-700">
-                        <span className="font-medium">Vị trí:</span> {project.position}
-                      </p>
-                      <p className="text-sm text-primary-600">
-                        <span className="font-medium">Công nghệ:</span> {project.technologies}
-                      </p>
-                      <div>
-                        <p className="text-sm text-gray-600 font-medium mb-1">Mô tả dự án:</p>
-                        <p className="text-sm text-gray-700">{project.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Briefcase className="w-8 h-8 text-neutral-400" />
-                </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa tham gia dự án</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Kỹ năng của Talent */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-secondary-100 rounded-lg">
-                    <Star className="w-5 h-5 text-secondary-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của Talent</h2>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-skills/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Thêm kỹ năng
-                    </Button>
-                  </Link>
-                  <Button
-                    onClick={handleDeleteSkills}
-                    disabled={selectedSkills.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedSkills.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                </Link>
+                <Button
+                  onClick={handleDeleteProjects}
+                  disabled={selectedProjects.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedProjects.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
                     }`}
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kỹ năng ({selectedSkills.length})
-                  </Button>
-                </div>
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa dự án ({selectedProjects.length})
+                </Button>
               </div>
+            </div>
           </div>
-          <div className="p-6">
-            {talentSkills.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {talentSkills.map((skill) => (
-                  <div key={skill.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-skills/edit/${skill.id}`)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedSkills.includes(skill.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedSkills([...selectedSkills, skill.id]);
-                            } else {
-                              setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                        />
-                        <h3 className="font-semibold text-secondary-800 hover:text-secondary-900 transition-colors duration-200">{skill.skillName}</h3>
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm text-secondary-700">
-                        <span className="font-medium">Level:</span> {skill.level}
-                      </p>
-                      <p className="text-sm text-secondary-600">
-                        <span className="font-medium">Kinh nghiệm:</span> {skill.yearsExp} năm
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Star className="w-8 h-8 text-neutral-400" />
-                </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kỹ năng</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Kinh nghiệm làm việc */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-accent-100 rounded-lg">
-                    <Workflow className="w-5 h-5 text-accent-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Kinh nghiệm làm việc</h2>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-work-experiences/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Thêm kinh nghiệm
-                    </Button>
-                  </Link>
-                  <Button
-                    onClick={handleDeleteExperiences}
-                    disabled={selectedExperiences.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedExperiences.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kinh nghiệm ({selectedExperiences.length})
-                  </Button>
-                </div>
-              </div>
-          </div>
-          <div className="p-6">
-            {workExperiences.length > 0 ? (
-              <div className="space-y-6">
-                {workExperiences.map((exp) => (
-                  <div key={exp.id} className="p-4 bg-gradient-to-r from-accent-50 to-accent-100 rounded-xl border border-accent-200 hover:from-accent-100 hover:to-accent-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-work-experiences/edit/${exp.id}`)}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedExperiences.includes(exp.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedExperiences([...selectedExperiences, exp.id]);
-                            } else {
-                              setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
-                        />
-                        <div>
-                          <h3 className="font-semibold text-accent-800 hover:text-accent-900 transition-colors duration-200">{exp.position}</h3>
-                          <p className="text-sm text-accent-700">
-                            <span className="font-medium">Công ty:</span> {exp.company}
-                          </p>
-                          <p className="text-sm text-accent-600">
-                            <span className="font-medium">Thời gian:</span> {new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
-                          </p>
+          {isProjectsExpanded && (
+            <div className="p-6">
+              {talentProjects.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {talentProjects
+                      .slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage)
+                      .map((project) => (
+                        <div key={project.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-projects/edit/${project.id}`)}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedProjects.includes(project.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedProjects([...selectedProjects, project.id]);
+                                  } else {
+                                    setSelectedProjects(selectedProjects.filter(id => id !== project.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                              />
+                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{project.projectName}</h3>
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-sm text-primary-700">
+                              <span className="font-medium">Vị trí:</span> {project.position}
+                            </p>
+                            <p className="text-sm text-primary-600">
+                              <span className="font-medium">Công nghệ:</span> {project.technologies}
+                            </p>
+                            <div>
+                              <p className="text-sm text-gray-600 font-medium mb-1">Mô tả dự án:</p>
+                              <p className="text-sm text-gray-700">{project.description}</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <p className="text-sm text-gray-600 font-medium mb-1">Mô tả công việc:</p>
-                      <p className="text-sm text-gray-700">{exp.description}</p>
-                    </div>
+                      ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Workflow className="w-8 h-8 text-neutral-400" />
+                  <SectionPagination
+                    currentPage={pageProjects}
+                    totalItems={talentProjects.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageProjects}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Briefcase className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa tham gia dự án</p>
                 </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kinh nghiệm</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Vị trí và mức lương */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-warning-100 rounded-lg">
-                    <Target className="w-5 h-5 text-warning-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Vị trí và mức lương</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsJobRoleLevelsExpanded(!isJobRoleLevelsExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isJobRoleLevelsExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-warning-100 rounded-lg">
+                  <Target className="w-5 h-5 text-warning-600" />
                 </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-job-role-levels/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Thêm vị trí
-                    </Button>
-                  </Link>
+                <h2 className="text-xl font-semibold text-gray-900">Vị trí và mức lương</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-job-role-levels/create?talentId=${id}`}>
                   <Button
-                    onClick={handleDeleteJobRoleLevels}
-                    disabled={selectedJobRoleLevels.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedJobRoleLevels.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
+                    className="group flex items-center gap-2 bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                   >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa vị trí ({selectedJobRoleLevels.length})
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Thêm vị trí
                   </Button>
-                </div>
+                </Link>
+                <Button
+                  onClick={handleDeleteJobRoleLevels}
+                  disabled={selectedJobRoleLevels.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedJobRoleLevels.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa vị trí ({selectedJobRoleLevels.length})
+                </Button>
               </div>
+            </div>
           </div>
-          <div className="p-6">
-            {jobRoleLevels.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {jobRoleLevels.map((jrl) => (
-                  <div key={jrl.id} className="p-4 bg-gradient-to-r from-warning-50 to-warning-100 rounded-xl border border-warning-200 hover:from-warning-100 hover:to-warning-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-job-role-levels/edit/${jrl.id}`)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedJobRoleLevels.includes(jrl.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
-                            } else {
-                              setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
-                        />
-                        <h3 className="font-semibold text-warning-800 hover:text-warning-900 transition-colors duration-200">{jrl.jobRoleLevelName}</h3>
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm text-warning-700">
-                        <span className="font-medium">Kinh nghiệm tối thiểu:</span> {jrl.yearsOfExp} năm
-                      </p>
-                      <p className="text-sm text-warning-600">
-                        <span className="font-medium">Mức lương:</span> {jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}
-                      </p>
-                    </div>
+          {isJobRoleLevelsExpanded && (
+            <div className="p-6">
+              {jobRoleLevels.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {jobRoleLevels
+                      .slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage)
+                      .map((jrl) => (
+                        <div key={jrl.id} className="p-4 bg-gradient-to-r from-warning-50 to-warning-100 rounded-xl border border-warning-200 hover:from-warning-100 hover:to-warning-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-job-role-levels/edit/${jrl.id}`)}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedJobRoleLevels.includes(jrl.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
+                                  } else {
+                                    setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
+                              />
+                              <h3 className="font-semibold text-warning-800 hover:text-warning-900 transition-colors duration-200">{jrl.jobRoleLevelName}</h3>
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm text-warning-700">
+                              <span className="font-medium">Kinh nghiệm:</span> {jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}
+                            </p>
+                            <p className="text-sm text-warning-600">
+                              <span className="font-medium">Mức lương:</span> {jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-8 h-8 text-neutral-400" />
+                  <SectionPagination
+                    currentPage={pageJobRoleLevels}
+                    totalItems={jobRoleLevels.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageJobRoleLevels}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật vị trí làm việc</p>
                 </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật vị trí làm việc</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Chứng chỉ */}
+        {/* Kỹ năng của Talent */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <Award className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Chứng chỉ</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isSkillsExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-secondary-100 rounded-lg">
+                  <Star className="w-5 h-5 text-secondary-600" />
                 </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-certificates/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Thêm chứng chỉ
-                    </Button>
-                  </Link>
+                <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của Talent</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-skills/create?talentId=${id}`}>
                   <Button
-                    onClick={handleDeleteCertificates}
-                    disabled={selectedCertificates.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedCertificates.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
+                    className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                   >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa chứng chỉ ({selectedCertificates.length})
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Thêm kỹ năng
                   </Button>
-                </div>
+                </Link>
+                <Button
+                  onClick={handleDeleteSkills}
+                  disabled={selectedSkills.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedSkills.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa kỹ năng ({selectedSkills.length})
+                </Button>
               </div>
+            </div>
           </div>
-          <div className="p-6">
-            {certificates.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {certificates.map((cert) => (
-                  <div key={cert.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-certificates/edit/${cert.id}`)}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedCertificates.includes(cert.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedCertificates([...selectedCertificates, cert.id]);
-                            } else {
-                              setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                        />
-                        <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{cert.certificateTypeName}</h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                          {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm text-primary-700">
-                        <span className="font-medium">Ngày cấp:</span> {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}
-                      </p>
-                    </div>
-                    {cert.imageUrl && (
-                      <a
-                        href={cert.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Xem chứng chỉ
-                      </a>
-                    )}
+          {isSkillsExpanded && (
+            <div className="p-6">
+              {talentSkills.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {talentSkills
+                      .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
+                      .map((skill) => (
+                        <div key={skill.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-skills/edit/${skill.id}`)}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedSkills.includes(skill.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedSkills([...selectedSkills, skill.id]);
+                                  } else {
+                                    setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                              />
+                              <h3 className="font-semibold text-secondary-800 hover:text-secondary-900 transition-colors duration-200">{skill.skillName}</h3>
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm text-secondary-700">
+                              <span className="font-medium">Level:</span> {skill.level}
+                            </p>
+                            <p className="text-sm text-secondary-600">
+                              <span className="font-medium">Kinh nghiệm:</span> {skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Award className="w-8 h-8 text-neutral-400" />
+                  <SectionPagination
+                    currentPage={pageSkills}
+                    totalItems={talentSkills.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageSkills}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Star className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kỹ năng</p>
                 </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa upload chứng chỉ</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Thời gian có sẵn */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-secondary-100 rounded-lg">
-                    <Calendar className="w-5 h-5 text-secondary-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Thời gian có sẵn</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsAvailableTimesExpanded(!isAvailableTimesExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isAvailableTimesExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-secondary-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-secondary-600" />
                 </div>
-                <div className="flex gap-2">
-                  <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
-                    <Button
-                      className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    >
-                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Thêm thời gian
-                    </Button>
-                  </Link>
+                <h2 className="text-xl font-semibold text-gray-900">Thời gian có sẵn</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
                   <Button
-                    onClick={handleDeleteAvailableTimes}
-                    disabled={selectedAvailableTimes.length === 0}
-                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                      selectedAvailableTimes.length === 0
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
+                    className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                   >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa thời gian ({selectedAvailableTimes.length})
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Thêm thời gian
                   </Button>
-                </div>
+                </Link>
+                <Button
+                  onClick={handleDeleteAvailableTimes}
+                  disabled={selectedAvailableTimes.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedAvailableTimes.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa thời gian ({selectedAvailableTimes.length})
+                </Button>
               </div>
+            </div>
           </div>
-          <div className="p-6">
-            {availableTimes.length > 0 ? (
-              <div className="space-y-4">
-                {availableTimes.map((time) => (
-                  <div key={time.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-available-times/edit/${time.id}`)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedAvailableTimes.includes(time.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (e.target.checked) {
-                              setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
-                            } else {
-                              setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                        />
-                        <div>
-                          <p className="text-sm text-secondary-700">
-                            <span className="font-medium">Từ:</span> {new Date(time.startTime).toLocaleDateString('vi-VN')}
-                          </p>
-                          <p className="text-sm text-secondary-600">
-                            <span className="font-medium">Đến:</span> {time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}
-                          </p>
+          {isAvailableTimesExpanded && (
+            <div className="p-6">
+              {availableTimes.length > 0 ? (
+                <>
+                  <div className="space-y-4">
+                    {availableTimes
+                      .slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage)
+                      .map((time) => (
+                        <div key={time.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-available-times/edit/${time.id}`)}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedAvailableTimes.includes(time.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
+                                  } else {
+                                    setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                              />
+                              <div>
+                                <p className="text-sm text-secondary-700">
+                                  <span className="font-medium">Từ:</span> {new Date(time.startTime).toLocaleDateString('vi-VN')}
+                                </p>
+                                <p className="text-sm text-secondary-600">
+                                  <span className="font-medium">Đến:</span> {time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          {time.notes && (
+                            <div className="mt-3">
+                              <p className="text-sm text-gray-600 font-medium mb-1">Ghi chú:</p>
+                              <p className="text-sm text-gray-700">{time.notes}</p>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </div>
-                    {time.notes && (
-                      <div className="mt-3">
-                        <p className="text-sm text-gray-600 font-medium mb-1">Ghi chú:</p>
-                        <p className="text-sm text-gray-700">{time.notes}</p>
-                      </div>
-                    )}
+                      ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-8 h-8 text-neutral-400" />
+                  <SectionPagination
+                    currentPage={pageAvailableTimes}
+                    totalItems={availableTimes.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageAvailableTimes}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Calendar className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật thời gian có sẵn</p>
                 </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
-                <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật thời gian có sẵn</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Chứng chỉ */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsCertificatesExpanded(!isCertificatesExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isCertificatesExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Award className="w-5 h-5 text-primary-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Chứng chỉ</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-certificates/create?talentId=${id}`}>
+                  <Button
+                    className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  >
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Thêm chứng chỉ
+                  </Button>
+                </Link>
+                <Button
+                  onClick={handleDeleteCertificates}
+                  disabled={selectedCertificates.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedCertificates.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa chứng chỉ ({selectedCertificates.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+          {isCertificatesExpanded && (
+            <div className="p-6">
+              {certificates.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {certificates
+                      .slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage)
+                      .map((cert) => (
+                        <div key={cert.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-certificates/edit/${cert.id}`)}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedCertificates.includes(cert.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedCertificates([...selectedCertificates, cert.id]);
+                                  } else {
+                                    setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                              />
+                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{cert.certificateTypeName}</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm text-primary-700">
+                              <span className="font-medium">Ngày cấp:</span> {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}
+                            </p>
+                          </div>
+                          {cert.imageUrl && (
+                            <a
+                              href={cert.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                              Xem chứng chỉ
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                  <SectionPagination
+                    currentPage={pageCertificates}
+                    totalItems={certificates.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageCertificates}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Award className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa upload chứng chỉ</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Kinh nghiệm làm việc */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsExperiencesExpanded(!isExperiencesExpanded)}>
+                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
+                  {isExperiencesExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                  )}
+                </button>
+                <div className="p-2 bg-accent-100 rounded-lg">
+                  <Workflow className="w-5 h-5 text-accent-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Kinh nghiệm làm việc</h2>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/hr/talent-work-experiences/create?talentId=${id}`}>
+                  <Button
+                    className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  >
+                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Thêm kinh nghiệm
+                  </Button>
+                </Link>
+                <Button
+                  onClick={handleDeleteExperiences}
+                  disabled={selectedExperiences.length === 0}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedExperiences.length === 0
+                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Xóa kinh nghiệm ({selectedExperiences.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+          {isExperiencesExpanded && (
+            <div className="p-6">
+              {workExperiences.length > 0 ? (
+                <>
+                  <div className="space-y-6">
+                    {workExperiences
+                      .slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage)
+                      .map((exp) => (
+                        <div key={exp.id} className="p-4 bg-gradient-to-r from-accent-50 to-accent-100 rounded-xl border border-accent-200 hover:from-accent-100 hover:to-accent-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-work-experiences/edit/${exp.id}`)}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedExperiences.includes(exp.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedExperiences([...selectedExperiences, exp.id]);
+                                  } else {
+                                    setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
+                              />
+                              <div>
+                                <h3 className="font-semibold text-accent-800 hover:text-accent-900 transition-colors duration-200">{exp.position}</h3>
+                                <p className="text-sm text-accent-700">
+                                  <span className="font-medium">Công ty:</span> {exp.company}
+                                </p>
+                                <p className="text-sm text-accent-600">
+                                  <span className="font-medium">Thời gian:</span> {new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-sm text-gray-600 font-medium mb-1">Mô tả công việc:</p>
+                            <p className="text-sm text-gray-700">{exp.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                  <SectionPagination
+                    currentPage={pageExperiences}
+                    totalItems={workExperiences.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setPageExperiences}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Workflow className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
+                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kinh nghiệm</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
 }
 
 
-function InfoItem({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function InfoItem({ label, value, icon }: { label: string; value: string | React.ReactNode; icon?: React.ReactNode }) {
   return (
     <div className="group">
       <div className="flex items-center gap-2 mb-2">
         {icon && <div className="text-neutral-400">{icon}</div>}
         <p className="text-neutral-500 text-sm font-medium">{label}</p>
       </div>
-      <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+      <div className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
         {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+// Pagination component for sections
+function SectionPagination({
+  currentPage,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const startItem = totalItems > 0 ? startIndex + 1 : 0;
+  const endItem = endIndex;
+
+  if (totalItems <= itemsPerPage) return null;
+
+  return (
+    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200">
+      <p className="text-sm text-neutral-600">
+        {startItem}-{endItem} của {totalItems} mục
       </p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`p-2 rounded-lg transition-all duration-200 ${currentPage === 1
+            ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+            }`}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`p-2 rounded-lg transition-all duration-200 ${currentPage === totalPages
+            ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+            }`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }

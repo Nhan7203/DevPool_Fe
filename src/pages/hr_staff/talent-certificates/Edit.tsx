@@ -23,6 +23,8 @@ export default function TalentCertificateEditPage() {
   const navigate = useNavigate();
   const [allCertificateTypes, setAllCertificateTypes] = useState<CertificateType[]>([]);
   const [talentId, setTalentId] = useState<number>(0);
+  const [existingCertificateTypeIds, setExistingCertificateTypeIds] = useState<number[]>([]);
+  const [currentCertificateTypeId, setCurrentCertificateTypeId] = useState<number>(0);
   const [formData, setFormData] = useState<TalentCertificateCreate>({
     talentId: 0,
     certificateTypeId: 0,
@@ -48,6 +50,7 @@ export default function TalentCertificateEditPage() {
           imageUrl: data.imageUrl,
         });
         setTalentId(data.talentId);
+        setCurrentCertificateTypeId(data.certificateTypeId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin chứng chỉ!");
@@ -71,6 +74,24 @@ export default function TalentCertificateEditPage() {
     fetchCertificateTypes();
   }, []);
 
+  // Fetch existing certificates for this talent to disable them in dropdown (except current one)
+  useEffect(() => {
+    const fetchExistingCertificates = async () => {
+      if (!talentId) return;
+      try {
+        const existingCertificates = await talentCertificateService.getAll({ talentId: talentId, excludeDeleted: true });
+        // Exclude current certificate type ID from disabled list
+        const certificateTypeIds = existingCertificates
+          .map(cert => cert.certificateTypeId)
+          .filter(id => id > 0 && id !== currentCertificateTypeId);
+        setExistingCertificateTypeIds(certificateTypeIds);
+      } catch (error) {
+        console.error("❌ Error loading existing certificates", error);
+      }
+    };
+    fetchExistingCertificates();
+  }, [talentId, currentCertificateTypeId]);
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -88,6 +109,12 @@ export default function TalentCertificateEditPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
 
     if (!formData.certificateTypeId || formData.certificateTypeId === 0) {
       alert("⚠️ Vui lòng chọn loại chứng chỉ trước khi lưu!");
@@ -184,7 +211,7 @@ export default function TalentCertificateEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Award className="w-4 h-4" />
-                  Loại chứng chỉ
+                  Loại chứng chỉ <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -195,9 +222,19 @@ export default function TalentCertificateEditPage() {
                     required
                   >
                     <option value="0">-- Chọn loại chứng chỉ --</option>
-                    {allCertificateTypes.map(certType => (
-                      <option key={certType.id} value={certType.id}>{certType.name}</option>
-                    ))}
+                    {allCertificateTypes.map(certType => {
+                      const isDisabled = existingCertificateTypeIds.includes(certType.id);
+                      return (
+                        <option 
+                          key={certType.id} 
+                          value={certType.id}
+                          disabled={isDisabled}
+                          style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                        >
+                          {certType.name}{isDisabled ? ' (đã chọn)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 {formData.certificateTypeId > 0 && (

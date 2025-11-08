@@ -4,19 +4,36 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { Button } from "../../../components/ui/button";
-import { 
-  ArrowLeft, 
-  Edit, 
-  Trash2, 
-  Building2, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  User, 
-  Briefcase, 
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Building2,
+  Mail,
+  Phone,
+  MapPin,
+  User,
+  Briefcase,
   CheckCircle,
   XCircle,
+  Clock,
 } from "lucide-react";
+
+const formatDateTime = (dateString?: string | null) => {
+  if (!dateString) return "—";
+  try {
+    return new Date(dateString).toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
+};
 
 export default function ClientCompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,7 +100,7 @@ export default function ClientCompanyDetailPage() {
               <XCircle className="w-8 h-8 text-red-500" />
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy công ty</p>
-            <Link 
+            <Link
               to="/sales/clients"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
@@ -98,12 +115,12 @@ export default function ClientCompanyDetailPage() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
-      
+
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               to="/sales/clients"
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
@@ -118,7 +135,7 @@ export default function ClientCompanyDetailPage() {
               <p className="text-neutral-600 mb-4">
                 Thông tin chi tiết công ty khách hàng
               </p>
-              
+
               {/* Status Badge */}
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 ${
                 company.isDeleted ? "bg-red-50" : "bg-green-50"
@@ -167,39 +184,49 @@ export default function ClientCompanyDetailPage() {
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem 
-                label="Tên công ty" 
-                value={company.name} 
+              <InfoItem
+                label="Tên công ty"
+                value={company.name}
                 icon={<Building2 className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Mã số thuế" 
-                value={company.taxCode ?? "—"} 
+              <InfoItem
+                label="Mã số thuế"
+                value={company.taxCode ?? "—"}
                 icon={<Briefcase className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Người liên hệ" 
-                value={company.contactPerson} 
+              <InfoItem
+                label="Người liên hệ"
+                value={company.contactPerson}
                 icon={<User className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Chức vụ" 
-                value={company.position ?? "—"} 
+              <InfoItem
+                label="Chức vụ"
+                value={company.position ?? "—"}
                 icon={<Briefcase className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Email" 
-                value={company.email} 
+              <InfoItem
+                label="Email"
+                value={company.email}
                 icon={<Mail className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Số điện thoại" 
-                value={company.phone ?? "—"} 
+              <InfoItem
+                label="Số điện thoại"
+                value={company.phone ?? "—"}
                 icon={<Phone className="w-4 h-4" />}
               />
-              <InfoItem 
-                label="Địa chỉ" 
-                value={company.address ?? "—"} 
+              <InfoItem
+                label="Ngày tạo"
+                value={formatDateTime(company.createdAt)}
+                icon={<Clock className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Ngày cập nhật"
+                value={formatDateTime(company.updatedAt)}
+                icon={<Clock className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Địa chỉ"
+                value={company.address ?? "—"}
                 icon={<MapPin className="w-4 h-4" />}
                 className="col-span-2"
               />
@@ -211,10 +238,10 @@ export default function ClientCompanyDetailPage() {
   );
 }
 
-function InfoItem({ label, value, icon, className }: { 
-  label: string; 
-  value: string; 
-  icon?: React.ReactNode; 
+function InfoItem({ label, value, icon, className }: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
   className?: string;
 }) {
   return (

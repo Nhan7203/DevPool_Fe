@@ -97,6 +97,12 @@ export default function TalentProjectEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Xác nhận trước khi lưu
+    const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+    if (!confirmed) {
+      return;
+    }
+
     if (!formData.talentCVId || formData.talentCVId === 0) {
       alert("⚠️ Vui lòng chọn CV của talent trước khi lưu!");
       return;
@@ -189,7 +195,7 @@ export default function TalentProjectEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent
+                  CV của Talent <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -218,7 +224,7 @@ export default function TalentProjectEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Briefcase className="w-4 h-4" />
-                  Tên dự án
+                  Tên dự án <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="projectName"
@@ -235,7 +241,7 @@ export default function TalentProjectEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Target className="w-4 h-4" />
-                    Vị trí trong dự án
+                    Vị trí trong dự án <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="position"

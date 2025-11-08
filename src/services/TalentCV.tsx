@@ -57,6 +57,17 @@ export interface TalentCVExtractRequest {
   filePDF: File;
 }
 
+export interface TalentCVToggleActiveModel {
+  isActive: boolean;
+}
+
+export interface TalentCVFieldsUpdateModel {
+  talentId: number;
+  summary?: string | null;
+  isActive?: boolean;
+  isGeneratedFromTemplate?: boolean;
+}
+
 export const talentCVService = {
   async getAll(filter?: TalentCVFilter) {
     try {
@@ -117,6 +128,39 @@ export const talentCVService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to delete talent CV" };
       throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  async activate(id: number) {
+    try {
+      const response = await axios.patch(`/talentcv/${id}/activate`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to activate talent CV" };
+      throw { message: "Unexpected error occurred during activation" };
+    }
+  },
+
+  async deactivate(id: number) {
+    try {
+      const response = await axios.patch(`/talentcv/${id}/deactivate`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to deactivate talent CV" };
+      throw { message: "Unexpected error occurred during deactivation" };
+    }
+  },
+
+  async updateFields(id: number, payload: TalentCVFieldsUpdateModel) {
+    try {
+      const response = await axios.patch(`/talentcv/${id}/update-fields`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to update talent CV fields" };
+      throw { message: "Unexpected error occurred during field update" };
     }
   },
 

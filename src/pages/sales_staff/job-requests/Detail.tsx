@@ -63,9 +63,9 @@ export default function JobRequestDetailPage() {
 
   const workingModeLabels: Record<number, string> = {
     0: "Không xác định",
-    1: "Onsite",
-    2: "Remote",
-    4: "Hybrid",
+    1: "Tại công ty",
+    2: "Từ xa",
+    4: "Kết hợp",
     8: "Linh hoạt",
   };
 
@@ -235,6 +235,13 @@ export default function JobRequestDetailPage() {
           icon: <XCircle className="w-4 h-4" />,
           bgColor: "bg-gray-50"
         };
+      case 3:
+        return {
+          label: "Bị từ chối",
+          color: "bg-red-100 text-red-800",
+          icon: <XCircle className="w-4 h-4" />,
+          bgColor: "bg-red-50"
+        };
       default:
         return {
           label: "Không xác định",
@@ -246,7 +253,7 @@ export default function JobRequestDetailPage() {
   };
 
   const statusConfig = getStatusConfig(Number(jobRequest.status));
-  const isDisabled = Number(jobRequest.status) === 1 || Number(jobRequest.status) === 2;
+  const isDisabled = [1, 2, 3].includes(Number(jobRequest.status));
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -334,22 +341,26 @@ export default function JobRequestDetailPage() {
               />
               <InfoItem 
                 label="Vị trí tuyển dụng" 
-                value={jobRequest.jobPositionName ?? "—"} 
-                icon={<Users className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Loại vị trí tuyển dụng" 
                 value={jobRoleName} 
                 icon={<Users className="w-4 h-4" />}
               />
-              {/* Removed level item as requested */}
+              <InfoItem 
+                label="Cấp độ chuyên môn" 
+                value={jobRequest.jobPositionName ?? "—"} 
+                icon={<Users className="w-4 h-4" />}
+              />            
+              <InfoItem 
+                label="Số lượng tuyển dụng" 
+                value={jobRequest.quantity?.toString() || "—"} 
+                icon={<Users className="w-4 h-4" />}
+              />
               <InfoItem 
                 label="Ngân sách/tháng" 
                 value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
                 icon={<DollarSign className="w-4 h-4" />}
               />
               <InfoItem 
-                label="Địa điểm (Location)" 
+                label="Khu vực làm việc" 
                 value={locationName} 
                 icon={<Building2 className="w-4 h-4" />}
               />
