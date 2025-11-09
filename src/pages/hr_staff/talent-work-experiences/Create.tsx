@@ -4,6 +4,7 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentWorkExperienceService, type TalentWorkExperienceCreate } from "../../../services/TalentWorkExperience";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
+import { type ExtractedWorkExperience } from "../../../services/TalentCV";
 import { 
   ArrowLeft, 
   Plus, 
@@ -35,6 +36,8 @@ export default function TalentWorkExperienceCreatePage() {
   });
 
   const [talentCVs, setTalentCVs] = useState<TalentCV[]>([]);
+  const [analysisExperiences, setAnalysisExperiences] = useState<ExtractedWorkExperience[]>([]);
+  const analysisStorageKey = talentId ? `talent-analysis-prefill-experiences-${talentId}` : null;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,6 +52,20 @@ export default function TalentWorkExperienceCreatePage() {
     };
     fetchData();
   }, [talentId]);
+
+  useEffect(() => {
+    if (!analysisStorageKey) return;
+    try {
+      const raw = sessionStorage.getItem(analysisStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ExtractedWorkExperience[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setAnalysisExperiences(parsed);
+      }
+    } catch (error) {
+      console.error("❌ Không thể đọc gợi ý kinh nghiệm từ phân tích CV", error);
+    }
+  }, [analysisStorageKey]);
 
   // Validate start date similar to talents/Create.tsx
   const validateStartDate = (date: string): boolean => {
@@ -104,6 +121,45 @@ export default function TalentWorkExperienceCreatePage() {
       ...prev, 
       [name]: name === "talentCVId" ? Number(value) : value 
     }));
+  };
+
+  const normalizeDateInput = (value?: string | null) => {
+    if (!value) return "";
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
+    if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
+    if (/present|hiện tại/i.test(trimmed)) return "";
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return "";
+  };
+
+  const applyExperienceSuggestion = (suggestion: ExtractedWorkExperience) => {
+    if (!suggestion) return;
+    setError("");
+    setSuccess(false);
+    const normalizedStart = normalizeDateInput(suggestion.startDate);
+    const normalizedEnd = normalizeDateInput(suggestion.endDate);
+    setFieldErrors({});
+    setForm(prev => ({
+      ...prev,
+      company: suggestion.company ?? prev.company,
+      position: suggestion.position ?? prev.position,
+      startDate: normalizedStart || prev.startDate,
+      endDate: normalizedEnd,
+      description: suggestion.description ?? prev.description,
+    }));
+  };
+
+  const clearExperienceSuggestions = () => {
+    if (analysisStorageKey) {
+      sessionStorage.removeItem(analysisStorageKey);
+    }
+    setAnalysisExperiences([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,6 +226,7 @@ export default function TalentWorkExperienceCreatePage() {
       };
       
       await talentWorkExperienceService.create(formData);
+      clearExperienceSuggestions();
       setSuccess(true);
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
@@ -217,6 +274,50 @@ export default function TalentWorkExperienceCreatePage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {analysisExperiences.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 animate-fade-in">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-blue-900">Gợi ý kinh nghiệm từ CV</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Chọn một gợi ý bên dưới để tự động điền thông tin vào biểu mẫu.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearExperienceSuggestions}
+                  className="text-xs font-medium text-blue-800 hover:text-blue-900 underline"
+                >
+                  Bỏ gợi ý
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {analysisExperiences.map((experience, index) => (
+                  <div
+                    key={`analysis-experience-${index}`}
+                    className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex-1 min-w-[220px]">
+                      <p className="text-sm font-semibold text-blue-900">{experience.position ?? "Vị trí chưa rõ"}</p>
+                      <p className="text-xs text-blue-700 mt-1">{experience.company ?? "Công ty chưa rõ"}</p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        {experience.startDate ?? "Không rõ"} - {experience.endDate ?? "Hiện tại"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applyExperienceSuggestion(experience)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-xs font-semibold text-white transition-all duration-300 hover:from-blue-700 hover:to-blue-800"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Điền form
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Basic Information */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
             <div className="p-6 border-b border-neutral-200">

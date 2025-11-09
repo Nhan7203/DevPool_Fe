@@ -53,6 +53,160 @@ export interface TalentCVExtractResponse {
   isSuccess: boolean;
 }
 
+export interface BasicInfoData {
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth?: string | null;
+  locationName: string;
+  githubUrl: string;
+  portfolioUrl: string;
+  workingMode: string;
+}
+
+export interface BasicInfoComparison {
+  current: BasicInfoData;
+  suggested: BasicInfoData;
+  hasChanges: boolean;
+}
+
+export interface SkillComparisonItem {
+  skillId: number;
+  skillName: string;
+  level: string;
+  yearsExp: number;
+}
+
+export interface SkillMatchResult {
+  skillId: number;
+  skillName: string;
+  cvMention: string;
+  cvLevel: string;
+  cvYearsExp?: number | null;
+  matchConfidence: number;
+}
+
+export interface ExtractedSkill {
+  skillName: string;
+  level: string;
+  yearsExp?: number | null;
+}
+
+export interface SkillsComparison {
+  existing: SkillComparisonItem[];
+  newFromCV: ExtractedSkill[];
+  matched: SkillMatchResult[];
+}
+
+export interface ExistingWorkExperienceData {
+  id: number;
+  company: string;
+  position: string;
+  startDate: string;
+  endDate?: string | null;
+  description: string;
+}
+
+export interface ExtractedWorkExperience {
+  company: string;
+  position: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+}
+
+export interface WorkExperienceDuplicateCheck {
+  existing: ExistingWorkExperienceData;
+  fromCV: ExtractedWorkExperience;
+  similarityScore: number;
+  recommendation: string;
+  differencesSummary: string[];
+}
+
+export interface WorkExperiencesComparison {
+  potentialDuplicates: WorkExperienceDuplicateCheck[];
+  newEntries: ExtractedWorkExperience[];
+}
+
+export interface ExistingProjectData {
+  id: number;
+  projectName: string;
+  position: string;
+  technologies: string;
+  description: string;
+}
+
+export interface ExtractedProject {
+  projectName: string;
+  position: string;
+  description: string;
+  technologies: string;
+}
+
+export interface ProjectDuplicateCheck {
+  existing: ExistingProjectData;
+  fromCV: ExtractedProject;
+  similarityScore: number;
+  recommendation: string;
+  differencesSummary: string[];
+}
+
+export interface ProjectsComparison {
+  potentialDuplicates: ProjectDuplicateCheck[];
+  newEntries: ExtractedProject[];
+}
+
+export interface ExistingCertificateData {
+  id: number;
+  certificateTypeName: string;
+  issuedDate?: string | null;
+  isVerified: boolean;
+  imageUrl: string;
+}
+
+export interface ExtractedCertificate {
+  certificateName: string;
+  issuedDate: string;
+  imageUrl: string;
+}
+
+export interface CertificatesComparison {
+  existing: ExistingCertificateData[];
+  newFromCV: ExtractedCertificate[];
+}
+
+export interface JobRoleLevelComparisonItem {
+  id: number;
+  position: string;
+  level: string;
+  yearsOfExp: number;
+  ratePerMonth?: number | null;
+}
+
+export interface ExtractedJobRoleLevel {
+  position: string;
+  level: string;
+  yearsOfExp?: number | null;
+  ratePerMonth?: number | null;
+}
+
+export interface JobRoleLevelsComparison {
+  existing: JobRoleLevelComparisonItem[];
+  newFromCV: ExtractedJobRoleLevel[];
+}
+
+export interface CVAnalysisComparisonResponse {
+  isSuccess: boolean;
+  errorMessage?: string | null;
+  basicInfo: BasicInfoComparison;
+  skills: SkillsComparison;
+  workExperiences: WorkExperiencesComparison;
+  projects: ProjectsComparison;
+  certificates: CertificatesComparison;
+  jobRoleLevels: JobRoleLevelsComparison;
+  rawExtractedText: string;
+}
+
 export interface TalentCVExtractRequest {
   filePDF: File;
 }
@@ -194,6 +348,23 @@ export const talentCVService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to extract CV from PDF" };
       throw { message: "Unexpected error occurred during extraction" };
+    }
+  },
+
+  async analyzeCVForUpdate(talentId: number, file: File) {
+    try {
+      const formData = new FormData();
+      formData.append("CVFile", file);
+      const response = await axios.post(`/talentcv/talents/${talentId}/analyze-cv`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response.data as CVAnalysisComparisonResponse;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to analyze CV for update" };
+      throw { message: "Unexpected error occurred during CV analysis" };
     }
   },
 };

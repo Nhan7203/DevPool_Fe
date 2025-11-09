@@ -4,6 +4,7 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { type ExtractedSkill } from "../../../services/TalentCV";
 import { 
   ArrowLeft, 
   Plus, 
@@ -34,6 +35,8 @@ export default function TalentSkillCreatePage() {
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState("");
   const [existingSkillIds, setExistingSkillIds] = useState<number[]>([]);
+  const [analysisSuggestions, setAnalysisSuggestions] = useState<ExtractedSkill[]>([]);
+  const analysisStorageKey = talentId ? `talent-analysis-prefill-skills-${talentId}` : null;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,12 +65,57 @@ export default function TalentSkillCreatePage() {
     fetchExistingSkills();
   }, [talentId]);
 
+  useEffect(() => {
+    if (!analysisStorageKey) return;
+    try {
+      const raw = sessionStorage.getItem(analysisStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ExtractedSkill[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setAnalysisSuggestions(parsed);
+      }
+    } catch (storageError) {
+      console.error("❌ Không thể đọc gợi ý kỹ năng từ phân tích CV", storageError);
+    }
+  }, [analysisStorageKey]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ 
       ...prev, 
       [name]: name === "skillId" || name === "yearsExp" ? Number(value) : value 
     }));
+  };
+
+  const applySkillSuggestion = (suggestion: ExtractedSkill) => {
+    if (!suggestion) return;
+    if (allSkills.length === 0) {
+      setError("⚠️ Danh sách kỹ năng chưa được tải xong. Vui lòng thử lại sau.");
+      return;
+    }
+    const matchingSkill = allSkills.find(
+      (skill) => skill.name.toLowerCase() === suggestion.skillName.toLowerCase()
+    );
+    if (!matchingSkill) {
+      setError(`⚠️ Không tìm thấy kỹ năng "${suggestion.skillName}" trong hệ thống. Vui lòng chọn thủ công.`);
+      return;
+    }
+    setError("");
+    setSuccess(false);
+    setSkillSearchQuery(suggestion.skillName);
+    setForm((prev) => ({
+      ...prev,
+      skillId: matchingSkill.id,
+      level: suggestion.level ?? prev.level,
+      yearsExp: suggestion.yearsExp ?? prev.yearsExp,
+    }));
+  };
+
+  const clearSkillSuggestions = () => {
+    if (analysisStorageKey) {
+      sessionStorage.removeItem(analysisStorageKey);
+    }
+    setAnalysisSuggestions([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -103,6 +151,7 @@ export default function TalentSkillCreatePage() {
 
     try {
       await talentSkillService.create(form);
+      clearSkillSuggestions();
       setSuccess(true);
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
@@ -150,6 +199,50 @@ export default function TalentSkillCreatePage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {analysisSuggestions.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 animate-fade-in">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-amber-900">Gợi ý từ phân tích CV</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Chọn một gợi ý bên dưới để tự động điền thông tin vào biểu mẫu.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSkillSuggestions}
+                  className="text-xs font-medium text-amber-800 hover:text-amber-900 underline"
+                >
+                  Bỏ gợi ý
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {analysisSuggestions.map((suggestion, index) => (
+                  <div
+                    key={`analysis-skill-${index}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-amber-900">{suggestion.skillName}</span>
+                      <span className="text-xs text-amber-700">
+                        Level: {suggestion.level ?? "Chưa rõ"} · Kinh nghiệm:{" "}
+                        {suggestion.yearsExp != null ? `${suggestion.yearsExp} năm` : "Chưa rõ"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applySkillSuggestion(suggestion)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 px-3 py-2 text-xs font-semibold text-white transition-all duration-300 hover:from-secondary-700 hover:to-secondary-800"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Điền form
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Basic Information */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
             <div className="p-6 border-b border-neutral-200">
