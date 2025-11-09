@@ -4,6 +4,7 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentProjectService, type TalentProjectCreate } from "../../../services/TalentProject";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
+import { type ExtractedProject } from "../../../services/TalentCV";
 import { 
   ArrowLeft, 
   Plus, 
@@ -34,6 +35,8 @@ export default function TalentProjectCreatePage() {
   });
 
   const [talentCVs, setTalentCVs] = useState<TalentCV[]>([]);
+  const [analysisProjects, setAnalysisProjects] = useState<ExtractedProject[]>([]);
+  const analysisStorageKey = talentId ? `talent-analysis-prefill-projects-${talentId}` : null;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,12 +55,46 @@ export default function TalentProjectCreatePage() {
     fetchData();
   }, [talentId]);
 
+  useEffect(() => {
+    if (!analysisStorageKey) return;
+    try {
+      const raw = sessionStorage.getItem(analysisStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ExtractedProject[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setAnalysisProjects(parsed);
+      }
+    } catch (error) {
+      console.error("❌ Không thể đọc gợi ý dự án từ phân tích CV", error);
+    }
+  }, [analysisStorageKey]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ 
       ...prev, 
       [name]: name === "talentCVId" ? Number(value) : value 
     }));
+  };
+
+  const applyProjectSuggestion = (suggestion: ExtractedProject) => {
+    if (!suggestion) return;
+    setError("");
+    setSuccess(false);
+    setForm(prev => ({
+      ...prev,
+      projectName: suggestion.projectName ?? prev.projectName,
+      position: suggestion.position ?? prev.position,
+      technologies: suggestion.technologies ?? prev.technologies,
+      description: suggestion.description ?? prev.description,
+    }));
+  };
+
+  const clearProjectSuggestions = () => {
+    if (analysisStorageKey) {
+      sessionStorage.removeItem(analysisStorageKey);
+    }
+    setAnalysisProjects([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +130,7 @@ export default function TalentProjectCreatePage() {
 
     try {
       await talentProjectService.create(form);
+      clearProjectSuggestions();
       setSuccess(true);
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
@@ -140,6 +178,52 @@ export default function TalentProjectCreatePage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">
+          {analysisProjects.length > 0 && (
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6 animate-fade-in">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-purple-900">Gợi ý dự án từ CV</p>
+                  <p className="text-xs text-purple-700 mt-1">
+                    Chọn một dự án bên dưới để tự động điền thông tin vào biểu mẫu.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearProjectSuggestions}
+                  className="text-xs font-medium text-purple-800 hover:text-purple-900 underline"
+                >
+                  Bỏ gợi ý
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {analysisProjects.map((project, index) => (
+                  <div
+                    key={`analysis-project-${index}`}
+                    className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-purple-200 bg-white px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex-1 min-w-[200px]">
+                      <p className="text-sm font-semibold text-purple-900">{project.projectName}</p>
+                      <p className="text-xs text-purple-700 mt-1">
+                        Vai trò: {project.position ?? "Chưa rõ"}
+                      </p>
+                      {project.technologies && (
+                        <p className="text-xs text-purple-600 mt-1">Công nghệ: {project.technologies}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applyProjectSuggestion(project)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-3 py-2 text-xs font-semibold text-white transition-all duration-300 hover:from-purple-700 hover:to-purple-800"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Điền form
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Basic Information */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
             <div className="p-6 border-b border-neutral-200">
