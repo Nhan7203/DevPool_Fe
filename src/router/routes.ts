@@ -151,7 +151,6 @@ export const ROUTES = {
     CONTRACTS: {
       LIST: '/sales/contracts',                     // Danh sách hợp đồng
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
-      UPLOAD: '/sales/contracts/upload',        // Upload file hợp đồng
       CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
     },
     APPLICATIONS: {

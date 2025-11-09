@@ -156,10 +156,10 @@ export default function ListClientContracts() {
               <h1 className="text-3xl font-bold text-gray-900">Hợp đồng</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng với khách hàng</p>
             </div>
-            <Link to="/sales/contracts/upload">
+            <Link to="/sales/contracts/create">
               <button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                Upload hợp đồng mới
+                Tạo hợp đồng mới
               </button>
             </Link>
           </div>

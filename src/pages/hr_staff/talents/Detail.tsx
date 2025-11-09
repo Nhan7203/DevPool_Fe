@@ -119,7 +119,7 @@ export default function TalentDetailPage() {
   const [pageJobRoleLevels, setPageJobRoleLevels] = useState(1);
   const [pageCertificates, setPageCertificates] = useState(1);
   const [pageAvailableTimes, setPageAvailableTimes] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 9;
 
   // Collapse/Expand states for each section
   const [isCVsExpanded, setIsCVsExpanded] = useState(true);
