@@ -1,6 +1,5 @@
 import { 
   BarChart3, 
-  Settings, 
   LineChart, 
   Users, 
   DollarSign,
@@ -19,8 +18,8 @@ export const sidebarItems = [
     href: '/manager/contract',
     icon: Users,
     subItems: [
-      { label: 'Danh Sách Hợp Đồng Khách Hàng', href: '/manager/contracts/clients' },
-      { label: 'Danh Sách Hợp Đồng Đối Tác', href: '/manager/contracts/developers' },
+      { label: 'Hợp Đồng Khách Hàng', href: '/manager/contracts/clients' },
+      { label: 'Hợp Đồng Nhân Sự', href: '/manager/contracts/developers' },
     ]
   },
   {
@@ -32,17 +31,17 @@ export const sidebarItems = [
       { label: 'Doanh thu', href: '/manager/business/revenue' },
     ]
   },
-  {
-    label: 'Báo cáo Nhân sự',
-    href: '/manager/hr',
-    icon: Users,
-    subItems: [
-      { label: 'Tổng quan nhân sự', href: '/manager/hr/overview' },
-      { label: 'Thống kê developers', href: '/manager/hr/developers' },
-      { label: 'Tỷ lệ sử dụng nhân sự', href: '/manager/hr/utilization' },
-      { label: 'Hiệu suất làm việc', href: '/manager/hr/performance' }
-    ]
-  },
+  // {
+  //   label: 'Báo cáo Nhân sự',
+  //   href: '/manager/hr',
+  //   icon: Users,
+  //   subItems: [
+  //     { label: 'Tổng quan nhân sự', href: '/manager/hr/overview' },
+  //     { label: 'Thống kê developers', href: '/manager/hr/developers' },
+  //     { label: 'Tỷ lệ sử dụng nhân sự', href: '/manager/hr/utilization' },
+  //     { label: 'Hiệu suất làm việc', href: '/manager/hr/performance' }
+  //   ]
+  // },
   {
     label: 'Báo cáo Tài chính',
     href: '/manager/finance',
@@ -63,9 +62,4 @@ export const sidebarItems = [
       { label: 'Đối tác', href: '/manager/payment-periods/partners', icon: Wallet },
     ]
   },
-  {
-    label: 'Cài Đặt',
-    href: '/manager/settings',
-    icon: Settings
-  }
 ];

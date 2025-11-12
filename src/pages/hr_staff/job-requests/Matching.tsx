@@ -230,6 +230,16 @@ export default function CVMatchingPage() {
                 note: `Điểm khớp: ${match.matchScore}%`,
             });
 
+      // Cập nhật trạng thái nhân sự sang Applying
+      try {
+        await talentService.changeStatus(match.talentCV.talentId, {
+          newStatus: "Applying",
+          notes: "Tự động chuyển trạng thái khi tạo hồ sơ ứng tuyển",
+        });
+      } catch (statusErr) {
+        console.error("⚠️ Không thể cập nhật trạng thái nhân sự sang Applying:", statusErr);
+      }
+
             alert("✅ Đã tạo hồ sơ ứng tuyển thành công!");
             navigate(`/hr/applications`);
         } catch (err) {
@@ -431,29 +441,29 @@ export default function CVMatchingPage() {
                             const talentWorkingModeText = talentWorkingMode !== WorkingMode.None ? formatWorkingMode(talentWorkingMode) : "";
 
                             const workingModeAnalysis = workingModeRequired
-                                ? `Chế độ làm việc yêu cầu: ${workingModeRequirementText}. ${talentWorkingModeText ? `Talent sẵn sàng: ${talentWorkingModeText}.` : "Talent chưa cập nhật chế độ làm việc."} ${workingModeMatch ? "Hai bên tương thích." : "Chưa tương thích, cần trao đổi thêm."}`
+                                ? `Chế độ làm việc yêu cầu: ${workingModeRequirementText}. ${talentWorkingModeText ? `Nhân sự sẵn sàng: ${talentWorkingModeText}.` : "Nhân sự chưa cập nhật chế độ làm việc."} ${workingModeMatch ? "Hai bên tương thích." : "Chưa tương thích, cần trao đổi thêm."}`
                                 : "Job không yêu cầu chế độ làm việc cụ thể, mọi chế độ đều được chấp nhận.";
 
                             const locationAnalysis = isRemoteOrFlexible
-                                ? "Job cho phép làm Remote/Hybrid nên không yêu cầu talent cố định địa điểm."
+                                ? "Job cho phép làm Remote/Hybrid nên không yêu cầu nhân sự cố định địa điểm."
                                 : locationRequired
                                     ? talentLocationId
                                         ? locationMatch
-                                            ? "Talent đang ở đúng địa điểm yêu cầu."
-                                            : "Talent ở khác địa điểm yêu cầu, cần cân nhắc."
-                                        : "Job yêu cầu địa điểm cụ thể nhưng talent chưa cập nhật thông tin địa điểm."
+                                            ? "Nhân sự đang ở đúng địa điểm yêu cầu."
+                                            : "Nhân sự ở khác địa điểm yêu cầu, cần cân nhắc."
+                                        : "Job yêu cầu địa điểm cụ thể nhưng nhân sự chưa cập nhật thông tin địa điểm."
                                     : "Job không yêu cầu địa điểm cụ thể.";
 
                             const analysisPoints = [
                                 `Điểm tổng hợp: ${match.matchScore}/100.`,
                                 totalRequiredSkills > 0
                                     ? `Kỹ năng: ${match.matchedSkills.length}/${totalRequiredSkills} (${skillMatchPercent}%) kỹ năng yêu cầu đã đáp ứng${match.missingSkills.length ? `. Cần bổ sung: ${match.missingSkills.join(", ")}` : "."}`
-                                    : "Kỹ năng: Yêu cầu tuyển dụng không chỉ định kỹ năng cụ thể, talent được tính 100%.",
+                                    : "Kỹ năng: Yêu cầu tuyển dụng không chỉ định kỹ năng cụ thể, nhân sự được tính 100%.",
                                 workingModeAnalysis,
                                 locationAnalysis,
                                 match.levelMatch
-                                    ? "Cấp độ/kinh nghiệm: Talent phù hợp với cấp độ mà yêu cầu tuyển dụng mong muốn."
-                                    : "Cấp độ/kinh nghiệm: Talent khác cấp độ yêu cầu, nên trao đổi thêm trước khi gửi khách hàng."
+                                    ? "Cấp độ/kinh nghiệm: Nhân sự phù hợp với cấp độ mà yêu cầu tuyển dụng mong muốn."
+                                    : "Cấp độ/kinh nghiệm: Nhân sự khác cấp độ yêu cầu, nên trao đổi thêm trước khi gửi khách hàng."
                             ].filter(Boolean);
 
                             return (

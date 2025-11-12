@@ -166,7 +166,7 @@ export default function TalentWorkExperienceCreatePage() {
     e.preventDefault();
     
     // Xác nhận trước khi tạo
-    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm kinh nghiệm làm việc cho talent không?");
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm kinh nghiệm làm việc cho nhân sự không?");
     if (!confirmed) {
       return;
     }
@@ -204,12 +204,6 @@ export default function TalentWorkExperienceCreatePage() {
       return;
     }
 
-    if (!form.description.trim()) {
-      setError("⚠️ Vui lòng nhập mô tả công việc.");
-      setLoading(false);
-      return;
-    }
-
     // Validate date logic
     if (form.endDate && new Date(form.endDate) <= new Date(form.startDate)) {
       setError("⚠️ Ngày kết thúc phải sau ngày bắt đầu.");
@@ -231,7 +225,7 @@ export default function TalentWorkExperienceCreatePage() {
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent Work Experience:", err);
-      setError("Không thể tạo kinh nghiệm làm việc cho talent. Vui lòng thử lại.");
+      setError("Không thể tạo kinh nghiệm làm việc cho nhân sự. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -250,15 +244,15 @@ export default function TalentWorkExperienceCreatePage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm kinh nghiệm làm việc cho talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm kinh nghiệm làm việc cho nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin chi tiết để thêm kinh nghiệm làm việc mới cho talent
+                Nhập thông tin chi tiết để thêm kinh nghiệm làm việc mới cho nhân sự
               </p>
               
               {/* Status Badge */}
@@ -329,11 +323,11 @@ export default function TalentWorkExperienceCreatePage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* CV của Talent */}
+              {/* CV của nhân sự */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent <span className="text-red-500">*</span>
+                  CV của nhân sự <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="talentCVId"
@@ -440,7 +434,7 @@ export default function TalentWorkExperienceCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mô tả công việc <span className="text-red-500">*</span>
+                  Mô tả công việc (tùy chọn)
                 </label>
                 <textarea
                   name="description"
@@ -448,9 +442,11 @@ export default function TalentWorkExperienceCreatePage() {
                   onChange={handleChange}
                   placeholder="Mô tả chi tiết về công việc, trách nhiệm và thành tựu..."
                   rows={4}
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Có thể để trống nếu chưa muốn ghi chú chi tiết.
+                </p>
               </div>
             </div>
           </div>

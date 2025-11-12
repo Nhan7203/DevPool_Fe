@@ -46,6 +46,17 @@ const getActivityStatusLabel = (status: number): string => {
   return labels[status] || `Trạng thái ${status}`;
 };
 
+const getActivityStatusColor = (status: number): string => {
+  const colors: Record<number, string> = {
+    [ApplyActivityStatus.Scheduled]: "bg-yellow-100 text-yellow-800",
+    [ApplyActivityStatus.Completed]: "bg-blue-100 text-blue-800",
+    [ApplyActivityStatus.Passed]: "bg-green-100 text-green-800",
+    [ApplyActivityStatus.Failed]: "bg-red-100 text-red-800",
+    [ApplyActivityStatus.NoShow]: "bg-orange-100 text-orange-800"
+  };
+  return colors[status] || "bg-gray-100 text-gray-800";
+};
+
 const getActivityTypeColor = (type: number): string => {
   const colors: Record<number, string> = {
     [ApplyActivityType.Online]: "bg-blue-100 text-blue-800",
@@ -128,8 +139,8 @@ export default function ApplyActivityDetailPage() {
   const handleDelete = async () => {
     if (!id) return;
 
-    if (activity?.status !== ApplyActivityStatus.Scheduled || activity?.applicationInfo?.status !== 'InterviewScheduled') {
-      alert("⚠️ Chỉ có thể xóa hoạt động khi hoạt động đang ở trạng thái Đã lên lịch và hồ sơ ở trạng thái Đã lên lịch phỏng vấn!");
+    if (activity?.status !== ApplyActivityStatus.Scheduled || activity?.applicationInfo?.status !== 'Interviewing') {
+      alert("⚠️ Chỉ có thể xóa hoạt động khi hoạt động đang ở trạng thái Đã lên lịch và hồ sơ ở trạng thái Đang xem xét phỏng vấn!");
       return;
     }
 
@@ -147,10 +158,18 @@ export default function ApplyActivityDetailPage() {
   };
 
   const handleEdit = () => {
-    if (activity?.applicationInfo?.status !== 'InterviewScheduled' && activity?.applicationInfo?.status !== 'Submitted') {
-      alert("⚠️ Chỉ có thể chỉnh sửa hoạt động khi đã lên lịch phỏng vấn!");
+    if (!activity) return;
+
+    const canEdit =
+      (activity.applicationInfo?.status === 'Interviewing' ||
+        activity.applicationInfo?.status === 'Submitted') &&
+      activity.status === ApplyActivityStatus.Scheduled;
+
+    if (!canEdit) {
+      alert("⚠️ Chỉ có thể chỉnh sửa hoạt động khi hồ sơ đang xem xét phỏng vấn hoặc đã nộp hồ sơ và hoạt động đang ở trạng thái Đã lên lịch!");
       return;
     }
+
     navigate(`/hr/apply-activities/edit/${id}`);
   };
 
@@ -347,31 +366,9 @@ export default function ApplyActivityDetailPage() {
                 <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityTypeColor(activity.activityType)}`}>
                   {getActivityTypeLabel(activity.activityType)}
                 </span>
-                {/* <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityStatusColor(activity.status)}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${getActivityStatusColor(activity.status)}`}>
                   {getActivityStatusLabel(activity.status)}
-                </span> */}
-                {activity.applicationInfo && (
-                  <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.applicationInfo.status === 'InterviewScheduled' || activity.applicationInfo.status === 'Submitted'
-                      ? 'bg-green-100 text-green-800'
-                      : activity.applicationInfo.status === 'Withdrawn'
-                        ? 'bg-gray-100 text-gray-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                    {activity.applicationInfo.status === 'InterviewScheduled' || activity.applicationInfo.status === 'Submitted'
-                      ? '✓ Đã lên lịch'
-                      : activity.applicationInfo.status === 'Withdrawn'
-                        ? '✗ Đã rút'
-                        : activity.applicationInfo.status === 'Interviewing'
-                          ? '⏳ Đang xem xét phỏng vấn'
-                          : activity.applicationInfo.status === 'Offered'
-                            ? '⏳ Đã đề xuất'
-                            : activity.applicationInfo.status === 'Rejected'
-                              ? '⏳ Đã từ chối'
-                              : activity.applicationInfo.status === 'Hired'
-                                ? '⏳ Đã tuyển'
-                                : `⏳ ${activity.applicationInfo.status}`}
-                  </span>
-                )}
+                </span>
               </div>
             </div>
 
@@ -380,10 +377,10 @@ export default function ApplyActivityDetailPage() {
                 onClick={handleEdit}
                 disabled={
                   activity.status !== ApplyActivityStatus.Scheduled ||
-                  activity.applicationInfo?.status !== 'InterviewScheduled'
+                  activity.applicationInfo?.status !== 'Interviewing'
                 }
                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
-                    activity.applicationInfo?.status !== 'InterviewScheduled'
+                    activity.applicationInfo?.status !== 'Interviewing'
                     ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
                   }`}
@@ -395,10 +392,10 @@ export default function ApplyActivityDetailPage() {
                 onClick={handleDelete}
                 disabled={
                   activity.status !== ApplyActivityStatus.Scheduled ||
-                  activity.applicationInfo?.status !== 'InterviewScheduled'
+                  activity.applicationInfo?.status !== 'Interviewing'
                 }
                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
-                    activity.applicationInfo?.status !== 'InterviewScheduled'
+                    activity.applicationInfo?.status !== 'Interviewing'
                     ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
                   }`}
@@ -496,11 +493,6 @@ export default function ApplyActivityDetailPage() {
                 label="Loại hoạt động"
                 value={getActivityTypeLabel(activity.activityType)}
                 icon={<Tag className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Trạng thái"
-                value={getActivityStatusLabel(activity.status)}
-                icon={<CheckCircle className="w-4 h-4" />}
               />
               {activity.processStepName && (
                 <InfoItem

@@ -101,7 +101,7 @@ export default function TalentProjectCreatePage() {
     e.preventDefault();
     
     // Xác nhận trước khi tạo
-    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm dự án cho talent không?");
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm dự án cho nhân sự không?");
     if (!confirmed) {
       return;
     }
@@ -111,7 +111,7 @@ export default function TalentProjectCreatePage() {
     setSuccess(false);
 
     if (!form.talentCVId || form.talentCVId === 0) {
-      setError("⚠️ Vui lòng chọn CV của talent trước khi tạo.");
+      setError("⚠️ Vui lòng chọn CV của nhân sự trước khi tạo.");
       setLoading(false);
       return;
     }
@@ -135,7 +135,7 @@ export default function TalentProjectCreatePage() {
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent Project:", err);
-      setError("Không thể tạo dự án cho talent. Vui lòng thử lại.");
+      setError("Không thể tạo dự án cho nhân sự. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -154,15 +154,15 @@ export default function TalentProjectCreatePage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm dự án cho talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm dự án cho nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin chi tiết để thêm dự án mới cho talent
+                Nhập thông tin chi tiết để thêm dự án mới cho nhân sự
               </p>
               
               {/* Status Badge */}
@@ -235,11 +235,11 @@ export default function TalentProjectCreatePage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* CV của Talent */}
+              {/* CV của nhân sự */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent <span className="text-red-500">*</span>
+                  CV của nhân sự <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="talentCVId"

@@ -90,7 +90,7 @@ export default function SalesDashboard() {
   const closedJobRequests = jobRequests.filter(jr => jr.status === JobRequestStatus.Closed).length;
 
   const totalApplications = applications.length;
-  const interviewScheduledApplications = applications.filter(app => app.status === "InterviewScheduled").length;
+  const interviewScheduledApplications = applications.filter(app => app.status === "Interviewing").length;
   const interviewingApplications = applications.filter(app => app.status === "Interviewing").length;
   const offeredApplications = applications.filter(app => app.status === "Offered").length;
   const hiredApplications = applications.filter(app => app.status === "Hired").length;
@@ -143,7 +143,7 @@ export default function SalesDashboard() {
   const stageFunnelData = [
     { stage: "Đã lên lịch", count: interviewScheduledApplications },
     { stage: "Phỏng vấn", count: interviewingApplications },
-    { stage: "Đã đề xuất", count: offeredApplications },
+    { stage: "Đã bàn bạc", count: offeredApplications },
     { stage: "Đã tuyển", count: hiredApplications },
     { stage: "Từ chối", count: rejectedApplications },
     { stage: "Đã rút", count: withdrawnApplications }

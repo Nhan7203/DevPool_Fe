@@ -5,7 +5,7 @@ import {
   Building,
   FileUp,
   Briefcase,
-  UsersRound,
+  ClipboardList,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -26,7 +26,7 @@ export const sidebarItems = [
   {
     label: 'Hồ Sơ Ứng Tuyển',
     href: '/sales/applications',
-    icon: UsersRound,
+    icon: ClipboardList,
     subItems: [
       { label: 'Danh Sách Hồ Sơ', href: '/sales/applications' },
       { label: 'Mẫu Quy Trình', href: '/sales/apply-process-templates' },

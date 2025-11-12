@@ -15,6 +15,8 @@ export default function ListContract() {
     const [showFilters, setShowFilters] = useState(false);
     const [filterStatus, setFilterStatus] = useState('');
     const [error, setError] = useState('');
+    const statsPageSize = 4;
+    const [statsStartIndex, setStatsStartIndex] = useState(0);
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -37,8 +39,18 @@ export default function ListContract() {
                     talentService.getAll({ excludeDeleted: true })
                 ]);
 
-                setContracts(contractsData);
-                setFilteredContracts(contractsData);
+                const sortedContracts = [...contractsData].sort((a, b) => {
+                    const metaA = a as PartnerContract & { createdAt?: string; updatedAt?: string };
+                    const metaB = b as PartnerContract & { createdAt?: string; updatedAt?: string };
+                    const dateA = metaA.updatedAt ?? metaA.createdAt ?? a.startDate;
+                    const dateB = metaB.updatedAt ?? metaB.createdAt ?? b.startDate;
+                    const timeA = dateA ? new Date(dateA).getTime() : 0;
+                    const timeB = dateB ? new Date(dateB).getTime() : 0;
+                    return timeB - timeA;
+                });
+
+                setContracts(sortedContracts);
+                setFilteredContracts(sortedContracts);
 
                 // Create maps for quick lookup
                 const partnersMapData = new Map<number, Partner>();
@@ -78,7 +90,7 @@ export default function ListContract() {
             });
         }
         if (filterStatus) {
-            filtered = filtered.filter(c => c.status === filterStatus);
+            filtered = filtered.filter(c => matchesStatus(c.status, filterStatus));
         }
         setFilteredContracts(filtered);
         setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
@@ -92,14 +104,18 @@ export default function ListContract() {
     const startItem = filteredContracts.length > 0 ? startIndex + 1 : 0;
     const endItem = Math.min(endIndex, filteredContracts.length);
 
+    const normalizeStatus = (status?: string | null) => (status ?? '').toLowerCase();
+
     const getStatusColor = (status: string) => {
-        switch (status) {
+        const normalized = normalizeStatus(status);
+        switch (normalized) {
             case 'active':
                 return 'bg-green-100 text-green-800';
             case 'pending':
+                return 'bg-yellow-100 text-yellow-800';        
             case 'draft':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'completed':
+                return 'bg-gray-100 text-gray-800';
+            case 'expired':
                 return 'bg-blue-100 text-blue-800';
             case 'terminated':
                 return 'bg-red-100 text-red-800';
@@ -109,14 +125,16 @@ export default function ListContract() {
     };
 
     const getStatusText = (status: string) => {
-        switch (status) {
+        const normalized = normalizeStatus(status);
+        switch (normalized) {
             case 'active':
                 return 'Đang hiệu lực';
             case 'pending':
-            case 'draft':
                 return 'Chờ duyệt';
-            case 'completed':
-                return 'Đã hoàn thành';
+            case 'draft':
+                return 'Bản nháp';
+            case 'expired':
+                return 'Đã hết hạn';
             case 'terminated':
                 return 'Đã chấm dứt';
             default:
@@ -124,13 +142,19 @@ export default function ListContract() {
         }
     };
 
-    const formatCurrency = (value: number | null | undefined) => {
-        if (!value) return '—';
-        return new Intl.NumberFormat('vi-VN', {
-            style: 'currency',
-            currency: 'VND'
-        }).format(value);
+    const matchesStatus = (statusValue: string | null | undefined, target: string) => {
+        const normalized = normalizeStatus(statusValue);
+        if (target === 'expired') {
+            return normalized === 'expired';
+        }
+        if (target === 'terminated') {
+            return normalized === 'terminated';
+        }
+        return normalized === target;
     };
+
+    const countStatus = (...statuses: string[]) =>
+        contracts.filter(c => statuses.some(status => matchesStatus(c.status, status))).length;
 
     const getPartnerName = (partnerId: number) => {
         return partnersMap.get(partnerId)?.companyName || '—';
@@ -149,15 +173,33 @@ export default function ListContract() {
         },
         {
             title: 'Đang Hiệu Lực',
-            value: contracts.filter(c => c.status === 'active').length.toString(),
+            value: countStatus('active').toString(),
             color: 'green',
             icon: <CheckCircle className="w-6 h-6" />
         },
         {
             title: 'Chờ Duyệt',
-            value: contracts.filter(c => c.status === 'pending').length.toString(),
+            value: countStatus('pending').toString(),
             color: 'orange',
             icon: <Clock className="w-6 h-6" />
+        },
+        {
+            title: 'Bản nháp',
+            value: countStatus('draft').toString(),
+            color: 'gray',
+            icon: <FileText className="w-6 h-6" />
+        },
+        {
+            title: 'Đã hết hạn',
+            value: countStatus('expired').toString(),
+            color: 'blue',
+            icon: <CheckCircle className="w-6 h-6" />
+        },
+        {
+            title: 'Đã chấm dứt',
+            value: countStatus('terminated').toString(),
+            color: 'red',
+            icon: <AlertCircle className="w-6 h-6" />
         },
         {
             title: 'Tổng Giá Trị',
@@ -166,6 +208,24 @@ export default function ListContract() {
             icon: <DollarSign className="w-6 h-6" />
         }
     ];
+
+    const statsSlice = stats.slice(statsStartIndex, Math.min(statsStartIndex + statsPageSize, stats.length));
+    const canShowStatsNav = stats.length > statsPageSize;
+    const canGoPrevStats = statsStartIndex > 0;
+    const canGoNextStats = statsStartIndex + statsPageSize < stats.length;
+
+    const handlePrevStats = () => {
+        setStatsStartIndex(prev => Math.max(0, prev - statsPageSize));
+    };
+
+    const handleNextStats = () => {
+        setStatsStartIndex(prev => Math.min(stats.length - statsPageSize, prev + statsPageSize));
+    };
+
+    useEffect(() => {
+        const maxIndex = Math.max(0, stats.length - statsPageSize);
+        setStatsStartIndex(prev => Math.min(prev, maxIndex));
+    }, [stats.length]);
 
     if (loading) {
         return (
@@ -207,8 +267,8 @@ export default function ListContract() {
                 <div className="mb-8 animate-slide-up">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng Đối Tác</h1>
-                            <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng đối tác</p>
+                            <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng Nhân Sự</h1>
+                            <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng nhân sự</p>
                         </div>
                         <Link
                             to="/hr/contracts/create"
@@ -220,24 +280,100 @@ export default function ListContract() {
                     </div>
 
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-                        {stats.map((stat, index) => (
-                            <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    <div className="mb-8 animate-fade-in">
+                        <div className="relative">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {statsSlice.map((stat, index) => (
+                                    <div key={`${stat.title}-${statsStartIndex + index}`} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                                                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                                            </div>
+                                            <div className={`p-3 rounded-full ${
+                                                stat.color === 'blue'
+                                                    ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200'
+                                                    : stat.color === 'green'
+                                                        ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200'
+                                                        : stat.color === 'purple'
+                                                            ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200'
+                                                            : stat.color === 'red'
+                                                                ? 'bg-red-100 text-red-600 group-hover:bg-red-200'
+                                                                : stat.color === 'gray'
+                                                                    ? 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200'
+                                                                    : 'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                                            } transition-all duration-300`}>
+                                                {stat.icon}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                                        stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                                            stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                                                'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                                    } transition-all duration-300`}>
-                                        {stat.icon}
-                                    </div>
+                                ))}
+                            </div>
+
+                            {canShowStatsNav && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStats}
+                                        disabled={!canGoPrevStats}
+                                        className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                                            canGoPrevStats
+                                                ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                                                : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê phía trước"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStats}
+                                        disabled={!canGoNextStats}
+                                        className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                                            canGoNextStats
+                                                ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                                                : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê tiếp theo"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {canShowStatsNav && (
+                            <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStats}
+                                        disabled={!canGoPrevStats}
+                                        className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                                            canGoPrevStats
+                                                ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                                                : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê phía trước"
+                                    >
+                                        Trước
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStats}
+                                        disabled={!canGoNextStats}
+                                        className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                                            canGoNextStats
+                                                ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                                                : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê tiếp theo"
+                                    >
+                                        Tiếp
+                                    </button>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 
@@ -274,9 +410,10 @@ export default function ListContract() {
                                         className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                                     >
                                         <option value="">Tất cả trạng thái</option>
-                                        <option value="draft">Chờ duyệt</option>
+                                        <option value="pending">Chờ duyệt</option>
+                                        <option value="draft">Bản nháp</option>
                                         <option value="active">Đang hiệu lực</option>
-                                        <option value="completed">Đã hoàn thành</option>
+                                        <option value="expired">Đã hết hạn</option>
                                         <option value="terminated">Đã chấm dứt</option>
                                     </select>
                                     <button
@@ -339,12 +476,10 @@ export default function ListContract() {
                             <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số hợp đồng</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Nhân viên</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Nhân sự</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Đối tác</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
-                                    <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mức Phí Dev</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Loại Mức Phí</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                                 </tr>
@@ -393,24 +528,7 @@ export default function ListContract() {
                                                         {new Date(contract.startDate).toLocaleDateString('vi-VN')} {contract.endDate ? `- ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
                                                     </span>
                                                 </div>
-                                            </td>
-                                            <td className="py-4 px-6 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <DollarSign className="w-4 h-4 text-neutral-400" />
-                                                    <span className="text-sm font-medium text-neutral-700">
-                                                        {formatCurrency(contract.devRate)}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-6">
-                                                <span className="text-sm text-neutral-700">
-                                                    {contract.rateType === 'Hourly' ? 'Theo giờ' :
-                                                     contract.rateType === 'Daily' ? 'Theo ngày' :
-                                                     contract.rateType === 'Monthly' ? 'Theo tháng' :
-                                                     contract.rateType === 'Fixed' ? 'Cố định' : 
-                                                     contract.rateType || '—'}
-                                                </span>
-                                            </td>
+                                            </td>                              
                                             <td className="py-4 px-6 text-center">
                                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
                                                     {getStatusText(contract.status)}

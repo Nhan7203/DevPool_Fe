@@ -7,22 +7,22 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
-    label: 'Quản Lý Talent',
+    label: 'Quản Lý Nhân Sự',
     href: '/hr/developers',
     icon: Users,
     // subItems: [
-    //   { label: 'Danh sách talent', href: '/hr/developers' },
-    //   { label: 'Tạo talent', href: '/hr/developers/create' },
+    //   { label: 'Danh sách nhân sự', href: '/hr/developers' },
+    //   { label: 'Tạo nhân sự', href: '/hr/developers/create' },
 
     // ]
   },
   {
-    label: 'Quản Lý Partner',
+    label: 'Quản Lý Đối Tác',
     href: '/hr/partners',
     icon: Building2,
     // subItems: [
-    //   { label: 'Danh Sách Partner', href: '/hr/partners' },
-    //   { label: 'Tạo Partner', href: '/hr/partners/create' },
+    //   { label: 'Danh Sách Đối Tác', href: '/hr/partners' },
+    //   { label: 'Tạo Đối Tác', href: '/hr/partners/create' },
     // ]
   },
   // {
@@ -49,13 +49,13 @@ export const sidebarItems = [
     icon: ClipboardList,
   },
   {
-    label: 'Hợp Đồng Đối Tác',
+    label: 'Hợp Đồng Nhân Sự',
     href: '/hr/contracts',
     icon: FileText,
-    subItems: [
-      { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
-      { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
-    ]
+    // subItems: [
+    //   { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
+    //   { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
+    // ]
   },
   {
     label: 'Tạo tài liệu đối tác',

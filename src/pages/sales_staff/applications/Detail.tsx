@@ -40,13 +40,11 @@ interface SalesActivity extends ApplyActivity {
 }
 
 const statusLabels: Record<string, string> = {
-  Rejected: "Đã từ chối",
-  Interview: "Phỏng vấn",
-  InterviewScheduled: "Đã lên lịch phỏng vấn",
   Submitted: "Đã nộp hồ sơ",
   Interviewing: "Đang xem xét phỏng vấn",
-  Offered: "Đã đề xuất",
+  Offered: "Đã bàn bạc",
   Hired: "Đã tuyển",
+  Rejected: "Đã từ chối",
   Withdrawn: "Đã rút",
 };
 
@@ -70,7 +68,7 @@ interface JobDisplayInfo {
 }
 
 const workingModeLabels: Record<number, string> = {
-  [WorkingModeEnum.Onsite]: "Tại công ty",
+  [WorkingModeEnum.Onsite]: "Tại văn phòng",
   [WorkingModeEnum.Remote]: "Làm từ xa",
   [WorkingModeEnum.Hybrid]: "Kết hợp",
   [WorkingModeEnum.Flexible]: "Linh hoạt",

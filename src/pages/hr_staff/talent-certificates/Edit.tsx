@@ -18,7 +18,7 @@ import {
   ExternalLink
 } from "lucide-react";
 
-export default function TalentCertificateEditPage() {
+function TalentCertificateEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [allCertificateTypes, setAllCertificateTypes] = useState<CertificateType[]>([]);
@@ -81,9 +81,9 @@ export default function TalentCertificateEditPage() {
       try {
         const existingCertificates = await talentCertificateService.getAll({ talentId: talentId, excludeDeleted: true });
         // Exclude current certificate type ID from disabled list
-        const certificateTypeIds = existingCertificates
-          .map(cert => cert.certificateTypeId)
-          .filter(id => id > 0 && id !== currentCertificateTypeId);
+        const certificateTypeIds = (existingCertificates as Array<{ certificateTypeId?: number }>)
+          .map((cert) => cert.certificateTypeId ?? 0)
+          .filter((cid) => cid > 0 && cid !== currentCertificateTypeId);
         setExistingCertificateTypeIds(certificateTypeIds);
       } catch (error) {
         console.error("❌ Error loading existing certificates", error);
@@ -121,22 +121,27 @@ export default function TalentCertificateEditPage() {
       return;
     }
 
-    if (!formData.imageUrl.trim()) {
-      alert("⚠️ Vui lòng nhập URL hình ảnh chứng chỉ!");
-      return;
-    }
+    const imageUrl = formData.imageUrl.trim();
 
-    // Validate URL format
-    try {
-      new URL(formData.imageUrl);
-    } catch {
-      alert("⚠️ URL hình ảnh không hợp lệ!");
-      return;
+    if (imageUrl) {
+      try {
+        const parsed = new URL(imageUrl);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          throw new Error("invalid protocol");
+        }
+      } catch {
+        alert("⚠️ URL hình ảnh không hợp lệ!");
+        return;
+      }
     }
 
     try {
       console.log("Payload gửi đi:", formData);
-      await talentCertificateService.update(Number(id), formData);
+      await talentCertificateService.update(Number(id), {
+        ...formData,
+        imageUrl: imageUrl || "",
+        issuedDate: formData.issuedDate ? formData.issuedDate : undefined,
+      });
 
       alert("✅ Cập nhật chứng chỉ thành công!");
       navigate(`/hr/developers/${talentId}`);
@@ -293,18 +298,18 @@ export default function TalentCertificateEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Upload className="w-4 h-4" />
-                  URL hình ảnh chứng chỉ
+                  URL hình ảnh chứng chỉ (tùy chọn)
                 </label>
                 <Input
+                  type="url"
                   name="imageUrl"
                   value={formData.imageUrl}
                   onChange={handleChange}
                   placeholder="https://example.com/certificate-image.jpg"
-                  required
                   className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
-                  Nhập URL đầy đủ của hình ảnh chứng chỉ
+                  Nhập URL nếu muốn đính kèm hình ảnh chứng chỉ
                 </p>
                 {formData.imageUrl && (
                   <div className="mt-3">
@@ -345,3 +350,5 @@ export default function TalentCertificateEditPage() {
     </div>
   );
 }
+
+export default TalentCertificateEditPage;

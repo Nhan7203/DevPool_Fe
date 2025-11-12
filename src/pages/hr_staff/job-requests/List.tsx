@@ -40,7 +40,7 @@ interface HRJobRequest {
 
 const workingModeLabels: Record<number, string> = {
     0: "Không xác định",
-    1: "Tại công ty",
+    1: "Tại văn phòng",
     2: "Từ xa",
     4: "Kết hợp",
     8: "Linh hoạt"
@@ -51,6 +51,13 @@ const statusLabels: Record<number, string> = {
     1: "Approved",
     2: "Closed",
     3: "Rejected"
+};
+
+const statusLabelDisplay: Record<string, string> = {
+    Pending: "Chờ duyệt",
+    Approved: "Đã duyệt",
+    Closed: "Đã đóng",
+    Rejected: "Từ chối"
 };
 
 export default function HRJobRequestList() {
@@ -69,9 +76,11 @@ export default function HRJobRequestList() {
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+    const statsPageSize = 4;
+    const [statsStartIndex, setStatsStartIndex] = useState(0);
 
     // Stats data
-    const stats = [
+const stats = [
         {
             title: 'Tổng Yêu Cầu',
             value: requests.length.toString(),
@@ -95,8 +104,19 @@ export default function HRJobRequestList() {
             value: requests.filter(r => r.status === 'Rejected').length.toString(),
             color: 'red',
             icon: <XCircle className="w-6 h-6" />
+        },
+        {
+            title: 'Đã đóng',
+            value: requests.filter(r => r.status === 'Closed').length.toString(),
+            color: 'gray',
+            icon: <Briefcase className="w-6 h-6" />
         }
     ];
+
+    useEffect(() => {
+        const maxIndex = Math.max(0, stats.length - statsPageSize);
+        setStatsStartIndex((prev) => Math.min(prev, maxIndex));
+    }, [stats.length, statsPageSize]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -114,7 +134,18 @@ export default function HRJobRequestList() {
                     ]);
 
                 // Lấy tất cả yêu cầu
-                const filteredReqs = jobReqs;
+                const filteredReqs = [...jobReqs].sort((a, b) => {
+                    const metaA = a as { createdAt?: string };
+                    const metaB = b as { createdAt?: string };
+                    const timeA = metaA.createdAt ? new Date(metaA.createdAt).getTime() : 0;
+                    const timeB = metaB.createdAt ? new Date(metaB.createdAt).getTime() : 0;
+
+                    if (timeA !== timeB) {
+                        return timeB - timeA;
+                    }
+
+                    return b.id - a.id;
+                });
 
                 const projectDict: Record<number, Project> = {};
                 projects.forEach((p) => (projectDict[p.id] = p));
@@ -214,6 +245,25 @@ export default function HRJobRequestList() {
     const startItem = filteredRequests.length > 0 ? startIndex + 1 : 0;
     const endItem = Math.min(endIndex, filteredRequests.length);
 
+    const handlePrevStats = () => {
+        setStatsStartIndex((prev) => Math.max(0, prev - statsPageSize));
+    };
+
+    const handleNextStats = () => {
+        setStatsStartIndex((prev) => {
+            const maxIndex = Math.max(0, stats.length - statsPageSize);
+            return Math.min(maxIndex, prev + statsPageSize);
+        });
+    };
+
+    const statsSlice = stats.slice(
+        statsStartIndex,
+        Math.min(statsStartIndex + statsPageSize, stats.length)
+    );
+    const canShowStatsNav = stats.length > statsPageSize;
+    const canGoPrev = canShowStatsNav && statsStartIndex > 0;
+    const canGoNext = canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
     const handleResetFilters = () => {
         setSearchTerm("");
         setFilterCompany("");
@@ -249,25 +299,96 @@ export default function HRJobRequestList() {
                     </div>
 
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-                        {stats.map((stat, index) => (
-                            <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    <div className="mb-8 animate-fade-in">
+                        <div className="relative">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {statsSlice.map((stat, index) => (
+                                    <div key={`${stat.title}-${statsStartIndex + index}`} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                                                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                                            </div>
+                                            <div className={`p-3 rounded-full ${
+                                                stat.color === 'blue'
+                                                    ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200'
+                                                    : stat.color === 'green'
+                                                    ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200'
+                                                    : stat.color === 'purple'
+                                                    ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200'
+                                                    : stat.color === 'red'
+                                                    ? 'bg-red-100 text-red-600 group-hover:bg-red-200'
+                                                    : 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200'
+                                            } transition-all duration-300`}>
+                                                {stat.icon}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                                        stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                                            stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                                                stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
-                                                    'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                                        } transition-all duration-300`}>
-                                        {stat.icon}
-                                    </div>
+                                ))}
+                            </div>
+                            {canShowStatsNav && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStats}
+                                        disabled={!canGoPrev}
+                                        className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                                            canGoPrev
+                                                ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                                                : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê phía trước"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStats}
+                                        disabled={!canGoNext}
+                                        className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                                            canGoNext
+                                                ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                                                : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê tiếp theo"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        {canShowStatsNav && (
+                            <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStats}
+                                        disabled={!canGoPrev}
+                                        className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                                            canGoPrev
+                                                ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                                                : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê phía trước"
+                                    >
+                                        Trước
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStats}
+                                        disabled={!canGoNext}
+                                        className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                                            canGoNext
+                                                ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                                                : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                                        }`}
+                                        aria-label="Xem thống kê tiếp theo"
+                                    >
+                                        Tiếp
+                                    </button>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 
@@ -463,17 +584,13 @@ export default function HRJobRequestList() {
                                                 </Link>
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${req.status === 'Pending' ? 'bg-warning-100 text-warning-700' :
+                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${req.status === 'Pending' ? 'bg-warning-100 text-warning-700' :
                                                         req.status === 'Approved' ? 'bg-secondary-100 text-secondary-700' :
                                                             req.status === 'Rejected' ? 'bg-red-100 text-red-700' :
                                                                 req.status === 'Closed' ? 'bg-neutral-100 text-neutral-700' :
                                                                     'bg-gray-100 text-gray-700'
                                                     }`}>
-                                                    {req.status === 'Pending' ? '⏳ Chờ duyệt' :
-                                                        req.status === 'Approved' ? '✅ Đã duyệt' :
-                                                            req.status === 'Rejected' ? '❌ Từ chối' :
-                                                                req.status === 'Closed' ? '🔒 Đã đóng' :
-                                                                    '❓ Không xác định'}
+                                                    {statusLabelDisplay[req.status] ?? req.status}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">

@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   XCircle,
+  Mail,
 } from "lucide-react";
 
 import Sidebar from "../../../components/common/Sidebar";
@@ -23,7 +24,7 @@ import { WorkingMode } from "../../../types/WorkingMode";
 // Mapping WorkingMode values to Vietnamese names
 const workingModeLabels: Record<number, string> = {
   [WorkingMode.None]: "Không xác định",
-  [WorkingMode.Onsite]: "Tại công ty",
+  [WorkingMode.Onsite]: "Tại văn phòng",
   [WorkingMode.Remote]: "Từ xa",
   [WorkingMode.Hybrid]: "Kết hợp",
   [WorkingMode.Flexible]: "Linh hoạt",
@@ -31,12 +32,20 @@ const workingModeLabels: Record<number, string> = {
 
 const statusLabels: Record<string, { label: string; badgeClass: string }> = {
   Available: {
-    label: "Đang rảnh",
+    label: "Sẵn sàng làm việc",
     badgeClass: "bg-green-100 text-green-800",
   },
   Busy: {
     label: "Đang bận",
     badgeClass: "bg-yellow-100 text-yellow-800",
+  },
+  Working: {
+    label: "Đang làm việc",
+    badgeClass: "bg-blue-100 text-blue-800",
+  },
+  Applying: {
+    label: "Đang ứng tuyển",
+    badgeClass: "bg-purple-100 text-purple-800",
   },
   Unavailable: {
     label: "Tạm ngưng",
@@ -57,33 +66,47 @@ export default function ListDev() {
   const [filterLocation, setFilterLocation] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterWorkingMode, setFilterWorkingMode] = useState("");
-  
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 30;
+  const itemsPerPage = 10;
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
 
   // Thống kê
   const stats = [
     {
-      title: "Tổng Talent",
+      title: "Tổng nhân sự",
       value: talents.length.toString(),
       color: "blue",
       icon: <Users className="w-6 h-6" />,
     },
     {
-      title: "Đang rảnh (Available)",
+    title: "Sẵn sàng làm việc",
       value: talents.filter((t) => t.status === "Available").length.toString(),
       color: "green",
       icon: <Briefcase className="w-6 h-6" />,
     },
     {
-      title: "Đang bận (Busy)",
+      title: "Đang bận",
       value: talents.filter((t) => t.status === "Busy").length.toString(),
       color: "orange",
       icon: <MapPin className="w-6 h-6" />,
     },
+  {
+    title: "Đang làm việc",
+    value: talents.filter((t) => t.status === "Working").length.toString(),
+    color: "blue",
+    icon: <Briefcase className="w-6 h-6" />,
+  },
+  {
+    title: "Đang ứng tuyển",
+    value: talents.filter((t) => t.status === "Applying").length.toString(),
+    color: "purple",
+    icon: <Users className="w-6 h-6" />,
+  },
     {
-      title: "Tạm ngưng (Unavailable)",
+      title: "Tạm ngưng",
       value: talents
         .filter((t) => t.status === "Unavailable")
         .length.toString(),
@@ -91,6 +114,11 @@ export default function ListDev() {
       icon: <XCircle className="w-6 h-6" />,
     },
   ];
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex((prev) => Math.min(prev, maxIndex));
+  }, [stats.length, statsPageSize]);
 
   // Lấy dữ liệu talent + location
   useEffect(() => {
@@ -101,8 +129,22 @@ export default function ListDev() {
           talentService.getAll(),
           locationService.getAll({ excludeDeleted: true }),
         ]);
-        setTalents(talentData);
-        setFilteredTalents(talentData);
+        const sortedTalents = [...talentData].sort((a, b) => {
+          const createdAtA = (a as { createdAt?: string }).createdAt;
+          const createdAtB = (b as { createdAt?: string }).createdAt;
+
+          const timeA = createdAtA ? new Date(createdAtA).getTime() : 0;
+          const timeB = createdAtB ? new Date(createdAtB).getTime() : 0;
+
+          if (timeA !== timeB) {
+            return timeB - timeA;
+          }
+
+          return b.id - a.id;
+        });
+
+        setTalents(sortedTalents);
+        setFilteredTalents(sortedTalents);
         setLocations(locationData);
       } catch (err) {
         console.error("❌ Không thể tải dữ liệu:", err);
@@ -158,6 +200,26 @@ export default function ListDev() {
     setFilterWorkingMode("");
   };
 
+  const handlePrevStats = () => {
+    setStatsStartIndex((prev) => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex((prev) => {
+      const maxIndex = Math.max(0, stats.length - statsPageSize);
+      return Math.min(maxIndex, prev + statsPageSize);
+    });
+  };
+
+  const statsSlice = stats.slice(
+    statsStartIndex,
+    Math.min(statsStartIndex + statsPageSize, stats.length)
+  );
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrev = canShowStatsNav && statsStartIndex > 0;
+  const canGoNext =
+    canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
   if (loading)
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -180,40 +242,120 @@ export default function ListDev() {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Danh Sách Talent
+                Danh Sách Nhân Sự
               </h1>
               <p className="text-neutral-600 mt-1">
                 Quản lý và theo dõi developer trong hệ thống DevPool
               </p>
             </div>
             <Link to="/hr/developers/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                Tạo Talent mới
+                Tạo nhân sự mới
               </Button>
             </Link>
           </div>
 
-          {/* Thống kê */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+        {/* Thống kê */}
+        <div className="mb-8 animate-fade-in">
+          <div className="relative">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {statsSlice.map((stat, index) => (
+              <div
+                key={`${stat.title}-${statsStartIndex + index}`}
+                className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200"
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                      {stat.title}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">
+                      {stat.value}
+                    </p>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          stat.color === 'gray' ? 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200' :
-                            'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
+                  <div
+                    className={`p-3 rounded-full ${
+                      stat.color === "blue"
+                        ? "bg-primary-100 text-primary-600 group-hover:bg-primary-200"
+                        : stat.color === "green"
+                        ? "bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200"
+                        : stat.color === "purple"
+                        ? "bg-accent-100 text-accent-600 group-hover:bg-accent-200"
+                        : stat.color === "gray"
+                        ? "bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200"
+                        : "bg-warning-100 text-warning-600 group-hover:bg-warning-200"
+                    } transition-all duration-300`}
+                  >
                     {stat.icon}
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+            {canShowStatsNav && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevStats}
+                  disabled={!canGoPrev}
+                  className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                    canGoPrev
+                      ? "h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300"
+                      : "h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                  }`}
+                  aria-label="Xem thống kê phía trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextStats}
+                  disabled={!canGoNext}
+                  className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                    canGoNext
+                      ? "h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300"
+                      : "h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                  }`}
+                  aria-label="Xem thống kê tiếp theo"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+          {canShowStatsNav && (
+            <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handlePrevStats}
+                  disabled={!canGoPrev}
+                  className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                    canGoPrev
+                      ? "bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                  }`}
+                  aria-label="Xem thống kê phía trước"
+                >
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextStats}
+                  disabled={!canGoNext}
+                  className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                    canGoNext
+                      ? "bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                  }`}
+                  aria-label="Xem thống kê tiếp theo"
+                >
+                  Tiếp
+                </button>
+              </div>
+            </div>
+          )}
           </div>
         </div>
 
@@ -225,7 +367,7 @@ export default function ListDev() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm theo tên Talent..."
+                  placeholder="Tìm kiếm theo tên nhân sự..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -257,17 +399,19 @@ export default function ListDev() {
                     onChange={(e) => setFilterStatus(e.target.value)}
                     className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                   >
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="Available">Available</option>
-                    <option value="Busy">Busy</option>
-                    <option value="Unavailable">Unavailable</option>
+                    <option value="">Trạng thái</option>
+                    <option value="Available">Sẵn sàng làm việc</option>
+                    <option value="Busy">Đang bận</option>
+                    <option value="Working">Đang làm việc</option>
+                    <option value="Applying">Đang ứng tuyển</option>
+                    <option value="Unavailable">Tạm ngưng</option>
                   </select>
                   <select
                     value={filterWorkingMode}
                     onChange={(e) => setFilterWorkingMode(e.target.value)}
                     className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                   >
-                    <option value="">Tất cả hình thức làm việc</option>
+                    <option value="">Hình thức làm việc</option>
                     <option value={WorkingMode.Remote.toString()}>Làm việc từ xa</option>
                     <option value={WorkingMode.Onsite.toString()}>Tại văn phòng</option>
                     <option value={WorkingMode.Hybrid.toString()}>Kết hợp</option>
@@ -289,7 +433,7 @@ export default function ListDev() {
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
           <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Danh sách Talent</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Danh sách nhân sự</h2>
               <div className="flex items-center gap-4">
                 {filteredTalents.length > 0 ? (
                   <>
@@ -322,7 +466,7 @@ export default function ListDev() {
                     </button>
                   </>
                 ) : (
-                  <span className="text-sm text-neutral-600">Tổng: 0 người</span>
+                  <span className="text-sm text-neutral-600">Tổng: 0 nhân sự</span>
                 )}
               </div>
             </div>
@@ -341,10 +485,10 @@ export default function ListDev() {
                     Email
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
-                    Khu vực làm việc
+                    Khu vực
                   </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
-                    Hình thức làm việc
+                    Hình thức
                   </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
                     Trạng thái
@@ -362,8 +506,8 @@ export default function ListDev() {
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Users className="w-8 h-8 text-neutral-400" />
                         </div>
-                        <p className="text-neutral-500 text-lg font-medium">Không có talent nào phù hợp</p>
-                        <p className="text-neutral-400 text-sm mt-1">Thử thay đổi bộ lọc hoặc tạo talent mới</p>
+                        <p className="text-neutral-500 text-lg font-medium">Không có nhân sự nào phù hợp</p>
+                        <p className="text-neutral-400 text-sm mt-1">Thử thay đổi bộ lọc hoặc tạo nhân sự mới</p>
                       </div>
                     </td>
                   </tr>
@@ -385,7 +529,7 @@ export default function ListDev() {
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4 text-neutral-400" />
+                            <Mail className="w-4 h-4 text-neutral-400" />
                             <span className="text-sm text-neutral-700">{t.email || "—"}</span>
                           </div>
                         </td>

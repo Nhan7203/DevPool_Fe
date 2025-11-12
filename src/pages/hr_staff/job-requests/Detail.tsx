@@ -27,7 +27,8 @@ import {
   Target,
   Clock,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Star
 } from "lucide-react";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
@@ -71,7 +72,7 @@ export default function JobRequestDetailHRPage() {
 
     const workingModeLabels: Record<number, string> = {
         0: "Không xác định",
-        1: "Tại công ty",
+        1: "Tại văn phòng",
         2: "Từ xa",
         4: "Kết hợp",
         8: "Linh hoạt",
@@ -561,7 +562,7 @@ export default function JobRequestDetailHRPage() {
                     <div className="p-6 border-b border-neutral-200">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-warning-100 rounded-lg">
-                                <Briefcase className="w-5 h-5 text-warning-600" />
+                                <Star className="w-5 h-5 text-warning-600" />
                             </div>
                             <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
                         </div>

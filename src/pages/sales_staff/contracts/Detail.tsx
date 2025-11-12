@@ -81,9 +81,9 @@ export default function ContractDetailPage() {
           icon: <ClockIcon className="w-4 h-4" />,
           bgColor: 'bg-yellow-50'
         };
-      case 'completed':
+      case 'expired':
         return {
-          label: 'Đã hoàn thành',
+          label: 'Đã hết hạn',
           color: 'bg-blue-100 text-blue-800',
           icon: <CheckCircle className="w-4 h-4" />,
           bgColor: 'bg-blue-50'

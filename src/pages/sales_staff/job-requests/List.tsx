@@ -27,6 +27,7 @@ type AugmentedJobRequest = JobRequest & {
   projectName: string;
   clientCompanyName: string;
   applicationCount: number;
+  createdAt?: string;
 };
 
 const statusLabels: Record<number, string> = {
@@ -113,16 +114,29 @@ export default function JobRequestListPage() {
           });
         }
 
-        const merged: AugmentedJobRequest[] = reqRes.map((r) => {
-          const projectInfo = projectDict[r.projectId];
-          const clientCompanyName = projectInfo ? companyDict[projectInfo.clientCompanyId] ?? "—" : "—";
-          return {
-            ...r,
-            projectName: projectInfo?.name ?? "—",
-            clientCompanyName,
-            applicationCount: applicationCountMap[r.id] ?? 0,
-          };
-        });
+        const merged: AugmentedJobRequest[] = reqRes
+          .map((r) => {
+            const projectInfo = projectDict[r.projectId];
+            const clientCompanyName = projectInfo ? companyDict[projectInfo.clientCompanyId] ?? "—" : "—";
+            const createdAt = (r as { createdAt?: string }).createdAt;
+            return {
+              ...r,
+              projectName: projectInfo?.name ?? "—",
+              clientCompanyName,
+              applicationCount: applicationCountMap[r.id] ?? 0,
+              createdAt
+            };
+          })
+          .sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+            if (dateA !== 0 || dateB !== 0) {
+              return dateB - dateA;
+            }
+
+            return b.id - a.id;
+          });
 
         setRequests(merged);
         setFilteredRequests(merged);

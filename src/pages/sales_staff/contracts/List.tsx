@@ -33,6 +33,30 @@ export default function ListClientContracts() {
   const [projectsMap, setProjectsMap] = useState<Map<number, Project>>(new Map());
 
   // Stats data
+  const normalizeStatus = (status?: string | null) => (status ?? '').toLowerCase();
+
+  const matchesStatus = (
+    statusValue: string | null | undefined,
+    target: string
+  ) => {
+    const normalized = normalizeStatus(statusValue);
+    if (target === 'expired') {
+      return normalized === 'expired';
+    }
+    if (target === 'terminated') {
+      return normalized === 'terminated';
+    }
+    if (target === 'pending') {
+      return normalized === 'pending';
+    }
+    return normalized === target;
+  };
+
+  const countStatus = (...statuses: string[]) =>
+    contracts.filter((c) =>
+      statuses.some((status) => matchesStatus(c.status, status))
+    ).length;
+
   const stats = [
     {
       title: 'Tổng Hợp Đồng',
@@ -42,19 +66,19 @@ export default function ListClientContracts() {
     },
     {
       title: 'Đang Hoạt Động',
-      value: contracts.filter(c => c.status?.toLowerCase() === 'active').length.toString(),
+      value: countStatus('active').toString(),
       color: 'green',
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
-      title: 'Đã Hoàn Thành',
-      value: contracts.filter(c => c.status?.toLowerCase() === 'completed').length.toString(),
+      title: 'Đã Hết Hạn',
+      value: countStatus('expired').toString(),
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
     },
     {
       title: 'Chờ Duyệt',
-      value: contracts.filter(c => c.status?.toLowerCase() === 'pending' || c.status?.toLowerCase() === 'draft').length.toString(),
+      value: countStatus('pending', 'draft').toString(),
       color: 'orange',
       icon: <CheckCircle className="w-6 h-6" />
     }
@@ -114,7 +138,8 @@ export default function ListClientContracts() {
       });
     }
     if (filterStatus) {
-      filtered = filtered.filter(c => c.status.toLowerCase() === filterStatus.toLowerCase());
+      const normalizedFilter = filterStatus.toLowerCase();
+      filtered = filtered.filter(c => matchesStatus(c.status, normalizedFilter));
     }
     setFilteredContracts(filtered);
   }, [searchTerm, filterStatus, contracts, clientsMap, projectsMap]);
@@ -129,10 +154,11 @@ export default function ListClientContracts() {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
+    const normalized = normalizeStatus(status);
+    switch (normalized) {
       case 'active':
         return 'bg-green-100 text-green-700';
-      case 'completed':
+      case 'expired':
         return 'bg-blue-100 text-blue-700';
       case 'terminated':
         return 'bg-red-100 text-red-700';
@@ -222,7 +248,7 @@ export default function ListClientContracts() {
                     >
                       <option value="">Tất cả trạng thái</option>
                       <option value="active">Đang hoạt động</option>
-                      <option value="completed">Đã hoàn thành</option>
+                      <option value="expired">Đã hết hạn</option>
                       <option value="pending">Chờ duyệt</option>
                       <option value="draft">Nháp</option>
                       <option value="terminated">Đã chấm dứt</option>

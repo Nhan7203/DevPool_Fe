@@ -169,11 +169,6 @@ export default function TalentWorkExperienceEditPage() {
       return;
     }
 
-    if (!formData.description.trim()) {
-      alert("⚠️ Vui lòng nhập mô tả công việc!");
-      return;
-    }
-
     // Validate date logic
     if (formData.endDate && new Date(formData.endDate) <= new Date(formData.startDate)) {
       alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
@@ -225,7 +220,7 @@ export default function TalentWorkExperienceEditPage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
@@ -233,7 +228,7 @@ export default function TalentWorkExperienceEditPage() {
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa kinh nghiệm làm việc</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin kinh nghiệm làm việc của talent
+                Cập nhật thông tin kinh nghiệm làm việc của nhân sự
               </p>
               
               {/* Status Badge */}
@@ -260,11 +255,11 @@ export default function TalentWorkExperienceEditPage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* CV của Talent */}
+                {/* CV của nhân sự */}
               <div>
-                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  CV của Talent <span className="text-red-500">*</span>
+                  CV của nhân sự <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -373,7 +368,7 @@ export default function TalentWorkExperienceEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mô tả công việc <span className="text-red-500">*</span>
+                  Mô tả công việc (tùy chọn)
                 </label>
                 <textarea
                   name="description"
@@ -381,9 +376,11 @@ export default function TalentWorkExperienceEditPage() {
                   onChange={handleChange}
                   placeholder="Mô tả chi tiết về công việc, trách nhiệm và thành tựu..."
                   rows={4}
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Có thể để trống nếu chưa muốn ghi chú chi tiết.
+                </p>
               </div>
             </div>
           </div>

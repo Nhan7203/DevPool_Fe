@@ -111,6 +111,19 @@ export interface TalentWithRelatedDataCreateModel {
   jobRoleLevels?: TalentJobRoleLevelCreateModel[];
 }
 
+export interface TalentStatusUpdateModel {
+  newStatus: string;
+  notes?: string;
+}
+
+export interface TalentStatusTransitionResult {
+  isSuccess: boolean;
+  message: string;
+  previousStatus?: string;
+  newStatus?: string;
+  validationErrors?: string[];
+}
+
 export const talentService = {
   async getAll(filter?: TalentFilter) {
     try {
@@ -184,6 +197,17 @@ export const talentService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to delete talent" };
       throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  async changeStatus(id: number, payload: TalentStatusUpdateModel) {
+    try {
+      const response = await axios.patch(`/talent/${id}/change-status`, payload);
+      return response.data as TalentStatusTransitionResult;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to change talent status" };
+      throw { message: "Unexpected error occurred during status change" };
     }
   },
 };

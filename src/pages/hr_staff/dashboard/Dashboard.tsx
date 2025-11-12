@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Briefcase, Clock, Calendar, FileText, UserPlus, Building2, AlertCircle, CheckCircle, Target } from 'lucide-react';
+import { TrendingUp, Briefcase, Clock, Calendar, FileText, UserPlus, Building2, Target, Users, ClipboardList } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { talentService, type Talent } from '../../../services/Talent';
@@ -53,7 +53,7 @@ export default function HRDashboard() {
   const [loading, setLoading] = useState(true);
   const [talents, setTalents] = useState<Talent[]>([]);
   const [applications, setApplications] = useState<Apply[]>([]);
-  const [activities, setActivities] = useState<ApplyActivity[]>([]);
+  const [, setActivities] = useState<ApplyActivity[]>([]);
   const [jobRequests, setJobRequests] = useState<JobRequest[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [contracts, setContracts] = useState<PartnerContract[]>([]);
@@ -66,7 +66,7 @@ export default function HRDashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
+
         // Fetch all data in parallel
         const [talentsData, applicationsData, activitiesData, jobRequestsData, partnersData, contractsData, projectsData, clientCompaniesData] = await Promise.all([
           talentService.getAll({ excludeDeleted: true }),
@@ -97,9 +97,9 @@ export default function HRDashboard() {
                 talentCVService.getById(app.cvId),
                 jobRequestService.getById(app.jobRequestId)
               ]);
-              
+
               const talent = talentsData.find((t: Talent) => t.id === cv.talentId);
-              
+
               return {
                 id: app.id,
                 talentName: talent?.fullName || 'N/A',
@@ -133,7 +133,7 @@ export default function HRDashboard() {
               [ApplyActivityType.Online]: 'Hoạt động trực tuyến',
               [ApplyActivityType.Offline]: 'Hoạt động trực tiếp'
             };
-            
+
             // Map activityType to UI type string
             const getActivityTypeString = (activityType: ApplyActivityType): string => {
               switch (activityType) {
@@ -142,10 +142,10 @@ export default function HRDashboard() {
                 default: return 'online';
               }
             };
-            
+
             const activityDate = new Date(activity.scheduledDate!);
             const timeAgo = getTimeAgo(activityDate);
-            
+
             return {
               type: getActivityTypeString(activity.activityType),
               message: `${activityTypeNames[activity.activityType] || 'Hoạt động'} được lên lịch`,
@@ -158,10 +158,10 @@ export default function HRDashboard() {
         // Get recent job requests
         const companyDict: Record<number, ClientCompany> = {};
         clientCompaniesData.forEach((c: ClientCompany) => (companyDict[c.id] = c));
-        
+
         const projectDict: Record<number, Project> = {};
         projectsData.forEach((p: Project) => (projectDict[p.id] = p));
-        
+
         const recentJobReqs = jobRequestsData
           .sort((a: JobRequest, b: JobRequest) => b.id - a.id)
           .slice(0, 5)
@@ -245,23 +245,12 @@ export default function HRDashboard() {
   const totalJobRequests = jobRequests.length;
   const totalPartners = partners.length;
   const totalContracts = contracts.length;
-  
-  const today = new Date();
-  const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const weeklyActivities = activities.filter(
-    activity => new Date(activity.scheduledDate || '') >= lastWeek
-  ).length;
-  
+
   const hiredCount = applications.filter(app => app.status === 'Hired').length;
-  const successRate = totalApplications > 0 ? Math.round((hiredCount / totalApplications) * 100) : 0;
-  
+
   // Job Requests stats
   const pendingJobRequests = jobRequests.filter(jr => jr.status === JobRequestStatus.Pending).length;
-  
-  // Contracts stats
-  const activeContracts = contracts.filter(c => c.status?.toLowerCase() === 'active').length;
-  const pendingContracts = contracts.filter(c => c.status?.toLowerCase() === 'pending' || c.status?.toLowerCase() === 'draft').length;
-  
+
   // Applications by status
   const interviewingCount = applications.filter(app => app.status === 'Interviewing').length;
   const offeredCount = applications.filter(app => app.status === 'Offered').length;
@@ -269,28 +258,12 @@ export default function HRDashboard() {
 
   const stats = [
     {
-      title: 'Tổng Số Talents',
+      title: 'Nhân Sự',
       value: totalTalents.toString(),
       change: 'Tổng số trong hệ thống',
       trend: 'up',
       color: 'blue',
-      icon: UserPlus
-    },
-    {
-      title: 'Tổng Ứng Tuyển',
-      value: totalApplications.toString(),
-      change: `${interviewingCount} đang phỏng vấn`,
-      trend: 'up',
-      color: 'green',
-      icon: Briefcase
-    },
-    {
-      title: 'Yêu Cầu Tuyển Dụng',
-      value: totalJobRequests.toString(),
-      change: `${pendingJobRequests} chờ duyệt`,
-      trend: 'up',
-      color: 'purple',
-      icon: Target
+      icon: Users
     },
     {
       title: 'Đối Tác',
@@ -299,33 +272,45 @@ export default function HRDashboard() {
       trend: 'up',
       color: 'orange',
       icon: Building2
-    }
+    },
+    {
+      title: 'Yêu Cầu Tuyển Dụng',
+      value: totalJobRequests.toString(),
+      change: `${pendingJobRequests} chờ duyệt`,
+      trend: 'up',
+      color: 'purple',
+      icon: Briefcase
+    },    
+    {
+      title: 'Hồ Sơ Ứng Tuyển',
+      value: totalApplications.toString(),
+      change: `${interviewingCount} đang phỏng vấn`,
+      trend: 'up',
+      color: 'green',
+      icon: ClipboardList
+    },
   ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Rejected': return 'bg-red-100 text-red-800';
-      case 'Interview': return 'bg-blue-100 text-blue-800';
-      case 'InterviewScheduled': return 'bg-indigo-100 text-indigo-800';
       case 'Submitted': return 'bg-sky-100 text-sky-800';
       case 'Interviewing': return 'bg-cyan-100 text-cyan-800';
-      case 'Hired': return 'bg-purple-100 text-purple-800';
-      case 'Withdrawn': return 'bg-gray-100 text-gray-800';
       case 'Offered': return 'bg-teal-100 text-teal-800';
+      case 'Hired': return 'bg-purple-100 text-purple-800';
+      case 'Rejected': return 'bg-red-100 text-red-800';
+      case 'Withdrawn': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'Rejected': return 'Đã từ chối';
-      case 'Interview': return 'Phỏng vấn';
-      case 'InterviewScheduled': return 'Đã lên lịch PV';
       case 'Submitted': return 'Đã nộp hồ sơ';
-      case 'Interviewing': return 'Đang phỏng vấn';
+      case 'Interviewing': return 'Đang xem xét phỏng vấn';
+      case 'Offered': return 'Đã bàn bạc';
       case 'Hired': return 'Đã tuyển';
+      case 'Rejected': return 'Đã từ chối';
       case 'Withdrawn': return 'Đã rút';
-      case 'Offered': return 'Đã đề xuất';
       default: return status;
     }
   };
@@ -365,9 +350,9 @@ export default function HRDashboard() {
                   <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
                 </div>
                 <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                    stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                      stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                        'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                  stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                    stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                      'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
                   } transition-all duration-300`}>
                   {stat.icon && <stat.icon className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />}
                 </div>
@@ -380,80 +365,13 @@ export default function HRDashboard() {
           ))}
         </div>
 
-        {/* Additional Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-          <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Hoạt Động Tuần Này</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{weeklyActivities}</p>
-              </div>
-              <div className="p-3 rounded-full bg-accent-100 text-accent-600 group-hover:bg-accent-200 transition-all duration-300">
-                <Calendar className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
-              </div>
-            </div>
-            <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-              <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-              Hoạt động trong 7 ngày
-            </p>
-          </div>
-          
-          <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Tỷ Lệ Thành Công</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{successRate}%</p>
-              </div>
-              <div className="p-3 rounded-full bg-warning-100 text-warning-600 group-hover:bg-warning-200 transition-all duration-300">
-                <CheckCircle className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
-              </div>
-            </div>
-            <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-              <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-              {hiredCount} người đã tuyển
-            </p>
-          </div>
-
-          <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">YC Chờ Duyệt</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{pendingJobRequests}</p>
-              </div>
-              <div className="p-3 rounded-full bg-orange-100 text-orange-600 group-hover:bg-orange-200 transition-all duration-300">
-                <AlertCircle className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
-              </div>
-            </div>
-            <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-              <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-              Yêu cầu cần xử lý
-            </p>
-          </div>
-
-          <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Hợp Đồng Đang Hoạt Động</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{activeContracts}</p>
-              </div>
-              <div className="p-3 rounded-full bg-green-100 text-green-600 group-hover:bg-green-200 transition-all duration-300">
-                <FileText className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
-              </div>
-            </div>
-            <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-              <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-              {pendingContracts} chờ xử lý
-            </p>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
           {/* Recent Applications */}
           <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Ứng Tuyển Gần Đây</h2>
-                <button 
+                <button
                   onClick={() => navigate('/hr/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
@@ -472,8 +390,8 @@ export default function HRDashboard() {
               ) : (
                 <div className="space-y-4">
                   {recentApplications.map((app) => (
-                    <div 
-                      key={app.id} 
+                    <div
+                      key={app.id}
                       onClick={() => navigate(`/hr/applications/${app.id}`)}
                       className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
                     >
@@ -507,7 +425,7 @@ export default function HRDashboard() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Hoạt Động Gần Đây</h2>
-                <button 
+                <button
                   onClick={() => navigate('/hr/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
@@ -528,13 +446,12 @@ export default function HRDashboard() {
                   {recentActivities.map((activity, index) => (
                     <div key={index} className="group flex space-x-3 hover:bg-neutral-50 p-2 rounded-lg transition-all duration-300">
                       <div className="flex-shrink-0">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 ${
-                          activity.type === 'online'
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 ${activity.type === 'online'
                             ? 'bg-primary-100 group-hover:bg-primary-200'
                             : activity.type === 'offline'
-                            ? 'bg-secondary-100 group-hover:bg-secondary-200'
-                            : 'bg-neutral-100 group-hover:bg-neutral-200'
-                        }`}>
+                              ? 'bg-secondary-100 group-hover:bg-secondary-200'
+                              : 'bg-neutral-100 group-hover:bg-neutral-200'
+                          }`}>
                           {activity.type === 'online' && <Calendar className="w-4 h-4 text-primary-600" />}
                           {activity.type === 'offline' && <Briefcase className="w-4 h-4 text-secondary-600" />}
                         </div>
@@ -554,127 +471,6 @@ export default function HRDashboard() {
                           <span className="text-xs text-neutral-400">•</span>
                           <p className="text-xs text-neutral-500 group-hover:text-neutral-600 transition-colors duration-300">{activity.time}</p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Job Requests & Contracts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
-          {/* Recent Job Requests */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
-                <button 
-                  onClick={() => navigate('/hr/job-requests')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentJobRequests.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Target className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentJobRequests.map((jr) => (
-                    <div 
-                      key={jr.id} 
-                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.companyName}
-                          </span>
-                          <span className="flex items-center">
-                            <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.quantity} vị trí
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
-                          jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
-                          jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {jr.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Contracts */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
-                <button 
-                  onClick={() => navigate('/hr/contracts')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentContracts.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FileText className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có hợp đồng nào</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentContracts.map((contract) => (
-                    <div 
-                      key={contract.id} 
-                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.partnerName}
-                          </span>
-                          <span className="flex items-center">
-                            <UserPlus className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.talentName}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          contract.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
-                          contract.status?.toLowerCase() === 'pending' || contract.status?.toLowerCase() === 'draft' ? 'bg-orange-100 text-orange-800' :
-                          contract.status?.toLowerCase() === 'completed' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {contract.status || 'N/A'}
-                        </span>
                       </div>
                     </div>
                   ))}
@@ -711,26 +507,146 @@ export default function HRDashboard() {
           </div>
         </div>
 
+
+        {/* Job Requests & Contracts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
+          {/* Recent Job Requests */}
+          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
+                <button
+                  onClick={() => navigate('/hr/job-requests')}
+                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
+                >
+                  Xem tất cả
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {recentJobRequests.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentJobRequests.map((jr) => (
+                    <div
+                      key={jr.id}
+                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
+                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
+                    >
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          <span className="flex items-center">
+                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {jr.companyName}
+                          </span>
+                          <span className="flex items-center">
+                            <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {jr.quantity} vị trí
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
+                            jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
+                              jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
+                                'bg-red-100 text-red-800'
+                          }`}>
+                          {jr.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Contracts */}
+          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
+                <button
+                  onClick={() => navigate('/hr/contracts')}
+                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
+                >
+                  Xem tất cả
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {recentContracts.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có hợp đồng nào</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentContracts.map((contract) => (
+                    <div
+                      key={contract.id}
+                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
+                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
+                    >
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          <span className="flex items-center">
+                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {contract.partnerName}
+                          </span>
+                          <span className="flex items-center">
+                            <UserPlus className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {contract.talentName}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${contract.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
+                            contract.status?.toLowerCase() === 'pending' || contract.status?.toLowerCase() === 'draft' ? 'bg-orange-100 text-orange-800' :
+                              contract.status?.toLowerCase() === 'expired' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                          }`}>
+                          {contract.status || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Quick Actions */}
         <div className="mt-8 animate-slide-up">
           <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 border border-neutral-100">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao Tác Nhanh</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button 
+              <button
                 onClick={() => navigate('/hr/developers/create')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
               >
                 <UserPlus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                <span>Thêm Talent Mới</span>
+                <span>Thêm nhân sự mới</span>
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/hr/applications')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-secondary-600 to-secondary-700 text-white px-6 py-3 rounded-xl hover:from-secondary-700 hover:to-secondary-800 transition-all duration-300 shadow-soft hover:shadow-glow-green transform hover:scale-105"
               >
                 <Calendar className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 <span>Xem Ứng Tuyển</span>
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/hr/job-requests')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-accent-600 to-accent-700 text-white px-6 py-3 rounded-xl hover:from-accent-700 hover:to-accent-800 transition-all duration-300 shadow-soft hover:shadow-glow-purple transform hover:scale-105"
               >

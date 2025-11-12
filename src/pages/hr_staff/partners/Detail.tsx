@@ -13,8 +13,6 @@ import {
   Phone, 
   MapPin, 
   User, 
-  Briefcase, 
-  CheckCircle,
   XCircle,
   FileText,
 } from "lucide-react";

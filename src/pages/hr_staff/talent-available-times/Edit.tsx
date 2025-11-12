@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentAvailableTimeService, type TalentAvailableTimeCreate } from "../../../services/TalentAvailableTime";
+import { talentAvailableTimeService, type TalentAvailableTimeCreate, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -67,20 +67,7 @@ export default function TalentAvailableTimeEditPage() {
     if (!dateTime) return false;
     const startDateTime = new Date(dateTime);
     const now = new Date();
-    
-    // Không được quá xa trong quá khứ (ví dụ: không quá 1 năm trước)
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
-    
-    if (startDateTime < oneYearAgo) return false;
-    
-    // Không được quá xa trong tương lai (ví dụ: không quá 2 năm sau)
-    const twoYearsLater = new Date();
-    twoYearsLater.setFullYear(now.getFullYear() + 2);
-    
-    if (startDateTime > twoYearsLater) return false;
-    
-    return true;
+    return startDateTime > now;
   };
 
   const validateEndTime = (startDateTime: string, endDateTime: string | undefined): boolean => {
@@ -103,6 +90,38 @@ export default function TalentAvailableTimeEditPage() {
   };
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "Không xác định";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Không xác định";
+    return date.toLocaleString("vi-VN", { hour12: false });
+  };
+
+  const formatRange = (slot: TalentAvailableTime) => {
+    const start = formatDateTime(slot.startTime);
+    const end = slot.endTime ? formatDateTime(slot.endTime) : "Không xác định";
+    return `${start} - ${end}`;
+  };
+
+  const findOverlappingSlot = (
+    existing: TalentAvailableTime[],
+    newStart: Date,
+    newEnd: Date | undefined,
+    currentId: number
+  ) => {
+    const effectiveNewEnd = newEnd ?? new Date(8640000000000000);
+
+    for (const slot of existing) {
+      if (slot.id === currentId) continue;
+      const slotStart = new Date(slot.startTime);
+      const slotEnd = slot.endTime ? new Date(slot.endTime) : new Date(8640000000000000);
+      if (newStart < slotEnd && slotStart < effectiveNewEnd) {
+        return slot;
+      }
+    }
+    return null;
+  };
 
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
@@ -164,7 +183,7 @@ export default function TalentAvailableTimeEditPage() {
 
     // Validate talentId
     if (!talentId || talentId === 0) {
-      alert("⚠️ Không tìm thấy thông tin talent. Vui lòng quay lại trang trước.");
+      alert("⚠️ Không tìm thấy thông tin nhân sự. Vui lòng quay lại trang trước.");
       return;
     }
 
@@ -175,7 +194,7 @@ export default function TalentAvailableTimeEditPage() {
 
     // Validate startTime hợp lý
     if (!validateStartTime(formData.startTime)) {
-      alert("⚠️ Thời gian bắt đầu không hợp lệ (phải trong khoảng 1 năm trước đến 2 năm sau)!");
+      alert("⚠️ Thời gian bắt đầu phải nằm trong tương lai!");
       return;
     }
 
@@ -186,13 +205,30 @@ export default function TalentAvailableTimeEditPage() {
     }
 
     try {
-      // Convert datetime-local to UTC ISO string for PostgreSQL
+      const newStart = new Date(formData.startTime);
+      const newEnd = formData.endTime ? new Date(formData.endTime) : undefined;
+
+      const existingTimes = (await talentAvailableTimeService.getAll({
+        talentId,
+        excludeDeleted: true,
+      })) as TalentAvailableTime[];
+
+      if (Array.isArray(existingTimes)) {
+        const overlappingSlot = findOverlappingSlot(existingTimes, newStart, newEnd, Number(id));
+        if (overlappingSlot) {
+          alert(
+            `⚠️ Khung giờ này trùng với khoảng đã có: ${formatRange(overlappingSlot)}. Vui lòng chọn khung khác!`
+          );
+          return;
+        }
+      }
+
       const updateData = {
         ...formData,
-        startTime: new Date(formData.startTime).toISOString(),
-        endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined,
+        startTime: newStart.toISOString(),
+        endTime: newEnd ? newEnd.toISOString() : undefined,
       };
-      
+
       console.log("Payload gửi đi:", updateData);
       await talentAvailableTimeService.update(Number(id), updateData);
 
@@ -230,7 +266,7 @@ export default function TalentAvailableTimeEditPage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
@@ -238,7 +274,7 @@ export default function TalentAvailableTimeEditPage() {
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa thời gian có sẵn</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin thời gian có sẵn của talent
+                Cập nhật thông tin thời gian có sẵn của nhân sự
               </p>
               
               {/* Status Badge */}
@@ -287,7 +323,7 @@ export default function TalentAvailableTimeEditPage() {
                   )}
                   {!errors.startTime && (
                     <p className="text-xs text-neutral-500 mt-1">
-                      Chọn ngày và giờ bắt đầu có sẵn (trong khoảng 1 năm trước đến 2 năm sau)
+                      Chọn ngày và giờ bắt đầu có sẵn (phải lớn hơn thời điểm hiện tại)
                     </p>
                   )}
                 </div>
