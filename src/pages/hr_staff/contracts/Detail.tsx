@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Clock, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
@@ -9,7 +10,6 @@ import { talentService, type Talent } from '../../../services/Talent';
 
 export default function ContractDetailPage() {
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
     const [contract, setContract] = useState<PartnerContract | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -37,7 +37,7 @@ export default function ContractDetailPage() {
                     setPartner(partnerData || null);
                     setTalent(talentData);
                 } catch (err) {
-                    console.error("⚠️ Lỗi tải thông tin đối tác/talent:", err);
+                    console.error("⚠️ Lỗi tải thông tin đối tác/nhân sự:", err);
                 }
             } catch (err: any) {
                 console.error("❌ Lỗi tải chi tiết hợp đồng:", err);
@@ -67,9 +67,9 @@ export default function ContractDetailPage() {
                     icon: <ClockIcon className="w-4 h-4" />,
                     bgColor: 'bg-yellow-50'
                 };
-            case 'completed':
+            case 'expired':
                 return {
-                    label: 'Đã hoàn thành',
+                    label: 'Đã hết hạn',
                     color: 'bg-blue-100 text-blue-800',
                     icon: <CheckCircle className="w-4 h-4" />,
                     bgColor: 'bg-blue-50'
@@ -176,7 +176,7 @@ export default function ContractDetailPage() {
                         <div className="flex-1">
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">{contract.contractNumber}</h1>
                             <p className="text-neutral-600 mb-4">
-                                Thông tin chi tiết hợp đồng làm việc
+                                Thông tin chi tiết hợp đồng nhân sự
                             </p>
                             
                             {/* Status Badge */}
@@ -189,30 +189,6 @@ export default function ContractDetailPage() {
                         </div>
 
                     </div>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in">
-                    <StatCard
-                        title="Mức Phí Dev"
-                        value={formatCurrency(contract.devRate)}
-                        icon={<DollarSign className="w-6 h-6" />}
-                        color="green"
-                    />
-                    <StatCard
-                        title="Thời hạn"
-                        value={contract.endDate 
-                            ? `${Math.ceil((new Date(contract.endDate).getTime() - new Date(contract.startDate).getTime()) / (1000 * 60 * 60 * 24))} ngày`
-                            : 'Không giới hạn'}
-                        icon={<Calendar className="w-6 h-6" />}
-                        color="blue"
-                    />
-                    <StatCard
-                        title="Loại Mức Phí"
-                        value={contract.rateType ? getRateTypeText(contract.rateType) : '—'}
-                        icon={<FileText className="w-6 h-6" />}
-                        color="orange"
-                    />
                 </div>
 
                 {/* Thông tin chung */}
@@ -228,17 +204,17 @@ export default function ContractDetailPage() {
                     <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <InfoItem 
-                                label="Số hợp đồng" 
+                                label="Mã hợp đồng" 
                                 value={contract.contractNumber} 
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Loại Mức Phí" 
+                                label="Hình thức tính lương" 
                                 value={contract.rateType ? getRateTypeText(contract.rateType) : '—'} 
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Nhân viên" 
+                                label="Nhân sự" 
                                 value={talent?.fullName || '—'} 
                                 icon={<UserCheck className="w-4 h-4" />}
                             />
@@ -258,14 +234,9 @@ export default function ContractDetailPage() {
                                 icon={<Calendar className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Mức Phí Dev" 
+                                label="Mức lương nhân sự" 
                                 value={formatCurrency(contract.devRate)} 
                                 icon={<DollarSign className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Trạng thái" 
-                                value={statusConfig.label} 
-                                icon={<Clock className="w-4 h-4" />}
                             />
                             {contract.contractFileUrl && (
                                 <InfoItem 
@@ -292,43 +263,14 @@ export default function ContractDetailPage() {
     );
 }
 
-function StatCard({ title, value, icon, color }: { 
-    title: string; 
-    value: string; 
-    icon: React.ReactNode; 
-    color: string; 
-}) {
-    const getColorClasses = (color: string) => {
-        switch (color) {
-            case 'blue':
-                return 'bg-primary-100 text-primary-600 group-hover:bg-primary-200';
-            case 'green':
-                return 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200';
-            case 'purple':
-                return 'bg-accent-100 text-accent-600 group-hover:bg-accent-200';
-            case 'orange':
-                return 'bg-warning-100 text-warning-600 group-hover:bg-warning-200';
-            default:
-                return 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200';
-        }
-    };
+function InfoItem({ label, value, icon }: { label: string; value: ReactNode; icon?: ReactNode }) {
+    const displayValue: ReactNode =
+        value === null || value === undefined
+            ? '—'
+            : typeof value === 'string' && value.trim() === ''
+                ? '—'
+                : value;
 
-    return (
-        <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{value}</p>
-                </div>
-                <div className={`p-3 rounded-full ${getColorClasses(color)} transition-all duration-300`}>
-                    {icon}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function InfoItem({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
     return (
         <div className="group">
             <div className="flex items-center gap-2 mb-2">
@@ -336,7 +278,7 @@ function InfoItem({ label, value, icon }: { label: string; value: string; icon?:
                 <p className="text-neutral-500 text-sm font-medium">{label}</p>
             </div>
             <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
-                {value || "—"}
+                {displayValue}
             </p>
         </div>
     );

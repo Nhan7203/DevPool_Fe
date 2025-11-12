@@ -120,7 +120,7 @@ export default function TalentEditPage() {
         });
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
-        alert("Không thể tải thông tin Talent!");
+        alert("Không thể tải thông tin nhân sự!");
       } finally {
         setLoading(false);
       }
@@ -303,11 +303,11 @@ export default function TalentEditPage() {
       console.log("Payload gửi đi:", payload);
       await talentService.update(Number(id), payload);
 
-      alert("✅ Cập nhật talent thành công!");
+      alert("✅ Cập nhật nhân sự thành công!");
       navigate(`/hr/developers/${id}`);
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
-      alert("Không thể cập nhật talent!");
+      alert("Không thể cập nhật nhân sự!");
     }
   };
 
@@ -343,16 +343,16 @@ export default function TalentEditPage() {
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin talent trong hệ thống DevPool
+                Cập nhật thông tin nhân sự trong hệ thống DevPool
               </p>
               
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-50 border border-yellow-200">
                 <AlertCircle className="w-4 h-4 text-yellow-600" />
                 <span className="text-sm font-medium text-yellow-800">
-                  Chỉnh sửa thông tin talent
+                  Chỉnh sửa thông tin nhân sự
                 </span>
               </div>
             </div>
@@ -584,7 +584,7 @@ export default function TalentEditPage() {
                       }`}
                     >
                       <option value={WorkingMode.None}>Không xác định</option>
-                      <option value={WorkingMode.Onsite}>Tại công ty</option>
+                      <option value={WorkingMode.Onsite}>Tại văn phòng</option>
                       <option value={WorkingMode.Remote}>Từ xa</option>
                       <option value={WorkingMode.Hybrid}>Kết hợp</option>
                       <option value={WorkingMode.Flexible}>Linh hoạt</option>

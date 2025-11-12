@@ -195,6 +195,103 @@ export interface JobRoleLevelsComparison {
   newFromCV: ExtractedJobRoleLevel[];
 }
 
+export interface BasicInfoUpdateDecision {
+  updateFullName: boolean;
+  updateEmail: boolean;
+  updatePhone: boolean;
+  updateDateOfBirth: boolean;
+  updateLocation: boolean;
+  updateGithubUrl: boolean;
+  updatePortfolioUrl: boolean;
+  updateWorkingMode: boolean;
+  newFullName?: string;
+  newEmail?: string;
+  newPhone?: string;
+  newDateOfBirth?: string | null;
+  newLocationId?: number | null;
+  newGithubUrl?: string;
+  newPortfolioUrl?: string;
+  newWorkingMode?: string;
+}
+
+export interface SkillsUpdateDecision {
+  skillIdsToAdd: number[];
+  skillIdsToRemove: number[];
+}
+
+export type WorkExperienceActionType = "UPDATE" | "ADD_NEW" | "SKIP";
+
+export interface WorkExperienceUpdateAction {
+  actionType: WorkExperienceActionType;
+  existingId?: number | null;
+  newData: ExtractedWorkExperience;
+}
+
+export interface WorkExperiencesUpdateDecision {
+  actions: WorkExperienceUpdateAction[];
+}
+
+export type ProjectActionType = "UPDATE" | "ADD_NEW" | "SKIP";
+
+export interface ProjectUpdateAction {
+  actionType: ProjectActionType;
+  existingId?: number | null;
+  newData: ExtractedProject;
+}
+
+export interface ProjectsUpdateDecision {
+  actions: ProjectUpdateAction[];
+}
+
+export type CertificateActionType = "ADD_NEW" | "SKIP";
+
+export interface CertificateUpdateAction {
+  actionType: CertificateActionType;
+  newData: ExtractedCertificate;
+}
+
+export interface CertificatesUpdateDecision {
+  actions: CertificateUpdateAction[];
+}
+
+export type JobRoleLevelActionType = "ADD_NEW" | "SKIP";
+
+export interface JobRoleLevelUpdateAction {
+  actionType: JobRoleLevelActionType;
+  newData: ExtractedJobRoleLevel;
+}
+
+export interface JobRoleLevelsUpdateDecision {
+  actions: JobRoleLevelUpdateAction[];
+}
+
+export interface ApplyCVUpdatesRequest {
+  basicInfo?: BasicInfoUpdateDecision;
+  skills?: SkillsUpdateDecision;
+  workExperiences?: WorkExperiencesUpdateDecision;
+  projects?: ProjectsUpdateDecision;
+  certificates?: CertificatesUpdateDecision;
+  jobRoleLevels?: JobRoleLevelsUpdateDecision;
+}
+
+export interface UpdateStatistics {
+  skillsAdded: number;
+  skillsRemoved: number;
+  workExperiencesAdded: number;
+  workExperiencesUpdated: number;
+  projectsAdded: number;
+  projectsUpdated: number;
+  certificatesAdded: number;
+  jobRoleLevelsAdded: number;
+  basicInfoUpdated: boolean;
+}
+
+export interface ApplyCVUpdatesResponse {
+  isSuccess: boolean;
+  message: string;
+  statistics: UpdateStatistics;
+}
+
 export interface CVAnalysisComparisonResponse {
   isSuccess: boolean;
   errorMessage?: string | null;
@@ -365,6 +462,17 @@ export const talentCVService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to analyze CV for update" };
       throw { message: "Unexpected error occurred during CV analysis" };
+    }
+  },
+
+  async applyCVUpdates(talentId: number, payload: ApplyCVUpdatesRequest) {
+    try {
+      const response = await axios.put(`/talentcv/talents/${talentId}/apply-cv-updates`, payload);
+      return response.data as ApplyCVUpdatesResponse;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to apply CV updates" };
+      throw { message: "Unexpected error occurred while applying CV updates" };
     }
   },
 };

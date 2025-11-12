@@ -63,7 +63,7 @@ export default function JobRequestDetailPage() {
 
   const workingModeLabels: Record<number, string> = {
     0: "Không xác định",
-    1: "Tại công ty",
+    1: "Tại văn phòng",
     2: "Từ xa",
     4: "Kết hợp",
     8: "Linh hoạt",

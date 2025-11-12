@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
@@ -25,27 +25,20 @@ import {
   X,
   Send,
   Mail,
-  Phone
+  Phone,
 } from "lucide-react";
 
-const statusLabels: Record<string, string> = {
-  "Rejected": "Đã từ chối",
-  "Interview": "Phỏng vấn",
-  "InterviewScheduled": "Đã lên lịch phỏng vấn",
-  "Submitted": "Đã nộp hồ sơ",
-  "Interviewing": "Đang phỏng vấn",
-  "Hired": "Đã tuyển",
-  "Withdrawn": "Đã rút",
-  "Offered": "Đã đề xuất"
-};
-
 const talentStatusLabels: Record<string, string> = {
-  "Available": "Đang rảnh",
-  "OnProject": "Đang tham gia dự án",
-  "Interviewing": "Đang phỏng vấn",
-  "OfferPending": "Đang chờ offer",
-  "Hired": "Đã tuyển",
-  "Inactive": "Không hoạt động",
+  Available: "Sẵn sàng làm việc",
+  Working: "Đang làm việc",
+  Applying: "Đang ứng tuyển",
+  Unavailable: "Không sẵn sàng",
+  Busy: "Đang bận",
+  Interviewing: "Đang phỏng vấn",
+  OfferPending: "Đang chờ offer",
+  Hired: "Đã tuyển",
+  Inactive: "Không hoạt động",
+  OnProject: "Đang tham gia dự án",
 };
 
 const getActivityTypeLabel = (type: number): string => {
@@ -77,18 +70,20 @@ export default function TalentCVApplicationDetailPage() {
   const [submitterName, setSubmitterName] = useState<string>("");
   const [activities, setActivities] = useState<ApplyActivity[]>([]);
   const [processSteps, setProcessSteps] = useState<Record<number, ApplyProcessStep>>({});
+  const [templateSteps, setTemplateSteps] = useState<ApplyProcessStep[]>([]);
   const [detailedApplication, setDetailedApplication] = useState<TalentApplicationDetailed | null>(null);
   const [talentLocationName, setTalentLocationName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      let currentApplication: Apply | null = null;
       try {
         setLoading(true);
 
         // Fetch application
         const appData = await applyService.getById(Number(id));
-        setApplication(appData);
+        currentApplication = appData;
 
         // Fetch related data in parallel
         const [jobReqData, cvData] = await Promise.all([
@@ -98,6 +93,26 @@ export default function TalentCVApplicationDetailPage() {
 
         setJobRequest(jobReqData);
         setTalentCV(cvData);
+
+        let fetchedTemplateSteps: ApplyProcessStep[] = [];
+        if (jobReqData?.applyProcessTemplateId) {
+          try {
+            const stepsResponse = await applyProcessStepService.getAll({
+              templateId: jobReqData.applyProcessTemplateId,
+              excludeDeleted: true
+            });
+            if (Array.isArray(stepsResponse)) {
+              fetchedTemplateSteps = stepsResponse as ApplyProcessStep[];
+            } else if (stepsResponse?.data && Array.isArray(stepsResponse.data)) {
+              fetchedTemplateSteps = stepsResponse.data as ApplyProcessStep[];
+            }
+          } catch (err) {
+            console.error("❌ Lỗi tải bước quy trình ứng tuyển:", err);
+          }
+        } else {
+          fetchedTemplateSteps = [];
+        }
+        setTemplateSteps(fetchedTemplateSteps);
 
         // Fetch detailed application info (talent, project, client company)
         try {
@@ -136,18 +151,26 @@ export default function TalentCVApplicationDetailPage() {
 
           // Fetch process steps for activities
           const stepIds = [...new Set(activitiesData.map(a => a.processStepId).filter(id => id > 0))];
-          if (stepIds.length > 0) {
-            const stepPromises = stepIds.map(id => applyProcessStepService.getById(id).catch(() => null));
-            const steps = await Promise.all(stepPromises);
+          const stepsMap: Record<number, ApplyProcessStep> = {};
+          const templateMap = new Map<number, ApplyProcessStep>();
+          fetchedTemplateSteps.forEach(step => {
+            stepsMap[step.id] = step;
+            templateMap.set(step.id, step);
+          });
 
-            const stepsMap: Record<number, ApplyProcessStep> = {};
+          const missingStepIds = stepIds.filter(id => !templateMap.has(id));
+          if (missingStepIds.length > 0) {
+            const stepPromises = missingStepIds.map(id =>
+              applyProcessStepService.getById(id).catch(() => null)
+            );
+            const steps = await Promise.all(stepPromises);
             steps.forEach(step => {
               if (step) {
                 stepsMap[step.id] = step;
               }
             });
-            setProcessSteps(stepsMap);
           }
+          setProcessSteps(stepsMap);
         } catch (err) {
           console.error("❌ Lỗi tải activities:", err);
         }
@@ -155,11 +178,18 @@ export default function TalentCVApplicationDetailPage() {
         console.error("❌ Lỗi tải chi tiết Application:", err);
       } finally {
         setLoading(false);
+        setApplication(currentApplication);
       }
     };
 
     fetchData();
   }, [id]);
+
+  const allProcessStepsCovered = useMemo(() => {
+    if (!templateSteps.length) return false;
+    const coveredStepIds = new Set(activities.map(activity => activity.processStepId));
+    return templateSteps.every(step => coveredStepIds.has(step.id));
+  }, [templateSteps, activities]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!id || !application) return;
@@ -168,8 +198,8 @@ export default function TalentCVApplicationDetailPage() {
       await applyService.updateStatus(Number(id), { status: newStatus });
       setApplication({ ...application, status: newStatus });
 
-      // Nếu là Withdrawn, cập nhật tất cả activities thành NoShow
-      if (newStatus === 'Withdrawn') {
+      // Nếu là Withdrawn và không phải chuyển từ trạng thái Offered, cập nhật tất cả activities thành NoShow
+      if (newStatus === 'Withdrawn' && application.status !== 'Offered') {
         try {
           const activitiesToUpdate = activities.filter(
             activity => activity.status !== ApplyActivityStatus.NoShow
@@ -201,10 +231,6 @@ export default function TalentCVApplicationDetailPage() {
   };
 
   // Helper functions to check activity statuses
-  const hasCompletedActivity = () => {
-    return activities.some(activity => activity.status === ApplyActivityStatus.Completed);
-  };
-
   const hasFailedActivity = () => {
     return activities.some(activity => activity.status === ApplyActivityStatus.Failed);
   };
@@ -220,63 +246,50 @@ export default function TalentCVApplicationDetailPage() {
   interface StatusConfig {
     label: string;
     color: string;
-    icon: React.ReactNode;
     bgColor: string;
   }
 
   const getStatusConfig = (status: string): StatusConfig => {
     const configs: Record<string, StatusConfig> = {
-      "Rejected": {
-        label: "Đã từ chối",
-        color: "bg-red-100 text-red-800",
-        icon: <XCircle className="w-4 h-4" />,
-        bgColor: "bg-red-50"
-      },
-      "Interview": {
-        label: "Phỏng vấn",
-        color: "bg-blue-100 text-blue-800",
-        icon: <Calendar className="w-4 h-4" />,
-        bgColor: "bg-blue-50"
-      },
-      "InterviewScheduled": {
-        label: "Đã lên lịch phỏng vấn",
-        color: "bg-indigo-100 text-indigo-800",
-        icon: <Calendar className="w-4 h-4" />,
-        bgColor: "bg-indigo-50"
+      "Interviewing": {
+        label: "Đang xem xét phỏng vấn",
+        color: "bg-cyan-100 text-cyan-800",
+        bgColor: "bg-cyan-50"
       },
       "Submitted": {
         label: "Đã nộp hồ sơ",
         color: "bg-sky-100 text-sky-800",
-        icon: <FileText className="w-4 h-4" />,
         bgColor: "bg-sky-50"
-      },
-      "Interviewing": {
-        label: "Đang xem xét phỏng vấn",
-        color: "bg-cyan-100 text-cyan-800",
-        icon: <Calendar className="w-4 h-4" />,
-        bgColor: "bg-cyan-50"
       },
       "Hired": {
         label: "Đã tuyển",
         color: "bg-purple-100 text-purple-800",
-        icon: <CheckCircle className="w-4 h-4" />,
         bgColor: "bg-purple-50"
       },
       "Withdrawn": {
         label: "Đã rút",
         color: "bg-gray-100 text-gray-800",
-        icon: <X className="w-4 h-4" />,
         bgColor: "bg-gray-50"
       },
       "Offered": {
-        label: "Đã đề xuất",
+        label: "Đã bàn bạc",
         color: "bg-teal-100 text-teal-800",
-        icon: <Send className="w-4 h-4" />,
         bgColor: "bg-teal-50"
+      },
+      "Rejected": {
+        label: "Đã từ chối",
+        color: "bg-red-100 text-red-800",
+        bgColor: "bg-red-50"
       }
     };
 
-    return configs[status] || configs["Rejected"];
+    return (
+      configs[status] || {
+        label: status,
+        color: "bg-neutral-100 text-neutral-800",
+        bgColor: "bg-neutral-50"
+      }
+    );
   };
 
   if (loading) {
@@ -316,15 +329,17 @@ export default function TalentCVApplicationDetailPage() {
   }
 
   const statusConfig = getStatusConfig(application.status);
+  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status);
+  const shouldHideCreateActivityButton = allProcessStepsCovered;
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return "—";
     try {
-      return new Date(dateString).toLocaleDateString("vi-VN", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+    return new Date(dateString).toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
     } catch {
       return dateString;
     }
@@ -333,7 +348,7 @@ export default function TalentCVApplicationDetailPage() {
   const getWorkingModeDisplay = (workingMode?: number) => {
     if (!workingMode) return "—";
     const labels: { value: number; label: string }[] = [
-      { value: WorkingModeEnum.Onsite, label: "Tại công ty" },
+      { value: WorkingModeEnum.Onsite, label: "Tại văn phòng" },
       { value: WorkingModeEnum.Remote, label: "Làm từ xa" },
       { value: WorkingModeEnum.Hybrid, label: "Kết hợp" },
       { value: WorkingModeEnum.Flexible, label: "Linh hoạt" },
@@ -386,7 +401,6 @@ export default function TalentCVApplicationDetailPage() {
 
               {/* Status Badge */}
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
-                {statusConfig.icon}
                 <span className={`text-sm font-medium ${statusConfig.color}`}>
                   {statusConfig.label}
                 </span>
@@ -394,8 +408,16 @@ export default function TalentCVApplicationDetailPage() {
             </div>
 
             <div className="flex gap-3 flex-wrap">
-              {/* Nếu đang ở trạng thái Interviewing, hiển thị các nút chọn trạng thái tiếp theo */}
-              {application.status === 'Interviewing' ? (
+              {/* Nếu đang ở trạng thái Submitted, cho phép rút lui */}
+              {application.status === 'Submitted' ? (
+                <Button
+                  onClick={() => handleStatusUpdate('Withdrawn')}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white"
+                >
+                  <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Rút lui
+                </Button>
+              ) : application.status === 'Interviewing' ? (
                 <>
                   {hasFailedActivity() && (
                     <Button
@@ -440,23 +462,7 @@ export default function TalentCVApplicationDetailPage() {
                     Rút lui
                   </Button>
                 </>
-              ) : (
-                <>
-                  {hasCompletedActivity() && (
-                    <Button
-                      onClick={() => handleStatusUpdate('Interviewing')}
-                      disabled={application.status === 'Interviewing'}
-                      className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${application.status === 'Interviewing'
-                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white"
-                        }`}
-                    >
-                      <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      Đang xem xét phỏng vấn
-                    </Button>
-                  )}
-                </>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -487,11 +493,6 @@ export default function TalentCVApplicationDetailPage() {
                 label="Ngày nộp"
                 value={new Date(application.createdAt).toLocaleString('vi-VN')}
                 icon={<Calendar className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Trạng thái"
-                value={statusLabels[application.status] ?? application.status}
-                icon={<AlertCircle className="w-4 h-4" />}
               />
               <InfoItem
                 label="Vị trí ứng tuyển"
@@ -641,17 +642,20 @@ export default function TalentCVApplicationDetailPage() {
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">Hoạt động tuyển dụng</h2>
               </div>
-              <Button
-                onClick={() => navigate(`/hr/apply-activities/create?applyId=${application.id}`)}
-                disabled={application.status === 'Interviewing' || application.status === 'Offered' || (application.status !== 'InterviewScheduled' && application.status !== 'Submitted')}
-                className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${application.status === 'Interviewing' || application.status === 'Offered' || (application.status !== 'InterviewScheduled' && application.status !== 'Submitted')
-                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
-                  }`}
-              >
-                <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                Tạo hoạt động
-              </Button>
+                {!shouldHideCreateActivityButton && (
+                  <Button
+                    onClick={() => navigate(`/hr/apply-activities/create?applyId=${application.id}`)}
+                    disabled={!statusAllowsActivityCreation}
+                    className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
+                      !statusAllowsActivityCreation
+                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Tạo hoạt động
+                  </Button>
+                )}
             </div>
           </div>
           <div className="p-6">

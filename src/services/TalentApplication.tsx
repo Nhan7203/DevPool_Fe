@@ -62,7 +62,6 @@ export interface TalentApplicationUpdate {
 
 // Status Constants
 export const TalentApplicationStatusConstants = {
-  InterviewScheduled: "InterviewScheduled",
   Interviewing: "Interviewing",
   Offered: "Offered",
   Hired: "Hired",
@@ -70,7 +69,6 @@ export const TalentApplicationStatusConstants = {
   Withdrawn: "Withdrawn",
 
   AllStatuses: [
-    "InterviewScheduled",
     "Interviewing",
     "Offered",
     "Hired",
@@ -83,7 +81,6 @@ export const TalentApplicationStatusConstants = {
   },
 
   AllowedTransitions: {
-    InterviewScheduled: ["Interviewing", "Rejected", "Withdrawn"],
     Interviewing: ["Offered", "Rejected", "Withdrawn"],
     Offered: ["Hired", "Rejected", "Withdrawn"],
     Hired: [] as string[], // Terminal state

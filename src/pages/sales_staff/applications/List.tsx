@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
@@ -12,12 +12,8 @@ import {
   Search,
   Filter,
   Briefcase,
-  AlertCircle,
   Calendar,
-  XCircle,
-  Send,
   CheckCircle,
-  Eye,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -38,24 +34,20 @@ type SalesTalentApplication = TalentApplication & {
 };
 
 const statusLabels: Record<string, string> = {
-  Rejected: "Đã từ chối",
-  Interview: "Phỏng vấn",
-  InterviewScheduled: "Đã lên lịch phỏng vấn",
   Submitted: "Đã nộp hồ sơ",
   Interviewing: "Đang xem xét phỏng vấn",
-  Offered: "Đã đề xuất",
+  Offered: "Đã bàn bạc",
   Hired: "Đã tuyển",
+  Rejected: "Đã từ chối",
   Withdrawn: "Đã rút",
 };
 
 const statusColors: Record<string, string> = {
-  Rejected: "bg-red-100 text-red-700",
-  Interview: "bg-blue-100 text-blue-700",
-  InterviewScheduled: "bg-indigo-100 text-indigo-700",
   Submitted: "bg-sky-100 text-sky-700",
   Interviewing: "bg-cyan-100 text-cyan-700",
   Offered: "bg-teal-100 text-teal-700",
   Hired: "bg-purple-100 text-purple-700",
+  Rejected: "bg-red-100 text-red-700",
   Withdrawn: "bg-gray-100 text-gray-700",
 };
 
@@ -66,17 +58,6 @@ interface JobRequestWithRelations extends JobRequest {
     };
   };
 }
-
-const statusIcons: Record<string, ReactNode> = {
-  Rejected: <XCircle className="w-4 h-4" />,
-  Interview: <Calendar className="w-4 h-4" />,
-  InterviewScheduled: <Calendar className="w-4 h-4" />,
-  Submitted: <FileText className="w-4 h-4" />,
-  Interviewing: <Eye className="w-4 h-4" />,
-  Offered: <Send className="w-4 h-4" />,
-  Hired: <CheckCircle className="w-4 h-4" />,
-  Withdrawn: <AlertCircle className="w-4 h-4" />,
-};
 
 const formatDate = (dateString?: string | null) => {
   if (!dateString) return "—";
@@ -265,7 +246,7 @@ export default function SalesApplicationListPage() {
       },
       {
         title: "Đã lên lịch phỏng vấn",
-        value: applications.filter((app) => app.status === "InterviewScheduled").length.toString(),
+        value: applications.filter((app) => app.status === "Interviewing").length.toString(),
         icon: <Calendar className="w-6 h-6 text-secondary-600" />,
         accent: "bg-secondary-100",
       },
@@ -484,11 +465,10 @@ export default function SalesApplicationListPage() {
                       <td className="px-6 py-4">
                         <div className="flex justify-center">
                           <span
-                            className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-medium ${
+                            className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium ${
                               statusColors[app.status] ?? "bg-neutral-100 text-neutral-600"
                             }`}
                           >
-                            {statusIcons[app.status] ?? <AlertCircle className="w-4 h-4" />}
                             {statusLabels[app.status] ?? app.status}
                           </span>
                         </div>

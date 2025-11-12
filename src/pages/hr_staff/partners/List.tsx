@@ -117,7 +117,7 @@ export default function ListPartner() {
             </div>
             <Button 
               onClick={() => navigate(ROUTES.HR_STAFF.PARTNERS.CREATE)}
-              className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300"
+              className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
             >
               <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
               Thêm đối tác mới

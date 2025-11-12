@@ -137,7 +137,7 @@ export default function TalentJobRoleLevelCreatePage() {
     e.preventDefault();
     
     // Xác nhận trước khi tạo
-    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm vị trí công việc cho talent không?");
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm vị trí công việc cho nhân sự không?");
     if (!confirmed) {
       return;
     }
@@ -171,7 +171,7 @@ export default function TalentJobRoleLevelCreatePage() {
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent Job Role Level:", err);
-      setError("Không thể tạo vị trí công việc cho talent. Vui lòng thử lại.");
+      setError("Không thể tạo vị trí công việc cho nhân sự. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -190,15 +190,15 @@ export default function TalentJobRoleLevelCreatePage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm vị trí công việc cho talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm vị trí công việc cho nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin chi tiết để thêm vị trí công việc mới cho talent
+                Nhập thông tin chi tiết để thêm vị trí công việc mới cho nhân sự
               </p>
               
               {/* Status Badge */}

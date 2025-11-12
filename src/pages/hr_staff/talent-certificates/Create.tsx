@@ -18,7 +18,7 @@ import {
   ExternalLink
 } from "lucide-react";
 
-export default function TalentCertificateCreatePage() {
+function TalentCertificateCreatePage() {
   const [searchParams] = useSearchParams();
   const talentId = searchParams.get('talentId');
   const navigate = useNavigate();
@@ -142,7 +142,7 @@ export default function TalentCertificateCreatePage() {
     e.preventDefault();
     
     // Xác nhận trước khi tạo
-    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm chứng chỉ cho talent không?");
+    const confirmed = window.confirm("Bạn có chắc chắn muốn thêm chứng chỉ cho nhân sự không?");
     if (!confirmed) {
       return;
     }
@@ -157,29 +157,33 @@ export default function TalentCertificateCreatePage() {
       return;
     }
 
-    if (!form.imageUrl.trim()) {
-      setError("⚠️ Vui lòng nhập URL hình ảnh chứng chỉ.");
-      setLoading(false);
-      return;
+    const imageUrl = form.imageUrl.trim();
+
+    if (imageUrl) {
+      try {
+        const parsed = new URL(imageUrl);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          throw new Error("invalid protocol");
+        }
+      } catch {
+        setError("⚠️ URL hình ảnh không hợp lệ.");
+        setLoading(false);
+        return;
+      }
     }
 
-    // Validate URL format
     try {
-      new URL(form.imageUrl);
-    } catch {
-      setError("⚠️ URL hình ảnh không hợp lệ.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      await talentCertificateService.create(form);
+      await talentCertificateService.create({
+        ...form,
+        imageUrl: imageUrl || "",
+        issuedDate: form.issuedDate ? form.issuedDate : undefined,
+      });
       clearCertificateSuggestions();
       setSuccess(true);
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent Certificate:", err);
-      setError("Không thể tạo chứng chỉ cho talent. Vui lòng thử lại.");
+      setError("Không thể tạo chứng chỉ cho nhân sự. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -198,15 +202,15 @@ export default function TalentCertificateCreatePage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm chứng chỉ cho talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm chứng chỉ cho nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin chi tiết để thêm chứng chỉ mới cho talent
+                Nhập thông tin chi tiết để thêm chứng chỉ mới cho nhân sự
               </p>
               
               {/* Status Badge */}
@@ -366,20 +370,20 @@ export default function TalentCertificateCreatePage() {
 
               {/* URL hình ảnh */}
               <div>
-                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  URL hình ảnh chứng chỉ
+              <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                URL hình ảnh chứng chỉ (tùy chọn)
                 </label>
                 <input
+                  type="url"
                   name="imageUrl"
                   value={form.imageUrl}
                   onChange={handleChange}
                   placeholder="https://example.com/certificate-image.jpg"
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
-                  Nhập URL đầy đủ của hình ảnh chứng chỉ
+                Nhập URL nếu muốn đính kèm hình ảnh chứng chỉ
                 </p>
                 {form.imageUrl && (
                   <div className="mt-3">
@@ -450,3 +454,5 @@ export default function TalentCertificateCreatePage() {
     </div>
   );
 }
+
+export default TalentCertificateCreatePage;

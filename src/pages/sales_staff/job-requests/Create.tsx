@@ -384,7 +384,7 @@ export default function JobRequestCreatePage() {
                       required
                     >
                       <option value={WorkingMode.None}>Không xác định</option>
-                      <option value={WorkingMode.Onsite}>Tại công ty</option>
+                      <option value={WorkingMode.Onsite}>Tại văn phòng</option>
                       <option value={WorkingMode.Remote}>Từ xa</option>
                       <option value={WorkingMode.Hybrid}>Kết hợp</option>
                       <option value={WorkingMode.Flexible}>Linh hoạt</option>

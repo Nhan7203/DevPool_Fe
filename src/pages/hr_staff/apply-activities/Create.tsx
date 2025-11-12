@@ -146,7 +146,7 @@ export default function ApplyActivityCreatePage() {
       // Sau khi tạo hoạt động đầu tiên, cập nhật trạng thái hồ sơ ứng tuyển
       try {
         if (form.applyId) {
-          await applyService.updateStatus(form.applyId, { status: "InterviewScheduled" });
+          await applyService.updateStatus(form.applyId, { status: "Interviewing" });
         }
       } catch (statusErr) {
         console.error("❌ Lỗi cập nhật trạng thái hồ sơ ứng tuyển:", statusErr);

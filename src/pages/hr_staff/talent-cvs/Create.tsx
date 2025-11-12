@@ -415,7 +415,7 @@ export default function TalentCVCreatePage() {
     }
 
     if (!talentId) {
-      setError("⚠️ Không tìm thấy ID talent.");
+      setError("⚠️ Không tìm thấy ID nhân sự.");
       return;
     }
 
@@ -506,8 +506,13 @@ export default function TalentCVCreatePage() {
       return;
     }
 
-    if (!form.summary.trim()) {
-      setError("⚠️ Vui lòng nhập tóm tắt CV.");
+    try {
+      const url = new URL(form.cvFileUrl.trim());
+      if (!["http:", "https:"].includes(url.protocol)) {
+        throw new Error("invalid protocol");
+      }
+    } catch {
+      setError("⚠️ URL file CV không hợp lệ. Vui lòng nhập đường dẫn bắt đầu bằng http hoặc https.");
       setLoading(false);
       return;
     }
@@ -543,7 +548,7 @@ export default function TalentCVCreatePage() {
           await talentCVService.deactivate(activeCVWithSameJobRole.id);
         } else {
           // Nếu không trùng, CV mới active (đã set ở trên)
-          const confirmed = window.confirm("Bạn có chắc chắn muốn tạo CV mới cho talent không?");
+          const confirmed = window.confirm("Bạn có chắc chắn muốn tạo CV mới cho nhân sự không?");
           if (!confirmed) {
             setLoading(false);
             return;
@@ -556,7 +561,7 @@ export default function TalentCVCreatePage() {
       setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent CV:", err);
-      setError("Không thể tạo CV cho talent. Vui lòng thử lại.");
+      setError("Không thể tạo CV cho nhân sự. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -576,15 +581,15 @@ export default function TalentCVCreatePage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm CV cho talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Thêm CV cho nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin chi tiết để thêm CV mới cho talent
+                Nhập thông tin chi tiết để thêm CV mới cho nhân sự
               </p>
               
               {/* Status Badge */}
@@ -931,7 +936,7 @@ export default function TalentCVCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tóm tắt CV <span className="text-red-500">*</span>
+                  Tóm tắt CV
                 </label>
                 <textarea
                   name="summary"
@@ -939,13 +944,12 @@ export default function TalentCVCreatePage() {
                   onChange={handleChange}
                   placeholder="Mô tả ngắn gọn về nội dung CV, bao gồm: tên ứng viên, vị trí công việc, kinh nghiệm làm việc, kỹ năng chính, dự án nổi bật, chứng chỉ (nếu có)..."
                   rows={4}
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
                   {!form.summary && (
-                    <span className="block mt-1 text-green-600">
-                      ✓ Tóm tắt sẽ được tự động điền khi nhấn "Trích xuất thông tin CV"
+                    <span className="block mt-1 text-neutral-500">
+                      Tuỳ chọn: sẽ được tự động điền khi nhấn "Trích xuất thông tin CV", bạn có thể để trống nếu chưa cần.
                     </span>
                   )}
                   {form.summary && (

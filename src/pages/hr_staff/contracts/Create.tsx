@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
@@ -6,16 +6,26 @@ import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContractPayload } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
+import { talentApplicationService, type TalentApplication } from '../../../services/TalentApplication';
+import { talentCVService, type TalentCV } from '../../../services/TalentCV';
 import { uploadFile } from '../../../utils/firebaseStorage';
+import { notificationService, NotificationPriority, NotificationType } from '../../../services/Notification';
+import { userService } from '../../../services/User';
+import { decodeJWT } from '../../../services/Auth';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function CreatePartnerContractPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
+    const [fileError, setFileError] = useState('');
     const [partners, setPartners] = useState<Partner[]>([]);
     const [talents, setTalents] = useState<Talent[]>([]);
     const [contractFile, setContractFile] = useState<File | null>(null);
+    const [eligibleTalentIds, setEligibleTalentIds] = useState<number[]>([]);
+    const [talentHireDates, setTalentHireDates] = useState<Record<number, string>>({});
 
     const [form, setForm] = useState<PartnerContractPayload>({
         partnerId: 0,
@@ -29,22 +39,104 @@ export default function CreatePartnerContractPage() {
         contractFileUrl: undefined,
     });
 
+    const formatDateForInput = (date: Date) => {
+        const year = date.getFullYear();
+        const month = `${date.getMonth() + 1}`.padStart(2, '0');
+        const day = `${date.getDate()}`.padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [partnersData, talentsData] = await Promise.all([
+                const [partnersData, talentsData, hiredApplications, talentCVs] = await Promise.all([
                     partnerService.getAll(),
-                    talentService.getAll({ excludeDeleted: true })
+                    talentService.getAll({ excludeDeleted: true }),
+                    talentApplicationService.getAll({ excludeDeleted: true }),
+                    talentCVService.getAll({ excludeDeleted: true })
                 ]);
+
+                const cvTalentMap = new Map<number, number>();
+                (talentCVs as TalentCV[]).forEach(cv => {
+                    cvTalentMap.set(cv.id, cv.talentId);
+                });
+
+                const hiredTalentSet = new Set<number>();
+                const talentHireDateMap: Record<number, string> = {};
+
+                (hiredApplications as TalentApplication[])
+                    .filter(app => app.status === 'Hired')
+                    .forEach(app => {
+                        const talentId = cvTalentMap.get(app.cvId);
+                        if (!talentId) return;
+
+                        hiredTalentSet.add(talentId);
+
+                        const hireDate = app.updatedAt ?? app.createdAt;
+                        if (!hireDate) return;
+
+                        const existing = talentHireDateMap[talentId];
+                        if (!existing || new Date(hireDate).getTime() < new Date(existing).getTime()) {
+                            talentHireDateMap[talentId] = hireDate;
+                        }
+                    });
+
                 setPartners(partnersData);
                 setTalents(talentsData);
+                setEligibleTalentIds(Array.from(hiredTalentSet));
+                setTalentHireDates(talentHireDateMap);
             } catch (err) {
                 console.error("❌ Lỗi tải dữ liệu:", err);
-                setError("Không thể tải danh sách đối tác và talent");
+                setError("Không thể tải danh sách đối tác và nhân sự");
             }
         };
         fetchData();
     }, []);
+
+    const sendNotificationToManagers = useCallback(async (contractId: number | null, contractNumber: string) => {
+        try {
+            const managersResponse = await userService.getAll({
+                role: "Manager",
+                excludeDeleted: true,
+                pageNumber: 1,
+                pageSize: 100
+            });
+
+            const managerIds =
+                (managersResponse.items || [])
+                    .map((manager) => manager.id)
+                    .filter((id): id is string => Boolean(id));
+
+            if (!managerIds.length) {
+                return;
+            }
+
+            const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+            const decoded = token ? decodeJWT(token) : null;
+            const creatorName =
+                user?.name ||
+                decoded?.unique_name ||
+                decoded?.email ||
+                "Nhân viên HR";
+
+            await notificationService.create({
+                title: "Hợp đồng nhân sự mới",
+                message: `${creatorName} vừa tạo hợp đồng nhân sự ${contractNumber}. Vui lòng kiểm tra và phê duyệt.`,
+                type: NotificationType.ContractPendingApproval,
+                priority: NotificationPriority.Medium,
+                userIds: managerIds,
+                entityType: "PartnerContract",
+                entityId: contractId ?? undefined,
+                actionUrl: contractId ? `/manager/contracts/developers/${contractId}` : undefined,
+                metaData: {
+                    contractNumber,
+                    createdBy: String(creatorName),
+                },
+            });
+        } catch (notifyError) {
+            console.error("⚠️ Không thể gửi thông báo tới Manager:", notifyError);
+        }
+    }, [user]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -62,9 +154,11 @@ export default function CreatePartnerContractPage() {
         const file = e.target.files?.[0];
         if (file && file.size <= 10 * 1024 * 1024) {
             setContractFile(file);
+            setFileError('');
             setError('');
         } else {
-            setError("❌ File quá lớn (tối đa 10MB)");
+            setContractFile(null);
+            setFileError('❌ File quá lớn (tối đa 10MB)');
         }
     };
 
@@ -79,6 +173,7 @@ export default function CreatePartnerContractPage() {
         
         setLoading(true);
         setError('');
+        setFileError('');
         setSuccess(false);
 
         try {
@@ -89,8 +184,51 @@ export default function CreatePartnerContractPage() {
                 return;
             }
 
+            const selectedTalent = talents.find(talent => talent.id === form.talentId);
+            if (!selectedTalent) {
+                setError("Không tìm thấy thông tin nhân sự đã chọn");
+                setLoading(false);
+                return;
+            }
+
+            if (!eligibleTalentIds.includes(selectedTalent.id)) {
+                setError("Talent chưa có hồ sơ ứng tuyển ở trạng thái Đã tuyển, không thể tạo hợp đồng.");
+                setLoading(false);
+                return;
+            }
+
+            const talentHireDate = talentHireDates[selectedTalent.id];
+            if (talentHireDate) {
+                const hireDateValue = new Date(talentHireDate);
+                const startDateValue = new Date(form.startDate);
+                if (!Number.isNaN(hireDateValue.getTime()) && !Number.isNaN(startDateValue.getTime())) {
+                    if (startDateValue <= hireDateValue) {
+                        setError("Ngày bắt đầu hợp đồng phải sau ngày được tuyển dụng.");
+                        setLoading(false);
+                        return;
+                    }
+                }
+            }
+
+            if (form.endDate) {
+                const start = new Date(form.startDate);
+                const end = new Date(form.endDate);
+
+                if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    setError("Ngày bắt đầu hoặc ngày kết thúc không hợp lệ");
+                    setLoading(false);
+                    return;
+                }
+
+                if (end <= start) {
+                    setError("Ngày kết thúc phải sau ngày bắt đầu.");
+                    setLoading(false);
+                    return;
+                }
+            }
+
             if (!contractFile) {
-                setError("⚠️ Vui lòng chọn file hợp đồng");
+                setFileError('⚠️ Vui lòng chọn file hợp đồng');
                 setLoading(false);
                 return;
             }
@@ -103,7 +241,11 @@ export default function CreatePartnerContractPage() {
                 contractFileUrl: fileUrl,
             };
 
-            await partnerContractService.create(payload);
+            const createdContract = await partnerContractService.create(payload);
+            await sendNotificationToManagers(
+                (createdContract as { id?: number } | null)?.id ?? null,
+                payload.contractNumber
+            );
             setSuccess(true);
             setContractFile(null);
             setTimeout(() => {
@@ -116,6 +258,14 @@ export default function CreatePartnerContractPage() {
             setLoading(false);
         }
     };
+
+    const selectedTalentHireDate = form.talentId ? talentHireDates[form.talentId] : undefined;
+    const minStartDate = selectedTalentHireDate ? (() => {
+        const date = new Date(selectedTalentHireDate);
+        if (Number.isNaN(date.getTime())) return undefined;
+        date.setDate(date.getDate() + 1);
+        return formatDateForInput(date);
+    })() : undefined;
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
@@ -187,11 +337,11 @@ export default function CreatePartnerContractPage() {
                                     />
                                 </div>
 
-                                {/* Loại Mức Phí */}
+                                {/* Hình thức tính lương */}
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <DollarSign className="w-4 h-4" />
-                                        Loại Mức Phí <span className="text-red-500">*</span>
+                                        Hình thức tính lương <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         name="rateType"
@@ -200,7 +350,7 @@ export default function CreatePartnerContractPage() {
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     >
-                                        <option value="">-- Chọn loại mức phí --</option>
+                                        <option value="">-- Chọn hình thức tính lương --</option>
                                         <option value="Hourly">Theo giờ</option>
                                         <option value="Daily">Theo ngày</option>
                                         <option value="Monthly">Theo tháng</option>
@@ -232,11 +382,11 @@ export default function CreatePartnerContractPage() {
                                     </select>
                                 </div>
 
-                                {/* Nhân viên */}
+                                {/* Nhân sự */}
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <UserCheck className="w-4 h-4" />
-                                        Nhân viên <span className="text-red-500">*</span>
+                                        Nhân sự <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         name="talentId"
@@ -245,22 +395,29 @@ export default function CreatePartnerContractPage() {
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     >
-                                        <option value="">-- Chọn nhân viên --</option>
-                                        {talents.map(talent => (
-                                            <option key={talent.id} value={talent.id}>
-                                                {talent.fullName} ({talent.email})
+                                        <option value="">-- Chọn nhân sự --</option>
+                                        {eligibleTalentIds.length === 0 && (
+                                            <option disabled value="">
+                                                Không có nhân sự nào có hồ sơ ứng tuyển ở trạng thái Đã tuyển
                                             </option>
-                                        ))}
+                                        )}
+                                        {talents
+                                            .filter(talent => eligibleTalentIds.includes(talent.id))
+                                            .map(talent => (
+                                                <option key={talent.id} value={talent.id}>
+                                                    {talent.fullName} ({talent.email})
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
                             </div>
 
                             <div>
-                                {/* Mức Phí Dev */}
+                                {/* Mức Lương Nhân Sự */}
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <DollarSign className="w-4 h-4" />
-                                        Mức Phí Dev (VND)
+                                        Mức Lương Nhân Sự (VND)
                                     </label>
                                     <input
                                         type="number"
@@ -289,6 +446,8 @@ export default function CreatePartnerContractPage() {
                                         onChange={handleChange}
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        min={minStartDate}
+                                        max={form.endDate || undefined}
                                     />
                                 </div>
 
@@ -304,6 +463,7 @@ export default function CreatePartnerContractPage() {
                                         value={form.endDate || ''}
                                         onChange={handleChange}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        min={form.startDate || undefined}
                                     />
                                     <p className="text-xs text-neutral-500 mt-2">Để trống nếu hợp đồng không có thời hạn</p>
                                 </div>
@@ -323,7 +483,10 @@ export default function CreatePartnerContractPage() {
                                             <p className="text-sm text-neutral-600">{(contractFile.size / 1024 / 1024).toFixed(2)} MB</p>
                                             <button
                                                 type="button"
-                                                onClick={() => setContractFile(null)}
+                                                onClick={() => {
+                                                    setContractFile(null);
+                                                    setFileError('');
+                                                }}
                                                 className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
                                             >
                                                 Xóa file
@@ -343,6 +506,9 @@ export default function CreatePartnerContractPage() {
                                         </label>
                                     )}
                                 </div>
+                                {fileError && (
+                                    <p className="mt-2 text-sm text-red-600">{fileError}</p>
+                                )}
                             </div>
                         </div>
                     </div>

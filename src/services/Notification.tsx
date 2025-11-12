@@ -5,7 +5,6 @@ import { AxiosError } from "axios";
 export const NotificationType = {
   // Recruitment & Application (1xxx)
   ApplicationStatusChanged: 1001,
-  InterviewScheduled: 1002,
   InterviewRescheduled: 1003,
   InterviewCompleted: 1004,
   InterviewResultPassed: 1005,

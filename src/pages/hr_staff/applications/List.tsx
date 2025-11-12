@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
@@ -6,12 +6,12 @@ import { talentApplicationService, type TalentApplication } from "../../../servi
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { userService, type User } from "../../../services/User";
+import { talentService, type Talent } from "../../../services/Talent";
 import { 
   Search, 
   Filter, 
   Eye, 
   Briefcase, 
-  Calendar,
   FileText,
   User as UserIcon,
   CheckCircle,
@@ -19,7 +19,9 @@ import {
   X,
   Send,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  UserStar,
+  FileUser
 } from "lucide-react";
 
 type AugmentedTalentApplication = TalentApplication & {
@@ -35,39 +37,25 @@ type AugmentedTalentApplication = TalentApplication & {
     cvFileUrl: string;
   };
   submitterName?: string;
+  talentName?: string;
 };
 
 const statusLabels: Record<string, string> = {
-  "Rejected": "Đã từ chối",
-  "Interview": "Phỏng vấn",
-  "InterviewScheduled": "Đã lên lịch phỏng vấn",
-  "Submitted": "Đã nộp hồ sơ",
-  "Interviewing": "Đang xem xét phỏng vấn",
-  "Offered": "Đã đề xuất",
-  "Hired": "Đã tuyển",
-  "Withdrawn": "Đã rút",
+  Submitted: "Đã nộp hồ sơ",
+  Interviewing: "Đang xem xét phỏng vấn",
+  Offered: "Đã bàn bạc",
+  Hired: "Đã tuyển",
+  Rejected: "Đã từ chối",
+  Withdrawn: "Đã rút",
 };
 
 const statusColors: Record<string, string> = {
-  "Rejected": "bg-red-100 text-red-800",
-  "Interview": "bg-blue-100 text-blue-800",
-  "InterviewScheduled": "bg-indigo-100 text-indigo-800",
-  "Submitted": "bg-sky-100 text-sky-800",
-  "Interviewing": "bg-cyan-100 text-cyan-800",
-  "Hired": "bg-purple-100 text-purple-800",
-  "Withdrawn": "bg-gray-100 text-gray-800",
-  "Offered": "bg-teal-100 text-teal-800",
-};
-
-const statusIcons: Record<string, React.ReactNode> = {
-  "Rejected": <XCircle className="w-4 h-4" />,
-  "Interview": <Calendar className="w-4 h-4" />,
-  "InterviewScheduled": <Calendar className="w-4 h-4" />,
-  "Submitted": <FileText className="w-4 h-4" />,
-  "Interviewing": <Eye className="w-4 h-4" />,
-  "Hired": <CheckCircle className="w-4 h-4" />,
-  "Withdrawn": <X className="w-4 h-4" />,
-  "Offered": <Send className="w-4 h-4" />,
+  Submitted: "bg-sky-100 text-sky-800",
+  Interviewing: "bg-cyan-100 text-cyan-800",
+  Offered: "bg-teal-100 text-teal-800",
+  Hired: "bg-purple-100 text-purple-800",
+  Rejected: "bg-red-100 text-red-800",
+  Withdrawn: "bg-gray-100 text-gray-800",
 };
 
 export default function TalentCVApplicationPage() {
@@ -87,33 +75,78 @@ export default function TalentCVApplicationPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Stats data
-  const stats = [
+  // Stats navigation
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
+
+  const stats = useMemo(() => [
     {
       title: 'Tổng Hồ Sơ',
       value: applications.length.toString(),
       color: 'blue',
-      icon: <FileText className="w-6 h-6" />
+      icon: <FileText className="w-6 h-6" />,
     },
     {
-      title: 'Đã Lên Lịch PV',
-      value: applications.filter(a => a.status === 'InterviewScheduled').length.toString(),
+      title: 'Đã nộp hồ sơ',
+      value: applications.filter(a => a.status === 'Submitted').length.toString(),
+      color: 'blue',
+      icon: <FileUser className="w-6 h-6" />,
+    },
+    {
+      title: 'Đang xem xét PV',
+      value: applications.filter(a => a.status === 'Interviewing').length.toString(),
+      color: 'teal',
+      icon: <Eye className="w-6 h-6" />,
+    },
+    {
+      title: 'Đã bàn bạc',
+      value: applications.filter(a => a.status === 'Offered').length.toString(),
       color: 'green',
-      icon: <Calendar className="w-6 h-6" />
+      icon: <Send className="w-6 h-6" />,
     },
     {
       title: 'Đã Tuyển',
       value: applications.filter(a => a.status === 'Hired').length.toString(),
-      color: 'orange',
-      icon: <CheckCircle className="w-6 h-6" />
+      color: 'purple',
+      icon: <CheckCircle className="w-6 h-6" />,
     },
     {
-      title: 'Đang PV',
-      value: applications.filter(a => a.status === 'Interview').length.toString(),
-      color: 'purple',
-      icon: <Calendar className="w-6 h-6" />
-    }
-  ];
+      title: 'Đã Từ Chối',
+      value: applications.filter(a => a.status === 'Rejected').length.toString(),
+      color: 'red',
+      icon: <XCircle className="w-6 h-6" />,
+    },
+    {
+      title: 'Đã Rút',
+      value: applications.filter(a => a.status === 'Withdrawn').length.toString(),
+      color: 'gray',
+      icon: <X className="w-6 h-6" />,
+    },
+  ], [applications]);
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex(prev => Math.min(prev, maxIndex));
+  }, [stats.length, statsPageSize]);
+
+  const statsSlice = stats.slice(
+    statsStartIndex,
+    Math.min(statsStartIndex + statsPageSize, stats.length)
+  );
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrev = canShowStatsNav && statsStartIndex > 0;
+  const canGoNext = canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
+  const handlePrevStats = () => {
+    setStatsStartIndex(prev => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex(prev => {
+      const maxIndex = Math.max(0, stats.length - statsPageSize);
+      return Math.min(maxIndex, prev + statsPageSize);
+    });
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -149,10 +182,27 @@ export default function TalentCVApplicationPage() {
           }))
         ]);
 
+        const talentIds = [...new Set(
+          cvsData
+            .map((cv: TalentCV) => cv?.talentId)
+            .filter((id): id is number => typeof id === "number" && id > 0)
+        )];
+
+        const talentsData = await Promise.all(
+          talentIds.map(id =>
+            talentService.getById(id).catch(() => null)
+          )
+        );
+
         // Create lookup maps
         const jobRequestMap = new Map(jobRequestsData.map((jr: JobRequest) => [jr.id, jr]));
         const cvMap = new Map(cvsData.map((cv: TalentCV) => [cv.id, cv]));
         const userMap = new Map(usersData.filter((u): u is User => u !== null).map((u: User) => [u.id, u]));
+        const talentMap = new Map(
+          talentsData
+            .filter((talent): talent is Talent => talent !== null && typeof talent?.id === "number")
+            .map((talent: Talent) => [talent.id, talent])
+        );
 
         // Augment applications with related data
         const augmented: AugmentedTalentApplication[] = applicationsData
@@ -161,6 +211,7 @@ export default function TalentCVApplicationPage() {
           const jobRequest = jobRequestMap.get(app.jobRequestId);
           const talentCV = cvMap.get(app.cvId);
           const submitter = userMap.get(app.submittedBy);
+          const talent = talentCV ? talentMap.get(talentCV.talentId) : undefined;
           
           return {
             ...app,
@@ -174,6 +225,7 @@ export default function TalentCVApplicationPage() {
               cvFileUrl: talentCV.cvFileUrl,
             } : undefined,
             submitterName: submitter?.fullName || app.submittedBy,
+            talentName: talent?.fullName
           };
         });
 
@@ -219,9 +271,11 @@ export default function TalentCVApplicationPage() {
   useEffect(() => {
     let filtered = [...applications];
     if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter((a) => 
-        a.jobRequest?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.submitterName?.toLowerCase().includes(searchTerm.toLowerCase())
+        a.jobRequest?.title?.toLowerCase().includes(lowerSearch) ||
+        a.submitterName?.toLowerCase().includes(lowerSearch) ||
+        a.talentName?.toLowerCase().includes(lowerSearch)
       );
     }
     if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
@@ -298,24 +352,109 @@ export default function TalentCVApplicationPage() {
           )}
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+          <div className="mb-8 animate-fade-in">
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statsSlice.map((stat, index) => (
+                  <div
+                    key={`${stat.title}-${statsStartIndex + index}`}
+                    className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          {stat.title}
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">
+                          {stat.value}
+                        </p>
+                      </div>
+                      <div
+                        className={`p-3 rounded-full ${
+                          stat.color === 'blue'
+                            ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200'
+                            : stat.color === 'green'
+                            ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200'
+                            : stat.color === 'purple'
+                            ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200'
+                            : stat.color === 'red'
+                            ? 'bg-red-100 text-red-600 group-hover:bg-red-200'
+                            : stat.color === 'gray'
+                            ? 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200'
+                            : stat.color === 'teal'
+                            ? 'bg-teal-100 text-teal-600 group-hover:bg-teal-200'
+                            : 'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                        } transition-all duration-300`}
+                      >
+                        {stat.icon}
+                      </div>
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
-                    {stat.icon}
-                  </div>
+                ))}
+              </div>
+              {canShowStatsNav && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrev}
+                    className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoPrev
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNext}
+                    className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoNext
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+            {canShowStatsNav && (
+              <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrev}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoPrev
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNext}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoNext
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    Tiếp
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -352,13 +491,12 @@ export default function TalentCVApplicationPage() {
                     className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                   >
                     <option value="">Tất cả trạng thái</option>
-                    <option value="Rejected">Đã từ chối</option>
-                    <option value="Interview">Phỏng vấn</option>
-                    <option value="InterviewScheduled">Đã lên lịch phỏng vấn</option>
-                    <option value="Interviewing">Đang phỏng vấn</option>
+                    <option value="Submitted">Đã nộp hồ sơ</option>
+                    <option value="Interviewing">Đang xem xét phỏng vấn</option>
+                    <option value="Offered">Đã bàn bạc</option>
                     <option value="Hired">Đã tuyển</option>
+                    <option value="Rejected">Đã từ chối</option>
                     <option value="Withdrawn">Đã rút</option>
-                    <option value="Offered">Đã đề xuất</option>
                   </select>
                   <button
                     onClick={handleResetFilters}
@@ -421,6 +559,7 @@ export default function TalentCVApplicationPage() {
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người nộp</th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên ứng viên</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Yêu cầu tuyển dụng</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Phiên bản CV</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
@@ -431,7 +570,7 @@ export default function TalentCVApplicationPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredApplications.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <FileText className="w-8 h-8 text-neutral-400" />
@@ -456,6 +595,12 @@ export default function TalentCVApplicationPage() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
+                          <UserStar  className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-700">{app.talentName ?? "—"}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
                           <Briefcase className="w-4 h-4 text-neutral-400" />
                           <span className="text-sm text-primary-700 font-medium">{app.jobRequest?.title ?? "—"}</span>
                         </div>
@@ -464,8 +609,7 @@ export default function TalentCVApplicationPage() {
                         <span className="text-sm text-neutral-700">{app.talentCV?.versionName ?? "—"}</span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>
-                          {statusIcons[app.status]}
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>
                           {statusLabels[app.status] ?? app.status}
                         </span>
                       </td>

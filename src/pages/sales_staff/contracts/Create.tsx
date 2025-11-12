@@ -15,6 +15,7 @@ export default function CreateClientContractPage() {
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
+    const [fileError, setFileError] = useState('');
     const [clientCompanies, setClientCompanies] = useState<ClientCompany[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
     const [talents, setTalents] = useState<Talent[]>([]);
@@ -79,9 +80,11 @@ export default function CreateClientContractPage() {
         const file = e.target.files?.[0];
         if (file && file.size <= 10 * 1024 * 1024) {
             setContractFile(file);
+            setFileError('');
             setError('');
         } else {
-            setError("❌ File quá lớn (tối đa 10MB)");
+            setContractFile(null);
+            setFileError('❌ File quá lớn (tối đa 10MB)');
         }
     };
 
@@ -96,6 +99,7 @@ export default function CreateClientContractPage() {
         
         setSubmitting(true);
         setError('');
+        setFileError('');
         setSuccess(false);
 
         try {
@@ -107,7 +111,7 @@ export default function CreateClientContractPage() {
             }
 
             if (!contractFile) {
-                setError("⚠️ Vui lòng chọn file hợp đồng");
+                setFileError('⚠️ Vui lòng chọn file hợp đồng');
                 setSubmitting(false);
                 return;
             }
@@ -356,7 +360,10 @@ export default function CreateClientContractPage() {
                                             <p className="text-sm text-neutral-600">{(contractFile.size / 1024 / 1024).toFixed(2)} MB</p>
                                             <button
                                                 type="button"
-                                                onClick={() => setContractFile(null)}
+                                                onClick={() => {
+                                                    setContractFile(null);
+                                                    setFileError('');
+                                                }}
                                                 className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
                                             >
                                                 Xóa file
@@ -376,6 +383,9 @@ export default function CreateClientContractPage() {
                                         </label>
                                     )}
                                 </div>
+                                {fileError && (
+                                    <p className="mt-2 text-sm text-red-600">{fileError}</p>
+                                )}
                             </div>
                         </div>
                     </div>

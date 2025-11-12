@@ -52,7 +52,7 @@ export default function TalentProjectEditPage() {
         setTalentId(data.talentId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
-        alert("Không thể tải thông tin Talent Project!");
+        alert("Không thể tải thông tin dự án nhân sự!");
       } finally {
         setLoading(false);
       }
@@ -104,7 +104,7 @@ export default function TalentProjectEditPage() {
     }
 
     if (!formData.talentCVId || formData.talentCVId === 0) {
-      alert("⚠️ Vui lòng chọn CV của talent trước khi lưu!");
+      alert("⚠️ Vui lòng chọn CV của nhân sự trước khi lưu!");
       return;
     }
 
@@ -122,11 +122,11 @@ export default function TalentProjectEditPage() {
       console.log("Payload gửi đi:", formData);
       await talentProjectService.update(Number(id), formData);
 
-      alert("✅ Cập nhật dự án talent thành công!");
+      alert("✅ Cập nhật dự án nhân sự thành công!");
       navigate(`/hr/developers/${talentId}`);
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
-      alert("Không thể cập nhật dự án talent!");
+      alert("Không thể cập nhật dự án nhân sự!");
     }
   };
 
@@ -156,22 +156,22 @@ export default function TalentProjectEditPage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa dự án talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa dự án nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin dự án của talent
+                Cập nhật thông tin dự án của nhân sự
               </p>
               
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-50 border border-yellow-200">
                 <AlertCircle className="w-4 h-4 text-yellow-600" />
                 <span className="text-sm font-medium text-yellow-800">
-                  Chỉnh sửa dự án talent
+                  Chỉnh sửa dự án nhân sự
                 </span>
               </div>
             </div>
@@ -191,11 +191,11 @@ export default function TalentProjectEditPage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* CV của Talent */}
+              {/* CV của nhân sự */}
               <div>
-                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  CV của Talent <span className="text-red-500">*</span>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    CV của nhân sự <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <select

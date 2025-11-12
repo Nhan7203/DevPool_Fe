@@ -33,14 +33,14 @@ export const sidebarItems = [
       { label: 'Loại tài liệu', href: '/admin/categories/document-types' },
     ]
   },
-  {
-    label: 'Cài Đặt',
-    href: '/admin/settings',
-    icon: Settings,
-    subItems: [
-      // { label: 'Thông tin tài khoản', href: '/admin/settings/profile', icon: User },
-      // { label: 'Thông báo', href: '/admin/settings/notifications', icon: Bell },
-      { label: 'Đăng xuất', href: '/logout', icon: LogOut },
-    ]
-  }
+  // {
+  //   label: 'Cài Đặt',
+  //   href: '/admin/settings',
+  //   icon: Settings,
+  //   subItems: [
+  //     // { label: 'Thông tin tài khoản', href: '/admin/settings/profile', icon: User },
+  //     // { label: 'Thông báo', href: '/admin/settings/notifications', icon: Bell },
+  //     { label: 'Đăng xuất', href: '/logout', icon: LogOut },
+  //   ]
+  // }
 ];

@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, User, Bell, LogOut, Settings, Loader2 } from 'lucide-react';
+import {
+  Menu,
+  X,
+  User,
+  Bell,
+  LogOut,
+  Settings,
+  Loader2,
+  Shield,
+  UserCog,
+  UserCheck,
+  Briefcase,
+  DollarSign,
+  Code,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardRoute, ROUTES, NOTIFICATION_CENTER_ROUTE } from '../../router/routes';
 import {
@@ -44,7 +59,11 @@ function getPriorityBadge(priority?: NotificationPriority) {
   }
 }
 
-export default function Header() {
+interface HeaderProps {
+  showPublicBranding?: boolean;
+}
+
+export default function Header({ showPublicBranding = true }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -143,6 +162,55 @@ export default function Header() {
     }
   };
 
+  const getRoleDisplay = () => {
+    const role = user?.role;
+    if (!role) {
+      return {
+        icon: <User className="w-4 h-4 text-white" />,
+        containerClass: 'bg-gradient-to-r from-primary-600 to-accent-600',
+      };
+    }
+
+    switch (role) {
+      case 'Admin':
+        return {
+          icon: <Shield className="w-5 h-5 text-red-600 group-hover:text-red-700 transition-colors duration-300" />,
+          containerClass: 'bg-red-50',
+        };
+      case 'Manager':
+        return {
+          icon: <UserCog className="w-5 h-5 text-purple-600 group-hover:text-purple-700 transition-colors duration-300" />,
+          containerClass: 'bg-purple-50',
+        };
+      case 'Staff HR':
+        return {
+          icon: <UserCheck className="w-5 h-5 text-blue-600 group-hover:text-blue-700 transition-colors duration-300" />,
+          containerClass: 'bg-blue-50',
+        };
+      case 'Staff Sales':
+        return {
+          icon: <Briefcase className="w-5 h-5 text-green-600 group-hover:text-green-700 transition-colors duration-300" />,
+          containerClass: 'bg-green-50',
+        };
+      case 'Staff Accountant':
+        return {
+          icon: <DollarSign className="w-5 h-5 text-yellow-600 group-hover:text-yellow-700 transition-colors duration-300" />,
+          containerClass: 'bg-yellow-50',
+        };
+      case 'Developer':
+        return {
+          icon: <Code className="w-5 h-5 text-cyan-600 group-hover:text-cyan-700 transition-colors duration-300" />,
+          containerClass: 'bg-cyan-50',
+        };
+      default:
+        return {
+          icon: <Users className="w-5 h-5 text-neutral-600 group-hover:text-primary-600 transition-colors duration-300" />,
+          containerClass: 'bg-neutral-100',
+        };
+    }
+  };
+
+  const roleDisplay = useMemo(getRoleDisplay, [user?.role]);
   const handleNotificationNavigate = async (notification: ExtendedNotification) => {
     try {
       const resolved = await markNotificationAsRead(notification);
@@ -176,38 +244,63 @@ export default function Header() {
     navigate(ROUTES.LOGIN);
   };
 
+  const desktopLinks = showPublicBranding
+    ? [
+        { label: 'Trang Chủ', to: '/' },
+        { label: 'Nhân Sự IT', to: '/professionals' },
+        { label: 'Về Chúng Tôi', to: '/about' },
+        { label: 'Liên Hệ', to: '/contact' },
+      ]
+    : [];
+
+  const mobileLinks = showPublicBranding
+    ? [
+        { label: 'Trang Chủ', to: '/' },
+        { label: 'Dự Án', to: '/projects' },
+        { label: 'Chuyên Gia IT', to: '/professionals' },
+        { label: 'Doanh Nghiệp', to: '/companies' },
+      ]
+    : [];
+
+  const hasDesktopLinks = desktopLinks.length > 0;
+  const hasMobileLinks = mobileLinks.length > 0;
+
   return (
     <>
       <header className="bg-white/95 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-neutral-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="group flex items-center space-x-2 transition-all duration-300 hover:scale-105">
-            <div className="w-10 h-10 bg-gradient-to-r from-primary-600 to-accent-600 rounded-xl flex items-center justify-center shadow-soft group-hover:shadow-glow transition-all duration-300">
-              <span className="text-white font-bold text-lg">D</span>
-            </div>
-            <span className="font-bold text-xl bg-gradient-to-r from-gray-900 to-primary-700 bg-clip-text text-transparent">DevPool</span>
-          </Link>
+          <div className="flex items-center min-h-[40px]">
+            {showPublicBranding ? (
+              <Link to="/" className="group flex items-center space-x-2 transition-all duration-300 hover:scale-105">
+                <div className="w-10 h-10 bg-gradient-to-r from-primary-600 to-accent-600 rounded-xl flex items-center justify-center shadow-soft group-hover:shadow-glow transition-all duration-300">
+                  <span className="text-white font-bold text-lg">D</span>
+                </div>
+                <span className="font-bold text-xl bg-gradient-to-r from-gray-900 to-primary-700 bg-clip-text text-transparent">
+                  DevPool
+                </span>
+              </Link>
+            ) : null}
+          </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            <Link to="/" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Trang Chủ
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>           
-            <Link to="/professionals" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Nhân Sự IT
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link to="/about" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Về Chúng Tôi
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link to="/contact" className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group">
-              Liên Hệ
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-          </nav>
+          {hasDesktopLinks ? (
+            <nav className="hidden md:flex space-x-8">
+              {desktopLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className="text-neutral-700 hover:text-primary-600 font-medium transition-all duration-300 hover:scale-105 relative group"
+                >
+                  {link.label}
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-600 transition-all duration-300 group-hover:w-full"></span>
+                </Link>
+              ))}
+            </nav>
+          ) : (
+            <div className="hidden md:flex flex-1" />
+          )}
 
           {/* Right Side */}
           <div className="hidden md:flex items-center space-x-4">
@@ -428,8 +521,10 @@ export default function Header() {
                         className="w-8 h-8 rounded-full object-cover ring-2 ring-primary-100 group-hover:ring-primary-300 transition-all duration-300"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gradient-to-r from-primary-600 to-accent-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                        <User className="w-4 h-4 text-white" />
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ring-2 ring-primary-100 group-hover:ring-primary-300 transition-all duration-300 shadow-sm group-hover:scale-110 ${roleDisplay.containerClass}`}
+                      >
+                        {roleDisplay.icon}
                       </div>
                     )}
                     <span className="text-neutral-700 font-medium group-hover:text-primary-700 transition-colors duration-300">{user.name}</span>
@@ -477,46 +572,30 @@ export default function Header() {
           </div>
 
           {/* Mobile menu button */}
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-neutral-600 hover:text-primary-600 hover:bg-primary-50 transition-all duration-300"
-          >
-            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          {hasMobileLinks && (
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="md:hidden p-2 rounded-lg text-neutral-600 hover:text-primary-600 hover:bg-primary-50 transition-all duration-300"
+            >
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          )}
         </div>
 
         {/* Mobile Navigation */}
-        {isMenuOpen && (
+        {isMenuOpen && hasMobileLinks && (
           <div className="md:hidden py-4 border-t border-neutral-200 animate-slide-down">
             <nav className="flex flex-col space-y-3">
-              <Link
-                to="/"
-                className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Trang Chủ
-              </Link>
-              <Link
-                to="/projects"
-                className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Dự Án
-              </Link>
-              <Link
-                to="/professionals"
-                className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Chuyên Gia IT
-              </Link>
-              <Link
-                to="/companies"
-                className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Doanh Nghiệp
-              </Link>
+              {mobileLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className="text-neutral-700 hover:text-primary-600 font-medium py-2 px-2 rounded-lg hover:bg-primary-50 transition-all duration-300"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
 
               {user ? (
                 <div className="pt-3 border-t border-neutral-200">

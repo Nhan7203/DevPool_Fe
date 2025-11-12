@@ -121,11 +121,6 @@ export default function TalentCVEditPage() {
       return;
     }
 
-    if (!editableFields.summary || !editableFields.summary.trim()) {
-      alert("⚠️ Vui lòng nhập tóm tắt CV!");
-      return;
-    }
-
     try {
       const payload: TalentCVFieldsUpdateModel = {
         talentId,
@@ -322,7 +317,7 @@ export default function TalentCVEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tóm tắt CV <span className="text-red-500">*</span>
+                  Tóm tắt CV
                 </label>
                 <textarea
                   name="summary"
@@ -330,11 +325,10 @@ export default function TalentCVEditPage() {
                   onChange={handleChange}
                   placeholder="Mô tả ngắn gọn về nội dung CV, bao gồm: tên ứng viên, vị trí công việc, kinh nghiệm làm việc, kỹ năng chính, dự án nổi bật, chứng chỉ (nếu có)..."
                   rows={4}
-                  required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
-                  💡 Tóm tắt nên bao gồm: Tên ứng viên, Vị trí công việc, Kinh nghiệm làm việc, Kỹ năng chính, Dự án nổi bật, Chứng chỉ (nếu có).
+                  💡 Tóm tắt nên bao gồm: Tên ứng viên, Vị trí công việc, Kinh nghiệm làm việc, Kỹ năng chính, Dự án nổi bật, Chứng chỉ (nếu có). Có thể để trống nếu chưa cập nhật.
                 </p>
               </div>
 

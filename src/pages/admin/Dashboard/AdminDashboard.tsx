@@ -18,6 +18,8 @@ import {
   UserCheck,
   DollarSign,
   Code,
+  Star,
+  Grid,
 } from 'lucide-react';
 import { userService } from '../../../services/User';
 import { skillService } from '../../../services/Skill';
@@ -150,13 +152,13 @@ export default function AdminDashboard() {
     {
       title: 'Loại Danh Mục',
       value: 10,
-      icon: <Layers className="w-6 h-6" />,
+      icon: <Grid className="w-6 h-6" />,
       color: 'green'
     },
     {
       title: 'Kỹ Năng',
       value: stats.totalSkills.toString(),
-      icon: <Award className="w-6 h-6" />,
+      icon: <Star className="w-6 h-6" />,
       color: 'purple'
     },
     {
@@ -169,7 +171,7 @@ export default function AdminDashboard() {
 
 
   const categoryStats = [
-    { name: 'Kỹ Năng (skill)', count: categoryBreakdown.skills, icon: <Award className="w-5 h-5" />, link: '/admin/categories/skills', color: 'blue' },
+    { name: 'Kỹ Năng (skill)', count: categoryBreakdown.skills, icon: <Star className="w-5 h-5" />, link: '/admin/categories/skills', color: 'blue' },
     { name: 'Nhóm Kỹ Năng (skill group)', count: categoryBreakdown.skillGroups, icon: <Tag className="w-5 h-5" />, link: '/admin/categories/skill-groups', color: 'green' },
     { name: 'Kiểu làm việc (working style)', count: categoryBreakdown.workingStyles, icon: <Target className="w-5 h-5" />, link: '/admin/categories/working-styles', color: 'purple' },
     { name: 'Mẫu CV (cv template)', count: categoryBreakdown.cvTemplates, icon: <FileText className="w-5 h-5" />, link: '/admin/categories/cv-templates', color: 'orange' },

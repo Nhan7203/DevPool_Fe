@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle, Filter, Loader2, RefreshCcw, Search } from 'lucide-react';
+import { Bell, CheckCircle, Filter, Loader2, RefreshCcw, Search, Trash2 } from 'lucide-react';
 import {
   notificationService,
   type Notification,
@@ -49,8 +49,6 @@ function getTypeLabel(type: NotificationType) {
   switch (entry.label) {
     case 'ApplicationStatusChanged':
       return 'Trạng thái hồ sơ';
-    case 'InterviewScheduled':
-      return 'Lịch phỏng vấn';
     case 'InterviewRescheduled':
       return 'Dời lịch phỏng vấn';
     case 'InterviewCompleted':
@@ -193,6 +191,23 @@ const NotificationCenterPage = () => {
       fetchNotifications();
     } catch (error) {
       console.error('Không thể đánh dấu tất cả thông báo đã đọc:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (notification: Notification) => {
+    const confirmed = window.confirm('Bạn có chắc chắn muốn xóa thông báo này? Hành động này không thể hoàn tác.');
+    if (!confirmed) return;
+    try {
+      await notificationService.delete(notification.id);
+      const isLastItemOnPage = notifications.length === 1 && pageNumber > 1;
+      if (isLastItemOnPage) {
+        setPageNumber((prev) => Math.max(1, prev - 1));
+      } else {
+        fetchNotifications();
+      }
+    } catch (error) {
+      console.error('Không thể xóa thông báo:', error);
+      alert('Không thể xóa thông báo. Vui lòng thử lại sau.');
     }
   };
 
@@ -462,6 +477,13 @@ const NotificationCenterPage = () => {
                             Xem chi tiết
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDeleteNotification(notification)}
+                          className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-error-200 text-sm font-medium text-error-600 hover:bg-error-50 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Xóa
+                        </button>
                       </div>
                     </div>
                   </div>

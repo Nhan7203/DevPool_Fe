@@ -51,7 +51,7 @@ export default function TalentSkillEditPage() {
         setCurrentSkillId(data.skillId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
-        alert("Không thể tải thông tin Talent Skill!");
+        alert("Không thể tải thông tin kỹ năng nhân sự!");
       } finally {
         setLoading(false);
       }
@@ -134,11 +134,11 @@ export default function TalentSkillEditPage() {
       console.log("Payload gửi đi:", formData);
       await talentSkillService.update(Number(id), formData);
 
-      alert("✅ Cập nhật kỹ năng talent thành công!");
+      alert("✅ Cập nhật kỹ năng nhân sự thành công!");
       navigate(`/hr/developers/${talentId}`);
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
-      alert("Không thể cập nhật kỹ năng talent!");
+      alert("Không thể cập nhật kỹ năng nhân sự!");
     }
   };
 
@@ -168,22 +168,22 @@ export default function TalentSkillEditPage() {
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết talent</span>
+              <span className="font-medium">Quay lại chi tiết nhân sự</span>
             </Link>
           </div>
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa kỹ năng talent</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa kỹ năng nhân sự</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin kỹ năng của talent
+                Cập nhật thông tin kỹ năng của nhân sự
               </p>
               
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-50 border border-yellow-200">
                 <AlertCircle className="w-4 h-4 text-yellow-600" />
                 <span className="text-sm font-medium text-yellow-800">
-                  Chỉnh sửa kỹ năng talent
+                  Chỉnh sửa kỹ năng nhân sự
                 </span>
               </div>
             </div>

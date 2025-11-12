@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
@@ -41,7 +41,6 @@ import {
   Calendar,
   Award,
   ExternalLink,
-  Download,
   Star,
   Workflow,
   Plus,
@@ -50,12 +49,13 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  Eye,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
 const workingModeLabels: Record<number, string> = {
   [WorkingMode.None]: "Không xác định",
-  [WorkingMode.Onsite]: "Tại công ty",
+  [WorkingMode.Onsite]: "Tại văn phòng",
   [WorkingMode.Remote]: "Từ xa",
   [WorkingMode.Hybrid]: "Kết hợp",
   [WorkingMode.Flexible]: "Linh hoạt",
@@ -86,11 +86,11 @@ export default function TalentDetailPage() {
   >({});
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisLoadingId, setAnalysisLoadingId] = useState<number | null>(null);
-  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   type PrefillType = "projects" | "jobRoleLevels" | "skills" | "certificates" | "experiences";
   const ANALYSIS_STORAGE_PREFIX = "talent-analysis-prefill";
   const prefillTypes: PrefillType[] = ["projects", "jobRoleLevels", "skills", "certificates", "experiences"];
   const getPrefillStorageKey = (type: PrefillType) => `${ANALYSIS_STORAGE_PREFIX}-${type}-${id}`;
+  const ANALYSIS_RESULT_STORAGE_KEY = id ? `talent-analysis-result-${id}` : null;
   const clearPrefillStorage = () => {
     prefillTypes.forEach((type) => {
       try {
@@ -101,6 +101,24 @@ export default function TalentDetailPage() {
     });
   };
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!ANALYSIS_RESULT_STORAGE_KEY) return;
+    try {
+      const stored = sessionStorage.getItem(ANALYSIS_RESULT_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as {
+        cvId: number | null;
+        result: CVAnalysisComparisonResponse | null;
+      };
+      if (parsed?.result) {
+        setAnalysisResult(parsed.result);
+        setAnalysisResultCVId(parsed.cvId ?? null);
+      }
+    } catch (error) {
+      console.warn("Không thể khôi phục kết quả phân tích CV:", error);
+    }
+  }, [ANALYSIS_RESULT_STORAGE_KEY]);
 
   // Multi-select states
   const [selectedCVs, setSelectedCVs] = useState<number[]>([]);
@@ -213,9 +231,9 @@ export default function TalentDetailPage() {
         setCertificates(certificatesWithNames);
 
         setTalent(talentData);
-        console.log("Talent chi tiết:", talentData);
+        console.log("Nhân sự chi tiết:", talentData);
       } catch (err) {
-        console.error("❌ Lỗi tải chi tiết Talent:", err);
+        console.error("❌ Lỗi tải chi tiết nhân sự:", err);
       } finally {
         setLoading(false);
       }
@@ -274,19 +292,47 @@ export default function TalentDetailPage() {
     setPageAvailableTimes(1);
   }, [availableTimes.length]);
 
-  // 🗑️ Xóa talent
+  useEffect(() => {
+    setIsCVsExpanded(talentCVs.length > 0);
+  }, [talentCVs.length]);
+
+  useEffect(() => {
+    setIsProjectsExpanded(talentProjects.length > 0);
+  }, [talentProjects.length]);
+
+  useEffect(() => {
+    setIsSkillsExpanded(talentSkills.length > 0);
+  }, [talentSkills.length]);
+
+  useEffect(() => {
+    setIsExperiencesExpanded(workExperiences.length > 0);
+  }, [workExperiences.length]);
+
+  useEffect(() => {
+    setIsJobRoleLevelsExpanded(jobRoleLevels.length > 0);
+  }, [jobRoleLevels.length]);
+
+  useEffect(() => {
+    setIsCertificatesExpanded(certificates.length > 0);
+  }, [certificates.length]);
+
+  useEffect(() => {
+    setIsAvailableTimesExpanded(availableTimes.length > 0);
+  }, [availableTimes.length]);
+
+  // 🗑️ Xóa nhân sự
   const handleDelete = async () => {
     if (!id) return;
-    const confirm = window.confirm("⚠️ Bạn có chắc muốn xóa talent này?");
+    const confirm = window.confirm("⚠️ Bạn có chắc muốn xóa nhân sự này?");
     if (!confirm) return;
 
     try {
       await talentService.deleteById(Number(id));
-      alert("✅ Đã xóa talent thành công!");
+      alert("✅ Đã xóa nhân sự thành công!");
       navigate("/hr/developers");
     } catch (err) {
       console.error("❌ Lỗi khi xóa:", err);
-      alert("Không thể xóa talent!");
+      alert("Không thể xóa nhân sự!");
     }
   };
 
@@ -301,13 +347,31 @@ export default function TalentDetailPage() {
       alert("⚠️ Vui lòng chọn CV để xóa!");
       return;
     }
+
+    const activeCVs = talentCVs.filter((cv) => selectedCVs.includes(cv.id) && cv.isActive);
+    if (activeCVs.length > 0) {
+      alert("⚠️ Không thể xóa các CV đang hoạt động. Vui lòng bỏ chọn hoặc hủy kích hoạt trước khi xóa.");
+      setSelectedCVs((prev) => prev.filter((id) => !activeCVs.some((cv) => cv.id === id)));
+      return;
+    }
+
+    const deletableCVIds = selectedCVs.filter((id) => {
+      const cv = talentCVs.find((item) => item.id === id);
+      return cv && !cv.isActive;
+    });
+
+    if (deletableCVIds.length === 0) {
+      alert("⚠️ Không có CV nào hợp lệ để xóa.");
+      return;
+    }
+
     const confirm = window.confirm(`⚠️ Bạn có chắc muốn xóa ${selectedCVs.length} CV đã chọn?`);
     if (!confirm) return;
 
     try {
-      await Promise.all(selectedCVs.map(id => talentCVService.deleteById(id)));
+      await Promise.all(deletableCVIds.map(id => talentCVService.deleteById(id)));
       alert("✅ Đã xóa CV thành công!");
-      setSelectedCVs([]);
+      setSelectedCVs((prev) => prev.filter((id) => !deletableCVIds.includes(id)));
       // Refresh data
       const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
       const allJobRoles = await jobRoleService.getAll({ excludeDeleted: true });
@@ -322,21 +386,69 @@ export default function TalentDetailPage() {
     }
   };
 
-  const handleAnalyzeCVFileChange = async (cvId: number, event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!id) return;
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setAnalysisLoadingId(cvId);
-    setAnalysisError(null);
+  const normalizeFirebaseUrl = (url: string) => {
     try {
+      const parsed = new URL(url);
+      if (parsed.hostname.endsWith(".firebasestorage.app")) {
+        parsed.hostname = parsed.hostname.replace(".firebasestorage.app", ".appspot.com");
+      }
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  };
+
+  const handleAnalyzeCVFromUrl = async (cv: TalentCV & { jobRoleName?: string }) => {
+    if (!id) return;
+    if (!cv.cvFileUrl) {
+      alert("⚠️ Không tìm thấy đường dẫn CV để phân tích.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn phân tích CV "${cv.versionName}"?\n` +
+      "Hệ thống sẽ tải file CV hiện tại và tiến hành phân tích."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setAnalysisLoadingId(cv.id);
+    setAnalysisError(null);
+
+    try {
+      const downloadUrl = normalizeFirebaseUrl(cv.cvFileUrl);
+      const response = await fetch(downloadUrl, { cache: "no-cache", mode: "cors" });
+      if (!response.ok || response.type === "opaque") {
+        throw new Error("Không thể tải CV từ đường dẫn hiện có (CORS).");
+      }
+
+      const blob = await response.blob();
+      const sanitizedVersionName = cv.versionName.replace(/[^a-zA-Z0-9-_]/g, "_");
+      const file = new File([blob], `${sanitizedVersionName || "cv"}_${cv.id}.pdf`, { type: blob.type || "application/pdf" });
+
       const result = await talentCVService.analyzeCVForUpdate(Number(id), file);
       setAnalysisResult(result);
-      setAnalysisResultCVId(cvId);
+      setAnalysisResultCVId(cv.id);
+      if (ANALYSIS_RESULT_STORAGE_KEY) {
+        try {
+          sessionStorage.setItem(
+            ANALYSIS_RESULT_STORAGE_KEY,
+            JSON.stringify({ cvId: cv.id, result })
+          );
+        } catch (storageError) {
+          console.warn("Không thể lưu kết quả phân tích CV:", storageError);
+        }
+      }
     } catch (error) {
       console.error("❌ Lỗi phân tích CV:", error);
       const message = (error as { message?: string }).message ?? "Không thể phân tích CV";
       setAnalysisError(message);
+      if ((error as Error).message?.includes("CORS")) {
+        alert("⚠️ Không thể tải CV tự động do giới hạn CORS. Vui lòng tải file CV xuống và sử dụng lại nút phân tích thủ công.");
+      } else {
+        alert(`❌ ${message}`);
+      }
     } finally {
       setAnalysisLoadingId(null);
     }
@@ -348,6 +460,13 @@ export default function TalentDetailPage() {
     setAnalysisError(null);
     setAnalysisLoadingId(null);
     setAnalysisResultCVId(null);
+    if (ANALYSIS_RESULT_STORAGE_KEY) {
+      try {
+        sessionStorage.removeItem(ANALYSIS_RESULT_STORAGE_KEY);
+      } catch (storageError) {
+        console.warn("Không thể xóa kết quả phân tích CV đã lưu:", storageError);
+      }
+    }
   };
 
   const isSuggestionPending = useCallback(
@@ -377,7 +496,7 @@ export default function TalentDetailPage() {
         return;
       }
       if (!id) {
-        alert("Thiếu thông tin talent để gửi đề xuất.");
+        alert("Thiếu thông tin nhân sự để gửi đề xuất.");
         return;
       }
       if (isSuggestionPending(suggestionKey)) {
@@ -418,7 +537,7 @@ export default function TalentDetailPage() {
 
         const response = await notificationService.create({
           title: config.title,
-          message: `${requesterName} đề xuất thêm ${config.label} cho talent ${talentName}:\n${messageLines}`,
+          message: `${requesterName} đề xuất thêm ${config.label} cho nhân sự ${talentName}:\n${messageLines}`,
           type: NotificationType.DocumentUploaded,
           priority: NotificationPriority.Medium,
           userIds: adminUserIds,
@@ -1051,7 +1170,7 @@ export default function TalentDetailPage() {
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Đang tải dữ liệu talent...</p>
+            <p className="text-gray-500">Đang tải dữ liệu nhân sự...</p>
           </div>
         </div>
       </div>
@@ -1067,7 +1186,7 @@ export default function TalentDetailPage() {
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <XCircle className="w-8 h-8 text-red-500" />
             </div>
-            <p className="text-red-500 text-lg font-medium">Không tìm thấy talent</p>
+            <p className="text-red-500 text-lg font-medium">Không tìm thấy nhân sự</p>
             <Link
               to="/hr/developers"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
@@ -1097,9 +1216,23 @@ export default function TalentDetailPage() {
           icon: <Clock className="w-4 h-4" />,
           bgColor: "bg-yellow-50"
         };
+      case "Working":
+        return {
+          label: "Đang làm việc",
+          color: "bg-blue-100 text-blue-800",
+          icon: <Briefcase className="w-4 h-4" />,
+          bgColor: "bg-blue-50"
+        };
+      case "Applying":
+        return {
+          label: "Đang ứng tuyển",
+          color: "bg-purple-100 text-purple-800",
+          icon: <Target className="w-4 h-4" />,
+          bgColor: "bg-purple-50"
+        };
       case "Unavailable":
         return {
-          label: "Tạm ngưng",
+          label: "Không sẵn sàng",
           color: "bg-gray-100 text-gray-800",
           icon: <XCircle className="w-4 h-4" />,
           bgColor: "bg-gray-50"
@@ -1116,6 +1249,19 @@ export default function TalentDetailPage() {
 
   const statusConfig = getStatusConfig(talent.status);
   const isDisabled = false;
+  const formatLinkDisplay = (url?: string) => {
+    if (!url) return "—";
+    try {
+      const parsed = new URL(url);
+      let display = parsed.hostname;
+      if (parsed.pathname && parsed.pathname !== "/") {
+        display += parsed.pathname.length > 20 ? `${parsed.pathname.slice(0, 20)}…` : parsed.pathname;
+      }
+      return display.length > 30 ? `${display.slice(0, 30)}…` : display;
+    } catch {
+      return url.length > 30 ? `${url.slice(0, 30)}…` : url;
+    }
+  };
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -1138,7 +1284,7 @@ export default function TalentDetailPage() {
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{talent.fullName}</h1>
               <p className="text-neutral-600 mb-4">
-                Thông tin chi tiết talent trong hệ thống DevPool
+                Thông tin chi tiết nhân sự trong hệ thống DevPool
               </p>
 
               {/* Status Badge */}
@@ -1188,7 +1334,7 @@ export default function TalentDetailPage() {
             </div>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <InfoItem
                 label="Họ và tên"
                 value={talent.fullName}
@@ -1225,33 +1371,40 @@ export default function TalentDetailPage() {
                 icon={<Globe className="w-4 h-4" />}
               />
               <InfoItem
-                label="Trạng thái"
-                value={statusConfig.label}
-                icon={<Target className="w-4 h-4" />}
-              />
-              <InfoItem
                 label="GitHub"
                 value={talent.githubUrl ? (
-                  <a href={talent.githubUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
-                    {talent.githubUrl}
+                  <a
+                    href={talent.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={talent.githubUrl}
+                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                  >
+                    {formatLinkDisplay(talent.githubUrl)}
                   </a>
-                ) : "Chưa có"}
+                ) : "—"}
                 icon={<ExternalLink className="w-4 h-4" />}
               />
               <InfoItem
                 label="Portfolio"
                 value={talent.portfolioUrl ? (
-                  <a href={talent.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-800">
-                    {talent.portfolioUrl}
+                  <a
+                    href={talent.portfolioUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={talent.portfolioUrl}
+                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                  >
+                    {formatLinkDisplay(talent.portfolioUrl)}
                   </a>
-                ) : "Chưa có"}
+                ) : "—"}
                 icon={<ExternalLink className="w-4 h-4" />}
               />
             </div>
           </div>
         </div>
 
-        {/* CV của Talent */}
+        {/* CV của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -1266,7 +1419,7 @@ export default function TalentDetailPage() {
                 <div className="p-2 bg-accent-100 rounded-lg">
                   <FileText className="w-5 h-5 text-accent-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">CV của Talent</h2>
+                <h2 className="text-xl font-semibold text-gray-900">CV của nhân sự</h2>
               </div>
               <div className="flex gap-2">
                 <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
@@ -1301,6 +1454,38 @@ export default function TalentDetailPage() {
                       .map((cv) => {
                         const isLoading = analysisLoadingId === cv.id;
                         const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
+                        const analysisControls = cv.isActive
+                          ? isCurrentAnalysis
+                            ? (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelAnalysis();
+                                }}
+                                className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
+                              >
+                                <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                Hủy phân tích
+                              </Button>
+                            )
+                            : (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAnalyzeCVFromUrl(cv);
+                                }}
+                                disabled={isLoading}
+                                className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                                  isLoading
+                                    ? "bg-neutral-200 text-neutral-500 cursor-wait"
+                                    : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                                }`}
+                              >
+                                <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                {isLoading ? "Đang phân tích..." : "Phân tích CV"}
+                              </Button>
+                            )
+                          : null;
 
                         return (
                           <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
@@ -1308,6 +1493,7 @@ export default function TalentDetailPage() {
                             <input
                               type="checkbox"
                               checked={selectedCVs.includes(cv.id)}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => {
                                 e.stopPropagation();
                                 if (e.target.checked) {
@@ -1327,57 +1513,10 @@ export default function TalentDetailPage() {
                                 <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
                                   {cv.jobRoleName ? `${cv.jobRoleName} ${cv.versionName}` : cv.versionName}
                                 </p>
-                                <p className="text-sm text-neutral-500">
-                                  <span className="font-medium">Trạng thái:</span> {cv.isActive ? "Đang hoạt động" : "Không hoạt động"}
-                                </p>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {cv.isActive && (
-                              <>
-                                {!isCurrentAnalysis && (
-                                  <>
-                                    <input
-                                      type="file"
-                                      accept="application/pdf"
-                                      className="hidden"
-                                      ref={(el) => {
-                                        fileInputRefs.current[cv.id] = el;
-                                      }}
-                                      onChange={(event) => handleAnalyzeCVFileChange(cv.id, event)}
-                                    />
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        fileInputRefs.current[cv.id]?.click();
-                                      }}
-                                      disabled={isLoading}
-                                      className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                        isLoading
-                                          ? "bg-neutral-200 text-neutral-500 cursor-wait"
-                                          : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                                      }`}
-                                    >
-                                      <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                      {isLoading ? "Đang phân tích..." : "Phân tích CV"}
-                                    </Button>
-                                  </>
-                                )}
-                                {isCurrentAnalysis && (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCancelAnalysis();
-                                    }}
-                                    className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
-                                  >
-                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    Hủy phân tích
-                                  </Button>
-                                )}
-                              </>
-                            )}
                             {cv.isActive ? (
                               <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
                             ) : (
@@ -1390,9 +1529,10 @@ export default function TalentDetailPage() {
                               onClick={(e) => e.stopPropagation()}
                               className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
                             >
-                              <Download className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                               <span className="text-sm font-medium">Xem PDF</span>
                             </a>
+                            {analysisControls}
                           </div>
                         </div>
                       );
@@ -1411,7 +1551,7 @@ export default function TalentDetailPage() {
                     <FileText className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có CV nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa upload CV</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload CV</p>
                 </div>
               )}
             </div>
@@ -1442,7 +1582,7 @@ export default function TalentDetailPage() {
             </div>
             <div className="p-6 space-y-5">
               <p className="text-sm text-neutral-600">
-                Hệ thống đã so sánh CV mới với dữ liệu hiện có của talent. Các gợi ý chi tiết được hiển thị ngay trong từng phần bên dưới để bạn thao tác nhanh chóng.
+                Hệ thống đã so sánh CV mới với dữ liệu hiện có của nhân sự. Các gợi ý chi tiết được hiển thị ngay trong từng phần bên dưới để bạn thao tác nhanh chóng.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl border border-primary-100 bg-primary-50/70">
@@ -1534,7 +1674,7 @@ export default function TalentDetailPage() {
           </div>
         )}
 
-        {/* Dự án của Talent */}
+        {/* Dự án của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -1549,7 +1689,7 @@ export default function TalentDetailPage() {
                 <div className="p-2 bg-primary-100 rounded-lg">
                   <Briefcase className="w-5 h-5 text-primary-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Dự án của Talent</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Dự án của nhân sự</h2>
               </div>
               <div className="flex gap-2">
                 <Link to={`/hr/talent-projects/create?talentId=${id}`}>
@@ -1593,9 +1733,6 @@ export default function TalentDetailPage() {
                           </div>
                           {project.technologies && (
                             <p className="mt-1 text-xs text-purple-600">Công nghệ: {project.technologies}</p>
-                          )}
-                          {project.description && (
-                            <p className="mt-1 text-xs text-purple-600 line-clamp-2">{project.description}</p>
                           )}
                         </div>
                       ))}
@@ -1647,6 +1784,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedProjects.includes(project.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -1667,10 +1805,6 @@ export default function TalentDetailPage() {
                             <p className="text-sm text-primary-600">
                               <span className="font-medium">Công nghệ:</span> {project.technologies}
                             </p>
-                            <div>
-                              <p className="text-sm text-gray-600 font-medium mb-1">Mô tả dự án:</p>
-                              <p className="text-sm text-gray-700">{project.description}</p>
-                            </div>
                           </div>
                         </div>
                       ))}
@@ -1688,7 +1822,7 @@ export default function TalentDetailPage() {
                     <Briefcase className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa tham gia dự án</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa tham gia dự án</p>
                 </div>
               )}
             </div>
@@ -1885,6 +2019,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedJobRoleLevels.includes(jrl.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -1922,14 +2057,14 @@ export default function TalentDetailPage() {
                     <Target className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật vị trí làm việc</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật vị trí làm việc</p>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Kỹ năng của Talent */}
+        {/* Kỹ năng của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -1944,7 +2079,7 @@ export default function TalentDetailPage() {
                 <div className="p-2 bg-secondary-100 rounded-lg">
                   <Star className="w-5 h-5 text-secondary-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của Talent</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của nhân sự</h2>
               </div>
               <div className="flex gap-2">
                 <Link to={`/hr/talent-skills/create?talentId=${id}`}>
@@ -2107,6 +2242,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedSkills.includes(skill.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -2144,14 +2280,14 @@ export default function TalentDetailPage() {
                     <Star className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kỹ năng</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Thời gian có sẵn */}
+        {/* Lịch sẵn sàng của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -2166,7 +2302,7 @@ export default function TalentDetailPage() {
                 <div className="p-2 bg-secondary-100 rounded-lg">
                   <Calendar className="w-5 h-5 text-secondary-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thời gian có sẵn</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h2>
               </div>
               <div className="flex gap-2">
                 <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
@@ -2205,6 +2341,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedAvailableTimes.includes(time.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -2247,7 +2384,7 @@ export default function TalentDetailPage() {
                     <Calendar className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật thời gian có sẵn</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật thời gian có sẵn</p>
                 </div>
               )}
             </div>
@@ -2433,6 +2570,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedCertificates.includes(cert.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -2484,7 +2622,7 @@ export default function TalentDetailPage() {
                     <Award className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa upload chứng chỉ</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload chứng chỉ</p>
                 </div>
               )}
             </div>
@@ -2598,6 +2736,7 @@ export default function TalentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedExperiences.includes(exp.id)}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (e.target.checked) {
@@ -2639,7 +2778,7 @@ export default function TalentDetailPage() {
                     <Workflow className="w-8 h-8 text-neutral-400" />
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
-                  <p className="text-neutral-400 text-sm mt-1">Talent chưa cập nhật kinh nghiệm</p>
+                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kinh nghiệm</p>
                 </div>
               )}
             </div>
@@ -2659,7 +2798,7 @@ function InfoItem({ label, value, icon }: { label: string; value: string | React
         {icon && <div className="text-neutral-400">{icon}</div>}
         <p className="text-neutral-500 text-sm font-medium">{label}</p>
       </div>
-      <div className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+      <div className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300 break-words max-w-full overflow-hidden">
         {value || "—"}
       </div>
     </div>
