@@ -21,6 +21,7 @@ export default function CVTemplateEditPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [urlError, setUrlError] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
   const [form, setForm] = useState<CVTemplatePayload>({
     name: "",
@@ -28,6 +29,16 @@ export default function CVTemplateEditPage() {
     isDefault: false,
     description: "",
   });
+
+  const validateURL = (url: string): boolean => {
+    if (!url.trim()) return false;
+    try {
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,6 +64,16 @@ export default function CVTemplateEditPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    // Validate URL khi thay đổi templateFilePath
+    if (name === 'templateFilePath') {
+      if (value.trim() && !validateURL(value)) {
+        setUrlError("⚠️ Đường dẫn phải là URL hợp lệ (bắt đầu với http:// hoặc https://)");
+      } else {
+        setUrlError("");
+      }
+    }
+    
     setForm(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value 
@@ -75,6 +96,12 @@ export default function CVTemplateEditPage() {
 
     if (!form.templateFilePath.trim()) {
       setError("⚠️ Vui lòng nhập đường dẫn file template.");
+      setLoading(false);
+      return;
+    }
+
+    if (!validateURL(form.templateFilePath)) {
+      setError("⚠️ Đường dẫn file template phải là URL hợp lệ (bắt đầu với http:// hoặc https://).");
       setLoading(false);
       return;
     }
@@ -156,7 +183,7 @@ export default function CVTemplateEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên template
+                  Tên template <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="name"
@@ -172,18 +199,24 @@ export default function CVTemplateEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <LinkIcon className="w-4 h-4" />
-                  Đường dẫn file template
+                  Đường dẫn file template <span className="text-red-500">*</span>
                 </label>
                 <input
+                  type="url"
                   name="templateFilePath"
                   value={form.templateFilePath}
                   onChange={handleChange}
-                  placeholder="VD: /templates/cv-standard.docx, /templates/cv-creative.html"
+                  placeholder="VD: https://example.com/templates/cv-standard.docx"
                   required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white font-mono"
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white font-mono ${
+                    urlError ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
+                  }`}
                 />
+                {urlError && (
+                  <p className="text-xs text-red-600 mt-1">{urlError}</p>
+                )}
                 <p className="text-xs text-neutral-500 mt-1">
-                  Đường dẫn tương đối hoặc tuyệt đối đến file template
+                  URL hợp lệ bắt đầu với http:// hoặc https://
                 </p>
               </div>
 

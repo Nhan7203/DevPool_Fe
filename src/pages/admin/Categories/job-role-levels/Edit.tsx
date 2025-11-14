@@ -7,7 +7,7 @@ import { Button } from "../../../../components/ui/button";
 import { Input } from "../../../../components/ui/input";
 import { Textarea } from "../../../../components/ui/textarea";
 import { jobRoleService, type JobRole } from "../../../../services/JobRole";
-import { Layers3, Users, Briefcase, FileText } from "lucide-react";
+import { Layers3, Users, FileText } from "lucide-react";
 
 export default function JobRoleLevelEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,8 +21,6 @@ export default function JobRoleLevelEditPage() {
     name: "",
     description: "",
     level: 0,
-    minManMonthPrice: undefined,
-    maxManMonthPrice: undefined,
   });
 
   const levelLabels: Record<number, string> = {
@@ -32,8 +30,6 @@ export default function JobRoleLevelEditPage() {
     3: "Lead",
   };
 
-  const formatPrice = (value?: number | null) =>
-    value === undefined || value === null ? "—" : Number(value).toLocaleString("vi-VN");
 
   // 🧭 Load dữ liệu chi tiết
   useEffect(() => {
@@ -55,8 +51,6 @@ export default function JobRoleLevelEditPage() {
           name: positionData.name,
           description: positionData.description ?? "",
           level: positionData.level,
-          minManMonthPrice: positionData.minManMonthPrice,
-          maxManMonthPrice: positionData.maxManMonthPrice,
         });
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
@@ -77,7 +71,7 @@ export default function JobRoleLevelEditPage() {
 
     setFormData(prev => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : ["level", "jobRoleId"].includes(name) ? Number(value) : ["minManMonthPrice","maxManMonthPrice"].includes(name) ? (value === "" ? undefined : Number(value)) : value,
+      [name]: type === "checkbox" ? checked : ["level", "jobRoleId"].includes(name) ? Number(value) : value,
     }));
   };
 
@@ -86,10 +80,26 @@ export default function JobRoleLevelEditPage() {
     e.preventDefault();
     if (!id) return;
 
+    // Validation
+    if (!formData.name || formData.name.trim() === "") {
+      alert("⚠️ Vui lòng nhập tên vị trí!");
+      return;
+    }
+
+    if (!formData.jobRoleId || formData.jobRoleId === 0) {
+      alert("⚠️ Vui lòng chọn loại vị trí!");
+      return;
+    }
+
     try {
       await jobRoleLevelService.update(Number(id), formData);
       alert("✅ Cập nhật vị trí tuyển dụng thành công!");
-      navigate(`/sales/job-role-levels/${id}`);
+      // Quay về trang chi tiết job role level, hoặc về job role nếu có
+      if (jobRoleLevel?.jobRoleId) {
+        navigate(`/admin/categories/job-roles/${jobRoleLevel.jobRoleId}`);
+      } else {
+        navigate(`/admin/categories/job-role-levels/${id}`);
+      }
     } catch (err) {
       console.error("❌ Lỗi cập nhật:", err);
       alert("Không thể cập nhật vị trí tuyển dụng!");
@@ -137,7 +147,7 @@ export default function JobRoleLevelEditPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Tên vị trí */}
                 <div className="md:col-span-2">
-                  <label className="block text-gray-700 font-medium mb-2">Tên vị trí</label>
+                  <label className="block text-gray-700 font-medium mb-2">Tên vị trí <span className="text-red-500">*</span></label>
                   <Input
                     name="name"
                     value={formData.name}
@@ -150,7 +160,7 @@ export default function JobRoleLevelEditPage() {
 
                 {/* Loại vị trí */}
                 <div>
-                  <label className="block text-gray-700 font-medium mb-2">Loại vị trí</label>
+                  <label className="block text-gray-700 font-medium mb-2">Loại vị trí <span className="text-red-500">*</span></label>
                   <select
                     name="jobRoleId"
                     value={formData.jobRoleId}
@@ -168,7 +178,7 @@ export default function JobRoleLevelEditPage() {
 
                 {/* Cấp độ */}
                 <div>
-                  <label className="block text-gray-700 font-medium mb-2">Cấp độ</label>
+                  <label className="block text-gray-700 font-medium mb-2">Cấp độ <span className="text-red-500">*</span></label>
                   <select
                     name="level"
                     value={formData.level}
@@ -180,28 +190,6 @@ export default function JobRoleLevelEditPage() {
                     <option value={2}>Senior</option>
                     <option value={3}>Lead</option>
                   </select>
-                </div>
-
-                {/* Đơn giá tối thiểu (man-month) */}
-                <div>
-                  <label className="block text-gray-700 font-medium mb-2">Đơn giá tối thiểu (man-month)</label>
-                  <Input
-                    name="minManMonthPrice"
-                    value={formData.minManMonthPrice?.toString() ?? ""}
-                    onChange={handleChange}
-                    placeholder="VD: 1,000"
-                  />
-                </div>
-
-                {/* Đơn giá tối đa (man-month) */}
-                <div>
-                  <label className="block text-gray-700 font-medium mb-2">Đơn giá tối đa (man-month)</label>
-                  <Input
-                    name="maxManMonthPrice"
-                    value={formData.maxManMonthPrice?.toString() ?? ""}
-                    onChange={handleChange}
-                    placeholder="VD: 3,000"
-                  />
                 </div>
 
                 {/* Mô tả */}
@@ -245,10 +233,6 @@ export default function JobRoleLevelEditPage() {
               <div className="flex items-center gap-2 text-neutral-700">
                 <Users className="w-4 h-4 text-neutral-400" />
                 <span>{levelLabels[formData.level]}</span>
-              </div>
-              <div className="flex items-center gap-2 text-neutral-700">
-                <Briefcase className="w-4 h-4 text-neutral-400" />
-                <span>{formatPrice(formData.minManMonthPrice)} - {formatPrice(formData.maxManMonthPrice)} / mm</span>
               </div>
               <div className="flex items-start gap-2 text-neutral-700">
                 <FileText className="w-4 h-4 text-neutral-400 mt-0.5" />

@@ -276,7 +276,6 @@ export default function ApplyActivityCreatePage() {
                   <option value="1">Completed - Hoàn thành</option>
                   <option value="2">Passed - Đạt</option>
                   <option value="3">Failed - Không đạt</option>
-                  <option value="4">NoShow - Không có mặt</option>
                 </select>
               </div>
             </div>

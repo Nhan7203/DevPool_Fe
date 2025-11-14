@@ -58,8 +58,8 @@ export default function JobRequestListPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
-
-  // Stats data
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
   const stats = [
     {
       title: 'Tổng Yêu Cầu',
@@ -84,8 +84,36 @@ export default function JobRequestListPage() {
       value: requests.filter(r => r.status === JobRequestStatus.Rejected).length.toString(),
       color: 'red',
       icon: <XCircle className="w-6 h-6" />
+    },
+    {
+      title: 'Đã Đóng',
+      value: requests.filter(r => r.status === JobRequestStatus.Closed).length.toString(),
+      color: 'gray',
+      icon: <Briefcase className="w-6 h-6" />
     }
   ];
+  const statsSlice = stats.slice(
+    statsStartIndex,
+    Math.min(statsStartIndex + statsPageSize, stats.length)
+  );
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrevStats = canShowStatsNav && statsStartIndex > 0;
+  const canGoNextStats = canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex((prev) => Math.min(prev, maxIndex));
+  }, [stats.length, statsPageSize]);
+
+  const handlePrevStats = () => {
+    setStatsStartIndex((prev) => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex((prev) =>
+      Math.min(Math.max(0, stats.length - statsPageSize), prev + statsPageSize)
+    );
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -201,7 +229,7 @@ export default function JobRequestListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các yêu cầu từ công ty khách hàng</p>
             </div>
             <Link to="/sales/job-requests/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="roup flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo yêu cầu mới
               </Button>
@@ -209,25 +237,91 @@ export default function JobRequestListPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+          <div className="mb-8 animate-fade-in">
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statsSlice.map((stat, index) => (
+                  <div key={`${stat.title}-${statsStartIndex + index}`} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                      </div>
+                      <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                          stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                            stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                              stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
+                                'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                        } transition-all duration-300`}>
+                        {stat.icon}
+                      </div>
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
-                            'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
-                    {stat.icon}
-                  </div>
+                ))}
+              </div>
+              {canShowStatsNav && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+            {canShowStatsNav && (
+              <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    Tiếp
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

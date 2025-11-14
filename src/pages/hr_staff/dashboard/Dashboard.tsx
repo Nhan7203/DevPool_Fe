@@ -315,6 +315,48 @@ export default function HRDashboard() {
     }
   };
 
+  // Helper functions for contract status
+  const normalizeContractStatus = (status: string | null | undefined): string => {
+    if (!status) return '';
+    return status.toLowerCase().trim();
+  };
+
+  const getContractStatusText = (status: string | null | undefined): string => {
+    const normalized = normalizeContractStatus(status);
+    switch (normalized) {
+      case 'active':
+        return 'Đang hiệu lực';
+      case 'pending':
+        return 'Chờ duyệt';
+      case 'draft':
+        return 'Bản nháp';
+      case 'expired':
+        return 'Đã hết hạn';
+      case 'terminated':
+        return 'Đã chấm dứt';
+      default:
+        return status || 'N/A';
+    }
+  };
+
+  const getContractStatusColor = (status: string | null | undefined): string => {
+    const normalized = normalizeContractStatus(status);
+    switch (normalized) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
+      case 'expired':
+        return 'bg-blue-100 text-blue-800';
+      case 'terminated':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -611,12 +653,8 @@ export default function HRDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${contract.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
-                            contract.status?.toLowerCase() === 'pending' || contract.status?.toLowerCase() === 'draft' ? 'bg-orange-100 text-orange-800' :
-                              contract.status?.toLowerCase() === 'expired' ? 'bg-blue-100 text-blue-800' :
-                                'bg-gray-100 text-gray-800'
-                          }`}>
-                          {contract.status || 'N/A'}
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getContractStatusColor(contract.status)}`}>
+                          {getContractStatusText(contract.status)}
                         </span>
                       </div>
                     </div>

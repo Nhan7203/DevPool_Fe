@@ -4,6 +4,7 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import { jobRoleService, type JobRole } from "../../../../services/JobRole";
+import { jobRoleLevelService } from "../../../../services/JobRoleLevel";
 import { 
   Search, 
   Plus, 
@@ -12,13 +13,15 @@ import {
   FileText,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Target
 } from "lucide-react";
 
 export default function JobRoleListPage() {
   const [loading, setLoading] = useState(true);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [filteredJobRoles, setFilteredJobRoles] = useState<JobRole[]>([]);
+  const [jobRoleLevelsCountMap, setJobRoleLevelsCountMap] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
   
   // Pagination
@@ -53,9 +56,22 @@ export default function JobRoleListPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const data = await jobRoleService.getAll();
-        setJobRoles(data);
-        setFilteredJobRoles(data);
+        const [rolesData, allLevels] = await Promise.all([
+          jobRoleService.getAll(),
+          jobRoleLevelService.getAll({ excludeDeleted: true })
+        ]);
+        
+        const rolesArray = Array.isArray(rolesData) ? rolesData : [];
+        setJobRoles(rolesArray);
+        setFilteredJobRoles(rolesArray);
+        
+        // Đếm số vị trí tuyển dụng cho mỗi loại vị trí
+        const levelsArray = Array.isArray(allLevels) ? allLevels : [];
+        const countMap: Record<number, number> = {};
+        rolesArray.forEach(role => {
+          countMap[role.id] = levelsArray.filter(l => l.jobRoleId === role.id).length;
+        });
+        setJobRoleLevelsCountMap(countMap);
       } catch (err) {
         console.error("❌ Lỗi khi tải danh sách Position Type:", err);
       } finally {
@@ -115,7 +131,7 @@ export default function JobRoleListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các loại vị trí trong hệ thống</p>
             </div>
             <Link to="/admin/categories/job-roles/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo loại vị trí mới
               </Button>
@@ -212,6 +228,7 @@ export default function JobRoleListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên loại vị trí</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mô tả</th>
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số vị trí tuyển dụng</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
               </thead>
@@ -246,6 +263,14 @@ export default function JobRoleListPage() {
                     <td className="py-4 px-6">
                       <div className="text-sm text-neutral-700 max-w-xs truncate">
                         {jr.description || "—"}
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Target className="w-4 h-4 text-neutral-400" />
+                        <span className="text-sm font-semibold text-primary-700">
+                          {jobRoleLevelsCountMap[jr.id] || 0}
+                        </span>
                       </div>
                     </td>
                       <td className="py-4 px-6 text-center">

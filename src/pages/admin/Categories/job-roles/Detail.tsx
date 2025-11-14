@@ -3,22 +3,25 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { jobRoleService, type JobRole } from "../../../../services/JobRole";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../../services/JobRoleLevel";
 import { 
   Layers3, 
   ArrowLeft, 
   Edit, 
   Trash2, 
   FileText, 
-  Calendar, 
-  Building2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Target,
+  Plus,
+  Eye
 } from "lucide-react";
 
 export default function JobRoleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [jobRole, setJobRole] = useState<JobRole | null>(null);
+  const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch dữ liệu chi tiết
@@ -27,8 +30,12 @@ export default function JobRoleDetailPage() {
       try {
         setLoading(true);
         if (!id) return;
-        const data = await jobRoleService.getById(Number(id));
-        setJobRole(data);
+        const [roleData, levelsData] = await Promise.all([
+          jobRoleService.getById(Number(id)),
+          jobRoleLevelService.getAll({ jobRoleId: Number(id), excludeDeleted: true })
+        ]);
+        setJobRole(roleData);
+        setJobRoleLevels(Array.isArray(levelsData) ? levelsData : []);
       } catch (err) {
         console.error("❌ Lỗi khi tải chi tiết JobRole:", err);
       } finally {
@@ -176,24 +183,82 @@ export default function JobRoleDetailPage() {
             </div>
           </div>
 
-          {/* Additional Information */}
+          {/* Job Role Levels List */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
             <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <Building2 className="w-5 h-5 text-secondary-600" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-secondary-100 rounded-lg">
+                    <Target className="w-5 h-5 text-secondary-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Danh sách vị trí tuyển dụng ({jobRoleLevels.length})
+                  </h2>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin bổ sung</h2>
+                <Link
+                  to={`/admin/categories/job-role-levels/create?jobRoleId=${id}`}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                >
+                  <Plus className="w-4 h-4" />
+                  Thêm vị trí tuyển dụng
+                </Link>
               </div>
             </div>
             <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <InfoItem 
-                  label="Trạng thái" 
-                  value="Đang hoạt động"
-                  icon={<CheckCircle className="w-4 h-4" />}
-                />
-              </div>
+              {jobRoleLevels.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium mb-2">Chưa có vị trí tuyển dụng nào</p>
+                  <p className="text-neutral-400 text-sm mb-4">Thêm vị trí tuyển dụng mới vào loại vị trí này</p>
+                  <Link
+                    to={`/admin/categories/job-role-levels/create?jobRoleId=${id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Thêm vị trí đầu tiên
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {jobRoleLevels
+                    .sort((a, b) => b.id - a.id) // Sắp xếp theo ID giảm dần (mới nhất trước)
+                    .map((level) => {
+                    const levelNames = ['Junior', 'Middle', 'Senior', 'Lead'];
+                    const levelName = levelNames[level.level] || 'Unknown';
+                    return (
+                      <div
+                        key={level.id}
+                        className="group flex items-center justify-between p-4 bg-neutral-50 hover:bg-primary-50 rounded-lg border border-neutral-200 hover:border-primary-300 transition-all duration-300"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="p-2 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors duration-300">
+                            <Target className="w-4 h-4 text-primary-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors duration-300">
+                              {level.name} - {levelName}
+                            </h3>
+                            {level.description && (
+                              <p className="text-sm text-neutral-600 mt-1 line-clamp-1">
+                                {level.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Link
+                          to={`/admin/categories/job-role-levels/${level.id}`}
+                          className="flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-100 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span className="text-sm font-medium">Xem</span>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

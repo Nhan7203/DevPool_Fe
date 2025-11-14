@@ -5,7 +5,6 @@ import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type Project } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { marketService, type Market } from "../../../services/Market";
-import { industryService, type Industry } from "../../../services/Industry";
 import { 
   Briefcase, 
   ArrowLeft, 
@@ -26,7 +25,6 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [company, setCompany] = useState<ClientCompany | null>(null);
   const [market, setMarket] = useState<Market | null>(null);
-  const [industry, setIndustry] = useState<Industry | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,10 +44,6 @@ export default function ProjectDetailPage() {
         // Lấy Market
         const mk = await marketService.getById(proj.marketId);
         setMarket(mk);
-
-        // Lấy Industry
-        const ind = await industryService.getById(proj.industryId);
-        setIndustry(ind);
 
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết dự án:", err);
@@ -235,7 +229,11 @@ export default function ProjectDetailPage() {
                 />
                 <InfoItem 
                   label="Ngành" 
-                  value={industry?.name || "—"}
+                  value={
+                    project.industryNames && project.industryNames.length > 0
+                      ? project.industryNames.join(", ")
+                      : "—"
+                  }
                   icon={<Factory className="w-4 h-4" />}
                 />
                 <InfoItem 

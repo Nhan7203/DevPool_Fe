@@ -229,7 +229,7 @@ export default function ApplyActivityEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Bước quy trình
+                  Bước quy trình <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="processStepId"
@@ -259,7 +259,7 @@ export default function ApplyActivityEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Clock className="w-4 h-4" />
-                  Trạng thái
+                  Trạng thái <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="status"

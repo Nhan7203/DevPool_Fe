@@ -4,6 +4,7 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { type ExtractedSkill } from "../../../services/TalentCV";
 import { 
   ArrowLeft, 
@@ -15,7 +16,8 @@ import {
   AlertCircle, 
   CheckCircle,
   X,
-  Search
+  Search,
+  Filter
 } from "lucide-react";
 
 export default function TalentSkillCreatePage() {
@@ -33,7 +35,10 @@ export default function TalentSkillCreatePage() {
   });
 
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState("");
+  const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState("");
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [existingSkillIds, setExistingSkillIds] = useState<number[]>([]);
   const [analysisSuggestions, setAnalysisSuggestions] = useState<ExtractedSkill[]>([]);
   const analysisStorageKey = talentId ? `talent-analysis-prefill-skills-${talentId}` : null;
@@ -41,10 +46,21 @@ export default function TalentSkillCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const skills = await skillService.getAll({ excludeDeleted: true });
+        const [skills, skillGroupsData] = await Promise.all([
+          skillService.getAll({ excludeDeleted: true }),
+          skillGroupService.getAll({ excludeDeleted: true })
+        ]);
         setAllSkills(skills);
+        const skillGroupsArray = Array.isArray(skillGroupsData)
+          ? skillGroupsData
+          : (Array.isArray((skillGroupsData as any)?.items)
+            ? (skillGroupsData as any).items
+            : (Array.isArray((skillGroupsData as any)?.data)
+              ? (skillGroupsData as any).data
+              : []));
+        setSkillGroups(skillGroupsArray);
       } catch (error) {
-        console.error("❌ Error loading skills", error);
+        console.error("❌ Error loading skills or skill groups", error);
       }
     };
     fetchData();
@@ -261,52 +277,121 @@ export default function TalentSkillCreatePage() {
                   Kỹ năng <span className="text-red-500">*</span>
                 </label>
                 
-                {/* Search Box */}
-                <div className="mb-3">
-                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
-                    <input
-                      type="text"
-                      value={skillSearchQuery}
-                      onChange={(e) => setSkillSearchQuery(e.target.value)}
-                      placeholder="Tìm kiếm để lọc danh sách kỹ năng..."
-                      className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    />
+                {/* Skill Group Filter and Skill Search */}
+                <div className="mb-3 space-y-3">
+                  {/* Lọc theo nhóm kỹ năng */}
+                  {skillGroups && skillGroups.length > 0 && (
+                    <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+                      <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+                        <Filter className="w-3.5 h-3.5" />
+                        Lọc danh sách kỹ năng theo nhóm
+                      </label>
+                      <div className="space-y-2">
+                        {/* Search nhóm kỹ năng - Chỉ hiển thị khi có nhiều nhóm */}
+                        {skillGroups.length > 5 && (
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                            <input
+                              type="text"
+                              placeholder={`Tìm kiếm nhóm kỹ năng... (${skillGroups.length} nhóm)`}
+                              value={skillGroupSearchQuery}
+                              onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
+                              className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                            {skillGroupSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setSkillGroupSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Dropdown chọn nhóm kỹ năng */}
+                        <div className="relative">
+                          <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5 pointer-events-none z-10" />
+                          <select
+                            value={selectedSkillGroupId || ""}
+                            onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
+                            className="w-full pl-8 pr-4 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                          >
+                            <option value="">Tất cả nhóm kỹ năng</option>
+                            {(() => {
+                              // Filter skill groups theo search query
+                              const filteredGroups = skillGroupSearchQuery
+                                ? skillGroups.filter(g =>
+                                  g.name.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()) ||
+                                  (g.description && g.description.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()))
+                                )
+                                : skillGroups;
+
+                              if (filteredGroups.length === 0) {
+                                return <option value="" disabled>Không tìm thấy nhóm kỹ năng</option>;
+                              }
+
+                              return filteredGroups.map((group) => (
+                                <option key={group.id} value={group.id}>
+                                  {group.name}
+                                </option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tìm kiếm kỹ năng để chọn */}
+                  <div className="bg-green-50/50 border border-green-200 rounded-lg p-3">
+                    <label className="block text-xs font-semibold text-green-800 mb-2 flex items-center gap-1.5">
+                      <Search className="w-3.5 h-3.5" />
+                      Tìm kiếm kỹ năng để chọn
+                    </label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                      <input
+                        type="text"
+                        placeholder="Nhập tên kỹ năng để tìm kiếm..."
+                        value={skillSearchQuery}
+                        onChange={(e) => setSkillSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                      />
+                      {skillSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSkillSearchQuery("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {/* Hint text */}
-                  <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
-                    <Search className="w-3 h-3" />
-                    Nhập từ khóa để tìm kiếm và lọc danh sách kỹ năng bên dưới
-                    {skillSearchQuery && (
-                      <span className="ml-1 text-primary-600 font-medium">
-                        ({allSkills.filter(skill => 
-                          skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
-                          skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
-                        ).length} kết quả)
-                      </span>
-                    )}
-                  </p>
                 </div>
 
                 {/* Filtered Skills Dropdown */}
-                {allSkills.filter(skill => 
-                  skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
-                  skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
-                ).length > 0 ? (
-                  <select
-                    name="skillId"
-                    value={form.skillId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
-                  >
-                    <option value="0">-- Chọn kỹ năng --</option>
-                    {allSkills
-                      .filter(skill => 
-                        skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
-                        skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase())
-                      )
-                      .map(skill => {
+                {(() => {
+                  const filteredSkills = allSkills.filter(skill => {
+                    const matchesSearch = !skillSearchQuery ||
+                      skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                      skill.description?.toLowerCase().includes(skillSearchQuery.toLowerCase());
+                    const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
+                    return matchesSearch && matchesGroup;
+                  });
+
+                  return filteredSkills.length > 0 ? (
+                    <select
+                      name="skillId"
+                      value={form.skillId}
+                      onChange={handleChange}
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      required
+                    >
+                      <option value="0">-- Chọn kỹ năng --</option>
+                      {filteredSkills.map(skill => {
                         const isDisabled = existingSkillIds.includes(skill.id);
                         return (
                           <option 
@@ -319,12 +404,13 @@ export default function TalentSkillCreatePage() {
                           </option>
                         );
                       })}
-                  </select>
-                ) : (
-                  <div className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-50 text-neutral-500 text-center">
-                    Không tìm thấy kỹ năng nào
-                  </div>
-                )}
+                    </select>
+                  ) : (
+                    <div className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-50 text-neutral-500 text-center">
+                      Không tìm thấy kỹ năng nào
+                    </div>
+                  );
+                })()}
                 
                 {form.skillId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">
@@ -340,16 +426,21 @@ export default function TalentSkillCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Target className="w-4 h-4" />
-                    Level kỹ năng
+                    Cấp độ
                   </label>
-                  <input
+                  <select
                     name="level"
                     value={form.level}
                     onChange={handleChange}
-                    placeholder="VD: Junior, Senior, Expert..."
                     required
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
+                  >
+                    <option value="">-- Chọn cấp độ --</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                  </select>
                 </div>
 
                 {/* Số năm kinh nghiệm */}

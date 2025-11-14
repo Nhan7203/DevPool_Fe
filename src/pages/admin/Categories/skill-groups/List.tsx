@@ -4,6 +4,7 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import { skillGroupService, type SkillGroup } from "../../../../services/SkillGroup";
+import { skillService } from "../../../../services/Skill";
 import { 
   Search, 
   Plus, 
@@ -12,18 +13,20 @@ import {
   FileText,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Star
 } from "lucide-react";
 
 export default function SkillGroupListPage() {
   const [loading, setLoading] = useState(true);
   const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
   const [filteredSkillGroups, setFilteredSkillGroups] = useState<SkillGroup[]>([]);
+  const [skillsCountMap, setSkillsCountMap] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 30;
+  const itemsPerPage = 10;
 
   // Stats data
   const stats = [
@@ -53,9 +56,22 @@ export default function SkillGroupListPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const data = await skillGroupService.getAll();
-        setSkillGroups(data);
-        setFilteredSkillGroups(data);
+        const [groupsData, allSkills] = await Promise.all([
+          skillGroupService.getAll(),
+          skillService.getAll({ excludeDeleted: true })
+        ]);
+        
+        const groupsArray = Array.isArray(groupsData) ? groupsData : [];
+        setSkillGroups(groupsArray);
+        setFilteredSkillGroups(groupsArray);
+        
+        // Đếm số kỹ năng cho mỗi nhóm
+        const skillsArray = Array.isArray(allSkills) ? allSkills : [];
+        const countMap: Record<number, number> = {};
+        groupsArray.forEach(group => {
+          countMap[group.id] = skillsArray.filter(s => s.skillGroupId === group.id).length;
+        });
+        setSkillsCountMap(countMap);
       } catch (err) {
         console.error("❌ Lỗi khi tải danh sách SkillGroups:", err);
       } finally {
@@ -115,7 +131,7 @@ export default function SkillGroupListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các nhóm kỹ năng trong hệ thống</p>
             </div>
             <Link to="/admin/categories/skill-groups/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo nhóm kỹ năng mới
               </Button>
@@ -164,7 +180,7 @@ export default function SkillGroupListPage() {
 
         {/* Table */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200 sticky top-0 bg-white z-20 rounded-t-2xl">
+          <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Danh sách nhóm kỹ năng</h2>
               <div className="flex items-center gap-4">
@@ -212,13 +228,14 @@ export default function SkillGroupListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên nhóm kỹ năng</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mô tả</th>
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số kỹ năng</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
                 {filteredSkillGroups.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-12">
+                    <td colSpan={5} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Layers3 className="w-8 h-8 text-neutral-400" />
@@ -246,6 +263,14 @@ export default function SkillGroupListPage() {
                       <td className="py-4 px-6">
                         <div className="text-sm text-neutral-700 max-w-xs truncate">
                           {sg.description || "—"}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Star className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm font-semibold text-primary-700">
+                            {skillsCountMap[sg.id] || 0}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-6 text-center">

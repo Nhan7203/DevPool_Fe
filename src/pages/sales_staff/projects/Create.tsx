@@ -28,7 +28,9 @@ export default function ProjectCreatePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const [form, setForm] = useState<Partial<ProjectPayload>>({
+  const [form, setForm] = useState<
+    Partial<Omit<ProjectPayload, "industryIds">> & { industryIds: number[] }
+  >({
     name: "",
     description: "",
     startDate: "",
@@ -36,12 +38,13 @@ export default function ProjectCreatePage() {
     status: "",
     clientCompanyId: undefined,
     marketId: undefined,
-    industryId: undefined,
+    industryIds: [],
   });
 
   const [clients, setClients] = useState<ClientCompany[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [industries, setIndustries] = useState<Industry[]>([]);
+  const [industrySearch, setIndustrySearch] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,7 +71,21 @@ export default function ProjectCreatePage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    if (name === "industryIds") return;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const filteredIndustries = industries.filter((industry) =>
+    industry.name.toLowerCase().includes(industrySearch.toLowerCase())
+  );
+
+  const toggleIndustry = (id: number, checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      industryIds: checked
+        ? [...prev.industryIds, id]
+        : prev.industryIds.filter((selectedId) => selectedId !== id),
+    }));
   };
 
   const toUTCDateString = (dateStr?: string | null) => {
@@ -97,6 +114,12 @@ export default function ProjectCreatePage() {
     }
 
     try {
+      if (!form.industryIds || form.industryIds.length === 0) {
+        setError("Vui lòng chọn ít nhất một ngành");
+        setFormLoading(false);
+        return;
+      }
+
       const payload: ProjectPayload = {
         name: form.name!,
         description: form.description ?? "",
@@ -105,7 +128,7 @@ export default function ProjectCreatePage() {
         status: form.status!,
         clientCompanyId: Number(form.clientCompanyId),
         marketId: Number(form.marketId),
-        industryId: Number(form.industryId),
+        industryIds: form.industryIds.map((id) => Number(id)),
       };
 
       await projectService.create(payload);
@@ -185,7 +208,7 @@ export default function ProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên dự án
+                  Tên dự án <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -219,14 +242,15 @@ export default function ProjectCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <CalendarDays className="w-4 h-4" />
-                    Ngày bắt đầu
+                    Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
                   <input
-                  type="date"
-                  name="startDate"
-                  value={form.startDate}
-                  onChange={handleChange}
-                  required
+                    type="date"
+                    name="startDate"
+                    value={form.startDate}
+                    onChange={handleChange}
+                    required
+                    max={form.endDate || undefined}
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
                 </div>
@@ -236,12 +260,13 @@ export default function ProjectCreatePage() {
                     Ngày kết thúc
                   </label>
                   <input
-                  type="date"
-                  name="endDate"
-                  value={form.endDate ?? ""}
-                  onChange={handleChange}
+                    type="date"
+                    name="endDate"
+                    value={form.endDate ?? ""}
+                    onChange={handleChange}
+                    min={form.startDate || undefined}
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                />
+                  />
                 </div>
               </div>
             </div>
@@ -262,7 +287,7 @@ export default function ProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
-                  Công ty khách hàng
+                  Công ty khách hàng <span className="text-red-500">*</span>
                 </label>
                 <select
                 name="clientCompanyId"
@@ -281,46 +306,91 @@ export default function ProjectCreatePage() {
               </div>
 
               {/* Thị trường & Ngành */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Globe2 className="w-4 h-4" />
-                    Thị trường
-                  </label>
-                  <select
-                name="marketId"
-                value={form.marketId?.toString() || ""}
-                onChange={handleChange}
-                required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">-- Chọn thị trường --</option>
-                    {markets.map((m) => (
-                      <option key={m.id} value={m.id.toString()}>
-                        {m.name}
-                      </option>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Globe2 className="w-4 h-4" />
+                  Thị trường <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="marketId"
+                  value={form.marketId?.toString() || ""}
+                  onChange={handleChange}
+                  required
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                >
+                  <option value="">-- Chọn thị trường --</option>
+                  {markets.map((m) => (
+                    <option key={m.id} value={m.id.toString()}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Factory className="w-4 h-4" />
+                  Ngành <span className="text-red-500">*</span>
+                </label>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 space-y-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={industrySearch}
+                      onChange={(e) => setIndustrySearch(e.target.value)}
+                      placeholder="Tìm kiếm ngành..."
+                      className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    />
+                    {industrySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setIndustrySearch("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                        aria-label="Xoá tìm kiếm ngành"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-neutral-600">
+                    <span>
+                      Đã chọn: <span className="font-semibold">{form.industryIds.length}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, industryIds: [] }))}
+                      className="text-primary-600 hover:text-primary-800"
+                    >
+                      Bỏ chọn hết
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
+                    {filteredIndustries.map((industry) => (
+                      <label
+                        key={industry.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 cursor-pointer ${
+                          form.industryIds.includes(industry.id)
+                            ? "bg-primary-50 border-primary-200"
+                            : "bg-white border-neutral-200 hover:border-primary-200"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                          checked={form.industryIds.includes(industry.id)}
+                          onChange={(e) => toggleIndustry(industry.id, e.target.checked)}
+                        />
+                        <span className="text-sm font-medium text-neutral-700">
+                          {industry.name}
+                        </span>
+                      </label>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Factory className="w-4 h-4" />
-                    Ngành
-                  </label>
-                  <select
-                name="industryId"
-                value={form.industryId?.toString() || ""}
-                onChange={handleChange}
-                required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">-- Chọn ngành --</option>
-                    {industries.map((i) => (
-                      <option key={i.id} value={i.id.toString()}>
-                        {i.name}
-                      </option>
-                    ))}
-                  </select>
+                    {!filteredIndustries.length && (
+                      <div className="col-span-2 text-center text-sm text-neutral-500 py-6">
+                        Không tìm thấy ngành phù hợp
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

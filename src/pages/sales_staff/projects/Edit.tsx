@@ -27,12 +27,15 @@ export default function ProjectEditPage() {
     const [company, setCompany] = useState<ClientCompany | null>(null);
     const [markets, setMarkets] = useState<Market[]>([]);
     const [industries, setIndustries] = useState<Industry[]>([]);
+    const [industrySearch, setIndustrySearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState(false);
 
-    const [formData, setFormData] = useState<Partial<ProjectPayload>>({
+    const [formData, setFormData] = useState<
+        Partial<Omit<ProjectPayload, "industryIds">> & { industryIds: number[] }
+    >({
         name: "",
         description: "",
         startDate: "",
@@ -40,7 +43,7 @@ export default function ProjectEditPage() {
         status: "",
         clientCompanyId: undefined,
         marketId: undefined,
-        industryId: undefined,
+        industryIds: [],
     });
 
     useEffect(() => {
@@ -73,7 +76,7 @@ export default function ProjectEditPage() {
                     status: proj.status,
                     clientCompanyId: proj.clientCompanyId,
                     marketId: proj.marketId,
-                    industryId: proj.industryId,
+                    industryIds: proj.industryIds ?? [],
                 });
             } catch (err) {
                 console.error("❌ Lỗi tải dữ liệu dự án:", err);
@@ -89,8 +92,22 @@ export default function ProjectEditPage() {
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
         const { name, value } = e.target;
+        if (name === "industryIds") return;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
+
+    const handleIndustryChange = (id: number, checked: boolean) => {
+        setFormData(prev => ({
+            ...prev,
+            industryIds: checked
+                ? [...prev.industryIds, id]
+                : prev.industryIds.filter(selectedId => selectedId !== id),
+        }));
+    };
+
+    const filteredIndustries = industries.filter(industry =>
+        industry.name.toLowerCase().includes(industrySearch.toLowerCase())
+    );
 
     const formatDate = (dateStr?: string | null) => {
         if (!dateStr) return "";
@@ -130,8 +147,8 @@ export default function ProjectEditPage() {
             setSaving(false);
             return;
         }
-        if (!formData.industryId) {
-            setError("⚠️ Vui lòng chọn ngành!");
+        if (!formData.industryIds || formData.industryIds.length === 0) {
+            setError("⚠️ Vui lòng chọn ít nhất một ngành!");
             setSaving(false);
             return;
         }
@@ -150,7 +167,7 @@ export default function ProjectEditPage() {
             status: formData.status,
             clientCompanyId: formData.clientCompanyId!,
             marketId: Number(formData.marketId),
-            industryId: Number(formData.industryId),
+            industryIds: formData.industryIds.map(id => Number(id)),
         };
 
         try {
@@ -253,7 +270,7 @@ export default function ProjectEditPage() {
                             <div>
                                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                     <FileText className="w-4 h-4" />
-                                    Tên dự án
+                                    Tên dự án <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -287,13 +304,14 @@ export default function ProjectEditPage() {
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <CalendarDays className="w-4 h-4" />
-                                        Ngày bắt đầu
+                                        Ngày bắt đầu <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="date"
                                         name="startDate"
                                         value={formData.startDate}
                                         onChange={handleChange}
+                                        max={formData.endDate || undefined}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                 </div>
@@ -307,6 +325,7 @@ export default function ProjectEditPage() {
                                         name="endDate"
                                         value={formData.endDate ?? ""}
                                         onChange={handleChange}
+                                        min={formData.startDate || undefined}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                 </div>
@@ -336,43 +355,101 @@ export default function ProjectEditPage() {
                                 </div>
                             )}
 
-                            {/* Thị trường & Ngành */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                                        <Globe2 className="w-4 h-4" />
-                                        Thị trường
-                                    </label>
-                                    <select
-                                        name="marketId"
-                                        value={formData.marketId}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    >
-                                        <option value="">-- Chọn thị trường --</option>
-                                        {markets.map(m => (
-                                            <option key={m.id} value={m.id}>{m.name}</option>
+                            <div>
+                                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                                    <Globe2 className="w-4 h-4" />
+                                    Thị trường <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="marketId"
+                                    value={formData.marketId}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                >
+                                    <option value="">-- Chọn thị trường --</option>
+                                    {markets.map(m => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                                    <Factory className="w-4 h-4" />
+                                    Ngành <span className="text-red-500">*</span>
+                                </label>
+                                <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 space-y-4">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={industrySearch}
+                                            onChange={(e) => setIndustrySearch(e.target.value)}
+                                            placeholder="Tìm kiếm ngành..."
+                                            className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        />
+                                        {industrySearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIndustrySearch("")}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                                                aria-label="Xoá tìm kiếm ngành"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm text-neutral-600">
+                                        <span>
+                                            Đã chọn:{" "}
+                                            <span className="font-semibold">
+                                                {formData.industryIds.length}
+                                            </span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    industryIds: [],
+                                                }))
+                                            }
+                                            className="text-primary-600 hover:text-primary-800"
+                                        >
+                                            Bỏ chọn hết
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
+                                        {filteredIndustries.map((industry) => (
+                                            <label
+                                                key={industry.id}
+                                                className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 cursor-pointer ${
+                                                    formData.industryIds.includes(industry.id)
+                                                        ? "bg-primary-50 border-primary-200"
+                                                        : "bg-white border-neutral-200 hover:border-primary-200"
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                                                    checked={formData.industryIds.includes(industry.id)}
+                                                    onChange={(e) =>
+                                                        handleIndustryChange(
+                                                            industry.id,
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                />
+                                                <span className="text-sm font-medium text-neutral-700">
+                                                    {industry.name}
+                                                </span>
+                                            </label>
                                         ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                                        <Factory className="w-4 h-4" />
-                                        Ngành
-                                    </label>
-                                    <select
-                                        name="industryId"
-                                        value={formData.industryId}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    >
-                                        <option value="">-- Chọn ngành --</option>
-                                        {industries.map(i => (
-                                            <option key={i.id} value={i.id}>{i.name}</option>
-                                        ))}
-                                    </select>
+                                        {!filteredIndustries.length && (
+                                            <div className="col-span-2 text-center text-sm text-neutral-500 py-6">
+                                                Không tìm thấy ngành phù hợp
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

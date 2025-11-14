@@ -5,34 +5,38 @@ import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { jobRequestService, type JobRequestPayload } from "../../../services/JobRequest";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
-import { Textarea } from "../../../components/ui/textarea";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { clientCompanyCVTemplateService, type ClientCompanyTemplate } from "../../../services/ClientCompanyTemplate";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { projectService, type Project } from "../../../services/Project";
 import { locationService, type Location } from "../../../services/location";
 import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
 import { jobRoleService, type JobRole } from "../../../services/JobRole";
-import { 
-  ArrowLeft, 
-  Save, 
-  X, 
-  Briefcase, 
-  Users, 
-  DollarSign, 
-  Target, 
-  FileText, 
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Briefcase,
+  Users,
+  DollarSign,
+  Target,
+  FileText,
   CheckSquare,
   Building2,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Search,
+  Filter,
 } from "lucide-react";
 import { WorkingMode } from "../../../types/WorkingMode";
+import RichTextEditor from "../../../components/common/RichTextEditor";
 
 export default function JobRequestEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<number[]>([]); // To store selected skills
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
@@ -41,11 +45,13 @@ export default function JobRequestEditPage() {
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [skillSearchQuery, setSkillSearchQuery] = useState("");
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<JobRequestPayload>({
     projectId: 0,
     jobRoleLevelId: 0,
     applyProcessTemplateId: undefined,
-    clientCompanyCVTemplateId: 0,
+    clientCompanyCVTemplateId: null,
     title: "",
     description: "",
     requirements: "",
@@ -58,6 +64,18 @@ export default function JobRequestEditPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const filteredSkills = allSkills.filter(skill => {
+    const matchesSearch = !skillSearchQuery || skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase());
+    const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
+    return matchesSearch && matchesGroup;
+  });
+
+  const handleRichTextChange = (field: "description" | "requirements", value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
   // 🧭 Load dữ liệu Job Request
   useEffect(() => {
@@ -72,7 +90,7 @@ export default function JobRequestEditPage() {
           projectId: data.projectId,
           jobRoleLevelId: data.jobRoleLevelId,
           applyProcessTemplateId: (data as any).applyProcessTemplateId ?? undefined,
-          clientCompanyCVTemplateId: data.clientCompanyCVTemplateId,
+          clientCompanyCVTemplateId: data.clientCompanyCVTemplateId ?? null,
           title: data.title,
           description: data.description ?? "",
           requirements: data.requirements ?? "",
@@ -107,6 +125,26 @@ export default function JobRequestEditPage() {
       setAllSkills(skills); // Save all skills
     };
     fetchSkills();
+  }, []);
+
+  useEffect(() => {
+    const fetchSkillGroups = async () => {
+      try {
+        const response = await skillGroupService.getAll({ excludeDeleted: true });
+        const groups = Array.isArray(response)
+          ? response
+          : Array.isArray((response as any)?.items)
+            ? (response as any).items
+            : Array.isArray((response as any)?.data)
+              ? (response as any).data
+              : [];
+        setSkillGroups(groups);
+      } catch (err) {
+        console.error("❌ Lỗi tải nhóm kỹ năng:", err);
+        setSkillGroups([]);
+      }
+    };
+    fetchSkillGroups();
   }, []);
 
   // 🧭 Load danh sách Projects, Job Role Levels, Locations, Apply Templates, Job Roles
@@ -150,7 +188,7 @@ export default function JobRequestEditPage() {
   // 🧭 Load danh sách Client Templates khi selectedClientId thay đổi
   const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const projectId = Number(e.target.value);
-    setFormData(prev => ({ ...prev, projectId, clientCompanyCVTemplateId: 0 }));
+    setFormData(prev => ({ ...prev, projectId, clientCompanyCVTemplateId: null }));
 
     const project = projects.find(p => p.id === projectId);
     setSelectedClientId(project ? project.clientCompanyId : 0);
@@ -162,14 +200,23 @@ export default function JobRequestEditPage() {
   ) => {
     const { name, value } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "status" || name === "workingMode"
-        ? Number(value)
-        : ["quantity","budgetPerMonth","projectId","jobRoleLevelId","clientCompanyCVTemplateId","locationId","applyProcessTemplateId"].includes(name)
-        ? Number(value)
-        : value,
-    }));
+    const numericFields = ["quantity","budgetPerMonth","projectId","jobRoleLevelId","clientCompanyCVTemplateId","locationId","applyProcessTemplateId"];
+    const optionalNumeric = ["clientCompanyCVTemplateId","locationId","applyProcessTemplateId","budgetPerMonth"];
+
+    setFormData((prev) => {
+      if (name === "status" || name === "workingMode") {
+        return { ...prev, [name]: Number(value) };
+      }
+
+      if (numericFields.includes(name)) {
+        if (optionalNumeric.includes(name) && value === "") {
+          return { ...prev, [name]: name === "clientCompanyCVTemplateId" ? null : undefined };
+        }
+        return { ...prev, [name]: Number(value) };
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   // 💾 Gửi form
@@ -188,14 +235,18 @@ export default function JobRequestEditPage() {
       return;
     }
 
-    // ⚠️ Kiểm tra bắt buộc chọn mẫu CV khách hàng
-    if (!Number(formData.clientCompanyCVTemplateId)) {
-      alert("⚠️ Vui lòng chọn Mẫu CV khách hàng trước khi lưu!");
+    if (!Number(formData.jobRoleLevelId)) {
+      alert("⚠️ Vui lòng chọn Vị trí tuyển dụng trước khi lưu!");
       return;
     }
 
-    if (!Number(formData.jobRoleLevelId)) {
-      alert("⚠️ Vui lòng chọn Vị trí tuyển dụng trước khi lưu!");
+    if (!Number(formData.applyProcessTemplateId)) {
+      alert("⚠️ Vui lòng chọn Quy trình Apply trước khi lưu!");
+      return;
+    }
+
+    if (selectedSkills.length === 0) {
+      alert("⚠️ Vui lòng chọn ít nhất một kỹ năng!");
       return;
     }
 
@@ -203,6 +254,7 @@ export default function JobRequestEditPage() {
       // Gộp selectedSkills vào payload
       const payload: JobRequestPayload = {
         ...formData,
+        clientCompanyCVTemplateId: formData.clientCompanyCVTemplateId ?? undefined,
         skillIds: selectedSkills, // Include selected skills in payload
       };
       console.log("Payload gửi đi:", payload);
@@ -281,7 +333,7 @@ export default function JobRequestEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tiêu đề yêu cầu
+                  Tiêu đề yêu cầu <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="title"
@@ -298,16 +350,17 @@ export default function JobRequestEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Briefcase className="w-4 h-4" />
-                    Dự án
+                    Dự án <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="projectId"
-                      value={formData.projectId}
+                      value={formData.projectId ? formData.projectId.toString() : ""}
                       onChange={handleProjectChange}
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      required
                     >
-                      <option value="0">-- Chọn dự án --</option>
+                      <option value="">-- Chọn dự án --</option>
                       {projects.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -319,17 +372,17 @@ export default function JobRequestEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Vị trí tuyển dụng
+                    Cấp độ chuyên môn <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       name="jobRoleLevelId"
-                      value={formData.jobRoleLevelId}
+                      value={formData.jobRoleLevelId ? formData.jobRoleLevelId.toString() : ""}
                       onChange={handleChange}
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                       required
                     >
-                      <option value="0">-- Chọn vị trí --</option>
+                      <option value="">-- Chọn vị trí --</option>
                       {jobRoleLevels.map(pos => (
                         <option key={pos.id} value={pos.id}>
                           {pos.name}
@@ -373,11 +426,11 @@ export default function JobRequestEditPage() {
                     <div className="relative">
                       <select
                         name="clientCompanyCVTemplateId"
-                        value={formData.clientCompanyCVTemplateId}
+                        value={formData.clientCompanyCVTemplateId ? formData.clientCompanyCVTemplateId.toString() : ""}
                         onChange={handleChange}
                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                       >
-                        <option value="0">
+                        <option value="">
                           {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
                         </option>
                         {clientTemplates.map(t => (
@@ -391,16 +444,17 @@ export default function JobRequestEditPage() {
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Quy trình Apply
+                      Quy trình Apply <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <select
                         name="applyProcessTemplateId"
-                        value={formData.applyProcessTemplateId ?? 0}
+                        value={formData.applyProcessTemplateId ? formData.applyProcessTemplateId.toString() : ""}
                         onChange={handleChange}
                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                        required
                       >
-                        <option value={0}>-- Chọn quy trình --</option>
+                        <option value="">-- Chọn quy trình --</option>
                         {applyTemplates.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
@@ -428,7 +482,7 @@ export default function JobRequestEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Số lượng
+                    Số lượng <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="number"
@@ -437,6 +491,7 @@ export default function JobRequestEditPage() {
                     onChange={handleChange}
                     min={1}
                     className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    required
                   />
                 </div>
 
@@ -460,7 +515,7 @@ export default function JobRequestEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    Chế độ làm việc
+                    Chế độ làm việc <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -468,6 +523,7 @@ export default function JobRequestEditPage() {
                       value={formData.workingMode}
                       onChange={handleChange}
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      required
                     >
                       <option value={0}>Không xác định</option>
                       <option value={1}>Tại văn phòng</option>
@@ -494,13 +550,10 @@ export default function JobRequestEditPage() {
                 </div>
               </div>
               <div className="p-6">
-                <Textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={6}
+                <RichTextEditor
+                  value={formData.description ?? ""}
+                  onChange={(val) => handleRichTextChange("description", val)}
                   placeholder="Nhập mô tả chi tiết về công việc..."
-                  className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl resize-none"
                 />
               </div>
             </div>
@@ -516,13 +569,10 @@ export default function JobRequestEditPage() {
                 </div>
               </div>
               <div className="p-6">
-                <Textarea
-                  name="requirements"
-                  value={formData.requirements}
-                  onChange={handleChange}
-                  rows={6}
+                <RichTextEditor
+                  value={formData.requirements ?? ""}
+                  onChange={(val) => handleRichTextChange("requirements", val)}
                   placeholder="Nhập yêu cầu cụ thể cho ứng viên..."
-                  className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl resize-none"
                 />
               </div>
             </div>
@@ -535,7 +585,7 @@ export default function JobRequestEditPage() {
                 <div className="p-2 bg-warning-100 rounded-lg">
                   <CheckSquare className="w-5 h-5 text-warning-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu <span className="text-red-500">*</span></h3>
                 <div className="ml-auto">
                   <span className="text-sm text-neutral-500">
                     Đã chọn: {selectedSkills.length} kỹ năng
@@ -544,8 +594,49 @@ export default function JobRequestEditPage() {
               </div>
             </div>
             <div className="p-6">
+              <div className="flex flex-col lg:flex-row gap-4 mb-5">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={skillSearchQuery}
+                    onChange={(e) => setSkillSearchQuery(e.target.value)}
+                    placeholder="Tìm kiếm kỹ năng..."
+                    className="w-full pl-11 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  />
+                  {skillSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSkillSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      aria-label="Xoá tìm kiếm kỹ năng"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="relative w-full lg:w-72">
+                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                  <select
+                    value={selectedSkillGroupId ?? ""}
+                    onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
+                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">Tất cả nhóm kỹ năng</option>
+                    {skillGroups.length === 0 ? (
+                      <option value="" disabled>Đang tải nhóm kỹ năng...</option>
+                    ) : (
+                      skillGroups.map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                {allSkills.map(skill => (
+                {filteredSkills.map(skill => (
                   <label
                     key={skill.id}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${
@@ -582,6 +673,11 @@ export default function JobRequestEditPage() {
                   </div>
                   <p className="text-neutral-500 text-lg font-medium">Không có kỹ năng nào</p>
                   <p className="text-neutral-400 text-sm mt-1">Liên hệ admin để thêm kỹ năng mới</p>
+                </div>
+              )}
+              {allSkills.length > 0 && filteredSkills.length === 0 && (
+                <div className="text-center py-6 text-sm text-neutral-500">
+                  Không tìm thấy kỹ năng phù hợp với bộ lọc hiện tại.
                 </div>
               )}
             </div>

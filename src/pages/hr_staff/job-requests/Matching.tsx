@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentCVService, type TalentCVMatchResult } from "../../../services/TalentCV";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentService, type Talent } from "../../../services/Talent";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { locationService, type Location } from "../../../services/location";
 import { applyService } from "../../../services/Apply";
 import { talentApplicationService, TalentApplicationStatusConstants, type TalentApplication } from "../../../services/TalentApplication";
 import { decodeJWT } from "../../../services/Auth";
@@ -14,13 +16,20 @@ import {
     Sparkles,
     Target,
     CheckCircle2,
-    XCircle,
     Users,
     TrendingUp,
     Award,
     Eye,
     FileText,
     Phone,
+    MapPin,
+    Briefcase,
+    GraduationCap,
+    Code,
+    Clock,
+    Filter,
+    X,
+    SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { WorkingMode } from "../../../types/WorkingMode";
@@ -44,15 +53,28 @@ const formatWorkingMode = (mode?: number) => {
     return labels.join(", ");
 };
 
+const formatLevel = (level?: number) => {
+    const levelMap: Record<number, string> = {
+        0: "Junior",
+        1: "Middle",
+        2: "Senior",
+        3: "Lead"
+    };
+    return level !== undefined ? levelMap[level] || "N/A" : "N/A";
+};
+
 export default function CVMatchingPage() {
     const { user } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const jobRequestId = searchParams.get("jobRequestId");
 
     const [matchResults, setMatchResults] = useState<EnrichedMatchResult[]>([]);
     const [allMatchResults, setAllMatchResults] = useState<EnrichedMatchResult[]>([]);
     const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
+    const [jobRoleLevel, setJobRoleLevel] = useState<JobRoleLevel | null>(null);
+    const [jobLocation, setJobLocation] = useState<Location | null>(null);
     const [loading, setLoading] = useState(true);
     const [showFilters, setShowFilters] = useState(false);
     
@@ -60,6 +82,7 @@ export default function CVMatchingPage() {
     const [minScore, setMinScore] = useState(0);
     const [showMissingSkillsOnly, setShowMissingSkillsOnly] = useState(false);
     const [hideLowScore, setHideLowScore] = useState(false);
+    const currentMatchingPath = `${location.pathname}${location.search}`;
 
     useEffect(() => {
         const fetchData = async () => {
@@ -75,6 +98,24 @@ export default function CVMatchingPage() {
                 const jobReq = await jobRequestService.getById(Number(jobRequestId));
                 console.log("✅ Job Request loaded:", jobReq);
                 setJobRequest(jobReq);
+
+                // Fetch job role level to get level information
+                try {
+                    const level = await jobRoleLevelService.getById(jobReq.jobRoleLevelId);
+                    setJobRoleLevel(level);
+                } catch (err) {
+                    console.warn("⚠️ Không thể tải thông tin JobRoleLevel:", err);
+                }
+
+                // Fetch job location if exists
+                if (jobReq.locationId) {
+                    try {
+                        const location = await locationService.getById(jobReq.locationId);
+                        setJobLocation(location);
+                    } catch (err) {
+                        console.warn("⚠️ Không thể tải thông tin Location:", err);
+                    }
+                }
 
                 // Tính số lượng match mong muốn: quantity + 5
                 const desiredMatchCount = jobReq.quantity ? jobReq.quantity + 5 : 5;
@@ -110,20 +151,35 @@ export default function CVMatchingPage() {
                         console.log(
                             "ℹ️ Bỏ qua CV có hồ sơ ứng tuyển ở trạng thái Hired:",
                             match.talentCV.id,
-                            match.talentCV.versionName
+                            `v${match.talentCV.version}`
                         );
                     }
                     return !alreadyApplied;
                 });
                 console.log("📉 Số CV sau khi loại trừ đã ứng tuyển:", filteredMatches.length);
 
-                // Enrich with talent information
+                // Enrich with talent information and location names
                 const enrichedMatches = await Promise.all(
                     filteredMatches.map(async (match: TalentCVMatchResult) => {
                         try {
                             const talent = await talentService.getById(match.talentCV.talentId);
                             console.log("✅ Talent info loaded for ID:", match.talentCV.talentId, talent);
-                            return { ...match, talentInfo: talent };
+                            
+                            // Load talent location name if exists
+                            let talentLocationName: string | null = null;
+                            if (talent.locationId) {
+                                try {
+                                    const loc = await locationService.getById(talent.locationId);
+                                    talentLocationName = loc.name;
+                                } catch (err) {
+                                    console.warn("⚠️ Failed to load location for talent:", err);
+                                }
+                            }
+                            
+                            return { 
+                                ...match, 
+                                talentInfo: { ...talent, locationName: talentLocationName } as Talent & { locationName?: string | null }
+                            };
                         } catch (err) {
                             console.warn("⚠️ Failed to load talent info for ID:", match.talentCV.talentId, err);
                             return { ...match, talentInfo: undefined };
@@ -191,7 +247,7 @@ export default function CVMatchingPage() {
         const confirm = window.confirm(
             `⚠️ Bạn có chắc muốn tạo hồ sơ ứng tuyển cho ${match.talentInfo?.fullName || 'talent này'}?\n\n` +
             `Điểm khớp: ${match.matchScore}%\n` +
-            `CV: ${match.talentCV.versionName}`
+            `CV: v${match.talentCV.version}`
         );
         
         if (!confirm) return;
@@ -308,33 +364,59 @@ export default function CVMatchingPage() {
                 </div>
 
                 {/* Filter Panel */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-                    <div className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900">Cấu hình lọc</h2>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={resetFilters}
-                                    className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-primary-600 transition-colors"
-                                >
-                                    Reset
-                                </button>
-                                <button
-                                    onClick={() => setShowFilters(!showFilters)}
-                                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-                                >
-                                    {showFilters ? 'Ẩn' : 'Hiện'} Filter
-                                </button>
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in overflow-hidden">
+                    {/* Header */}
+                    <div
+                        className="p-6 flex items-center justify-between cursor-pointer hover:bg-neutral-50 transition-colors duration-300"
+                        onClick={() => setShowFilters(!showFilters)}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl shadow-soft">
+                                <SlidersHorizontal className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold text-gray-900">Bộ lọc kết quả</h2>
+                                <p className="text-sm text-neutral-500">
+                                    {showFilters ? "Nhấn để thu gọn" : "Nhấn để mở rộng & điều chỉnh tiêu chí"}
+                                </p>
                             </div>
                         </div>
-                        
-                        {showFilters && (
-                            <div className="space-y-4 pt-4 border-t border-neutral-200">
+                        <div className="flex items-center gap-3">
+                            {(minScore > 0 || hideLowScore || showMissingSkillsOnly) && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        resetFilters();
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition-all duration-300"
+                                >
+                                    <X className="w-4 h-4" />
+                                    <span>Xóa bộ lọc</span>
+                                </button>
+                            )}
+                            <div className={`p-2 rounded-full border border-neutral-200 transition-transform duration-300 ${showFilters ? "bg-primary-100 border-primary-200 rotate-180" : ""}`}>
+                                <Filter className={`w-5 h-5 ${showFilters ? "text-primary-600" : "text-neutral-400"}`} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    {showFilters && (
+                        <div className="px-6 pb-6 border-t border-neutral-200 animate-fade-in">
+                            <div className="pt-6 space-y-6">
                                 {/* Min Score Slider */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Điểm tối thiểu: {minScore}%
-                                    </label>
+                                <div className="bg-gradient-to-r from-primary-50 to-purple-50 p-5 rounded-xl border border-primary-100">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <Target className="w-4 h-4 text-primary-600" />
+                                            <label className="text-sm font-semibold text-gray-900">
+                                                Điểm khớp tối thiểu
+                                            </label>
+                                        </div>
+                                        <div className="px-3 py-1.5 bg-white rounded-lg border border-primary-200 shadow-soft">
+                                            <span className="text-lg font-bold text-primary-600">{minScore}%</span>
+                                        </div>
+                                    </div>
                                     <input
                                         type="range"
                                         min="0"
@@ -342,35 +424,65 @@ export default function CVMatchingPage() {
                                         step="5"
                                         value={minScore}
                                         onChange={(e) => setMinScore(Number(e.target.value))}
-                                        className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer"
+                                        className="w-full h-3 bg-neutral-200 rounded-full appearance-none cursor-pointer accent-primary-600"
+                                        style={{
+                                            background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${minScore}%, rgb(229 231 235) ${minScore}%, rgb(229 231 235) 100%)`,
+                                        }}
                                     />
+                                    <div className="flex justify-between text-xs text-neutral-500 mt-2">
+                                        <span>0%</span>
+                                        <span>25%</span>
+                                        <span>50%</span>
+                                        <span>75%</span>
+                                        <span>100%</span>
+                                    </div>
                                 </div>
-                                
-                                {/* Checkboxes */}
-                                <div className="flex flex-wrap gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={hideLowScore}
-                                            onChange={(e) => setHideLowScore(e.target.checked)}
-                                            className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
-                                        />
-                                        <span className="text-sm text-gray-700">Ẩn CV có điểm thấp (&lt;60%)</span>
+
+                                {/* Toggles */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <label className="group flex items-center gap-3 p-4 bg-neutral-50 hover:bg-primary-50 border-2 border-transparent hover:border-primary-200 rounded-xl cursor-pointer transition-all duration-300">
+                                        <div className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${hideLowScore ? "bg-primary-600" : "bg-neutral-300"}`}>
+                                            <span
+                                                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-300 ${
+                                                    hideLowScore ? "translate-x-6" : ""
+                                                }`}
+                                            ></span>
+                                            <input
+                                                type="checkbox"
+                                                checked={hideLowScore}
+                                                onChange={(e) => setHideLowScore(e.target.checked)}
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-semibold text-gray-900 block">Ẩn CV điểm thấp</span>
+                                            <span className="text-xs text-neutral-600">Loại bỏ CV có điểm khớp &lt; 60%</span>
+                                        </div>
                                     </label>
-                                    
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={showMissingSkillsOnly}
-                                            onChange={(e) => setShowMissingSkillsOnly(e.target.checked)}
-                                            className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
-                                        />
-                                        <span className="text-sm text-gray-700">Chỉ hiện CV đủ kỹ năng</span>
+
+                                    <label className="group flex items-center gap-3 p-4 bg-neutral-50 hover:bg-primary-50 border-2 border-transparent hover:border-primary-200 rounded-xl cursor-pointer transition-all duration-300">
+                                        <div className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showMissingSkillsOnly ? "bg-primary-600" : "bg-neutral-300"}`}>
+                                            <span
+                                                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-300 ${
+                                                    showMissingSkillsOnly ? "translate-x-6" : ""
+                                                }`}
+                                            ></span>
+                                            <input
+                                                type="checkbox"
+                                                checked={showMissingSkillsOnly}
+                                                onChange={(e) => setShowMissingSkillsOnly(e.target.checked)}
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-semibold text-gray-900 block">Chỉ hiện CV đủ kỹ năng</span>
+                                            <span className="text-xs text-neutral-600">Ẩn các CV còn thiếu kỹ năng</span>
+                                        </div>
                                     </label>
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Stats Cards */}
@@ -440,31 +552,59 @@ export default function CVMatchingPage() {
                             const workingModeRequirementText = workingModeRequired ? formatWorkingMode(jobWorkingMode) : "";
                             const talentWorkingModeText = talentWorkingMode !== WorkingMode.None ? formatWorkingMode(talentWorkingMode) : "";
 
-                            const workingModeAnalysis = workingModeRequired
-                                ? `Chế độ làm việc yêu cầu: ${workingModeRequirementText}. ${talentWorkingModeText ? `Nhân sự sẵn sàng: ${talentWorkingModeText}.` : "Nhân sự chưa cập nhật chế độ làm việc."} ${workingModeMatch ? "Hai bên tương thích." : "Chưa tương thích, cần trao đổi thêm."}`
-                                : "Job không yêu cầu chế độ làm việc cụ thể, mọi chế độ đều được chấp nhận.";
-
-                            const locationAnalysis = isRemoteOrFlexible
-                                ? "Job cho phép làm Remote/Hybrid nên không yêu cầu nhân sự cố định địa điểm."
+                            // Tính điểm chi tiết theo công thức backend
+                            const levelPoints = match.levelMatch ? 20 : 0;
+                            
+                            // Working mode: 10 points
+                            const workingModePoints = workingModeRequired
+                                ? (workingModeMatch ? 10 : 0)
+                                : 10; // Nếu không yêu cầu thì cho đủ điểm
+                            
+                            // Location: 15 points
+                            const locationPoints = isRemoteOrFlexible
+                                ? 15 // Remote/Flexible thì cho đủ điểm
+                                : locationRequired
+                                    ? (locationMatch ? 15 : 0)
+                                    : 15; // Nếu không yêu cầu thì cho đủ điểm
+                            
+                            // Skills: 50 points
+                            const skillPoints = totalRequiredSkills > 0
+                                ? Math.round((50.0 / totalRequiredSkills) * match.matchedSkills.length)
+                                : 50; // Nếu không có skill yêu cầu thì cho đủ điểm
+                            
+                            // Availability bonus: 0-5 points (giả định, vì không có trong response)
+                            // Backend có thể đã tính sẵn trong matchScore
+                            const baseScore = levelPoints + workingModePoints + locationPoints + skillPoints;
+                            const availabilityBonus = match.matchScore - baseScore;
+                            
+                            // Xác định tiêu chí phù hợp - rút gọn
+                            const jobLevelDisplay = jobRoleLevel 
+                                ? `${jobRoleLevel.name} (${formatLevel(jobRoleLevel.level)})` 
+                                : "N/A";
+                            const levelMatchReason = match.levelMatch 
+                                ? `✅ Khớp: Talent có cấp độ phù hợp ↔ Job: ${jobLevelDisplay}`
+                                : `❌ Không khớp: Talent có cấp độ khác ↔ Job: ${jobLevelDisplay}`;
+                            
+                            const workingModeMatchReason = workingModeRequired
+                                ? workingModeMatch
+                                    ? `✅ Khớp: Talent ${talentWorkingModeText || "chưa cập nhật"} ↔ Job yêu cầu ${workingModeRequirementText}`
+                                    : `❌ Không khớp: Talent ${talentWorkingModeText || "chưa cập nhật"} ↔ Job yêu cầu ${workingModeRequirementText}`
+                                : "✅ Không yêu cầu: Job chấp nhận mọi chế độ làm việc";
+                            
+                            const talentLocationName = (match.talentInfo as any)?.locationName || null;
+                            const locationMatchReason = isRemoteOrFlexible
+                                ? "✅ Remote/Hybrid: Job cho phép làm việc từ xa nên không yêu cầu địa điểm cố định"
                                 : locationRequired
                                     ? talentLocationId
                                         ? locationMatch
-                                            ? "Nhân sự đang ở đúng địa điểm yêu cầu."
-                                            : "Nhân sự ở khác địa điểm yêu cầu, cần cân nhắc."
-                                        : "Job yêu cầu địa điểm cụ thể nhưng nhân sự chưa cập nhật thông tin địa điểm."
-                                    : "Job không yêu cầu địa điểm cụ thể.";
-
-                            const analysisPoints = [
-                                `Điểm tổng hợp: ${match.matchScore}/100.`,
-                                totalRequiredSkills > 0
-                                    ? `Kỹ năng: ${match.matchedSkills.length}/${totalRequiredSkills} (${skillMatchPercent}%) kỹ năng yêu cầu đã đáp ứng${match.missingSkills.length ? `. Cần bổ sung: ${match.missingSkills.join(", ")}` : "."}`
-                                    : "Kỹ năng: Yêu cầu tuyển dụng không chỉ định kỹ năng cụ thể, nhân sự được tính 100%.",
-                                workingModeAnalysis,
-                                locationAnalysis,
-                                match.levelMatch
-                                    ? "Cấp độ/kinh nghiệm: Nhân sự phù hợp với cấp độ mà yêu cầu tuyển dụng mong muốn."
-                                    : "Cấp độ/kinh nghiệm: Nhân sự khác cấp độ yêu cầu, nên trao đổi thêm trước khi gửi khách hàng."
-                            ].filter(Boolean);
+                                            ? `✅ Khớp: Talent ở ${talentLocationName || "N/A"} ↔ Job yêu cầu ${jobLocation?.name || "N/A"}`
+                                            : `❌ Khác địa điểm: Talent ở ${talentLocationName || "N/A"} ↔ Job yêu cầu ${jobLocation?.name || "N/A"}`
+                                        : "⚠️ Chưa xác định: Job yêu cầu địa điểm cụ thể nhưng Talent chưa cập nhật"
+                                    : "✅ Không yêu cầu: Job không yêu cầu địa điểm cụ thể";
+                            
+                            const skillMatchReason = totalRequiredSkills > 0
+                                ? `${match.matchedSkills.length}/${totalRequiredSkills} kỹ năng (${skillMatchPercent}%)`
+                                : "Không yêu cầu kỹ năng cụ thể";
 
                             return (
                             <div
@@ -491,7 +631,7 @@ export default function CVMatchingPage() {
                                                 <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors duration-300">
                                                     {match.talentInfo?.fullName || `Talent #${match.talentCV.talentId}`}
                                                 </h3>
-                                                <p className="text-neutral-600 text-sm mb-2">{match.talentCV.versionName}</p>
+                                                <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: {match.talentCV.version}</p>
                                                 <div className="flex items-center gap-4 text-sm text-neutral-500">
                                                     {match.talentInfo?.email && (
                                                         <span className="flex items-center gap-1">
@@ -538,16 +678,243 @@ export default function CVMatchingPage() {
                                         </div>
 
                                         {/* Match Summary */}
-                                        <div className="mb-4 p-4 bg-neutral-50 border border-neutral-200 rounded-xl">
-                                            <p className="text-sm font-semibold text-neutral-800 mb-2">Phân tích mức độ phù hợp</p>
-                                            <ul className="space-y-2 text-sm text-neutral-700">
-                                                {analysisPoints.map((point, idx) => (
-                                                    <li key={idx} className="flex items-start gap-2">
-                                                        <span className="mt-1 flex h-1.5 w-1.5 rounded-full bg-primary-500"></span>
-                                                        <span>{point}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                        <div className="mb-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <Target className="w-5 h-5 text-primary-600" />
+                                                <h4 className="text-lg font-bold text-gray-900">Phân tích mức độ phù hợp</h4>
+                                            </div>
+                                            
+                                            {/* Score Cards Grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                {/* Cấp độ/Kinh nghiệm */}
+                                                <div className={`p-4 rounded-xl border-2 ${
+                                                    match.levelMatch 
+                                                        ? 'bg-green-50 border-green-200' 
+                                                        : 'bg-red-50 border-red-200'
+                                                }`}>
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                match.levelMatch ? 'bg-green-100' : 'bg-red-100'
+                                                            }`}>
+                                                                <GraduationCap className={`w-4 h-4 ${
+                                                                    match.levelMatch ? 'text-green-600' : 'text-red-600'
+                                                                }`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900">Cấp độ/Kinh nghiệm</p>
+                                                                <p className="text-xs text-gray-600">Tối đa 20 điểm</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={`text-2xl font-bold ${
+                                                                match.levelMatch ? 'text-green-600' : 'text-red-600'
+                                                            }`}>
+                                                                {levelPoints}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">/20</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm mt-2 font-medium ${
+                                                        match.levelMatch ? 'text-green-700' : 'text-red-700'
+                                                    }`}>
+                                                        {levelMatchReason}
+                                                    </p>
+                                                </div>
+
+                                                {/* Chế độ làm việc */}
+                                                <div className={`p-4 rounded-xl border-2 ${
+                                                    workingModePoints === 10
+                                                        ? 'bg-green-50 border-green-200' 
+                                                        : 'bg-red-50 border-red-200'
+                                                }`}>
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                workingModePoints === 10 ? 'bg-green-100' : 'bg-red-100'
+                                                            }`}>
+                                                                <Briefcase className={`w-4 h-4 ${
+                                                                    workingModePoints === 10 ? 'text-green-600' : 'text-red-600'
+                                                                }`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900">Chế độ làm việc</p>
+                                                                <p className="text-xs text-gray-600">Tối đa 10 điểm</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={`text-2xl font-bold ${
+                                                                workingModePoints === 10 ? 'text-green-600' : 'text-red-600'
+                                                            }`}>
+                                                                {workingModePoints}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">/10</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm mt-2 font-medium ${
+                                                        workingModePoints === 10 ? 'text-green-700' : 'text-red-700'
+                                                    }`}>
+                                                        {workingModeMatchReason}
+                                                    </p>
+                                                </div>
+
+                                                {/* Địa điểm */}
+                                                <div className={`p-4 rounded-xl border-2 ${
+                                                    locationPoints === 15
+                                                        ? 'bg-green-50 border-green-200' 
+                                                        : 'bg-yellow-50 border-yellow-200'
+                                                }`}>
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                locationPoints === 15 ? 'bg-green-100' : 'bg-yellow-100'
+                                                            }`}>
+                                                                <MapPin className={`w-4 h-4 ${
+                                                                    locationPoints === 15 ? 'text-green-600' : 'text-yellow-600'
+                                                                }`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900">Địa điểm</p>
+                                                                <p className="text-xs text-gray-600">Tối đa 15 điểm</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={`text-2xl font-bold ${
+                                                                locationPoints === 15 ? 'text-green-600' : 'text-yellow-600'
+                                                            }`}>
+                                                                {locationPoints}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">/15</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm mt-2 font-medium ${
+                                                        locationPoints === 15 ? 'text-green-700' : 'text-yellow-700'
+                                                    }`}>
+                                                        {locationMatchReason}
+                                                    </p>
+                                                </div>
+
+                                                {/* Kỹ năng */}
+                                                <div className={`p-4 rounded-xl border-2 ${
+                                                    skillPoints >= 40
+                                                        ? 'bg-green-50 border-green-200' 
+                                                        : skillPoints >= 25
+                                                        ? 'bg-yellow-50 border-yellow-200'
+                                                        : 'bg-red-50 border-red-200'
+                                                }`}>
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                skillPoints >= 40 ? 'bg-green-100' : skillPoints >= 25 ? 'bg-yellow-100' : 'bg-red-100'
+                                                            }`}>
+                                                                <Code className={`w-4 h-4 ${
+                                                                    skillPoints >= 40 ? 'text-green-600' : skillPoints >= 25 ? 'text-yellow-600' : 'text-red-600'
+                                                                }`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900">Kỹ năng</p>
+                                                                <p className="text-xs text-gray-600">Tối đa 50 điểm</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={`text-2xl font-bold ${
+                                                                skillPoints >= 40 ? 'text-green-600' : skillPoints >= 25 ? 'text-yellow-600' : 'text-red-600'
+                                                            }`}>
+                                                                {skillPoints}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">/50</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <p className="text-sm font-medium text-gray-700 mb-2">
+                                                            {skillMatchReason}
+                                                        </p>
+                                                        {match.matchedSkills.length > 0 && (
+                                                            <div className="mb-2">
+                                                                <p className="text-xs font-medium text-green-600 mb-1">✅ Kỹ năng có:</p>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {match.matchedSkills.slice(0, 5).map((skill, idx) => (
+                                                                        <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                                                            {skill}
+                                                                        </span>
+                                                                    ))}
+                                                                    {match.matchedSkills.length > 5 && (
+                                                                        <span className="text-xs text-gray-500">+{match.matchedSkills.length - 5} kỹ năng khác</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {match.missingSkills.length > 0 && (
+                                                            <div className="pt-2 border-t border-gray-200">
+                                                                <p className="text-xs font-medium text-red-600 mb-1">❌ Còn thiếu:</p>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {match.missingSkills.slice(0, 5).map((skill, idx) => (
+                                                                        <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                                                                            {skill}
+                                                                        </span>
+                                                                    ))}
+                                                                    {match.missingSkills.length > 5 && (
+                                                                        <span className="text-xs text-gray-500">+{match.missingSkills.length - 5} kỹ năng khác</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Bonus Availability */}
+                                            {availabilityBonus > 0 && (
+                                                <div className="p-4 rounded-xl border-2 bg-purple-50 border-purple-200">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 rounded-lg bg-purple-100">
+                                                            <Clock className="w-4 h-4 text-purple-600" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <p className="font-semibold text-gray-900">Bonus sẵn sàng làm việc</p>
+                                                            <p className="text-sm text-gray-600">Sẵn sàng ngay hoặc linh hoạt, không có ràng buộc thời gian</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-2xl font-bold text-purple-600">+{availabilityBonus}</p>
+                                                            <p className="text-xs text-gray-500">điểm</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Total Score Summary */}
+                                            <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-primary-50 to-purple-50 border-2 border-primary-200">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 rounded-lg bg-primary-100">
+                                                            <Award className="w-5 h-5 text-primary-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-gray-900 text-lg">Tổng điểm phù hợp</p>
+                                                            <p className="text-sm text-gray-600">Tổng hợp tất cả các tiêu chí</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={`text-4xl font-bold ${
+                                                            match.matchScore >= 80 ? 'text-green-600' :
+                                                            match.matchScore >= 60 ? 'text-blue-600' :
+                                                            match.matchScore >= 40 ? 'text-yellow-600' :
+                                                            'text-red-600'
+                                                        }`}>
+                                                            {match.matchScore}
+                                                        </p>
+                                                        <p className="text-sm text-gray-500">/100 điểm</p>
+                                                        <p className={`text-xs font-medium mt-1 ${
+                                                            match.matchScore >= 80 ? 'text-green-600' :
+                                                            match.matchScore >= 60 ? 'text-blue-600' :
+                                                            match.matchScore >= 40 ? 'text-yellow-600' :
+                                                            'text-red-600'
+                                                        }`}>
+                                                            {getScoreLabel(match.matchScore)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         {/* Skills */}
@@ -575,28 +942,7 @@ export default function CVMatchingPage() {
                                                 </div>
                                             )}
 
-                                            {/* Missing Skills */}
-                                            {match.missingSkills.length > 0 && (
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <XCircle className="w-4 h-4 text-red-600" />
-                                                        <span className="text-sm font-semibold text-gray-900">
-                                                            Kỹ năng còn thiếu ({match.missingSkills.length})
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {match.missingSkills.map((skill, idx) => (
-                                                            <span
-                                                                key={idx}
-                                                                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200"
-                                                            >
-                                                                <XCircle className="w-3 h-3" />
-                                                                {skill}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                            
                                         </div>
 
                                         {/* Actions */}
@@ -609,7 +955,11 @@ export default function CVMatchingPage() {
                                                 Xem CV
                                             </Button>
                                             <Button
-                                                onClick={() => navigate(`/hr/developers/${match.talentCV.talentId}`)}
+                                                onClick={() =>
+                                                    navigate(`/hr/developers/${match.talentCV.talentId}`, {
+                                                        state: { returnTo: currentMatchingPath },
+                                                    })
+                                                }
                                                 className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transform hover:scale-105"
                                             >
                                                 <Users className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

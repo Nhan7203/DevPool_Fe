@@ -2,23 +2,22 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
-import { workingStyleService, type WorkingStyle } from "../../../../services/WorkingStyle";
+import { documentTypeService, type DocumentType, type DocumentTypeCreate } from "../../../../services/DocumentType";
 import { 
-  Briefcase, 
+  FileText, 
   ArrowLeft, 
   Save, 
-  FileText, 
   AlertCircle, 
   CheckCircle,
   X
 } from "lucide-react";
 
-export default function WorkingStyleEditPage() {
+export default function DocumentTypeEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [workingStyle, setWorkingStyle] = useState<WorkingStyle | null>(null);
-  const [formData, setFormData] = useState<{ name: string; description?: string }>({
-    name: "",
+  const [documentType, setDocumentType] = useState<DocumentType | null>(null);
+  const [formData, setFormData] = useState<DocumentTypeCreate>({
+    typeName: "",
     description: "",
   });
   const [loading, setLoading] = useState(true);
@@ -26,31 +25,35 @@ export default function WorkingStyleEditPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // 🧭 Load dữ liệu WorkingStyle
+  // 🧭 Load dữ liệu DocumentType
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDocumentType = async () => {
+      if (!id) return;
       try {
-        if (!id) return;
-        const data = await workingStyleService.getById(Number(id));
-        setWorkingStyle(data);
-        setFormData({ name: data.name, description: data.description ?? "" });
+        setLoading(true);
+        const data = await documentTypeService.getById(Number(id));
+        setDocumentType(data);
+        setFormData({
+          typeName: data.typeName,
+          description: data.description || "",
+        });
       } catch (err) {
-        console.error("❌ Lỗi tải dữ liệu:", err);
-        alert("Không thể tải thông tin phong cách làm việc!");
+        console.error("❌ Lỗi tải dữ liệu loại tài liệu:", err);
+        alert("Không thể tải thông tin loại tài liệu!");
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+    fetchDocumentType();
   }, [id]);
 
-  // ✍️ Handle change form
+  // ✍️ Cập nhật form
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // 💾 Submit form
+  // 💾 Gửi form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
@@ -59,20 +62,19 @@ export default function WorkingStyleEditPage() {
     setError("");
     setSuccess(false);
 
-    if (!formData.name.trim()) {
-      setError("⚠️ Vui lòng nhập tên phong cách làm việc!");
+    if (!formData.typeName.trim()) {
+      setError("⚠️ Vui lòng điền đầy đủ tên loại tài liệu!");
       setSaving(false);
       return;
     }
 
     try {
-      const payload = { ...formData };
-      await workingStyleService.update(Number(id), payload);
+      await documentTypeService.update(Number(id), formData);
       setSuccess(true);
-      setTimeout(() => navigate(`/admin/categories/working-styles/${id}`), 1500);
+      setTimeout(() => navigate(`/admin/categories/document-types/${id}`), 1500);
     } catch (err) {
-      console.error("❌ Lỗi khi cập nhật:", err);
-      setError("Không thể cập nhật phong cách làm việc. Vui lòng thử lại.");
+      console.error("❌ Lỗi khi cập nhật loại tài liệu:", err);
+      setError("Không thể cập nhật loại tài liệu. Vui lòng thử lại.");
     } finally {
       setSaving(false);
     }
@@ -92,7 +94,7 @@ export default function WorkingStyleEditPage() {
     );
   }
 
-  if (!workingStyle) {
+  if (!documentType) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
         <Sidebar items={sidebarItems} title="Admin" />
@@ -101,9 +103,9 @@ export default function WorkingStyleEditPage() {
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
-            <p className="text-red-500 text-lg font-medium">Không tìm thấy phong cách làm việc</p>
+            <p className="text-red-500 text-lg font-medium">Không tìm thấy loại tài liệu</p>
             <Link 
-              to="/admin/categories/working-styles"
+              to="/admin/categories/document-types"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               Quay lại danh sách
@@ -123,7 +125,7 @@ export default function WorkingStyleEditPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link 
-              to={`/admin/categories/working-styles/${id}`}
+              to={`/admin/categories/document-types/${id}`}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -133,16 +135,16 @@ export default function WorkingStyleEditPage() {
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa phong cách làm việc</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa loại tài liệu</h1>
               <p className="text-neutral-600 mb-4">
-                Cập nhật thông tin phong cách làm việc
+                Cập nhật thông tin loại tài liệu
               </p>
               
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-warning-50 border border-warning-200">
-                <Briefcase className="w-4 h-4 text-warning-600" />
+                <FileText className="w-4 h-4 text-warning-600" />
                 <span className="text-sm font-medium text-warning-800">
-                  Chỉnh sửa: {workingStyle.name}
+                  Chỉnh sửa: {documentType.typeName}
                 </span>
               </div>
             </div>
@@ -156,26 +158,26 @@ export default function WorkingStyleEditPage() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-primary-600" />
+                  <FileText className="w-5 h-5 text-primary-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin phong cách làm việc</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Thông tin loại tài liệu</h2>
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* Tên phong cách làm việc */}
+              {/* Tên loại tài liệu */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Briefcase className="w-4 h-4" />
-                  Tên phong cách làm việc
+                  <FileText className="w-4 h-4" />
+                  Tên loại tài liệu <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="typeName"
+                  value={formData.typeName}
                   onChange={handleChange}
                   required
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  placeholder="Nhập tên phong cách làm việc"
+                  placeholder="VD: Work Report, Invoice, Bill, Contract..."
                 />
               </div>
 
@@ -191,7 +193,7 @@ export default function WorkingStyleEditPage() {
                   onChange={handleChange}
                   rows={4}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
-                  placeholder="Nhập mô tả (tùy chọn)"
+                  placeholder="Mô tả ngắn gọn về loại tài liệu này..."
                 />
               </div>
             </div>
@@ -210,7 +212,7 @@ export default function WorkingStyleEditPage() {
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <p className="text-green-700 font-medium">
-                    ✅ Cập nhật phong cách làm việc thành công! Đang chuyển hướng...
+                    ✅ Cập nhật loại tài liệu thành công! Đang chuyển hướng...
                   </p>
                 </div>
               )}
@@ -220,7 +222,7 @@ export default function WorkingStyleEditPage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to={`/admin/categories/working-styles/${id}`}
+              to={`/admin/categories/document-types/${id}`}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
@@ -249,3 +251,4 @@ export default function WorkingStyleEditPage() {
     </div>
   );
 }
+

@@ -15,7 +15,8 @@ import {
   Upload,
   CheckCircle,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  FileText
 } from "lucide-react";
 
 function TalentCertificateEditPage() {
@@ -28,6 +29,8 @@ function TalentCertificateEditPage() {
   const [formData, setFormData] = useState<TalentCertificateCreate>({
     talentId: 0,
     certificateTypeId: 0,
+    certificateName: "",
+    certificateDescription: "",
     issuedDate: "",
     isVerified: false,
     imageUrl: "",
@@ -45,6 +48,8 @@ function TalentCertificateEditPage() {
         setFormData({
           talentId: data.talentId,
           certificateTypeId: data.certificateTypeId,
+          certificateName: data.certificateName || "",
+          certificateDescription: data.certificateDescription || "",
           issuedDate: data.issuedDate ? data.issuedDate.split('T')[0] : "", // Convert to date format
           isVerified: data.isVerified,
           imageUrl: data.imageUrl,
@@ -94,7 +99,7 @@ function TalentCertificateEditPage() {
 
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value, type } = e.target;
 
@@ -118,6 +123,21 @@ function TalentCertificateEditPage() {
 
     if (!formData.certificateTypeId || formData.certificateTypeId === 0) {
       alert("⚠️ Vui lòng chọn loại chứng chỉ trước khi lưu!");
+      return;
+    }
+
+    if (!formData.certificateName || formData.certificateName.trim() === "") {
+      alert("⚠️ Vui lòng nhập tên chứng chỉ trước khi lưu!");
+      return;
+    }
+
+    if (formData.certificateName.length > 255) {
+      alert("⚠️ Tên chứng chỉ không được vượt quá 255 ký tự!");
+      return;
+    }
+
+    if (formData.certificateDescription && formData.certificateDescription.length > 1000) {
+      alert("⚠️ Mô tả chứng chỉ không được vượt quá 1000 ký tự!");
       return;
     }
 
@@ -249,6 +269,47 @@ function TalentCertificateEditPage() {
                     </span>
                   </p>
                 )}
+              </div>
+
+              {/* Tên chứng chỉ */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tên chứng chỉ <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  name="certificateName"
+                  value={formData.certificateName}
+                  onChange={handleChange}
+                  maxLength={255}
+                  required
+                  className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                  placeholder="Nhập tên chứng chỉ"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tối đa 255 ký tự
+                </p>
+              </div>
+
+              {/* Mô tả chứng chỉ */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Mô tả chứng chỉ (tùy chọn)
+                </label>
+                <textarea
+                  name="certificateDescription"
+                  value={formData.certificateDescription || ""}
+                  onChange={handleChange}
+                  maxLength={1000}
+                  rows={4}
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                  placeholder="Nhập mô tả về chứng chỉ..."
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tối đa 1000 ký tự
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

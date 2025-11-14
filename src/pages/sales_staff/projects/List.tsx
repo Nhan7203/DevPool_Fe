@@ -4,16 +4,15 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type Project } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Eye, 
-  Briefcase, 
-  Building2, 
-  CalendarDays, 
+import {
+  Search,
+  Filter,
+  Plus,
+  Eye,
+  Briefcase,
+  Building2,
+  CalendarDays,
   CheckCircle,
-  TrendingUp,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
@@ -41,6 +40,12 @@ export default function ProjectListPage() {
       icon: <Briefcase className="w-6 h-6" />
     },
     {
+      title: 'Đã Lên Kế Hoạch',
+      value: projects.filter(p => p.status === 'Planned').length.toString(),
+      color: 'orange',
+      icon: <CalendarDays className="w-6 h-6" />
+    },
+    {
       title: 'Đang Thực Hiện',
       value: projects.filter(p => p.status === 'Ongoing').length.toString(),
       color: 'green',
@@ -51,12 +56,6 @@ export default function ProjectListPage() {
       value: projects.filter(p => p.status === 'Completed').length.toString(),
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
-    },
-    {
-      title: 'Tỷ Lệ Hoàn Thành',
-      value: `${Math.round((projects.filter(p => p.status === 'Completed').length / Math.max(projects.length, 1)) * 100)}%`,
-      color: 'orange',
-      icon: <TrendingUp className="w-6 h-6" />
     }
   ];
 
@@ -151,7 +150,7 @@ export default function ProjectListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các dự án khách hàng</p>
             </div>
             <Link to="/sales/projects/create">
-              <button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo dự án mới
               </button>
@@ -321,42 +320,31 @@ export default function ProjectListPage() {
                       >
                         <td className="py-4 px-4 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-neutral-400" />
-                            <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
-                              {p.name}
-                            </div>
+                          <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
+                            {p.name}
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-neutral-400" />
-                            <span className="text-sm text-neutral-700">{company?.name ?? "—"}</span>
-                          </div>
+                          <span className="text-sm text-neutral-700">{company?.name ?? "—"}</span>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <CalendarDays className="w-4 h-4 text-neutral-400" />
-                            <span className="text-sm text-neutral-700">{p.startDate}</span>
-                          </div>
+                          <span className="text-sm text-neutral-700">{p.startDate}</span>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <CalendarDays className="w-4 h-4 text-neutral-400" />
-                            <span className="text-sm text-neutral-700">{p.endDate ?? "—"}</span>
-                          </div>
+                          <span className="text-sm text-neutral-700">{p.endDate ?? "—"}</span>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-neutral-400" />
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              p.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                              p.status === 'Ongoing' ? 'bg-blue-100 text-blue-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {statusLabels[p.status] || "—"}
-                            </span>
-                          </div>
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              p.status === 'Completed'
+                                ? 'bg-green-100 text-green-800'
+                                : p.status === 'Ongoing'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {statusLabels[p.status] || "—"}
+                          </span>
                         </td>
                         <td className="py-4 px-4 text-center">
                           <div className="flex items-center justify-center gap-2">

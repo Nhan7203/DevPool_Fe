@@ -24,7 +24,6 @@ import {
 import { userService } from '../../../services/User';
 import { skillService } from '../../../services/Skill';
 import { skillGroupService } from '../../../services/SkillGroup';
-import { workingStyleService } from '../../../services/WorkingStyle';
 import { cvTemplateService } from '../../../services/CVTemplate';
 import { certificateTypeService } from '../../../services/CertificateType';
 import { jobRoleLevelService } from '../../../services/JobRoleLevel';
@@ -46,7 +45,6 @@ export default function AdminDashboard() {
   const [categoryBreakdown, setCategoryBreakdown] = useState({
     skills: 0,
     skillGroups: 0,
-    workingStyles: 0,
     cvTemplates: 0,
     certificateTypes: 0,
     jobRoleLevels: 0,
@@ -66,7 +64,6 @@ export default function AdminDashboard() {
           usersRes,
           skillsRes,
           skillGroupsRes,
-          workingStylesRes,
           cvTemplatesRes,
           certificateTypesRes,
           jobRoleLevelsRes,
@@ -78,7 +75,6 @@ export default function AdminDashboard() {
           userService.getAll({ excludeDeleted: true }).catch(() => ({ items: [], totalCount: 0 })),
           skillService.getAll({ excludeDeleted: true }).catch(() => []),
           skillGroupService.getAll({ excludeDeleted: true }).catch(() => []),
-          workingStyleService.getAll({ excludeDeleted: true }).catch(() => []),
           cvTemplateService.getAll({ excludeDeleted: true }).catch(() => []),
           certificateTypeService.getAll({ excludeDeleted: true }).catch(() => []),
           jobRoleLevelService.getAll({ excludeDeleted: true }).catch(() => []),
@@ -90,7 +86,6 @@ export default function AdminDashboard() {
 
         const skills = Array.isArray(skillsRes) ? skillsRes : [];
         const skillGroups = Array.isArray(skillGroupsRes) ? skillGroupsRes : [];
-        const workingStyles = Array.isArray(workingStylesRes) ? workingStylesRes : [];
         const cvTemplates = Array.isArray(cvTemplatesRes) ? cvTemplatesRes : [];
         const certificateTypes = Array.isArray(certificateTypesRes) ? certificateTypesRes : [];
         const jobRoleLevels = Array.isArray(jobRoleLevelsRes) ? jobRoleLevelsRes : [];
@@ -99,8 +94,8 @@ export default function AdminDashboard() {
         const markets = Array.isArray(marketsRes) ? marketsRes : [];
         const industries = Array.isArray(industriesRes) ? industriesRes : [];
 
-        // Đếm số loại danh mục (luôn là 10)
-        const categoryTypes = 10;
+        // Đếm số loại danh mục (luôn là 9)
+        const categoryTypes = 9;
 
         setStats({
           totalUsers: usersRes.totalCount || 0,
@@ -112,7 +107,6 @@ export default function AdminDashboard() {
         setCategoryBreakdown({
           skills: skills.length,
           skillGroups: skillGroups.length,
-          workingStyles: workingStyles.length,
           cvTemplates: cvTemplates.length,
           certificateTypes: certificateTypes.length,
           jobRoleLevels: jobRoleLevels.length,
@@ -173,14 +167,13 @@ export default function AdminDashboard() {
   const categoryStats = [
     { name: 'Kỹ Năng (skill)', count: categoryBreakdown.skills, icon: <Star className="w-5 h-5" />, link: '/admin/categories/skills', color: 'blue' },
     { name: 'Nhóm Kỹ Năng (skill group)', count: categoryBreakdown.skillGroups, icon: <Tag className="w-5 h-5" />, link: '/admin/categories/skill-groups', color: 'green' },
-    { name: 'Kiểu làm việc (working style)', count: categoryBreakdown.workingStyles, icon: <Target className="w-5 h-5" />, link: '/admin/categories/working-styles', color: 'purple' },
-    { name: 'Mẫu CV (cv template)', count: categoryBreakdown.cvTemplates, icon: <FileText className="w-5 h-5" />, link: '/admin/categories/cv-templates', color: 'orange' },
-    { name: 'Loại Chứng Chỉ', count: categoryBreakdown.certificateTypes, icon: <FileText className="w-5 h-5" />, link: '/admin/categories/certificate-types', color: 'blue' },
-    { name: 'Vị trí tuyển dụng (job role level)', count: categoryBreakdown.jobRoleLevels, icon: <Briefcase className="w-5 h-5" />, link: '/admin/categories/job-role-levels', color: 'green' },
-    { name: 'Loại vị trí tuyển dụng (job role)', count: categoryBreakdown.jobRoles, icon: <Briefcase className="w-5 h-5" />, link: '/admin/categories/job-roles', color: 'purple' },
-    { name: 'Khu vực làm việc (location)', count: categoryBreakdown.locations, icon: <MapPin className="w-5 h-5" />, link: '/admin/categories/locations', color: 'orange' },
-    { name: 'Thị trường (market)', count: categoryBreakdown.markets, icon: <Building2 className="w-5 h-5" />, link: '/admin/categories/markets', color: 'blue' },
-    { name: 'Lĩnh vực (industry)', count: categoryBreakdown.industries, icon: <Building2 className="w-5 h-5" />, link: '/admin/categories/industries', color: 'green' }
+    { name: 'Mẫu CV (cv template)', count: categoryBreakdown.cvTemplates, icon: <FileText className="w-5 h-5" />, link: '/admin/categories/cv-templates', color: 'purple' },
+    { name: 'Loại Chứng Chỉ', count: categoryBreakdown.certificateTypes, icon: <FileText className="w-5 h-5" />, link: '/admin/categories/certificate-types', color: 'orange' },
+    { name: 'Vị trí tuyển dụng (job role level)', count: categoryBreakdown.jobRoleLevels, icon: <Briefcase className="w-5 h-5" />, link: '/admin/categories/job-role-levels', color: 'blue' },
+    { name: 'Loại vị trí tuyển dụng (job role)', count: categoryBreakdown.jobRoles, icon: <Briefcase className="w-5 h-5" />, link: '/admin/categories/job-roles', color: 'green' },
+    { name: 'Khu vực làm việc (location)', count: categoryBreakdown.locations, icon: <MapPin className="w-5 h-5" />, link: '/admin/categories/locations', color: 'purple' },
+    { name: 'Thị trường (market)', count: categoryBreakdown.markets, icon: <Building2 className="w-5 h-5" />, link: '/admin/categories/markets', color: 'orange' },
+    { name: 'Lĩnh vực (industry)', count: categoryBreakdown.industries, icon: <Building2 className="w-5 h-5" />, link: '/admin/categories/industries', color: 'blue' }
   ];
 
   const getStatusColor = (isActive: boolean) => {

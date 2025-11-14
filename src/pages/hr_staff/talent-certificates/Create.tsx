@@ -15,7 +15,8 @@ import {
   CheckCircle,
   AlertCircle, 
   X,
-  ExternalLink
+  ExternalLink,
+  FileText
 } from "lucide-react";
 
 function TalentCertificateCreatePage() {
@@ -28,6 +29,8 @@ function TalentCertificateCreatePage() {
   const [form, setForm] = useState<TalentCertificateCreate>({
     talentId: talentId ? Number(talentId) : 0,
     certificateTypeId: 0,
+    certificateName: "",
+    certificateDescription: "",
     issuedDate: "",
     isVerified: false,
     imageUrl: "",
@@ -81,7 +84,7 @@ function TalentCertificateCreatePage() {
     }
   }, [analysisStorageKey]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setForm(prev => ({ 
       ...prev, 
@@ -125,6 +128,7 @@ function TalentCertificateCreatePage() {
     setForm(prev => ({
       ...prev,
       certificateTypeId: matchedType.id,
+      certificateName: suggestion.certificateName ?? prev.certificateName,
       issuedDate: normalizeDateInput(suggestion.issuedDate) || prev.issuedDate,
       imageUrl: suggestion.imageUrl ?? prev.imageUrl,
       isVerified: prev.isVerified,
@@ -153,6 +157,24 @@ function TalentCertificateCreatePage() {
 
     if (!form.certificateTypeId || form.certificateTypeId === 0) {
       setError("⚠️ Vui lòng chọn loại chứng chỉ trước khi tạo.");
+      setLoading(false);
+      return;
+    }
+
+    if (!form.certificateName || form.certificateName.trim() === "") {
+      setError("⚠️ Vui lòng nhập tên chứng chỉ trước khi tạo.");
+      setLoading(false);
+      return;
+    }
+
+    if (form.certificateName.length > 255) {
+      setError("⚠️ Tên chứng chỉ không được vượt quá 255 ký tự.");
+      setLoading(false);
+      return;
+    }
+
+    if (form.certificateDescription && form.certificateDescription.length > 1000) {
+      setError("⚠️ Mô tả chứng chỉ không được vượt quá 1000 ký tự.");
       setLoading(false);
       return;
     }
@@ -323,6 +345,47 @@ function TalentCertificateCreatePage() {
                     </span>
                   </p>
                 )}
+              </div>
+
+              {/* Tên chứng chỉ */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Tên chứng chỉ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="certificateName"
+                  value={form.certificateName}
+                  onChange={handleChange}
+                  maxLength={255}
+                  required
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  placeholder="Nhập tên chứng chỉ"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tối đa 255 ký tự
+                </p>
+              </div>
+
+              {/* Mô tả chứng chỉ */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Mô tả chứng chỉ (tùy chọn)
+                </label>
+                <textarea
+                  name="certificateDescription"
+                  value={form.certificateDescription || ""}
+                  onChange={handleChange}
+                  maxLength={1000}
+                  rows={4}
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                  placeholder="Nhập mô tả về chứng chỉ..."
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tối đa 1000 ký tự
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Building2, Briefcase, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/sales_staff/SidebarItems';
-import { clientContractService, type ClientContractPayload } from '../../../services/ClientContract';
+import { clientContractService, type ClientContractPayload, type ClientContract } from '../../../services/ClientContract';
 import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
 import { projectService, type Project } from '../../../services/Project';
 import { talentService, type Talent } from '../../../services/Talent';
@@ -20,6 +20,7 @@ export default function CreateClientContractPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [talents, setTalents] = useState<Talent[]>([]);
     const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+    const [existingContracts, setExistingContracts] = useState<string[]>([]);
     const [contractFile, setContractFile] = useState<File | null>(null);
 
     const [form, setForm] = useState<Partial<ClientContractPayload>>({
@@ -29,7 +30,7 @@ export default function CreateClientContractPage() {
         projectId: undefined,
         startDate: '',
         endDate: undefined,
-        status: 'draft',
+        status: 'Draft',
         contractFileUrl: undefined,
     });
 
@@ -37,14 +38,23 @@ export default function CreateClientContractPage() {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const [clientsData, projectsData, talentsData] = await Promise.all([
+                const [clientsData, projectsData, talentsData, contractsData] = await Promise.all([
                     clientCompanyService.getAll({ excludeDeleted: true }),
                     projectService.getAll({ excludeDeleted: true }),
-                    talentService.getAll({ excludeDeleted: true })
+                    talentService.getAll({ excludeDeleted: true }),
+                    clientContractService.getAll({ excludeDeleted: true })
                 ]);
                 setClientCompanies(clientsData);
                 setProjects(projectsData);
                 setTalents(talentsData);
+                const contractList: ClientContract[] = Array.isArray(contractsData)
+                    ? contractsData
+                    : (contractsData?.items || []);
+                setExistingContracts(
+                    contractList
+                        .map(contract => (contract.contractNumber || '').toString().toUpperCase())
+                        .filter(code => Boolean(code))
+                );
             } catch (err) {
                 console.error("❌ Lỗi tải dữ liệu:", err);
                 setError("Không thể tải danh sách công ty, dự án và nhân viên");
@@ -68,11 +78,14 @@ export default function CreateClientContractPage() {
         const { name, value } = e.target;
         setForm(prev => ({
             ...prev,
-            [name]: name === 'clientCompanyId' || name === 'projectId' || name === 'talentId'
-                ? (value ? Number(value) : undefined)
-                : value === '' && name === 'endDate'
-                ? undefined
-                : value
+            [name]:
+                name === 'clientCompanyId' || name === 'projectId' || name === 'talentId'
+                    ? (value ? Number(value) : undefined)
+                    : name === 'contractNumber'
+                    ? value.toUpperCase()
+                    : value === '' && name === 'endDate'
+                    ? undefined
+                    : value
         }));
     };
 
@@ -110,24 +123,54 @@ export default function CreateClientContractPage() {
                 return;
             }
 
+            const trimmedContractNumber = form.contractNumber.trim();
+            const contractNumberUpper = trimmedContractNumber.toUpperCase();
+
+            if (!trimmedContractNumber) {
+                setError("Số hợp đồng không được để trống");
+                setSubmitting(false);
+                return;
+            }
+
+            if (existingContracts.includes(contractNumberUpper)) {
+                setError(`Số hợp đồng "${contractNumberUpper}" đã tồn tại. Vui lòng chọn số khác.`);
+                setSubmitting(false);
+                return;
+            }
+
             if (!contractFile) {
                 setFileError('⚠️ Vui lòng chọn file hợp đồng');
                 setSubmitting(false);
                 return;
             }
 
+            if (form.endDate) {
+                const start = new Date(form.startDate);
+                const end = new Date(form.endDate);
+                if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    setError("Ngày bắt đầu hoặc ngày kết thúc không hợp lệ");
+                    setSubmitting(false);
+                    return;
+                }
+                if (end <= start) {
+                    setError("Ngày kết thúc phải sau ngày bắt đầu.");
+                    setSubmitting(false);
+                    return;
+                }
+            }
+
             // Upload file to Firebase Storage
-            const fileUrl = await uploadFile(contractFile, `contracts/${form.contractNumber}-${Date.now()}`);
+            const fileUrl = await uploadFile(contractFile, `contracts/${contractNumberUpper}-${Date.now()}`);
 
             // Create contract payload
             const payload: ClientContractPayload = {
-                contractNumber: form.contractNumber,
+                contractNumber: contractNumberUpper,
                 clientCompanyId: form.clientCompanyId!,
                 talentId: form.talentId!,
                 projectId: form.projectId!,
                 startDate: form.startDate!,
                 endDate: form.endDate || undefined,
-                status: 'draft',
+                status: 'Draft',
                 contractFileUrl: fileUrl,
             };
 
@@ -142,7 +185,7 @@ export default function CreateClientContractPage() {
                 projectId: undefined,
                 startDate: '',
                 endDate: undefined,
-                status: 'draft',
+                status: 'Draft',
                 contractFileUrl: undefined,
             });
             setContractFile(null);
@@ -289,11 +332,11 @@ export default function CreateClientContractPage() {
                                     </select>
                                 </div>
 
-                                {/* Nhân viên */}
+                                {/* Nhân sự */}
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <UserCheck className="w-4 h-4" />
-                                        Nhân viên <span className="text-red-500">*</span>
+                                        Nhân sự <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         name="talentId"
@@ -302,7 +345,7 @@ export default function CreateClientContractPage() {
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     >
-                                        <option value="">-- Chọn nhân viên --</option>
+                                        <option value="">-- Chọn nhân sự --</option>
                                         {talents.map(talent => (
                                             <option key={talent.id} value={talent.id}>
                                                 {talent.fullName} ({talent.email})
@@ -325,6 +368,7 @@ export default function CreateClientContractPage() {
                                         value={form.startDate || ''}
                                         onChange={handleChange}
                                         required
+                                        max={form.endDate || undefined}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                 </div>
@@ -340,6 +384,7 @@ export default function CreateClientContractPage() {
                                         name="endDate"
                                         value={form.endDate || ''}
                                         onChange={handleChange}
+                                        min={form.startDate || undefined}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                     <p className="text-xs text-neutral-500 mt-2">Để trống nếu hợp đồng không có thời hạn</p>

@@ -26,6 +26,7 @@ import {
   Send,
   Mail,
   Phone,
+  Target,
 } from "lucide-react";
 
 const talentStatusLabels: Record<string, string> = {
@@ -493,13 +494,7 @@ export default function TalentCVApplicationDetailPage() {
                 label="Ngày nộp"
                 value={new Date(application.createdAt).toLocaleString('vi-VN')}
                 icon={<Calendar className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Vị trí ứng tuyển"
-                value={jobRequest?.title || "—"}
-                icon={<Briefcase className="w-4 h-4" />}
-              />
-              {/* Ghi chú */}
+              />       
             </div>
           </div>
         </div>
@@ -582,7 +577,7 @@ export default function TalentCVApplicationDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   label="Phiên bản"
-                  value={talentCV.versionName}
+                  value={talentCV.version ? `v${talentCV.version}` : ""}
                   icon={<FileText className="w-4 h-4" />}
                 />
                 <InfoItem
@@ -623,9 +618,31 @@ export default function TalentCVApplicationDetailPage() {
                 <div className="md:col-span-2">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-neutral-400" />
-                    <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
+                    <p className="text-neutral-500 text-sm font-medium">Mô tả công việc</p>
                   </div>
-                  <p className="text-gray-700 leading-relaxed">{jobRequest.description}</p>
+              {jobRequest.description ? (
+                <div
+                  className="prose prose-sm text-gray-700 leading-relaxed max-w-none"
+                  dangerouslySetInnerHTML={{ __html: jobRequest.description }}
+                />
+              ) : (
+                <p className="text-gray-500 italic">Chưa có mô tả</p>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4 text-neutral-400" />
+                <p className="text-neutral-500 text-sm font-medium">Yêu cầu ứng viên</p>
+              </div>
+              {jobRequest.requirements ? (
+                <div
+                  className="prose prose-sm text-gray-700 leading-relaxed max-w-none"
+                  dangerouslySetInnerHTML={{ __html: jobRequest.requirements }}
+                />
+              ) : (
+                <p className="text-gray-500 italic">Chưa có yêu cầu ứng viên</p>
+              )}
                 </div>
               </div>
             </div>

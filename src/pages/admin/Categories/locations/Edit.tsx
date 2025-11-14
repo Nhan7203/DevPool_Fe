@@ -172,7 +172,7 @@ export default function LocationEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
-                  Tên khu vực làm việc
+                  Tên khu vực làm việc <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

@@ -67,6 +67,8 @@ export interface TalentProjectCreateModel {
 
 export interface TalentCertificateCreateModel {
   certificateTypeId: number;
+  certificateName: string;
+  certificateDescription?: string;
   issuedDate?: string; // DateTime as ISO string
   isVerified: boolean;
   imageUrl: string;
@@ -80,7 +82,7 @@ export interface TalentJobRoleLevelCreateModel {
 
 export interface TalentCVCreateModel {
   jobRoleId: number;
-  versionName: string;
+  version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;

@@ -12,6 +12,8 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  XCircle,
+  PowerOff,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
@@ -21,6 +23,14 @@ import {
 } from "../../../../services/PartnerContract";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { decodeJWT } from "../../../../services/Auth";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { userService } from "../../../../services/User";
+import {
+  notificationService,
+  NotificationPriority,
+  NotificationType,
+} from "../../../../services/Notification";
 
 // ===== TYPES =====
 interface EnrichedContract extends PartnerContract {
@@ -39,14 +49,18 @@ const formatCurrency = (value: number | null | undefined) => {
 
 export default function DevDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [contract, setContract] = useState<EnrichedContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
-  const [newStatus, setNewStatus] = useState<string>("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
 
   useEffect(() => {
     const fetchContract = async () => {
@@ -80,7 +94,6 @@ export default function DevDetailPage() {
         }
 
         setContract(enriched);
-        setNewStatus(enriched.status);
       } catch (err: any) {
         setError(err.message || "Không thể tải thông tin hợp đồng đối tác");
         console.error("❌ Lỗi tải hợp đồng:", err);
@@ -92,57 +105,185 @@ export default function DevDetailPage() {
     fetchContract();
   }, [id]);
 
-  const handleUpdateStatus = async () => {
-    if (!contract || !id) return;
+  const handleTerminate = async () => {
+    if (!contract || !id || contract.status !== "Active") return;
 
     try {
-      setIsUpdating(true);
+      setIsTerminating(true);
       setUpdateError(null);
       setUpdateSuccess(false);
 
-      const updatePayload = {
-        id: contract.id,
-        partnerId: contract.partnerId,
-        talentId: contract.talentId,
-        devRate: contract.devRate || null,
-        rateType: contract.rateType,
-        contractNumber: contract.contractNumber,
-        status: newStatus,
-        startDate: contract.startDate,
-        endDate: contract.endDate || null,
-        contractFileUrl: contract.contractFileUrl || null,
-      };
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const decoded = token ? decodeJWT(token) : null;
+      const updatedBy =
+        user?.name || decoded?.unique_name || decoded?.email || "Manager";
 
-      await partnerContractService.update(Number(id), updatePayload);
+      const result = await partnerContractService.changeStatus(Number(id), {
+        newStatus: "Terminated",
+        notes: `Chấm dứt hợp đồng ${contract.contractNumber}`,
+        updatedBy,
+      });
 
-      setContract({ ...contract, status: newStatus });
-      setIsEditingStatus(false);
+      const nextStatus =
+        result.success && result.newStatus ? result.newStatus : "Terminated";
+      setContract({ ...contract, status: nextStatus });
       setUpdateSuccess(true);
 
       setTimeout(() => setUpdateSuccess(false), 3000);
     } catch (err: any) {
       const message =
         err?.errors != null
-          ? Object.values(err.errors).flat().join(", ")
-          : err?.message || err?.title || "Không thể cập nhật trạng thái hợp đồng";
+          ? Array.isArray(err.errors)
+            ? err.errors.join(", ")
+            : Object.values(err.errors).flat().join(", ")
+          : err?.message || err?.title || "Không thể chấm dứt hợp đồng";
       setUpdateError(message);
-      console.error("❌ Lỗi cập nhật trạng thái hợp đồng:", err);
+      console.error("❌ Lỗi chấm dứt hợp đồng:", err);
+    } finally {
+      setIsTerminating(false);
+    }
+  };
+
+  const handleQuickApprove = async () => {
+    if (!contract || !id || contract.status !== "Pending") return;
+
+    try {
+      setIsUpdating(true);
+      setUpdateError(null);
+      setUpdateSuccess(false);
+
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const decoded = token ? decodeJWT(token) : null;
+      const updatedBy =
+        user?.name || decoded?.unique_name || decoded?.email || "Manager";
+
+      const result = await partnerContractService.changeStatus(Number(id), {
+        newStatus: "Active",
+        notes: `Phê duyệt hợp đồng ${contract.contractNumber}`,
+        updatedBy,
+      });
+
+      const nextStatus =
+        result.success && result.newStatus ? result.newStatus : "Active";
+      setContract({ ...contract, status: nextStatus });
+      setUpdateSuccess(true);
+      setShowRejectForm(false);
+      setRejectReason("");
+
+      setTimeout(() => setUpdateSuccess(false), 3000);
+    } catch (err: any) {
+      const message =
+        err?.errors != null
+          ? Array.isArray(err.errors)
+            ? err.errors.join(", ")
+            : Object.values(err.errors).flat().join(", ")
+          : err?.message || err?.title || "Không thể duyệt hợp đồng";
+      setUpdateError(message);
+      console.error("❌ Lỗi duyệt hợp đồng:", err);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleCancelEdit = () => {
-    if (contract) {
-      setNewStatus(contract.status);
+  const handleStartReject = () => {
+    if (contract?.status !== "Pending" || isRejecting) return;
+    setShowRejectForm(true);
+    setRejectReason("");
+    setRejectError(null);
+  };
+
+  const handleCancelReject = () => {
+    setShowRejectForm(false);
+    setRejectReason("");
+    setRejectError(null);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!contract || !id) return;
+    const trimmedReason = rejectReason.trim();
+    if (!trimmedReason) {
+      setRejectError("Vui lòng nhập lý do từ chối");
+      return;
     }
-    setIsEditingStatus(false);
-    setUpdateError(null);
+
+    try {
+      setIsRejecting(true);
+      setRejectError(null);
+      setUpdateError(null);
+
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const decoded = token ? decodeJWT(token) : null;
+      const updatedBy =
+        user?.name || decoded?.unique_name || decoded?.email || "Manager";
+
+      const result = await partnerContractService.changeStatus(Number(id), {
+        newStatus: "Rejected",
+        notes: trimmedReason,
+        reason: trimmedReason,
+        updatedBy,
+      });
+
+    const nextStatus = result.success && result.newStatus ? result.newStatus : "Rejected";
+    setContract({ ...contract, status: nextStatus });
+      setShowRejectForm(false);
+      setRejectReason("");
+      setUpdateSuccess(true);
+
+      try {
+        const hrResponse = await userService.getAll({
+          role: "HR",
+          excludeDeleted: true,
+          pageNumber: 1,
+          pageSize: 100,
+        });
+
+        const hrIds =
+          (hrResponse.items || [])
+            .map((hr) => hr.id)
+            .filter((hrId): hrId is string => Boolean(hrId));
+
+        if (hrIds.length > 0) {
+          await notificationService.create({
+            title: "Hợp đồng nhân sự bị từ chối",
+            message: `${updatedBy} đã từ chối hợp đồng ${contract.contractNumber}. Lý do: ${trimmedReason}.`,
+            type: NotificationType.ContractTerminated,
+            priority: NotificationPriority.Medium,
+            userIds: hrIds,
+            entityType: "PartnerContract",
+            entityId: contract.id,
+            actionUrl: `/hr/contracts/${contract.id}`,
+            metaData: {
+              contractNumber: contract.contractNumber,
+              reason: trimmedReason,
+              status: "Rejected",
+            },
+          });
+        }
+      } catch (notifyError) {
+        console.error("⚠️ Không thể gửi thông báo tới HR:", notifyError);
+      }
+
+      setTimeout(() => setUpdateSuccess(false), 3000);
+    } catch (err: any) {
+      const message =
+        err?.errors != null
+          ? Array.isArray(err.errors)
+            ? err.errors.join(", ")
+            : Object.values(err.errors).flat().join(", ")
+          : err?.message || err?.title || "Không thể từ chối hợp đồng";
+      setUpdateError(message);
+      console.error("❌ Lỗi từ chối hợp đồng:", err);
+    } finally {
+      setIsRejecting(false);
+    }
   };
 
   const getStatusConfig = (status: string) => {
     switch (status.toLowerCase()) {
-      case "draft":
+      case "pending":
         return {
           label: "Chờ duyệt",
           color: "bg-yellow-100 text-yellow-800",
@@ -169,6 +310,13 @@ export default function DevDetailPage() {
           color: "bg-red-100 text-red-800",
           icon: <AlertCircle className="w-4 h-4" />,
           bgColor: "bg-red-50",
+        };
+      case "rejected":
+        return {
+          label: "Đã từ chối",
+          color: "bg-rose-100 text-rose-800",
+          icon: <XCircle className="w-4 h-4" />,
+          bgColor: "bg-rose-50",
         };
       default:
         return {
@@ -235,14 +383,67 @@ export default function DevDetailPage() {
             </Link>
           </div>
 
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
+          <div className="flex justify-between items-start gap-6 flex-wrap">
+            <div className="flex-1 min-w-[240px]">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hợp đồng #{contract.contractNumber}</h1>
               <p className="text-neutral-600 mb-4">Thông tin chi tiết hợp đồng giữa DevPool và nhân sự</p>
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor}`}>
                 {statusConfig.icon}
                 <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
               </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {contract.status === "Active" && (
+                <button
+                  type="button"
+                  onClick={handleTerminate}
+                  disabled={isTerminating}
+                  className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                    isTerminating
+                      ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  }`}
+                >
+                  <PowerOff className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  {isTerminating ? "Đang chấm dứt..." : "Chấm dứt hợp đồng"}
+                </button>
+              )}
+
+              {contract.status === "Pending" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleQuickApprove}
+                    disabled={
+                      contract.status !== "Pending" || isUpdating || isRejecting
+                    }
+                    className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                      contract.status !== "Pending" || isUpdating || isRejecting
+                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                    }`}
+                  >
+                    <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Duyệt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartReject}
+                    disabled={
+                      contract.status !== "Pending" || isRejecting || showRejectForm
+                    }
+                    className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                      contract.status !== "Pending" || isRejecting || showRejectForm
+                        ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                    }`}
+                  >
+                    <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Từ chối
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -259,9 +460,54 @@ export default function DevDetailPage() {
           </div>
         )}
 
+        {contract.status === "Pending" && showRejectForm && (
+          <div className="bg-white rounded-2xl shadow-soft border border-rose-100 mb-8">
+            <div className="p-6 border-b border-rose-100 flex items-center gap-3">
+              <div className="p-2 bg-rose-100 rounded-lg">
+                <XCircle className="w-5 h-5 text-rose-600" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Lý do từ chối</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-600 mb-2">
+                  Lý do từ chối <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="w-full h-28 px-4 py-2 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition resize-none bg-white"
+                  placeholder="Nhập lý do từ chối hợp đồng..."
+                  disabled={isRejecting}
+                />
+                {rejectError && (
+                  <p className="text-sm text-red-500 mt-1">{rejectError}</p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleConfirmReject}
+                  disabled={isRejecting}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white font-medium hover:bg-rose-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <XCircle className="w-4 h-4" />
+                  {isRejecting ? "Đang xử lý..." : "Xác nhận từ chối"}
+                </button>
+                <button
+                  onClick={handleCancelReject}
+                  disabled={isRejecting}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-          {/* Thông tin chung */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-2">
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
             <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
               <div className="p-2 bg-primary-100 rounded-lg">
                 <FileText className="w-5 h-5 text-primary-600" />
@@ -323,74 +569,6 @@ export default function DevDetailPage() {
             </div>
           </div>
 
-          {/* Trạng thái & thao tác */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-secondary-100 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-secondary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Trạng thái hợp đồng
-              </h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3">
-                <p className="text-sm text-neutral-500 mb-1">
-                  Trạng thái hiện tại
-                </p>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-neutral-100 text-neutral-700 text-sm font-medium">
-                  {statusConfig.icon}
-                  {statusConfig.label}
-                </div>
-              </div>
-
-              {isEditingStatus ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-600 mb-2">
-                      Chọn trạng thái mới
-                    </label>
-                    <select
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value)}
-                      disabled={isUpdating}
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition disabled:opacity-50"
-                    >
-                      <option value="Draft">Chờ duyệt</option>
-                      <option value="Active">Đang hiệu lực</option>
-                      <option value="Expired">Đã hết hạn</option>
-                      <option value="Terminated">Đã chấm dứt</option>
-                    </select>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleUpdateStatus}
-                      disabled={isUpdating}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary-600 text-white font-medium hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Save className="w-4 h-4" />
-                      {isUpdating ? "Đang lưu..." : "Lưu trạng thái"}
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      disabled={isUpdating}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition disabled:opacity-50"
-                    >
-                      <X className="w-4 h-4" />
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsEditingStatus(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-primary-300 text-primary-600 hover:bg-primary-50 transition font-medium"
-                >
-                  Thay đổi trạng thái
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>

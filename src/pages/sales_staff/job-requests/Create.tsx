@@ -4,33 +4,36 @@ import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { jobRequestService, JobRequestStatus } from "../../../services/JobRequest";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { projectService, type Project } from "../../../services/Project";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { type ClientCompanyTemplate, clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
 import { locationService, type Location } from "../../../services/location";
 import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
-import { 
-  ArrowLeft, 
-  Plus, 
-  Save, 
-  Briefcase, 
-  Users, 
-  DollarSign, 
-  Target, 
-  FileText, 
-  CheckSquare, 
-  Building2, 
-  AlertCircle, 
+import {
+  ArrowLeft,
+  Plus,
+  Save,
+  Briefcase,
+  Users,
+  DollarSign,
+  Target,
+  FileText,
+  CheckSquare,
+  Building2,
+  AlertCircle,
   CheckCircle,
   X,
-  Search
+  Search,
+  Filter,
 } from "lucide-react";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
+import RichTextEditor from "../../../components/common/RichTextEditor";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
@@ -55,6 +58,7 @@ export default function JobRequestCreatePage() {
   });
 
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
@@ -64,6 +68,18 @@ export default function JobRequestCreatePage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
+  const filteredSkills = allSkills.filter(skill => {
+    const matchesName = skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase());
+    const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
+    return matchesName && matchesGroup;
+  });
+  const updateField = (field: "description" | "requirements", value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
   const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
     try {
@@ -103,13 +119,14 @@ export default function JobRequestCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [skills, projectsData, jobRoleLevelsData, jobRolesData, locs, apts] = await Promise.all([
+        const [skills, projectsData, jobRoleLevelsData, jobRolesData, locs, apts, skillGroupsData] = await Promise.all([
           skillService.getAll(),
           projectService.getAll(),
           jobRoleLevelService.getAll(),
           jobRoleService.getAll(),
           locationService.getAll(),
           applyProcessTemplateService.getAll(),
+          skillGroupService.getAll({ excludeDeleted: true }),
         ]);
         setAllSkills(skills);
         setProjects(projectsData);
@@ -117,6 +134,14 @@ export default function JobRequestCreatePage() {
         setJobRoles(jobRolesData);
         setLocations(locs);
         setApplyTemplates(apts);
+        const groups = Array.isArray(skillGroupsData)
+          ? skillGroupsData
+          : Array.isArray((skillGroupsData as any)?.items)
+            ? (skillGroupsData as any).items
+            : Array.isArray((skillGroupsData as any)?.data)
+              ? (skillGroupsData as any).data
+              : [];
+        setSkillGroups(groups);
       } catch (error) {
         console.error("❌ Error loading data", error);
       }
@@ -168,12 +193,6 @@ export default function JobRequestCreatePage() {
     setError("");
     setSuccess(false);
 
-    if (!form.clientCompanyCVTemplateId || form.clientCompanyCVTemplateId === 0) {
-      setError("⚠️ Vui lòng chọn mẫu CV của khách hàng trước khi tạo yêu cầu.");
-      setLoading(false);
-      return;
-    }
-
     if (!form.skillIds || form.skillIds.length === 0) {
       setError("⚠️ Vui lòng chọn ít nhất một kỹ năng yêu cầu.");
       setLoading(false);
@@ -185,7 +204,7 @@ export default function JobRequestCreatePage() {
         projectId: Number(form.projectId),
         jobRoleLevelId: Number(form.jobRoleLevelId),
         applyProcessTemplateId: form.applyProcessTemplateId ? Number(form.applyProcessTemplateId) : undefined,
-        clientCompanyCVTemplateId: Number(form.clientCompanyCVTemplateId),
+        clientCompanyCVTemplateId: form.clientCompanyCVTemplateId ? Number(form.clientCompanyCVTemplateId) : null,
         title: form.title,
         description: form.description,
         requirements: form.requirements,
@@ -352,14 +371,13 @@ export default function JobRequestCreatePage() {
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Mẫu CV khách hàng <span className="text-red-500">*</span>
+                      Mẫu CV khách hàng
                     </label>
                     <select
                       name="clientCompanyCVTemplateId"
-                      value={form.clientCompanyCVTemplateId.toString()}
+                      value={form.clientCompanyCVTemplateId ? form.clientCompanyCVTemplateId.toString() : ""}
                       onChange={handleChange}
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                      required
                     >
                       <option value="">
                         {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
@@ -447,13 +465,14 @@ export default function JobRequestCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Quy trình Apply
+                    Quy trình Apply <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="applyProcessTemplateId"
                     value={form.applyProcessTemplateId}
                     onChange={handleChange}
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
                   >
                     <option value="">-- Chọn quy trình --</option>
                     {applyTemplates.map(t => (
@@ -495,13 +514,10 @@ export default function JobRequestCreatePage() {
                 </div>
               </div>
               <div className="p-6">
-                <textarea
-                  name="description"
+                <RichTextEditor
                   value={form.description}
-                  onChange={handleChange}
-                  rows={6}
+                  onChange={(val) => updateField("description", val)}
                   placeholder="Nhập mô tả chi tiết về công việc..."
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
               </div>
             </div>
@@ -517,13 +533,10 @@ export default function JobRequestCreatePage() {
                 </div>
               </div>
               <div className="p-6">
-                <textarea
-                  name="requirements"
+                <RichTextEditor
                   value={form.requirements}
-                  onChange={handleChange}
-                  rows={6}
+                  onChange={(val) => updateField("requirements", val)}
                   placeholder="Nhập yêu cầu cụ thể cho ứng viên..."
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
               </div>
             </div>
@@ -545,27 +558,51 @@ export default function JobRequestCreatePage() {
               </div>
             </div>
             <div className="p-6">
-              {/* Search Box */}
-              <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+              <div className="flex flex-col lg:flex-row gap-4 mb-5">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                   <input
                     type="text"
                     value={skillSearchQuery}
                     onChange={(e) => setSkillSearchQuery(e.target.value)}
                     placeholder="Tìm kiếm kỹ năng..."
-                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className="w-full pl-11 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
+                  {skillSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSkillSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      aria-label="Xoá tìm kiếm kỹ năng"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="relative w-full lg:w-72">
+                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                  <select
+                    value={selectedSkillGroupId ?? ""}
+                    onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
+                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="">Tất cả nhóm kỹ năng</option>
+                    {skillGroups.length === 0 ? (
+                      <option value="" disabled>Đang tải nhóm kỹ năng...</option>
+                    ) : (
+                      skillGroups.map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
               </div>
 
               {/* Filtered Skills Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                {allSkills
-                  .filter(skill => 
-                    skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
-                  )
-                  .map(skill => (
+                {filteredSkills.map(skill => (
                   <label
                     key={skill.id}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${
@@ -593,7 +630,7 @@ export default function JobRequestCreatePage() {
                       {skill.name}
                     </span>
                   </label>
-                  ))}
+                ))}
               </div>
 
               {allSkills.length === 0 && (
@@ -606,9 +643,7 @@ export default function JobRequestCreatePage() {
                 </div>
               )}
 
-              {allSkills.length > 0 && allSkills.filter(skill => 
-                skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
-              ).length === 0 && (
+              {allSkills.length > 0 && filteredSkills.length === 0 && (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Search className="w-8 h-8 text-neutral-400" />

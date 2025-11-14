@@ -17,14 +17,96 @@ export default function CreatePartner() {
     phone: '',
     address: '',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^[0-9]{10}$/;
+    return phoneRegex.test(phone.replace(/\D/g, ''));
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    const newErrors = { ...errors };
+
+    // Validate companyName
+    if (name === 'companyName') {
+      if (value && value.trim() !== '') {
+        delete newErrors.companyName;
+      }
+    }
+
+    // Validate taxCode
+    if (name === 'taxCode') {
+      if (value && value.trim() !== '') {
+        delete newErrors.taxCode;
+      }
+    }
+
+    // Validate contactPerson
+    if (name === 'contactPerson') {
+      if (value && value.trim() !== '') {
+        delete newErrors.contactPerson;
+      }
+    }
+
+    // Validate email
+    if (name === 'email') {
+      if (value && validateEmail(value)) {
+        delete newErrors.email;
+      } else if (value && !validateEmail(value)) {
+        newErrors.email = 'Email không hợp lệ';
+      }
+    }
+
+    // Validate phone
+    if (name === 'phone') {
+      if (value && validatePhone(value)) {
+        delete newErrors.phone;
+      } else if (value && !validatePhone(value)) {
+        newErrors.phone = 'Số điện thoại phải có đúng 10 chữ số';
+      }
+    }
+
+    setErrors(newErrors);
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate all required fields
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.companyName || formData.companyName.trim() === '') {
+      newErrors.companyName = 'Tên công ty là bắt buộc';
+    }
+
+    if (!formData.taxCode || formData.taxCode.trim() === '') {
+      newErrors.taxCode = 'Mã số thuế là bắt buộc';
+    }
+
+    if (!formData.contactPerson || formData.contactPerson.trim() === '') {
+      newErrors.contactPerson = 'Người liên hệ là bắt buộc';
+    }
+
+    if (!formData.email || !validateEmail(formData.email)) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+
+    if (!formData.phone || !validatePhone(formData.phone)) {
+      newErrors.phone = 'Số điện thoại phải có đúng 10 chữ số';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      alert('⚠️ Vui lòng điền đầy đủ và chính xác các trường bắt buộc');
+      return;
+    }
     
     // Xác nhận trước khi tạo
     const confirmed = window.confirm("Bạn có chắc chắn muốn tạo đối tác mới không?");
@@ -68,7 +150,7 @@ export default function CreatePartner() {
               {/* Tên công ty */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                  Tên công ty
+                  Tên công ty <span className="text-red-500">*</span>
                 </label>
                 <div className="relative group">
                   <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -78,17 +160,20 @@ export default function CreatePartner() {
                     value={formData.companyName}
                     onChange={handleChange}
                     required
-                    className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
+                    className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.companyName ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
                     placeholder="Tên công ty đối tác"
                   />
                 </div>
+                {errors.companyName && (
+                  <p className="mt-1 text-sm text-red-500">{errors.companyName}</p>
+                )}
               </div>
 
               {/* Grid: Mã số thuế + Người liên hệ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Mã số thuế
+                    Mã số thuế <span className="text-red-500">*</span>
                   </label>
                   <div className="relative group">
                     <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -97,15 +182,19 @@ export default function CreatePartner() {
                       name="taxCode"
                       value={formData.taxCode}
                       onChange={handleChange}
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
+                      required
+                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.taxCode ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
                       placeholder="Nhập mã số thuế"
                     />
                   </div>
+                  {errors.taxCode && (
+                    <p className="mt-1 text-sm text-red-500">{errors.taxCode}</p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Người liên hệ
+                    Người liên hệ <span className="text-red-500">*</span>
                   </label>
                   <div className="relative group">
                     <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -115,10 +204,13 @@ export default function CreatePartner() {
                       value={formData.contactPerson}
                       onChange={handleChange}
                       required
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
+                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.contactPerson ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
                       placeholder="Tên người liên hệ"
                     />
                   </div>
+                  {errors.contactPerson && (
+                    <p className="mt-1 text-sm text-red-500">{errors.contactPerson}</p>
+                  )}
                 </div>
               </div>
 
@@ -126,7 +218,7 @@ export default function CreatePartner() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -136,15 +228,18 @@ export default function CreatePartner() {
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
+                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.email ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
                       placeholder="example@company.com"
                     />
                   </div>
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Số điện thoại
+                    Số điện thoại <span className="text-red-500">*</span>
                   </label>
                   <div className="relative group">
                     <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -154,10 +249,13 @@ export default function CreatePartner() {
                       value={formData.phone}
                       onChange={handleChange}
                       required
-                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
+                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.phone ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
                       placeholder="0123456789"
                     />
                   </div>
+                  {errors.phone && (
+                    <p className="mt-1 text-sm text-red-500">{errors.phone}</p>
+                  )}
                 </div>
               </div>
 
@@ -173,7 +271,6 @@ export default function CreatePartner() {
                     name="address"
                     value={formData.address}
                     onChange={handleChange}
-                    required
                     className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft border-neutral-300 focus:border-primary-500 transition-all"
                     placeholder="Số nhà, đường, quận, thành phố"
                   />

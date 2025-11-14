@@ -5,13 +5,13 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { skillService, type Skill } from "../../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../../services/SkillGroup";
 import { 
-  Code, 
   ArrowLeft, 
   Save, 
   FileText, 
   AlertCircle, 
   CheckCircle,
-  X
+  X,
+  Star
 } from "lucide-react";
 
 export default function SkillEditPage() {
@@ -165,7 +165,7 @@ export default function SkillEditPage() {
               
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-warning-50 border border-warning-200">
-                <Code className="w-4 h-4 text-warning-600" />
+                <Star className="w-4 h-4 text-warning-600" />
                 <span className="text-sm font-medium text-warning-800">
                   Chỉnh sửa: {skill.name}
                 </span>
@@ -181,7 +181,7 @@ export default function SkillEditPage() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-100 rounded-lg">
-                  <Code className="w-5 h-5 text-primary-600" />
+                  <Star className="w-5 h-5 text-primary-600" />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">Thông tin kỹ năng</h2>
               </div>
@@ -190,8 +190,8 @@ export default function SkillEditPage() {
               {/* Nhóm kỹ năng */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Code className="w-4 h-4" />
-                  Nhóm kỹ năng
+                  <Star className="w-4 h-4" />
+                  Nhóm kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="skillGroupId"
@@ -212,8 +212,8 @@ export default function SkillEditPage() {
               {/* Tên kỹ năng */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Code className="w-4 h-4" />
-                  Tên kỹ năng
+                  <Star className="w-4 h-4" />
+                  Tên kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
