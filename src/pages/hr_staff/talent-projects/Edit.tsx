@@ -207,7 +207,7 @@ export default function TalentProjectEditPage() {
                   >
                     <option value="0">-- Chọn CV --</option>
                     {talentCVs.map(cv => (
-                      <option key={cv.id} value={cv.id}>{cv.versionName}</option>
+                      <option key={cv.id} value={cv.id}>v{cv.version}</option>
                     ))}
                   </select>
                 </div>

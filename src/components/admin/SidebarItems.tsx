@@ -1,4 +1,4 @@
-import { BarChart3, Grid, Settings, Users, LogOut } from "lucide-react";
+import { BarChart3, Grid, Users } from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -20,17 +20,43 @@ export const sidebarItems = [
     href: '/admin/categories',
     icon: Grid,
     subItems: [
-      { label: 'Kỹ năng', href: '/admin/categories/skills' },
-      { label: 'Nhóm kỹ năng', href: '/admin/categories/skill-groups' },
+      // Kỹ năng & Vị trí (nhóm con)
+      {
+        label: 'Kỹ Năng & Vị Trí',
+        href: '/admin/categories/skill-groups',
+        subItems: [
+          { label: 'Nhóm kỹ năng', href: '/admin/categories/skill-groups' },
+          { label: 'Loại vị trí tuyển dụng', href: '/admin/categories/job-roles' },
+        ]
+      },
+      // CV & Chứng chỉ (nhóm con)
+      {
+        label: 'CV & Chứng Chỉ',
+        href: '/admin/categories/cv-templates',
+        subItems: [
+          { label: 'Mẫu CV', href: '/admin/categories/cv-templates' },
+          { label: 'Loại chứng chỉ', href: '/admin/categories/certificate-types' },
+        ]
+      },
+      // Địa lý (nhóm con)
+      {
+        label: 'Địa Lý',
+        href: '/admin/categories/locations',
+        subItems: [
+          { label: 'Khu vực làm việc', href: '/admin/categories/locations' },
+          { label: 'Thị trường', href: '/admin/categories/markets' },
+        ]
+      },
+      // Khác (nhóm con)
+      {
+        label: 'Khác',
+        href: '/admin/categories/industries',
+        subItems: [
+          { label: 'Lĩnh vực', href: '/admin/categories/industries' },
+          { label: 'Loại tài liệu', href: '/admin/categories/document-types' },
+        ]
+      },
       // { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },
-      { label: 'Mẫu CV', href: '/admin/categories/cv-templates' },
-      { label: 'Loại chứng chỉ', href: '/admin/categories/certificate-types' },
-      { label: 'Vị trí tuyển dụng', href: '/admin/categories/job-role-levels' },
-      { label: 'Loại vị trí tuyển dụng', href: '/admin/categories/job-roles' },
-      { label: 'Khu vực làm việc', href: '/admin/categories/locations' },
-      { label: 'Thị trường', href: '/admin/categories/markets' },
-      { label: 'Lĩnh vực', href: '/admin/categories/industries' },
-      { label: 'Loại tài liệu', href: '/admin/categories/document-types' },
     ]
   },
   // {

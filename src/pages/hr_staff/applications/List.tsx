@@ -33,7 +33,7 @@ type AugmentedTalentApplication = TalentApplication & {
   };
   talentCV?: {
     id: number;
-    versionName: string;
+    version: number;
     cvFileUrl: string;
   };
   submitterName?: string;
@@ -221,7 +221,7 @@ export default function TalentCVApplicationPage() {
             } : undefined,
             talentCV: talentCV ? {
               id: talentCV.id,
-              versionName: talentCV.versionName,
+              version: talentCV.version,
               cvFileUrl: talentCV.cvFileUrl,
             } : undefined,
             submitterName: submitter?.fullName || app.submittedBy,
@@ -606,7 +606,7 @@ export default function TalentCVApplicationPage() {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="text-sm text-neutral-700">{app.talentCV?.versionName ?? "—"}</span>
+                        <span className="text-sm text-neutral-700">{app.talentCV?.version ? `v${app.talentCV.version}` : "—"}</span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>

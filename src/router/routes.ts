@@ -121,6 +121,7 @@ export const ROUTES = {
       LIST: '/hr/contracts',                     // Danh sách hợp đồng
       DETAIL: '/hr/contracts/:id',               // Chi tiết hợp đồng
       CREATE: '/hr/contracts/create',            // Tạo hợp đồng mới
+      EDIT: '/hr/contracts/edit/:id',           // Chỉnh sửa hợp đồng
       UPLOAD: '/hr/contracts/upload',        // Upload file hợp đồng
     },
 
@@ -152,6 +153,7 @@ export const ROUTES = {
       LIST: '/sales/contracts',                     // Danh sách hợp đồng
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
       CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
+      EDIT: '/sales/contracts/edit/:id',        // Chỉnh sửa hợp đồng
     },
     APPLICATIONS: {
       LIST: '/sales/applications',
@@ -381,12 +383,6 @@ export const ROUTES = {
         DETAIL: '/admin/categories/locations/:id',
         EDIT: '/admin/categories/locations/edit/:id',
         CREATE: '/admin/categories/locations/create',
-      },
-      WORKING_STYLES: {
-        LIST: '/admin/categories/working-styles',
-        DETAIL: '/admin/categories/working-styles/:id',
-        EDIT: '/admin/categories/working-styles/edit/:id',
-        CREATE: '/admin/categories/working-styles/create',
       },
       MARKETS: {
         LIST: '/admin/categories/markets',

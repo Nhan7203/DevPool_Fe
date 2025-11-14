@@ -45,13 +45,6 @@ export default function TalentAvailableTimeCreatePage() {
     // End time phải sau start time
     if (end <= start) return false;
     
-    // End time không được quá xa trong tương lai (ví dụ: không quá 2 năm sau)
-    const now = new Date();
-    const twoYearsLater = new Date();
-    twoYearsLater.setFullYear(now.getFullYear() + 2);
-    
-    if (end > twoYearsLater) return false;
-    
     return true;
   };
 
@@ -91,14 +84,14 @@ export default function TalentAvailableTimeCreatePage() {
     // Validate startTime
     if (name === 'startTime') {
       if (value && !validateStartTime(value)) {
-        newErrors.startTime = 'Thời gian bắt đầu không hợp lệ (phải trong khoảng 1 năm trước đến 2 năm sau)';
+        newErrors.startTime = 'Thời gian bắt đầu phải trong tương lai';
       } else {
         delete newErrors.startTime;
       }
       // Re-validate endTime if startTime changes
       if (form.endTime && value) {
         if (!validateEndTime(value, form.endTime)) {
-          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau';
+          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu';
         } else {
           delete newErrors.endTime;
         }
@@ -109,7 +102,7 @@ export default function TalentAvailableTimeCreatePage() {
     if (name === 'endTime') {
       if (value && form.startTime) {
         if (!validateEndTime(form.startTime, value)) {
-          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau';
+          newErrors.endTime = 'Thời gian kết thúc phải sau thời gian bắt đầu';
         } else {
           delete newErrors.endTime;
         }
@@ -163,7 +156,7 @@ export default function TalentAvailableTimeCreatePage() {
 
     // Validate endTime hợp lý
     if (form.endTime && !validateEndTime(form.startTime, form.endTime)) {
-      setError("⚠️ Thời gian kết thúc phải sau thời gian bắt đầu và không quá 2 năm sau.");
+      setError("⚠️ Thời gian kết thúc phải sau thời gian bắt đầu.");
       setLoading(false);
       return;
     }

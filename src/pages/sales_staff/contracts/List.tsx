@@ -4,14 +4,16 @@ import {
   FileText, 
   Calendar, 
   Building2, 
-  Briefcase, 
-  Link2, 
+  Briefcase,
   Filter, 
   Search, 
   Plus,
   Eye,
   CheckCircle,
   AlertCircle,
+  Clock,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/sales_staff/SidebarItems';
@@ -27,6 +29,10 @@ export default function ListClientContracts() {
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
     
   // Store client company and project data for display
   const [clientsMap, setClientsMap] = useState<Map<number, ClientCompany>>(new Map());
@@ -49,6 +55,9 @@ export default function ListClientContracts() {
     if (target === 'pending') {
       return normalized === 'pending';
     }
+    if (target === 'rejected') {
+      return normalized === 'rejected';
+    }
     return normalized === target;
   };
 
@@ -65,22 +74,40 @@ export default function ListClientContracts() {
       icon: <FileText className="w-6 h-6" />
     },
     {
-      title: 'Đang Hoạt Động',
+      title: 'Đang hoạt động',
       value: countStatus('active').toString(),
       color: 'green',
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
-      title: 'Đã Hết Hạn',
-      value: countStatus('expired').toString(),
-      color: 'purple',
-      icon: <Building2 className="w-6 h-6" />
+      title: 'Chờ duyệt',
+      value: countStatus('pending').toString(),
+      color: 'orange',
+      icon: <Clock className="w-6 h-6" />
     },
     {
-      title: 'Chờ Duyệt',
-      value: countStatus('pending', 'draft').toString(),
-      color: 'orange',
-      icon: <CheckCircle className="w-6 h-6" />
+      title: 'Bản nháp',
+      value: countStatus('draft').toString(),
+      color: 'gray',
+      icon: <FileText className="w-6 h-6" />
+    },
+    {
+      title: 'Đã hết hạn',
+      value: countStatus('expired').toString(),
+      color: 'blue',
+      icon: <Calendar className="w-6 h-6" />
+    },
+    {
+      title: 'Đã chấm dứt',
+      value: countStatus('terminated').toString(),
+      color: 'red',
+      icon: <AlertCircle className="w-6 h-6" />
+    },
+    {
+      title: 'Đã từ chối',
+      value: countStatus('rejected').toString(),
+      color: 'rose',
+      icon: <AlertCircle className="w-6 h-6" />
     }
   ];
 
@@ -97,8 +124,14 @@ export default function ListClientContracts() {
           projectService.getAll({ excludeDeleted: true })
         ]);
 
-        setContracts(contractsData);
-        setFilteredContracts(contractsData);
+        const sortedContracts = [...contractsData].sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA;
+        });
+
+        setContracts(sortedContracts);
+        setFilteredContracts(sortedContracts);
 
         // Create maps for quick lookup
         const clientsMapData = new Map<number, ClientCompany>();
@@ -142,8 +175,33 @@ export default function ListClientContracts() {
       filtered = filtered.filter(c => matchesStatus(c.status, normalizedFilter));
     }
     setFilteredContracts(filtered);
+    setCurrentPage(1);
   }, [searchTerm, filterStatus, contracts, clientsMap, projectsMap]);
   
+  const totalPages = Math.ceil(filteredContracts.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedContracts = filteredContracts.slice(startIndex, endIndex);
+  const startItem = filteredContracts.length > 0 ? startIndex + 1 : 0;
+  const endItem = Math.min(endIndex, filteredContracts.length);
+
+  const statsSlice = stats.slice(statsStartIndex, Math.min(statsStartIndex + statsPageSize, stats.length));
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrevStats = statsStartIndex > 0;
+  const canGoNextStats = statsStartIndex + statsPageSize < stats.length;
+
+  const handlePrevStats = () => {
+    setStatsStartIndex(prev => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex(prev => Math.min(stats.length - statsPageSize, prev + statsPageSize));
+  };
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex(prev => Math.min(prev, maxIndex));
+  }, [stats.length]);
 
   const getClientName = (clientCompanyId: number) => {
     return clientsMap.get(clientCompanyId)?.name || '—';
@@ -156,17 +214,40 @@ export default function ListClientContracts() {
   const getStatusColor = (status: string) => {
     const normalized = normalizeStatus(status);
     switch (normalized) {
+        case 'active':
+            return 'bg-green-100 text-green-800';
+        case 'pending':
+            return 'bg-yellow-100 text-yellow-800';        
+        case 'draft':
+            return 'bg-gray-100 text-gray-800';
+        case 'expired':
+            return 'bg-blue-100 text-blue-800';
+        case 'terminated':
+            return 'bg-red-100 text-red-800';
+        case 'rejected':
+            return 'bg-rose-100 text-rose-800';
+        default:
+            return 'bg-gray-100 text-gray-800';
+    }
+};
+
+  const getStatusText = (status: string) => {
+    const normalized = normalizeStatus(status);
+    switch (normalized) {
       case 'active':
-        return 'bg-green-100 text-green-700';
-      case 'expired':
-        return 'bg-blue-100 text-blue-700';
-      case 'terminated':
-        return 'bg-red-100 text-red-700';
+        return 'Đang hiệu lực';
       case 'pending':
+        return 'Chờ duyệt';
       case 'draft':
-        return 'bg-yellow-100 text-yellow-700';
+        return 'Bản nháp';
+      case 'expired':
+        return 'Đã hết hạn';
+      case 'terminated':
+        return 'Đã chấm dứt';
+      case 'rejected':
+        return 'Đã từ chối';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return status || '—';
     }
   };
 
@@ -183,7 +264,7 @@ export default function ListClientContracts() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng với khách hàng</p>
             </div>
             <Link to="/sales/contracts/create">
-              <button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo hợp đồng mới
               </button>
@@ -191,24 +272,100 @@ export default function ListClientContracts() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+          <div className="mb-8 animate-fade-in">
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statsSlice.map((stat, index) => (
+                  <div key={`${stat.title}-${statsStartIndex + index}`} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                      </div>
+                      <div className={`p-3 rounded-full ${
+                        stat.color === 'blue'
+                          ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200'
+                          : stat.color === 'green'
+                            ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200'
+                            : stat.color === 'purple'
+                              ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200'
+                              : stat.color === 'rose'
+                                ? 'bg-rose-100 text-rose-600 group-hover:bg-rose-200'
+                                : stat.color === 'gray'
+                                  ? 'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200'
+                                  : stat.color === 'red'
+                                    ? 'bg-red-100 text-red-600 group-hover:bg-red-200'
+                                    : 'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                      } transition-all duration-300`}>
+                        {stat.icon}
+                      </div>
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
-                    {stat.icon}
-                  </div>
+                ))}
+              </div>
+
+              {canShowStatsNav && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {canShowStatsNav && (
+              <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                  >
+                    Tiếp
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -250,8 +407,9 @@ export default function ListClientContracts() {
                       <option value="active">Đang hoạt động</option>
                       <option value="expired">Đã hết hạn</option>
                       <option value="pending">Chờ duyệt</option>
-                      <option value="draft">Nháp</option>
+                      <option value="draft">Bản nháp</option>
                       <option value="terminated">Đã chấm dứt</option>
+                      <option value="rejected">Đã từ chối</option>
                     </select>
                   </div>
                   <button 
@@ -291,77 +449,117 @@ export default function ListClientContracts() {
                 <FileText className="w-8 h-8 text-neutral-400" />
               </div>
               <p className="text-neutral-500 text-lg font-medium">Không có hợp đồng nào</p>
-              <p className="text-neutral-400 text-sm mt-1">Thử thay đổi từ khóa tìm kiếm hoặc upload hợp đồng mới</p>
+              <p className="text-neutral-400 text-sm mt-1">Thử thay đổi từ khóa tìm kiếm hoặc tạo hợp đồng mới</p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-            {filteredContracts.map((contract) => (
-                <div
-                  key={contract.id}
-                  className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 border border-neutral-100 hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center group-hover:bg-primary-200 transition-colors duration-300">
-                        <FileText className="w-6 h-6 text-primary-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
-                        <p className="text-sm text-neutral-600">{getProjectName(contract.projectId)}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                        contract.status
-                      )}`}
-                    >
-                      {contract.status || '—'}
-                    </span>
-                  </div>
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+            <div className="p-6 border-b border-neutral-200 sticky top-16 bg-white z-20 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Danh sách hợp đồng</h2>
+                <div className="flex items-center gap-4">
+                  {filteredContracts.length > 0 ? (
+                    <>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                          currentPage === 1
+                            ? 'text-neutral-300 cursor-not-allowed'
+                            : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                        }`}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
 
-                  <div className="space-y-3 text-neutral-700">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-neutral-400" />
-                      <span className="text-sm">{getProjectName(contract.projectId)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-neutral-400" />
-                      <span className="text-sm">{getClientName(contract.clientCompanyId)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-neutral-400" />
-                      <span className="text-sm">
-                        {new Date(contract.startDate).toLocaleDateString('vi-VN')}
-                        {contract.endDate ? ` - ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
+                      <span className="text-sm text-neutral-600">
+                        {startItem}-{endItem} trong số {filteredContracts.length}
                       </span>
-                    </div>
-                    {contract.contractFileUrl && (
-                      <div className="flex items-center gap-2">
-                        <Link2 className="w-4 h-4 text-neutral-400" />
-                        <a
-                          href={contract.contractFileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary-600 hover:text-primary-800 text-sm transition-colors duration-300"
-                        >
-                          Xem file hợp đồng
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-6 flex items-center justify-between">
-                    <Link
-                      to={`/sales/contracts/${contract.id}`}
-                      className="group flex items-center gap-2 text-primary-600 hover:text-primary-800 transition-colors duration-300"
-                    >
-                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                      <span className="text-sm font-medium">Xem chi tiết</span>
-                    </Link>
-                  </div>
+
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                          currentPage === totalPages
+                            ? 'text-neutral-300 cursor-not-allowed'
+                            : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                        }`}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-sm text-neutral-600">Tổng: 0 hợp đồng</span>
+                  )}
                 </div>
-              ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
+                  <tr>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Khách hàng</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
+                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
+                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200">
+                  {paginatedContracts.map((contract, index) => (
+                    <tr key={contract.id} className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300">
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + index + 1}</td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-primary-500" />
+                          <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
+                            {contract.contractNumber}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-700">{getClientName(contract.clientCompanyId)}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-700">{getProjectName(contract.projectId)}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-700">
+                            {new Date(contract.startDate).toLocaleDateString('vi-VN')}
+                            {contract.endDate ? ` - ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
+                          {getStatusText(contract.status)}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <Link
+                          to={`/sales/contracts/${contract.id}`}
+                          className="group inline-flex items-center gap-1 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                        >
+                          <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          <span className="text-sm font-medium">Xem</span>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

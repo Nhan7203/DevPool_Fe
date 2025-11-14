@@ -46,6 +46,23 @@ export interface ClientContractFilter {
   excludeDeleted?: boolean;
 }
 
+export interface ContractAdvancedStatusUpdateModel {
+  newStatus: string;
+  notes?: string | null;
+  updatedBy?: string | null;
+  effectiveDate?: string | null;
+  reason?: string | null;
+}
+
+export interface ContractStatusTransitionResult {
+  success: boolean;
+  message: string;
+  oldStatus?: string;
+  newStatus?: string;
+  additionalInfo?: any;
+  errors?: string[];
+}
+
 export const clientContractService = {
   async getAll(filter?: ClientContractFilter) {
     try {
@@ -127,6 +144,33 @@ export const clientContractService = {
           error.response?.data || { message: "Không thể xóa hợp đồng khách hàng" }
         );
       throw { message: "Lỗi không xác định khi xóa hợp đồng khách hàng" };
+    }
+  },
+
+  async changeStatus(
+    id: number,
+    payload: ContractAdvancedStatusUpdateModel
+  ): Promise<ContractStatusTransitionResult> {
+    try {
+      const response = await axios.patch(
+        `/clientcontract/${id}/change-status`,
+        payload
+      );
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        if (error.response?.data) {
+          throw error.response.data;
+        }
+        throw {
+          success: false,
+          message: "Không thể thay đổi trạng thái hợp đồng khách hàng",
+        };
+      }
+      throw {
+        success: false,
+        message: "Lỗi không xác định khi thay đổi trạng thái hợp đồng khách hàng",
+      };
     }
   },
 };

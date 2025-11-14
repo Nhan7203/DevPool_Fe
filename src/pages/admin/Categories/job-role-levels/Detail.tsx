@@ -5,7 +5,7 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../../services/JobRoleLevel";
 import { Button } from "../../../../components/ui/button";
 import { jobRoleService } from "../../../../services/JobRole";
-import { Layers3, Building2 } from "lucide-react";
+import { Layers3, Building2, ArrowLeft } from "lucide-react";
 
 export default function JobRoleLevelDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,9 +13,6 @@ export default function JobRoleLevelDetailPage() {
   const [jobRoleLevel, setJobRoleLevel] = useState<JobRoleLevel | null>(null);
   const [jobRoleName, setJobRoleName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
-
-  const formatPrice = (value?: number | null) =>
-    typeof value === "number" ? value.toLocaleString("vi-VN") : "—";
 
   const levelLabels: Record<number, string> = {
     0: "Junior",
@@ -45,14 +42,19 @@ export default function JobRoleLevelDetailPage() {
   }, [id]);
 
   const handleDelete = async () => {
-    if (!id) return;
+    if (!id || !jobRoleLevel) return;
     const confirmDelete = window.confirm("⚠️ Bạn có chắc muốn xóa vị trí tuyển dụng này?");
     if (!confirmDelete) return;
 
     try {
       await jobRoleLevelService.delete(Number(id));
       alert("✅ Xóa vị trí tuyển dụng thành công!");
-      navigate("/admin/categories/job-role-levels");
+      // Quay về trang chi tiết job role nếu có, nếu không thì về danh sách job-role-levels
+      if (jobRoleLevel.jobRoleId) {
+        navigate(`/admin/categories/job-roles/${jobRoleLevel.jobRoleId}`);
+      } else {
+        navigate("/admin/categories/job-role-levels");
+      }
     } catch (err) {
       console.error("❌ Lỗi khi xóa vị trí:", err);
       alert("Không thể xóa vị trí!");
@@ -87,12 +89,23 @@ export default function JobRoleLevelDetailPage() {
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to="/admin/categories/job-role-levels"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
+            {jobRoleLevel?.jobRoleId ? (
+              <Link
+                to={`/admin/categories/job-roles/${jobRoleLevel.jobRoleId}`}
+                className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+              >
+                <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                <span className="font-medium">Quay lại loại vị trí</span>
+              </Link>
+            ) : (
+              <Link
+                to="/admin/categories/job-role-levels"
+                className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
+              >
+                <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                <span className="font-medium">Quay lại danh sách</span>
+              </Link>
+            )}
           </div>
 
           <div className="flex justify-between items-start">
@@ -132,8 +145,6 @@ export default function JobRoleLevelDetailPage() {
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
             <InfoItem label="Loại vị trí (Job Role)" value={jobRoleName} />
             <InfoItem label="Cấp độ" value={levelLabels[jobRoleLevel.level] || "—"} />
-            <InfoItem label="Đơn giá tối thiểu (man-month)" value={formatPrice(jobRoleLevel.minManMonthPrice)} />
-            <InfoItem label="Đơn giá tối đa (man-month)" value={formatPrice(jobRoleLevel.maxManMonthPrice)} />
             <InfoItem label="Mô tả" value={jobRoleLevel.description || "Chưa có mô tả"} />
           </div>
         </div>
@@ -152,15 +163,6 @@ export default function JobRoleLevelDetailPage() {
             <InfoItem label="ID" value={jobRoleLevel.id.toString()} />
             <InfoItem label="Job Role" value={jobRoleName} />
           </div>
-        </div>
-
-        <div className="mt-4">
-          <Link
-            to="/admin/categories/job-role-levels"
-            className="text-primary-600 hover:underline text-sm"
-          >
-            ← Quay lại danh sách
-          </Link>
         </div>
       </div>
     </div>

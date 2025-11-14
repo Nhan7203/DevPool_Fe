@@ -402,7 +402,7 @@ export default function TalentEditPage() {
                 </div>
 
                 {/* Người dùng */}
-                <div>
+                {/* <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
                     Người dùng
@@ -422,7 +422,7 @@ export default function TalentEditPage() {
                       ))}
                     </select>
                   </div>
-                </div>
+                </div> */}
               </div>
 
               {/* Họ tên */}

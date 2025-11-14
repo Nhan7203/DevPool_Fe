@@ -92,7 +92,7 @@ export default function JobRoleLevelListPage() {
             <p className="text-neutral-600 mt-1">Tổng hợp các vị trí tuyển dụng từ các công ty khách hàng.</p>
           </div>
           <Button
-            className="bg-primary-600 hover:bg-primary-700 text-white"
+            className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
             onClick={() => window.location.href = "/admin/categories/job-role-levels/create"}
           >
             + Tạo vị trí mới
@@ -182,8 +182,6 @@ export default function JobRoleLevelListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên vị trí</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Loại vị trí</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Cấp độ</th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Giá min</th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Giá max</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
               </thead>
@@ -206,8 +204,6 @@ export default function JobRoleLevelListPage() {
                           {"Junior,Middle,Senior,Lead".split(",")[p.level] ?? "—"}
                         </span>
                       </td>
-                      <td className="py-4 px-6">{p.minManMonthPrice ?? "—"}</td>
-                      <td className="py-4 px-6">{p.maxManMonthPrice ?? "—"}</td>
                       <td className="py-4 px-6 text-center">
                         <Link
                           to={`/admin/categories/job-role-levels/${p.id}`}

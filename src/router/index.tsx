@@ -5,6 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 // Layouts
 import PublicLayout from '../components/layouts/PublicLayout';
 import AdminLayout from '../components/layouts/AdminLayout';
+import HrLayout from '../components/layouts/HrLayout';
+import SalesLayout from '../components/layouts/SalesLayout';
+import ManagerLayout from '../components/layouts/ManagerLayout';
+import DeveloperLayout from '../components/layouts/DeveloperLayout';
+import AccountantLayout from '../components/layouts/AccountantLayout';
 import ProtectedRoute from './ProtectedRoute';
 import { ROUTES, getDashboardRoute, NOTIFICATION_CENTER_ROUTE } from './routes';
 
@@ -59,12 +64,10 @@ import SkillGroupCreatePage from '../pages/admin/Categories/skill-groups/Create'
 import SkillGroupDetailPage from '../pages/admin/Categories/skill-groups/Detail';
 import SkillGroupEditPage from '../pages/admin/Categories/skill-groups/Edit';
 import SkillGroupListPage from '../pages/admin/Categories/skill-groups/List';
-import WorkingStyleCreatePage from '../pages/admin/Categories/working-styles.tsx/Create';
-import WorkingStyleDetailPage from '../pages/admin/Categories/working-styles.tsx/Detail';
-import WorkingStyleEditPage from '../pages/admin/Categories/working-styles.tsx/Edit';
-import WorkingStyleListPage from '../pages/admin/Categories/working-styles.tsx/List';
 import DocumentTypeListPage from '../pages/admin/Categories/document-types/List';
 import DocumentTypeCreatePage from '../pages/admin/Categories/document-types/Create';
+import DocumentTypeDetailPage from '../pages/admin/Categories/document-types/Detail';
+import DocumentTypeEditPage from '../pages/admin/Categories/document-types/Edit';
 import NotificationCenterPage from '../pages/common/notifications/List';
 
 // ========================================
@@ -87,6 +90,7 @@ import ScheduleInterview from '../pages/hr_staff/interviews/Schedule';
 import ListContract from '../pages/hr_staff/contracts/List';
 import ContractDetailPageHR from '../pages/hr_staff/contracts/Detail';
 import CreatePartnerContractPage from '../pages/hr_staff/contracts/Create';
+import EditPartnerContractPage from '../pages/hr_staff/contracts/Edit';
 import HRPartnerPeriods from '../pages/hr_staff/payment-periods/PartnerPeriods';
 
 // ========================================
@@ -155,6 +159,7 @@ import InterviewSuccess from '../pages/hr_staff/reports/Interview_success';
 import ContractDetailPage from '../pages/sales_staff/contracts/Detail';
 import ListClientContracts from '../pages/sales_staff/contracts/List';
 import CreateClientContractPage from '../pages/sales_staff/contracts/Create';
+import EditClientContractPage from '../pages/sales_staff/contracts/Edit';
 import TalentDetailPage from '../pages/hr_staff/talents/Detail';
 import TalentEditPage from '../pages/hr_staff/talents/Edit';
 import TalentSkillCreatePage from '../pages/hr_staff/talent-skills/Create';
@@ -207,188 +212,199 @@ const AppRouter: React.FC = () => {
         <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
           <Route path={NOTIFICATION_CENTER_ROUTE} element={<NotificationCenterPage />} />
         </Route>
-
-        {/* ======================================== */}
-        {/* HR STAFF ROUTES */}
-        {/* ======================================== */}
-        <Route element={<ProtectedRoute requiredRole="Staff HR"><Outlet /></ProtectedRoute>}>
-          <Route path={ROUTES.HR_STAFF.DASHBOARD} element={<HRDashboard />} />
-          
-          {/* Developers */}
-          <Route path={ROUTES.HR_STAFF.DEVELOPERS.LIST} element={<ListDev />} />
-          <Route path={ROUTES.HR_STAFF.DEVELOPERS.DETAIL} element={<TalentDetailPage />} />
-          <Route path={ROUTES.HR_STAFF.DEVELOPERS.EDIT} element={<TalentEditPage />} />
-          <Route path={ROUTES.HR_STAFF.DEVELOPERS.CREATE} element={<CreateTalent />} />
-          
-          {/* Talent Available Times */}
-          <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.EDIT} element={<TalentAvailableTimeEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.CREATE} element={<TalentAvailableTimeCreatePage />} />
-          
-          {/* Talent Certificates */}
-          <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.EDIT} element={<TalentCertificateEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.CREATE} element={<TalentCertificateCreatePage />} />
-          
-          {/* Talent CVs */}
-          <Route path={ROUTES.HR_STAFF.TALENT_CVS.EDIT} element={<TalentCVEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_CVS.CREATE} element={<TalentCVCreatePage />} />
-          
-          {/* Talent Job Role Levels */}
-          <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.EDIT} element={<TalentJobRoleLevelEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.CREATE} element={<TalentJobRoleLevelCreatePage />} />
-          
-          {/* Talent Projects */}
-          <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.EDIT} element={<TalentProjectEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.CREATE} element={<TalentProjectCreatePage />} />
-
-          {/* Talent Skills */}
-          <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.EDIT} element={<TalentSkillEditPage />} />
-          <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.CREATE} element={<TalentSkillCreatePage />} />
-                        
-          {/* Talent Work Experiences */}
-          <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.CREATE} element={<TalentWorkExperienceCreatePage />} />  
-          <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.EDIT} element={<TalentWorkExperienceEditPage />} />
-  
-          {/* Partners */}
-          <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
-          <Route path={ROUTES.HR_STAFF.PARTNERS.DETAIL} element={<PartnerDetailPage />} />
-          <Route path={ROUTES.HR_STAFF.PARTNERS.EDIT} element={<PartnerEditPage />} />
-          <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
-          
-          {/* Assignments */}
-          <Route path={ROUTES.HR_STAFF.ASSIGNMENTS} element={<Assignments />} />
-          
-          {/* Job Requests */}
-          <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.LIST} element={<ListRequest />} />
-          <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailHRPage />} />
-          <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.MATCHING} element={<MatchingCVPage />} />
-          
-          {/* Applications */}
-          <Route path={ROUTES.HR_STAFF.APPLICATIONS.LIST} element={<TalentCVApplicationPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLICATIONS.DETAIL} element={<TalentCVApplicationDetailPage />} />
-
-          {/* Apply Activities */}
-          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.DETAIL} element={<ApplyActivityDetailPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.EDIT} element={<ApplyActivityEditPage />} />
-          <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.CREATE} element={<ApplyActivityCreatePage />} />
-
-          {/* Interviews */}
-          <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
-          <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />
-          <Route path={ROUTES.HR_STAFF.INTERVIEWS.HISTORY} element={<InterviewHistory />} />
-          
-          {/* Contracts */}
-          <Route path={ROUTES.HR_STAFF.CONTRACTS.LIST} element={<ListContract />} />
-          <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
-          <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
-
-          {/* Payment Periods - Partner */}
-          <Route path="/hr/payment-periods/partners" element={<HRPartnerPeriods />} />
-          
-          {/* Reports */}
-          <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
-          <Route path={ROUTES.HR_STAFF.REPORTS.DEVELOPER_STATUS} element={<DeveloperStatus />} />
-        </Route>
-
-        {/* ======================================== */}
-        {/* SALES STAFF ROUTES */}
-        {/* ======================================== */}
-        <Route element={<ProtectedRoute requiredRole="Staff Sales"><Outlet /></ProtectedRoute>}>
-          <Route path={ROUTES.SALES_STAFF.DASHBOARD} element={<SalesStaffDashboard />} />
-          
-          {/* Contracts */}
-          <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
-          <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
-
-          {/* Payment Periods - Client */}
-          <Route path="/sales/payment-periods/clients" element={<SalesClientPeriods />} />
-          
-          {/* Job Requests */}
-          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
-          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.EDIT} element={<JobRequestEditPage />} />
-          <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
-
-          {/* Apply Process Templates */}
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.LIST} element={<SalesApplyProcessTemplateListPage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.DETAIL} element={<SalesApplyProcessTemplateDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.CREATE} element={<SalesApplyProcessTemplateCreatePage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.EDIT} element={<SalesApplyProcessTemplateEditPage />} />
-
-          {/* Apply Process Steps */}
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.LIST} element={<SalesApplyProcessStepListPage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.DETAIL} element={<SalesApplyProcessStepDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<SalesApplyProcessStepCreatePage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<SalesApplyProcessStepEditPage />} />
-
-          {/* Applications */}
-          <Route path={ROUTES.SALES_STAFF.APPLICATIONS.LIST} element={<SalesApplicationListPage />} />
-          <Route path={ROUTES.SALES_STAFF.APPLICATIONS.DETAIL} element={<SalesApplicationDetailPage />} />
-          
-          {/* Clients */}
-          <Route path={ROUTES.SALES_STAFF.CLIENTS.LIST} element={<ClientCompanyListPage />} />
-          <Route path={ROUTES.SALES_STAFF.CLIENTS.DETAIL} element={<ClientCompanyDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.CLIENTS.EDIT} element={<ClientCompanyEditPage />} />
-          <Route path={ROUTES.SALES_STAFF.CLIENTS.CREATE} element={<ClientCompanyCreatePage />} />
-          
-          {/* Projects */}
-          <Route path={ROUTES.SALES_STAFF.PROJECTS.LIST} element={<ProjectListPage />} />
-          <Route path={ROUTES.SALES_STAFF.PROJECTS.DETAIL} element={<ProjectDetailPage />} />
-          <Route path={ROUTES.SALES_STAFF.PROJECTS.EDIT} element={<ProjectEditPage />} />
-          <Route path={ROUTES.SALES_STAFF.PROJECTS.CREATE} element={<ProjectCreatePage />} />
-                 
-        </Route>
-
-        {/* ======================================== */}
-        {/* ACCOUNTANT STAFF ROUTES */}
-        {/* ======================================== */}
-        <Route element={<ProtectedRoute requiredRole="Staff Accountant"><Outlet /></ProtectedRoute>}>
-          <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
-          <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
-          <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
-          <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
-        </Route>
-
-        {/* ======================================== */}
-        {/* DEVELOPER ROUTES */}
-        {/* ======================================== */}
-        <Route element={<ProtectedRoute requiredRole="Developer"><Outlet /></ProtectedRoute>}>
-          <Route path={ROUTES.DEVELOPER.DASHBOARD} element={<DeveloperDashboard />} />
-        </Route>
-
-        {/* ======================================== */}
-        {/* MANAGER ROUTES */}
-        {/* ======================================== */}
-        <Route element={<ProtectedRoute requiredRole="Manager"><Outlet /></ProtectedRoute>}>
-          <Route path={ROUTES.MANAGER.DASHBOARD} element={<ManagerDashboard />} />
-          
-          {/* Contracts */}
-          <Route path={ROUTES.MANAGER.CONTRACT.CLIENTS} element={<ClientContracts />} />
-          <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
-          <Route path={ROUTES.MANAGER.CONTRACT.DEVS} element={<DevContracts />} />
-          <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
-          
-          {/* Business */}
-          <Route path={ROUTES.MANAGER.BUSINESS.OVERVIEW} element={<BusinessOverview />} />
-          <Route path={ROUTES.MANAGER.BUSINESS.REVENUE} element={<Revenue />} />
-          
-          {/* Human Resources */}
-          <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.OVERVIEW} element={<HROverview />} />
-          <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.PERFORMANCE} element={<HRPerformance />} />
-          <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.DEVELOPERS} element={<HRDevelopers />} />
-          <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.UTILIZATION} element={<Utilization />} />
-          
-          {/* Finance */}
-          <Route path={ROUTES.MANAGER.FINANCE.OVERVIEW} element={<Overview />} />
-          <Route path={ROUTES.MANAGER.FINANCE.CASHFLOW} element={<CashFlow />} />
-          <Route path={ROUTES.MANAGER.FINANCE.DEBT} element={<Debt />} />
-          <Route path={ROUTES.MANAGER.FINANCE.PROFIT} element={<Profit />} />
-          
-          {/* Payment Periods */}
-          <Route path="/manager/payment-periods/clients" element={<ManagerClientPeriods />} />
-          <Route path="/manager/payment-periods/partners" element={<ManagerPartnerPeriods />} />
-        </Route>
       </Route>
+
+      {/* ======================================== */}
+      {/* HR STAFF ROUTES (với HrLayout) */}
+      {/* ======================================== */}
+      <Route element={<HrLayout />}>
+          <Route element={<ProtectedRoute requiredRole="Staff HR"><Outlet /></ProtectedRoute>}>
+            <Route path={ROUTES.HR_STAFF.DASHBOARD} element={<HRDashboard />} />
+            
+            {/* Developers */}
+            <Route path={ROUTES.HR_STAFF.DEVELOPERS.LIST} element={<ListDev />} />
+            <Route path={ROUTES.HR_STAFF.DEVELOPERS.DETAIL} element={<TalentDetailPage />} />
+            <Route path={ROUTES.HR_STAFF.DEVELOPERS.EDIT} element={<TalentEditPage />} />
+            <Route path={ROUTES.HR_STAFF.DEVELOPERS.CREATE} element={<CreateTalent />} />
+            
+            {/* Talent Available Times */}
+            <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.EDIT} element={<TalentAvailableTimeEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_AVAILABLE_TIMES.CREATE} element={<TalentAvailableTimeCreatePage />} />
+            
+            {/* Talent Certificates */}
+            <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.EDIT} element={<TalentCertificateEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_CERTIFICATES.CREATE} element={<TalentCertificateCreatePage />} />
+            
+            {/* Talent CVs */}
+            <Route path={ROUTES.HR_STAFF.TALENT_CVS.EDIT} element={<TalentCVEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_CVS.CREATE} element={<TalentCVCreatePage />} />
+            
+            {/* Talent Job Role Levels */}
+            <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.EDIT} element={<TalentJobRoleLevelEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_JOB_ROLE_LEVELS.CREATE} element={<TalentJobRoleLevelCreatePage />} />
+            
+            {/* Talent Projects */}
+            <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.EDIT} element={<TalentProjectEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_PROJECTS.CREATE} element={<TalentProjectCreatePage />} />
+
+            {/* Talent Skills */}
+            <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.EDIT} element={<TalentSkillEditPage />} />
+            <Route path={ROUTES.HR_STAFF.TALENT_SKILLS.CREATE} element={<TalentSkillCreatePage />} />
+                            
+            {/* Talent Work Experiences */}
+            <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.CREATE} element={<TalentWorkExperienceCreatePage />} />  
+            <Route path={ROUTES.HR_STAFF.TALENT_WORK_EXPERIENCES.EDIT} element={<TalentWorkExperienceEditPage />} />
+  
+            {/* Partners */}
+            <Route path={ROUTES.HR_STAFF.PARTNERS.LIST} element={<ListPartner />} />
+            <Route path={ROUTES.HR_STAFF.PARTNERS.DETAIL} element={<PartnerDetailPage />} />
+            <Route path={ROUTES.HR_STAFF.PARTNERS.EDIT} element={<PartnerEditPage />} />
+            <Route path={ROUTES.HR_STAFF.PARTNERS.CREATE} element={<CreatePartner />} />
+            
+            {/* Assignments */}
+            <Route path={ROUTES.HR_STAFF.ASSIGNMENTS} element={<Assignments />} />
+            
+            {/* Job Requests */}
+            <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.LIST} element={<ListRequest />} />
+            <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailHRPage />} />
+            <Route path={ROUTES.HR_STAFF.JOB_REQUESTS.MATCHING} element={<MatchingCVPage />} />
+            
+            {/* Applications */}
+            <Route path={ROUTES.HR_STAFF.APPLICATIONS.LIST} element={<TalentCVApplicationPage />} />
+            <Route path={ROUTES.HR_STAFF.APPLICATIONS.DETAIL} element={<TalentCVApplicationDetailPage />} />
+
+            {/* Apply Activities */}
+            <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.DETAIL} element={<ApplyActivityDetailPage />} />
+            <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.EDIT} element={<ApplyActivityEditPage />} />
+            <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.CREATE} element={<ApplyActivityCreatePage />} />
+
+            {/* Interviews */}
+            <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
+            <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />
+            <Route path={ROUTES.HR_STAFF.INTERVIEWS.HISTORY} element={<InterviewHistory />} />
+            
+            {/* Contracts */}
+            <Route path={ROUTES.HR_STAFF.CONTRACTS.LIST} element={<ListContract />} />
+            <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
+            <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
+            <Route path={ROUTES.HR_STAFF.CONTRACTS.EDIT} element={<EditPartnerContractPage />} />
+
+            {/* Payment Periods - Partner */}
+            <Route path="/hr/payment-periods/partners" element={<HRPartnerPeriods />} />
+            
+            {/* Reports */}
+            <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
+            <Route path={ROUTES.HR_STAFF.REPORTS.DEVELOPER_STATUS} element={<DeveloperStatus />} />
+          </Route>
+        </Route>
+
+        {/* ======================================== */}
+        {/* SALES STAFF ROUTES (với SalesLayout) */}
+        {/* ======================================== */}
+        <Route element={<SalesLayout />}>
+          <Route element={<ProtectedRoute requiredRole="Staff Sales"><Outlet /></ProtectedRoute>}>
+            <Route path={ROUTES.SALES_STAFF.DASHBOARD} element={<SalesStaffDashboard />} />
+            
+            {/* Contracts */}
+            <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
+            <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
+            <Route path={ROUTES.SALES_STAFF.CONTRACTS.EDIT} element={<EditClientContractPage />} />
+
+            {/* Payment Periods - Client */}
+            <Route path="/sales/payment-periods/clients" element={<SalesClientPeriods />} />
+            
+            {/* Job Requests */}
+            <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.LIST} element={<JobRequestListPage />} />
+            <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.DETAIL} element={<JobRequestDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.EDIT} element={<JobRequestEditPage />} />
+            <Route path={ROUTES.SALES_STAFF.JOB_REQUESTS.CREATE} element={<JobRequestCreatePage />} />
+
+            {/* Apply Process Templates */}
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.LIST} element={<SalesApplyProcessTemplateListPage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.DETAIL} element={<SalesApplyProcessTemplateDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.CREATE} element={<SalesApplyProcessTemplateCreatePage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_TEMPLATES.EDIT} element={<SalesApplyProcessTemplateEditPage />} />
+
+            {/* Apply Process Steps */}
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.LIST} element={<SalesApplyProcessStepListPage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.DETAIL} element={<SalesApplyProcessStepDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<SalesApplyProcessStepCreatePage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<SalesApplyProcessStepEditPage />} />
+
+            {/* Applications */}
+            <Route path={ROUTES.SALES_STAFF.APPLICATIONS.LIST} element={<SalesApplicationListPage />} />
+            <Route path={ROUTES.SALES_STAFF.APPLICATIONS.DETAIL} element={<SalesApplicationDetailPage />} />
+            
+            {/* Clients */}
+            <Route path={ROUTES.SALES_STAFF.CLIENTS.LIST} element={<ClientCompanyListPage />} />
+            <Route path={ROUTES.SALES_STAFF.CLIENTS.DETAIL} element={<ClientCompanyDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.CLIENTS.EDIT} element={<ClientCompanyEditPage />} />
+            <Route path={ROUTES.SALES_STAFF.CLIENTS.CREATE} element={<ClientCompanyCreatePage />} />
+            
+            {/* Projects */}
+            <Route path={ROUTES.SALES_STAFF.PROJECTS.LIST} element={<ProjectListPage />} />
+            <Route path={ROUTES.SALES_STAFF.PROJECTS.DETAIL} element={<ProjectDetailPage />} />
+            <Route path={ROUTES.SALES_STAFF.PROJECTS.EDIT} element={<ProjectEditPage />} />
+            <Route path={ROUTES.SALES_STAFF.PROJECTS.CREATE} element={<ProjectCreatePage />} />
+          </Route>
+        </Route>
+
+        {/* ======================================== */}
+        {/* ACCOUNTANT STAFF ROUTES (với AccountantLayout) */}
+        {/* ======================================== */}
+        <Route element={<AccountantLayout />}>
+          <Route element={<ProtectedRoute requiredRole="Staff Accountant"><Outlet /></ProtectedRoute>}>
+            <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
+            <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
+            <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
+            <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
+          </Route>
+        </Route>
+
+        {/* ======================================== */}
+        {/* DEVELOPER ROUTES (với DeveloperLayout) */}
+        {/* ======================================== */}
+        <Route element={<DeveloperLayout />}>
+          <Route element={<ProtectedRoute requiredRole="Developer"><Outlet /></ProtectedRoute>}>
+            <Route path={ROUTES.DEVELOPER.DASHBOARD} element={<DeveloperDashboard />} />
+          </Route>
+        </Route>
+
+        {/* ======================================== */}
+        {/* MANAGER ROUTES (với ManagerLayout) */}
+        {/* ======================================== */}
+        <Route element={<ManagerLayout />}>
+          <Route element={<ProtectedRoute requiredRole="Manager"><Outlet /></ProtectedRoute>}>
+            <Route path={ROUTES.MANAGER.DASHBOARD} element={<ManagerDashboard />} />
+            
+            {/* Contracts */}
+            <Route path={ROUTES.MANAGER.CONTRACT.CLIENTS} element={<ClientContracts />} />
+            <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
+            <Route path={ROUTES.MANAGER.CONTRACT.DEVS} element={<DevContracts />} />
+            <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
+            
+            {/* Business */}
+            <Route path={ROUTES.MANAGER.BUSINESS.OVERVIEW} element={<BusinessOverview />} />
+            <Route path={ROUTES.MANAGER.BUSINESS.REVENUE} element={<Revenue />} />
+            
+            {/* Human Resources */}
+            <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.OVERVIEW} element={<HROverview />} />
+            <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.PERFORMANCE} element={<HRPerformance />} />
+            <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.DEVELOPERS} element={<HRDevelopers />} />
+            <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.UTILIZATION} element={<Utilization />} />
+            
+            {/* Finance */}
+            <Route path={ROUTES.MANAGER.FINANCE.OVERVIEW} element={<Overview />} />
+            <Route path={ROUTES.MANAGER.FINANCE.CASHFLOW} element={<CashFlow />} />
+            <Route path={ROUTES.MANAGER.FINANCE.DEBT} element={<Debt />} />
+            <Route path={ROUTES.MANAGER.FINANCE.PROFIT} element={<Profit />} />
+            
+            {/* Payment Periods */}
+            <Route path="/manager/payment-periods/clients" element={<ManagerClientPeriods />} />
+            <Route path="/manager/payment-periods/partners" element={<ManagerPartnerPeriods />} />
+          </Route>
+        </Route>
 
       {/* ======================================== */}
       {/* ADMIN ROUTES (với AdminLayout) */}
@@ -425,12 +441,6 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.EDIT} element={<CVTemplateEditPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.CV_TEMPLATES.CREATE} element={<CVTemplateCreatePage />} />
  
-          {/* Working Styles */}
-          <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.LIST} element={<WorkingStyleListPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.DETAIL} element={<WorkingStyleDetailPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.EDIT} element={<WorkingStyleEditPage />} />
-          <Route path={ROUTES.ADMIN.CATEGORIES.WORKING_STYLES.CREATE} element={<WorkingStyleCreatePage />} />
-          
           {/* Job Role Levels */}
           <Route path={ROUTES.ADMIN.CATEGORIES.JOB_ROLE_LEVELS.LIST} element={<JobRoleLevelListPage />} />
           <Route path={ROUTES.ADMIN.CATEGORIES.JOB_ROLE_LEVELS.DETAIL} element={<JobRoleLevelDetailPage />} />
@@ -464,6 +474,8 @@ const AppRouter: React.FC = () => {
           {/* Document Types */}
           <Route path="/admin/categories/document-types" element={<DocumentTypeListPage />} />
           <Route path="/admin/categories/document-types/create" element={<DocumentTypeCreatePage />} />
+          <Route path="/admin/categories/document-types/edit/:id" element={<DocumentTypeEditPage />} />
+          <Route path="/admin/categories/document-types/:id" element={<DocumentTypeDetailPage />} />
        
         </Route>
       </Route>

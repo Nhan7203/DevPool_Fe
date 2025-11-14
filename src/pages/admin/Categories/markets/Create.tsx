@@ -107,7 +107,7 @@ export default function MarketCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Globe2 className="w-4 h-4" />
-                  Tên thị trường
+                  Tên thị trường <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -124,7 +124,7 @@ export default function MarketCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Hash className="w-4 h-4" />
-                  Mã thị trường
+                  Mã thị trường <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

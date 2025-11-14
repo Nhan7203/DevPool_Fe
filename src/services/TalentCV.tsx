@@ -5,7 +5,7 @@ export interface TalentCV {
   id: number;
   talentId: number;
   jobRoleId: number;
-  versionName: string;
+  version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;
@@ -24,7 +24,7 @@ export interface TalentCVFilter {
 export interface TalentCVCreate {
   talentId: number;
   jobRoleId: number;
-  versionName: string;
+  version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;
@@ -445,6 +445,23 @@ export const talentCVService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to extract CV from PDF" };
       throw { message: "Unexpected error occurred during extraction" };
+    }
+  },
+
+  async extractFromPDFWithOllama(file: File) {
+    try {
+      const formData = new FormData();
+      formData.append("filePDF", file);
+      const response = await axios.post("/talentcv/extract-pdf-ollama", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response.data as TalentCVExtractResponse;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to extract CV from PDF with Ollama" };
+      throw { message: "Unexpected error occurred during extraction with Ollama" };
     }
   },
 

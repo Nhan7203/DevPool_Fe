@@ -31,7 +31,7 @@ export default function TalentCVCreatePage() {
   const [form, setForm] = useState<TalentCVCreate>({
     talentId: talentId ? Number(talentId) : 0,
     jobRoleId: 0,
-    versionName: "",
+    version: 1,
     cvFileUrl: "",
     isActive: true,
     summary: "",
@@ -41,7 +41,7 @@ export default function TalentCVCreatePage() {
 
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
   const [existingCVs, setExistingCVs] = useState<any[]>([]);
-  const [versionNameError, setVersionNameError] = useState<string>("");
+  const [versionError, setVersionError] = useState<string>("");
   
   // File upload states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -100,21 +100,21 @@ export default function TalentCVCreatePage() {
         }
       } else {
         setExistingCVs([]);
-        setVersionNameError("");
+        setVersionError("");
       }
     };
     fetchCVsByJobRole();
   }, [talentId, form.jobRoleId]);
 
-  // Validate lại tên phiên bản khi existingCVs thay đổi
+  // Validate lại version khi existingCVs thay đổi
   useEffect(() => {
-    if (form.versionName.trim() && form.jobRoleId > 0 && existingCVs.length > 0) {
-      const error = validateVersionName(form.versionName, form.jobRoleId, existingCVs);
-      setVersionNameError(error);
+    if (form.version > 0 && form.jobRoleId > 0 && existingCVs.length > 0) {
+      const error = validateVersion(form.version, form.jobRoleId, existingCVs);
+      setVersionError(error);
     } else if (existingCVs.length === 0) {
-      setVersionNameError("");
+      setVersionError("");
     }
-  }, [existingCVs, form.versionName, form.jobRoleId]);
+  }, [existingCVs, form.version, form.jobRoleId]);
 
   // Cảnh báo khi user cố gắng rời khỏi trang sau khi đã upload CV lên Firebase nhưng chưa lưu
   useEffect(() => {
@@ -133,94 +133,25 @@ export default function TalentCVCreatePage() {
     };
   }, [isUploadedFromFirebase, success]);
 
-  // Validate tên phiên bản CV không trùng với CV cùng jobRoleId
-  const validateVersionName = (versionName: string, jobRoleId: number, existingCVsList: any[]): string => {
-    if (!versionName.trim()) {
-      return "";
+  // Validate version không trùng với CV cùng jobRoleId
+  const validateVersion = (version: number, jobRoleId: number, existingCVsList: any[]): string => {
+    if (version <= 0) {
+      return "Version phải lớn hơn 0";
     }
     
     if (jobRoleId === 0 || existingCVsList.length === 0) {
       return "";
     }
     
-    // Normalize version name để so sánh (loại bỏ khoảng trắng, chuyển lowercase)
-    const normalizeVersion = (v: string): string => {
-      return v.trim().toLowerCase().replace(/\s+/g, '');
-    };
-    
-    // Extract số từ chuỗi (có thể có chữ cái phía trước/sau)
-    // Ví dụ: "CV 1.0" -> "1.0", "1.0.0" -> "1.0.0", "1" -> "1"
-    const extractNumber = (v: string): string | null => {
-      const normalized = normalizeVersion(v);
-      // Tìm pattern số: có thể là số thuần (1, 2, 3...) hoặc số thập phân (1.0, 1.0.0, 1.1.2...)
-      const numberMatch = normalized.match(/(\d+(?:\.\d+)*)/);
-      if (numberMatch) {
-        return numberMatch[1];
-      }
-      return null;
-    };
-    
-    // Normalize số để so sánh (1 = 1.0 = 1.0.0)
-    // Chuyển tất cả về dạng major.minor (1 -> 1.0, 1.0 -> 1.0, 1.0.0 -> 1.0, 1.1.2 -> 1.1)
-    const normalizeNumber = (numStr: string): string => {
-      const parts = numStr.split('.');
-      const major = parts[0];
-      const minor = parts[1] || '0';
-      // Chỉ lấy major.minor, bỏ phần sau
-      return `${major}.${minor}`;
-    };
-    
-    const normalizedInput = normalizeVersion(versionName);
-    const extractedInputNumber = extractNumber(versionName);
-    const normalizedInputNumber = extractedInputNumber ? normalizeNumber(extractedInputNumber) : null;
-    
     // Kiểm tra trùng với các CV cùng jobRoleId
-    const duplicateCV = existingCVsList.find((cv: any) => {
-      const normalizedExisting = normalizeVersion(cv.versionName);
-      
-      // So sánh exact match (bao gồm cả chữ cái)
-      if (normalizedExisting === normalizedInput) {
-        return true;
-      }
-      
-      // So sánh số - nếu cả hai đều có số và số trùng thì không cho đặt
-      if (normalizedInputNumber !== null) {
-        const extractedExistingNumber = extractNumber(cv.versionName);
-        if (extractedExistingNumber !== null) {
-          const normalizedExistingNumber = normalizeNumber(extractedExistingNumber);
-          if (normalizedExistingNumber === normalizedInputNumber) {
-            return true;
-          }
-        }
-      }
-      
-      return false;
-    });
+    const duplicateCV = existingCVsList.find((cv: any) => cv.version === version);
     
     if (duplicateCV) {
-      // Gợi ý tên mới
-      let suggestedName = "";
-      const extractedNum = extractNumber(versionName);
+      // Tìm version cao nhất và gợi ý version tiếp theo
+      const maxVersion = Math.max(...existingCVsList.map((cv: any) => cv.version || 0));
+      const suggestedVersion = maxVersion + 1;
       
-      if (extractedNum) {
-        // Nếu có số trong tên, tăng số lên
-        const normalizedNum = normalizeNumber(extractedNum);
-        const parts = normalizedNum.split('.');
-        const major = parseInt(parts[0]);
-        const minor = parseFloat(parts[1] || '0');
-        
-        // Tăng minor lên 0.1
-        const newMinor = minor + 0.1;
-        const newNumber = `${major}.${newMinor.toFixed(1)}`;
-        
-        // Thay thế số cũ bằng số mới trong tên
-        suggestedName = versionName.replace(extractedNum, newNumber);
-      } else {
-        // Nếu không có số, thêm số vào cuối
-        suggestedName = `${versionName} 2.0`;
-      }
-      
-      return `Tên phiên bản "${versionName}" đã tồn tại cho vị trí công việc này. Vui lòng chọn tên khác (ví dụ: ${suggestedName}).`;
+      return `Version ${version} đã tồn tại cho vị trí công việc này. Vui lòng chọn version khác (ví dụ: ${suggestedVersion}).`;
     }
     
     return "";
@@ -229,15 +160,16 @@ export default function TalentCVCreatePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     
-    // Validate tên phiên bản khi user nhập
-    if (name === "versionName") {
-      const error = validateVersionName(value, form.jobRoleId, existingCVs);
-      setVersionNameError(error);
+    // Validate version khi user nhập
+    if (name === "version") {
+      const versionNum = Number(value);
+      const error = validateVersion(versionNum, form.jobRoleId, existingCVs);
+      setVersionError(error);
     }
     
-    // Clear error khi jobRoleId thay đổi (sẽ validate lại khi user nhập versionName)
+    // Clear error khi jobRoleId thay đổi (sẽ validate lại khi user nhập version)
     if (name === "jobRoleId") {
-      setVersionNameError("");
+      setVersionError("");
     }
     
     // Nếu user nhập URL thủ công, reset flag Firebase upload
@@ -248,7 +180,7 @@ export default function TalentCVCreatePage() {
     setForm(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
-              name === "jobRoleId" || name === "sourceTemplateId" ? Number(value) : value 
+              type === 'number' || name === "jobRoleId" || name === "sourceTemplateId" || name === "version" ? Number(value) : value
     }));
   };
 
@@ -351,7 +283,7 @@ export default function TalentCVCreatePage() {
 
     try {
       setExtractingCV(true);
-      const result = await talentCVService.extractFromPDF(selectedFile);
+      const result = await talentCVService.extractFromPDFWithOllama(selectedFile);
       
       if (result.isSuccess && result.generateText) {
         try {
@@ -409,8 +341,8 @@ export default function TalentCVCreatePage() {
       return;
     }
 
-    if (!form.versionName.trim()) {
-      setError("⚠️ Vui lòng nhập tên phiên bản CV trước khi upload.");
+    if (!form.version || form.version <= 0) {
+      setError("⚠️ Vui lòng nhập version CV trước khi upload.");
       return;
     }
 
@@ -422,7 +354,7 @@ export default function TalentCVCreatePage() {
     // Xác nhận trước khi upload
     const confirmed = window.confirm(
       `Bạn có chắc chắn muốn upload file "${selectedFile.name}" lên Firebase không?\n\n` +
-      `Tên phiên bản: ${form.versionName}\n` +
+      `Version: ${form.version}\n` +
       `Kích thước file: ${(selectedFile.size / 1024).toFixed(2)} KB`
     );
     
@@ -438,7 +370,7 @@ export default function TalentCVCreatePage() {
       const downloadURL = await uploadTalentCV(
         selectedFile,
         Number(talentId),
-        form.versionName,
+        `v${form.version}`,
         (progress) => setUploadProgress(progress)
       );
 
@@ -485,17 +417,17 @@ export default function TalentCVCreatePage() {
       return;
     }
 
-    if (!form.versionName.trim()) {
-      setError("⚠️ Vui lòng nhập tên phiên bản CV.");
+    if (!form.version || form.version <= 0) {
+      setError("⚠️ Vui lòng nhập version CV (phải lớn hơn 0).");
       setLoading(false);
       return;
     }
 
-    // Validate tên phiên bản không trùng
-    const versionNameError = validateVersionName(form.versionName, form.jobRoleId, existingCVs);
-    if (versionNameError) {
-      setVersionNameError(versionNameError);
-      setError("⚠️ " + versionNameError);
+    // Validate version không trùng
+    const versionErrorMsg = validateVersion(form.version, form.jobRoleId, existingCVs);
+    if (versionErrorMsg) {
+      setVersionError(versionErrorMsg);
+      setError("⚠️ " + versionErrorMsg);
       setLoading(false);
       return;
     }
@@ -653,40 +585,43 @@ export default function TalentCVCreatePage() {
                 )}
               </div>
 
-              {/* Tên phiên bản */}
+              {/* Version */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên phiên bản CV <span className="text-red-500">*</span>
+                  Version CV <span className="text-red-500">*</span>
                 </label>
                 <input
-                  name="versionName"
-                  value={form.versionName}
+                  type="number"
+                  name="version"
+                  value={form.version}
                   onChange={handleChange}
-                  placeholder="VD: CV v1.0, CV Frontend Developer..."
+                  placeholder="VD: 1, 2, 3..."
+                  min="1"
+                  step="1"
                   required
                   disabled={isUploadedFromFirebase}
                   className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
                     isUploadedFromFirebase
                       ? 'border-green-300 bg-green-50 cursor-not-allowed'
-                      : versionNameError 
+                      : versionError 
                         ? 'border-red-500 focus:border-red-500' 
                         : 'border-neutral-200 focus:border-primary-500'
                   }`}
                 />
                 {isUploadedFromFirebase && (
                   <p className="text-xs text-green-600 mt-1">
-                    File đã được upload lên Firebase, không thể thay đổi tên phiên bản CV
+                    File đã được upload lên Firebase, không thể thay đổi version CV
                   </p>
                 )}
-                {versionNameError && !isUploadedFromFirebase ? (
-                  <p className="text-xs text-red-500 mt-1">{versionNameError}</p>
+                {versionError && !isUploadedFromFirebase ? (
+                  <p className="text-xs text-red-500 mt-1">{versionError}</p>
                 ) : !isUploadedFromFirebase && (
                   <p className="text-xs text-neutral-500 mt-1">
-                    Tên này sẽ được sử dụng để đặt tên file khi upload
+                    Version này sẽ được sử dụng để đặt tên file khi upload
                     {existingCVs.length > 0 && (
                       <span className="block mt-1">
-                        Các phiên bản hiện có: {existingCVs.map((cv: any) => cv.versionName).join(', ')}
+                        Các version hiện có: {existingCVs.map((cv: any) => cv.version || 'N/A').join(', ')}
                       </span>
                     )}
                   </p>
@@ -868,7 +803,7 @@ export default function TalentCVCreatePage() {
                     <button
                       type="button"
                       onClick={handleFileUpload}
-                      disabled={!selectedFile || uploading || !form.versionName}
+                      disabled={!selectedFile || uploading || !form.version || form.version <= 0}
                       className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {uploading ? (

@@ -12,7 +12,7 @@ import {
   CheckCircle,
   X
 } from "lucide-react";
-import { type SkillGroupCreateModel, skillGroupService } from "../../../../services/SkillGroup";
+import { type SkillGroupCreate, skillGroupService } from "../../../../services/SkillGroup";
 
 export default function SkillGroupCreatePage() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function SkillGroupCreatePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const [form, setForm] = useState<SkillGroupCreateModel>({
+  const [form, setForm] = useState<SkillGroupCreate>({
     name: "",
     description: "",
   });
@@ -106,7 +106,7 @@ export default function SkillGroupCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Layers3 className="w-4 h-4" />
-                  Tên nhóm kỹ năng
+                  Tên nhóm kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

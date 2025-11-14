@@ -26,7 +26,7 @@ type SalesTalentApplication = TalentApplication & {
   };
   talentCV?: {
     id: number;
-    versionName: string;
+    version: number;
     talentId: number;
   };
   talentName?: string;
@@ -165,7 +165,7 @@ export default function SalesApplicationListPage() {
               talentCV: cv
                 ? {
                     id: cv.id,
-                    versionName: cv.versionName,
+                    version: cv.version,
                     talentId: cv.talentId,
                   }
                 : undefined,
@@ -460,7 +460,7 @@ export default function SalesApplicationListPage() {
                         {app.jobRequest?.title ?? "—"}
                       </td>
                       <td className="px-6 py-4 text-sm text-neutral-700">
-                        {app.talentName ?? app.talentCV?.versionName ?? "—"}
+                        {app.talentName ?? (app.talentCV?.version ? `v${app.talentCV.version}` : "—")}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center">

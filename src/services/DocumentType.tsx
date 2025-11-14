@@ -63,4 +63,28 @@ export const documentTypeService = {
       throw { message: "Lỗi không xác định khi tạo loại tài liệu" };
     }
   },
+
+  // Cập nhật DocumentType
+  async update(id: number, payload: DocumentTypeCreate) {
+    try {
+      const response = await axios.put(`/documenttype/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật loại tài liệu" };
+      throw { message: "Lỗi không xác định khi cập nhật loại tài liệu" };
+    }
+  },
+
+  // Xóa DocumentType
+  async deleteById(id: number) {
+    try {
+      const response = await axios.delete(`/documenttype/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể xóa loại tài liệu" };
+      throw { message: "Lỗi không xác định khi xóa loại tài liệu" };
+    }
+  },
 };

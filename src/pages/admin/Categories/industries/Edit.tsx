@@ -171,7 +171,7 @@ export default function IndustryEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Briefcase className="w-4 h-4" />
-                  Tên lĩnh vực
+                  Tên lĩnh vực <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -188,7 +188,7 @@ export default function IndustryEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Mã lĩnh vực
+                  Mã lĩnh vực <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

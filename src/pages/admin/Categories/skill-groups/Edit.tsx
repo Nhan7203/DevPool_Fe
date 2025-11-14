@@ -166,7 +166,7 @@ export default function SkillGroupEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Layers3 className="w-4 h-4" />
-                  Tên nhóm kỹ năng
+                  Tên nhóm kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

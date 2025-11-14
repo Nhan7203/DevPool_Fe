@@ -39,7 +39,7 @@ export interface JobRequestPayload {
   projectId: number;
   jobRoleLevelId: number;
   applyProcessTemplateId?: number | null;
-  clientCompanyCVTemplateId: number;
+  clientCompanyCVTemplateId?: number | null;
   title: string;
   description?: string;
   requirements?: string;

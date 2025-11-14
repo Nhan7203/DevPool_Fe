@@ -16,8 +16,6 @@ export interface JobRoleLevel {
   name: string;
   level: TalentLevel;
   description: string;
-  minManMonthPrice?: number | null;
-  maxManMonthPrice?: number | null;
 }
 
 export interface JobRoleLevelPayload {
@@ -25,8 +23,6 @@ export interface JobRoleLevelPayload {
   name: string;
   level: TalentLevel;
   description?: string;
-  minManMonthPrice?: number | null;
-  maxManMonthPrice?: number | null;
 }
 
 export interface JobRoleLevelFilter {

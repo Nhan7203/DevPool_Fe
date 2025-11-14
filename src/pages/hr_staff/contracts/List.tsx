@@ -42,10 +42,12 @@ export default function ListContract() {
                 const sortedContracts = [...contractsData].sort((a, b) => {
                     const metaA = a as PartnerContract & { createdAt?: string; updatedAt?: string };
                     const metaB = b as PartnerContract & { createdAt?: string; updatedAt?: string };
-                    const dateA = metaA.updatedAt ?? metaA.createdAt ?? a.startDate;
-                    const dateB = metaB.updatedAt ?? metaB.createdAt ?? b.startDate;
+                    // Ưu tiên createdAt (ngày tạo) trước, sau đó mới đến updatedAt
+                    const dateA = metaA.createdAt ?? metaA.updatedAt ?? a.startDate;
+                    const dateB = metaB.createdAt ?? metaB.updatedAt ?? b.startDate;
                     const timeA = dateA ? new Date(dateA).getTime() : 0;
                     const timeB = dateB ? new Date(dateB).getTime() : 0;
+                    // Sắp xếp mới nhất trước (descending)
                     return timeB - timeA;
                 });
 
@@ -119,6 +121,8 @@ export default function ListContract() {
                 return 'bg-blue-100 text-blue-800';
             case 'terminated':
                 return 'bg-red-100 text-red-800';
+            case 'rejected':
+                return 'bg-rose-100 text-rose-800';
             default:
                 return 'bg-gray-100 text-gray-800';
         }
@@ -137,6 +141,8 @@ export default function ListContract() {
                 return 'Đã hết hạn';
             case 'terminated':
                 return 'Đã chấm dứt';
+            case 'rejected':
+                return 'Đã từ chối';
             default:
                 return status;
         }
@@ -149,6 +155,9 @@ export default function ListContract() {
         }
         if (target === 'terminated') {
             return normalized === 'terminated';
+        }
+        if (target === 'rejected') {
+            return normalized === 'rejected';
         }
         return normalized === target;
     };
@@ -198,6 +207,12 @@ export default function ListContract() {
         {
             title: 'Đã chấm dứt',
             value: countStatus('terminated').toString(),
+            color: 'red',
+            icon: <AlertCircle className="w-6 h-6" />
+        },
+        {
+            title: 'Đã từ chối',
+            value: countStatus('rejected').toString(),
             color: 'red',
             icon: <AlertCircle className="w-6 h-6" />
         },
@@ -415,6 +430,7 @@ export default function ListContract() {
                                         <option value="active">Đang hiệu lực</option>
                                         <option value="expired">Đã hết hạn</option>
                                         <option value="terminated">Đã chấm dứt</option>
+                                        <option value="rejected">Đã từ chối</option>
                                     </select>
                                     <button
                                         onClick={() => { setFilterStatus(''); setSearchTerm(''); }}

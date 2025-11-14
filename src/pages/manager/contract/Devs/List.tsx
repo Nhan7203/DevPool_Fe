@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  XCircle,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
@@ -137,6 +138,8 @@ export default function DevContracts() {
         return "bg-blue-100 text-blue-800";
       case "terminated":
         return "bg-red-100 text-red-800";
+      case "rejected":
+        return "bg-rose-100 text-rose-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -154,6 +157,8 @@ export default function DevContracts() {
         return "Đã hết hạn";
       case "terminated":
         return "Đã chấm dứt";
+      case "rejected":
+        return "Đã từ chối";
       default:
         return status;
     }
@@ -177,6 +182,9 @@ export default function DevContracts() {
     }
     if (target === "terminated") {
       return normalized === "terminated";
+    }
+    if (target === "rejected") {
+      return normalized === "rejected";
     }
     return normalized === target;
   };
@@ -222,6 +230,12 @@ export default function DevContracts() {
       value: countStatus("terminated").toString(),
       color: "red",
       icon: <AlertCircle className="w-6 h-6" />,
+    },
+    {
+      title: "Đã từ chối",
+      value: countStatus("rejected").toString(),
+      color: "rose",
+      icon: <XCircle className="w-6 h-6" />,
     },
     {
       title: "Tổng giá trị",
@@ -325,6 +339,8 @@ export default function DevContracts() {
                             ? "bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200"
                             : stat.color === "red"
                             ? "bg-red-100 text-red-600 group-hover:bg-red-200"
+                            : stat.color === "rose"
+                            ? "bg-rose-100 text-rose-600 group-hover:bg-rose-200"
                             : stat.color === "purple"
                             ? "bg-accent-100 text-accent-600 group-hover:bg-accent-200"
                             : stat.color === "gray"
@@ -444,6 +460,7 @@ export default function DevContracts() {
                     <option value="active">Đang hiệu lực</option>
                     <option value="expired">Đã hết hạn</option>
                     <option value="terminated">Đã chấm dứt</option>
+                    <option value="rejected">Đã từ chối</option>
                   </select>
                   <button
                     onClick={() => {

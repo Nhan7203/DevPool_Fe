@@ -5,7 +5,8 @@ export interface Project {
   id: number;
   clientCompanyId: number;
   marketId: number;
-  industryId: number;
+  industryIds: number[];
+  industryNames?: string[];
   name: string;
   description?: string;
   startDate: string;
@@ -19,7 +20,7 @@ export interface Project {
 export interface ProjectPayload {
   clientCompanyId: number;
   marketId: number;
-  industryId: number;
+  industryIds: number[];
   name: string;
   description?: string;
   startDate: string;
@@ -30,7 +31,7 @@ export interface ProjectPayload {
 export interface ProjectFilter {
   clientCompanyId?: number;
   marketId?: number;
-  industryId?: number;
+  industryIds?: number[];
   name?: string;
   status?: string;
   startDateFrom?: string;
@@ -47,8 +48,11 @@ export const projectService = {
         params.append("ClientCompanyId", filter.clientCompanyId.toString());
       if (filter?.marketId)
         params.append("MarketId", filter.marketId.toString());
-      if (filter?.industryId)
-        params.append("IndustryId", filter.industryId.toString());
+      if (filter?.industryIds?.length) {
+        filter.industryIds.forEach((industryId) =>
+          params.append("IndustryIds", industryId.toString())
+        );
+      }
       if (filter?.name)
         params.append("Name", filter.name);
       if (filter?.status)

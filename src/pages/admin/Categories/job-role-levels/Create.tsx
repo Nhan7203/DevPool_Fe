@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { 
   Briefcase,
   Layers,
@@ -20,14 +20,18 @@ import { type JobRole, jobRoleService } from "../../../../services/JobRole";
 
 export default function JobRoleLevelCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
+  
+  // Lấy jobRoleId từ query string nếu có
+  const jobRoleIdFromQuery = searchParams.get('jobRoleId');
+  const initialJobRoleId = jobRoleIdFromQuery ? Number(jobRoleIdFromQuery) : 0;
+  
   const [formData, setFormData] = useState<JobRoleLevelPayload>({
-    jobRoleId: 0,
+    jobRoleId: initialJobRoleId,
     name: "",
     description: "",
     level: 0,
-    minManMonthPrice: undefined,
-    maxManMonthPrice: undefined,
   });
 
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
@@ -59,8 +63,6 @@ export default function JobRoleLevelCreatePage() {
           ? checked
           : ["level", "jobRoleId"].includes(name)
           ? Number(value)
-          : ["minManMonthPrice", "maxManMonthPrice"].includes(name)
-          ? (value === "" ? undefined : Number(value))
           : value,
     }));
   };
@@ -80,7 +82,12 @@ export default function JobRoleLevelCreatePage() {
     try {
       await jobRoleLevelService.create(formData);
       setSuccess(true);
-      setTimeout(() => navigate("/admin/categories/job-role-levels"), 1500);
+      // Nếu có jobRoleId từ query, quay lại trang detail của job role
+      if (jobRoleIdFromQuery) {
+        setTimeout(() => navigate(`/admin/categories/job-roles/${jobRoleIdFromQuery}`), 1500);
+      } else {
+        setTimeout(() => navigate("/admin/categories/job-roles"), 1500);
+      }
     } catch (err) {
       console.error("❌ Lỗi tạo vị trí:", err);
       setError("Không thể tạo vị trí. Vui lòng thử lại.");
@@ -98,11 +105,11 @@ export default function JobRoleLevelCreatePage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link 
-              to="/admin/categories/job-role-levels"
+              to={jobRoleIdFromQuery ? `/admin/categories/job-roles/${jobRoleIdFromQuery}` : "/admin/categories/job-roles"}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
+              <span className="font-medium">Quay lại</span>
             </Link>
           </div>
 
@@ -141,7 +148,7 @@ export default function JobRoleLevelCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <ClipboardList className="w-4 h-4" />
-                  Tên vị trí tuyển dụng
+                  Tên vị trí tuyển dụng <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="name"
@@ -158,7 +165,7 @@ export default function JobRoleLevelCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Layers className="w-4 h-4" />
-                    Loại vị trí
+                    Loại vị trí <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -198,7 +205,7 @@ export default function JobRoleLevelCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Cấp độ
+                    Cấp độ <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -213,40 +220,6 @@ export default function JobRoleLevelCreatePage() {
                       <option value="3">Lead</option>
                     </select>
                   </div>
-                </div>
-                {/* Đơn giá tối thiểu/tháng */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    Đơn giá tối thiểu (man-month)
-                  </label>
-                  <input
-                    name="minManMonthPrice"
-                    type="number"
-                    step="0.01"
-                    value={formData.minManMonthPrice?.toString() ?? ""}
-                    onChange={handleChange}
-                    placeholder="VD: 1000"
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                {/* Đơn giá tối đa/tháng */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    Đơn giá tối đa (man-month)
-                  </label>
-                  <input
-                    name="maxManMonthPrice"
-                    type="number"
-                    step="0.01"
-                    value={formData.maxManMonthPrice?.toString() ?? ""}
-                    onChange={handleChange}
-                    placeholder="VD: 3000"
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
                 </div>
               </div>
             </div>
@@ -297,7 +270,7 @@ export default function JobRoleLevelCreatePage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to="/admin/categories/job-role-levels"
+              to={jobRoleIdFromQuery ? `/admin/categories/job-roles/${jobRoleIdFromQuery}` : "/admin/categories/job-roles"}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <ArrowLeft className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

@@ -8,12 +8,12 @@ import { skillGroupService, type SkillGroup } from "../../../../services/SkillGr
 import { 
   Search, 
   Plus, 
-  Eye, 
-  Code, 
+  Eye,
   FileText,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Star
 } from "lucide-react";
 
 export default function SkillListPage() {
@@ -33,7 +33,7 @@ export default function SkillListPage() {
       title: 'Tổng Kỹ Năng',
       value: skills.length.toString(),
       color: 'blue',
-      icon: <Code className="w-6 h-6" />
+      icon: <Star className="w-6 h-6" />
     },
     // Có mô tả
     {
@@ -240,7 +240,7 @@ export default function SkillListPage() {
                     <td colSpan={5} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
-                          <Code className="w-8 h-8 text-neutral-400" />
+                          <Star className="w-8 h-8 text-neutral-400" />
                         </div>
                         <p className="text-neutral-500 text-lg font-medium">Không có kỹ năng nào</p>
                         <p className="text-neutral-400 text-sm mt-1">Thử thay đổi từ khóa tìm kiếm hoặc tạo kỹ năng mới</p>
@@ -256,7 +256,7 @@ export default function SkillListPage() {
                       <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <Code className="w-4 h-4 text-neutral-400" />
+                          <Star className="w-4 h-4 text-neutral-400" />
                           <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                             {s.name}
                           </div>

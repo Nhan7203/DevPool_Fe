@@ -124,7 +124,7 @@ export default function CertificateTypeCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Award className="w-4 h-4" />
-                  Tên loại chứng chỉ
+                  Tên loại chứng chỉ <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="name"

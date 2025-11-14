@@ -38,6 +38,7 @@ export default function TalentWorkExperienceCreatePage() {
   const [talentCVs, setTalentCVs] = useState<TalentCV[]>([]);
   const [analysisExperiences, setAnalysisExperiences] = useState<ExtractedWorkExperience[]>([]);
   const analysisStorageKey = talentId ? `talent-analysis-prefill-experiences-${talentId}` : null;
+  const cvIdStorageKey = talentId ? `talent-analysis-prefill-cv-id-${talentId}` : null;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,6 +67,21 @@ export default function TalentWorkExperienceCreatePage() {
       console.error("❌ Không thể đọc gợi ý kinh nghiệm từ phân tích CV", error);
     }
   }, [analysisStorageKey]);
+
+  // Tự động chọn CV đang được phân tích
+  useEffect(() => {
+    if (!cvIdStorageKey || !talentCVs.length) return;
+    try {
+      const raw = sessionStorage.getItem(cvIdStorageKey);
+      if (!raw) return;
+      const cvId = JSON.parse(raw) as number;
+      if (cvId && talentCVs.some(cv => cv.id === cvId)) {
+        setForm(prev => ({ ...prev, talentCVId: cvId }));
+      }
+    } catch (error) {
+      console.error("❌ Không thể đọc CV ID từ phân tích", error);
+    }
+  }, [cvIdStorageKey, talentCVs]);
 
   // Validate start date similar to talents/Create.tsx
   const validateStartDate = (date: string): boolean => {
@@ -338,7 +354,7 @@ export default function TalentWorkExperienceCreatePage() {
                 >
                   <option value="0">-- Chọn CV --</option>
                   {talentCVs.map(cv => (
-                    <option key={cv.id} value={cv.id}>{cv.versionName}</option>
+                    <option key={cv.id} value={cv.id}>v{cv.version}</option>
                   ))}
                 </select>
                 {form.talentCVId > 0 && (

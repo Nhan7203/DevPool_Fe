@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Phone, Briefcase, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow } from "lucide-react";
+import { User, Mail, Phone, Briefcase, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow, Search, Filter } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import {
@@ -16,12 +16,15 @@ import {
 import { type Partner, partnerService } from "../../../services/Partner";
 import { talentCVService, type TalentCVExtractResponse } from "../../../services/TalentCV";
 import { type Skill, skillService } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { type JobRole, jobRoleService } from "../../../services/JobRole";
 import { type CertificateType, certificateTypeService } from "../../../services/CertificateType";
 import { type JobRoleLevel, jobRoleLevelService } from "../../../services/JobRoleLevel";
 import { type Location, locationService } from "../../../services/location";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { uploadFile } from "../../../utils/firebaseStorage";
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "../../../configs/firebase";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
@@ -31,8 +34,13 @@ export default function CreateTalent() {
   const [loading, setLoading] = useState(false);
   const [extractingCV, setExtractingCV] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [partnerSearchQuery, setPartnerSearchQuery] = useState<string>("");
   const [locations, setLocations] = useState<Location[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
+  const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+  const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState<string>("");
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
@@ -41,6 +49,12 @@ export default function CreateTalent() {
   const [uploadingCV, setUploadingCV] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploadedFromFirebase, setIsUploadedFromFirebase] = useState(false);
+  const [uploadedCVUrl, setUploadedCVUrl] = useState<string | null>(null); // Track CV URL uploaded from Firebase
+  // Certificate image upload states
+  const [certificateImageFiles, setCertificateImageFiles] = useState<Record<number, File>>({});
+  const [uploadingCertificateIndex, setUploadingCertificateIndex] = useState<number | null>(null);
+  const [certificateUploadProgress, setCertificateUploadProgress] = useState<Record<number, number>>({});
+  const [uploadedCertificateUrls, setUploadedCertificateUrls] = useState<Record<number, string>>({}); // Track URLs uploaded from Firebase
 
   const [formData, setFormData] = useState<Partial<TalentWithRelatedDataCreateModel>>({
     currentPartnerId: 1,
@@ -61,11 +75,16 @@ export default function CreateTalent() {
   const [talentWorkExperiences, setTalentWorkExperiences] = useState<TalentWorkExperienceCreateModel[]>([]);
   const [talentProjects, setTalentProjects] = useState<TalentProjectCreateModel[]>([]);
   const [talentCertificates, setTalentCertificates] = useState<TalentCertificateCreateModel[]>([]);
-  const [talentJobRoleLevels, setTalentJobRoleLevels] = useState<TalentJobRoleLevelCreateModel[]>([]);
+  // State for job role levels (bắt buộc, tự động tạo 1 item mặc định)
+  const [talentJobRoleLevels, setTalentJobRoleLevels] = useState<TalentJobRoleLevelCreateModel[]>([{
+    jobRoleLevelId: 0,
+    yearsOfExp: 0,
+    ratePerMonth: undefined
+  }]); // Tự động tạo 1 job role level mặc định vì bắt buộc
   // State for initial CV (bắt buộc, chỉ 1 CV)
   const [initialCVs, setInitialCVs] = useState<Partial<TalentCVCreateModel>[]>([{
     jobRoleId: undefined,
-    versionName: "",
+    version: 1,
     cvFileUrl: "",
     isActive: true, // Mặc định active là "có"
     summary: "",
@@ -104,6 +123,7 @@ export default function CreateTalent() {
     }>;
     certificates?: Array<{
       certificateName: string;
+      certificateDescription?: string | null;
       issuedDate?: string | null; // YYYY-MM or string or null
       imageUrl?: string | null;
     }>;
@@ -125,18 +145,18 @@ export default function CreateTalent() {
     certificateTypes?: string[];
     jobRoles?: string[];
   }>({});
-const [adminUserIds, setAdminUserIds] = useState<string[]>([]);
-const [suggestionLoading, setSuggestionLoading] = useState<string | null>(null);
-const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useState<
-  Record<
-    string,
-    {
-      ids: number[];
-      readMap: Record<number, boolean>;
-      category: "location" | "jobRole" | "skill" | "certificateType";
-    }
-  >
->({});
+  const [adminUserIds, setAdminUserIds] = useState<string[]>([]);
+  const [suggestionLoading, setSuggestionLoading] = useState<string | null>(null);
+  const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useState<
+    Record<
+      string,
+      {
+        ids: number[];
+        readMap: Record<number, boolean>;
+        category: "location" | "jobRole" | "skill" | "certificateType";
+      }
+    >
+  >({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -170,6 +190,23 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
         setJobRoles(jobRolesArray);
         setCertificateTypes(certificateTypesArray);
         setJobRoleLevels(jobRoleLevelsArray);
+
+        // Load skill groups riêng để xử lý lỗi tốt hơn
+        try {
+          const skillGroupsData = await skillGroupService.getAll({ excludeDeleted: true });
+          const skillGroupsArray = Array.isArray(skillGroupsData)
+            ? skillGroupsData
+            : (Array.isArray((skillGroupsData as any)?.items)
+              ? (skillGroupsData as any).items
+              : (Array.isArray((skillGroupsData as any)?.data)
+                ? (skillGroupsData as any).data
+                : []));
+          setSkillGroups(skillGroupsArray);
+          console.log("✅ Skill Groups loaded:", skillGroupsArray.length, skillGroupsArray);
+        } catch (skillGroupsError) {
+          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
+          setSkillGroups([]); // Set empty array nếu có lỗi
+        }
 
         // Debug: Log dữ liệu để kiểm tra
         console.log("✅ Dữ liệu đã load:", {
@@ -629,12 +666,21 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       setTalentWorkExperiences([]);
       setTalentProjects([]);
       setTalentCertificates([]);
-      setTalentJobRoleLevels([]);
+      // Reset job role levels về mặc định (bắt buộc phải có ít nhất 1)
+      setTalentJobRoleLevels([{
+        jobRoleLevelId: 0,
+        yearsOfExp: 0,
+        ratePerMonth: undefined
+      }]);
 
       // Clear CV URL trong initialCVs khi chọn file mới
       setInitialCVs(prev => prev.map((cv, index) =>
         index === 0 ? { ...cv, cvFileUrl: "" } : cv
       ));
+
+      // Clear uploaded CV URL tracking
+      setUploadedCVUrl(null);
+      setIsUploadedFromFirebase(false);
 
       setCvFile(file);
       // Create preview URL for PDF
@@ -651,15 +697,20 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
     }
 
     const currentCV = initialCVs[cvIndex];
-    if (!currentCV?.versionName?.trim()) {
-      alert("Vui lòng nhập tên phiên bản CV trước khi upload!");
+    if (!currentCV?.version || currentCV.version <= 0) {
+      alert("Vui lòng nhập version CV trước khi upload!");
+      return;
+    }
+
+    if (!currentCV?.jobRoleId || currentCV.jobRoleId <= 0) {
+      alert("⚠️ Vui lòng chọn vị trí công việc cho CV trước khi upload lên Firebase!");
       return;
     }
 
     // Xác nhận trước khi upload
     const confirmed = window.confirm(
       `Bạn có chắc chắn muốn upload file "${cvFile.name}" lên Firebase không?\n\n` +
-      `Tên phiên bản: ${currentCV.versionName}\n` +
+      `Version: ${currentCV.version}\n` +
       `Kích thước file: ${(cvFile.size / 1024).toFixed(2)} KB`
     );
 
@@ -674,7 +725,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
     try {
       // Upload to temp folder (will be moved when talent is created)
       const timestamp = Date.now();
-      const sanitizedVersionName = currentCV.versionName.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const sanitizedVersionName = `v${currentCV.version}`.replace(/[^a-zA-Z0-9-_]/g, '_');
       const fileExtension = cvFile.name.split('.').pop();
       const fileName = `temp_${sanitizedVersionName}_${timestamp}.${fileExtension}`;
       const filePath = `temp-talents/${fileName}`;
@@ -690,8 +741,9 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
         index === cvIndex ? { ...cv, cvFileUrl: downloadURL } : cv
       ));
 
-      // Đánh dấu đã upload lên Firebase
+      // Đánh dấu đã upload lên Firebase và track URL
       setIsUploadedFromFirebase(true);
+      setUploadedCVUrl(downloadURL);
 
       alert("✅ Upload CV thành công!");
     } catch (err: any) {
@@ -701,6 +753,300 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       setUploadingCV(false);
       setUploadingCVIndex(null);
       setUploadProgress(0);
+    }
+  };
+
+  // Handle certificate image file selection
+  const handleFileChangeCertificate = (certIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type (images only)
+      if (!file.type.startsWith('image/')) {
+        alert("⚠️ Vui lòng chọn file ảnh (jpg, png, gif, etc.)");
+        e.target.value = '';
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert("⚠️ Kích thước file không được vượt quá 10MB");
+        e.target.value = '';
+        return;
+      }
+
+      setCertificateImageFiles(prev => ({ ...prev, [certIndex]: file }));
+    }
+  };
+
+  // Handle certificate image upload to Firebase
+  const handleUploadCertificateImage = async (certIndex: number) => {
+    const imageFile = certificateImageFiles[certIndex];
+    if (!imageFile) {
+      alert("Vui lòng chọn file ảnh trước!");
+      return;
+    }
+
+    // Xác nhận trước khi upload
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn upload ảnh "${imageFile.name}" lên Firebase không?\n\n` +
+      `Kích thước file: ${(imageFile.size / 1024).toFixed(2)} KB`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setUploadingCertificateIndex(certIndex);
+    setCertificateUploadProgress(prev => ({ ...prev, [certIndex]: 0 }));
+
+    try {
+      // Upload to certificates folder
+      const timestamp = Date.now();
+      const sanitizedFileName = imageFile.name.replace(/[^a-zA-Z0-9-_.]/g, '_');
+      const fileName = `cert_${certIndex}_${timestamp}_${sanitizedFileName}`;
+      const filePath = `certificates/${fileName}`;
+
+      const downloadURL = await uploadFile(
+        imageFile,
+        filePath,
+        (progress) => setCertificateUploadProgress(prev => ({ ...prev, [certIndex]: progress }))
+      );
+
+      // Update the certificate with the download URL
+      updateCertificate(certIndex, 'imageUrl', downloadURL);
+
+      // Track this URL as uploaded from Firebase
+      setUploadedCertificateUrls(prev => ({ ...prev, [certIndex]: downloadURL }));
+
+      // Clear the file from state after successful upload
+      setCertificateImageFiles(prev => {
+        const newFiles = { ...prev };
+        delete newFiles[certIndex];
+        return newFiles;
+      });
+
+      alert("✅ Upload ảnh chứng chỉ thành công!");
+    } catch (err: any) {
+      console.error("❌ Error uploading certificate image:", err);
+      alert(`❌ Lỗi khi upload ảnh: ${err.message || 'Vui lòng thử lại.'}`);
+    } finally {
+      setUploadingCertificateIndex(null);
+      setCertificateUploadProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[certIndex];
+        return newProgress;
+      });
+    }
+  };
+
+  // Extract Firebase Storage path from download URL
+  const extractFirebasePath = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      // Firebase Storage URLs have format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?...
+      const pathMatch = urlObj.pathname.match(/\/o\/(.+)/);
+      if (pathMatch && pathMatch[1]) {
+        // Decode the path (Firebase encodes spaces and special chars)
+        return decodeURIComponent(pathMatch[1]);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Delete CV file from Firebase Storage
+  const handleDeleteCVFile = async (cvIndex: number) => {
+    const currentCV = initialCVs[cvIndex];
+    const currentUrl = currentCV?.cvFileUrl;
+    if (!currentUrl) {
+      return;
+    }
+
+    if (!uploadedCVUrl || uploadedCVUrl !== currentUrl) {
+      // URL không phải từ Firebase upload, chỉ cần xóa URL
+      updateInitialCV(cvIndex, 'cvFileUrl', "");
+      setUploadedCVUrl(null);
+      setIsUploadedFromFirebase(false);
+      return;
+    }
+
+    // Xác nhận xóa file từ Firebase
+    const confirmed = window.confirm(
+      "⚠️ Bạn có chắc chắn muốn xóa file CV này?\n\n" +
+      "File sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
+      "Bạn có muốn tiếp tục không?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const firebasePath = extractFirebasePath(currentUrl);
+      if (firebasePath) {
+        const fileRef = ref(storage, firebasePath);
+        await deleteObject(fileRef);
+        console.log("✅ Đã xóa CV file từ Firebase:", firebasePath);
+      } else {
+        console.warn("⚠️ Không thể extract path từ URL, chỉ xóa URL khỏi form");
+      }
+
+      // Xóa URL khỏi CV
+      updateInitialCV(cvIndex, 'cvFileUrl', "");
+
+      // Xóa khỏi tracking
+      setUploadedCVUrl(null);
+      setIsUploadedFromFirebase(false);
+
+      alert("✅ Đã xóa file CV thành công!");
+    } catch (err: any) {
+      console.error("❌ Error deleting CV file:", err);
+      // Vẫn xóa URL khỏi form dù không xóa được file
+      updateInitialCV(cvIndex, 'cvFileUrl', "");
+      setUploadedCVUrl(null);
+      setIsUploadedFromFirebase(false);
+      alert("⚠️ Đã xóa URL khỏi form, nhưng có thể không xóa được file trong Firebase. Vui lòng kiểm tra lại.");
+    }
+  };
+
+  // Handle manual CV URL change with warning - BẮT BUỘC xóa file Firebase trước
+  const handleCVUrlChange = async (cvIndex: number, newUrl: string) => {
+    const currentCV = initialCVs[cvIndex];
+    const currentUrl = currentCV?.cvFileUrl;
+
+    // Nếu đang thay đổi URL đã upload từ Firebase
+    if (currentUrl && uploadedCVUrl && currentUrl === uploadedCVUrl && newUrl !== currentUrl) {
+      // BẮT BUỘC phải xóa file trong Firebase trước
+      const confirmed = window.confirm(
+        "⚠️ BẮT BUỘC XÓA FILE TRONG FIREBASE!\n\n" +
+        "URL hiện tại đã được upload từ Firebase.\n\n" +
+        "Để nhập URL thủ công, bạn PHẢI xóa file trong Firebase trước.\n\n" +
+        "Nhấn OK để xóa file trong Firebase và cho phép nhập URL mới\n" +
+        "Nhấn Cancel để hủy thay đổi"
+      );
+
+      if (!confirmed) {
+        // Hủy thay đổi - giữ nguyên URL cũ
+        return;
+      }
+
+      // Xóa file cũ trước
+      try {
+        await handleDeleteCVFile(cvIndex);
+        // Sau khi xóa thành công, cập nhật URL mới
+        updateInitialCV(cvIndex, 'cvFileUrl', newUrl);
+      } catch (error) {
+        // Nếu xóa thất bại, không cho phép thay đổi URL
+        alert("❌ Không thể xóa file trong Firebase. Vui lòng thử lại hoặc liên hệ admin.");
+        // Khôi phục URL cũ
+        return;
+      }
+    } else {
+      // Không phải URL từ Firebase, chỉ cập nhật bình thường
+      updateInitialCV(cvIndex, 'cvFileUrl', newUrl);
+    }
+  };
+
+  // Delete certificate image from Firebase Storage
+  const handleDeleteCertificateImage = async (certIndex: number) => {
+    const currentUrl = talentCertificates[certIndex]?.imageUrl;
+    if (!currentUrl) {
+      return;
+    }
+
+    const uploadedUrl = uploadedCertificateUrls[certIndex];
+    if (!uploadedUrl || uploadedUrl !== currentUrl) {
+      // URL không phải từ Firebase upload, chỉ cần xóa URL
+      updateCertificate(certIndex, 'imageUrl', "");
+      setUploadedCertificateUrls(prev => {
+        const newUrls = { ...prev };
+        delete newUrls[certIndex];
+        return newUrls;
+      });
+      return;
+    }
+
+    // Xác nhận xóa file từ Firebase
+    const confirmed = window.confirm(
+      "⚠️ Bạn có chắc chắn muốn xóa ảnh chứng chỉ này?\n\n" +
+      "File sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
+      "Bạn có muốn tiếp tục không?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const firebasePath = extractFirebasePath(currentUrl);
+      if (firebasePath) {
+        const fileRef = ref(storage, firebasePath);
+        await deleteObject(fileRef);
+        console.log("✅ Đã xóa file từ Firebase:", firebasePath);
+      } else {
+        console.warn("⚠️ Không thể extract path từ URL, chỉ xóa URL khỏi form");
+      }
+
+      // Xóa URL khỏi certificate
+      updateCertificate(certIndex, 'imageUrl', "");
+
+      // Xóa khỏi tracking
+      setUploadedCertificateUrls(prev => {
+        const newUrls = { ...prev };
+        delete newUrls[certIndex];
+        return newUrls;
+      });
+
+      alert("✅ Đã xóa ảnh chứng chỉ thành công!");
+    } catch (err: any) {
+      console.error("❌ Error deleting certificate image:", err);
+      // Vẫn xóa URL khỏi form dù không xóa được file
+      updateCertificate(certIndex, 'imageUrl', "");
+      setUploadedCertificateUrls(prev => {
+        const newUrls = { ...prev };
+        delete newUrls[certIndex];
+        return newUrls;
+      });
+      alert("⚠️ Đã xóa URL khỏi form, nhưng có thể không xóa được file trong Firebase. Vui lòng kiểm tra lại.");
+    }
+  };
+
+  // Handle manual URL change with warning - BẮT BUỘC xóa file Firebase trước
+  const handleCertificateImageUrlChange = async (certIndex: number, newUrl: string) => {
+    const currentUrl = talentCertificates[certIndex]?.imageUrl;
+    const uploadedUrl = uploadedCertificateUrls[certIndex];
+
+    // Nếu đang thay đổi URL đã upload từ Firebase
+    if (currentUrl && uploadedUrl && currentUrl === uploadedUrl && newUrl !== currentUrl) {
+      // BẮT BUỘC phải xóa file trong Firebase trước
+      const confirmed = window.confirm(
+        "⚠️ BẮT BUỘC XÓA FILE TRONG FIREBASE!\n\n" +
+        "URL hiện tại đã được upload từ Firebase.\n\n" +
+        "Để nhập URL thủ công, bạn PHẢI xóa file trong Firebase trước.\n\n" +
+        "Nhấn OK để xóa file trong Firebase và cho phép nhập URL mới\n" +
+        "Nhấn Cancel để hủy thay đổi"
+      );
+
+      if (!confirmed) {
+        // Hủy thay đổi - giữ nguyên URL cũ
+        return;
+      }
+
+      // Xóa file cũ trước
+      try {
+        await handleDeleteCertificateImage(certIndex);
+        // Sau khi xóa thành công, cập nhật URL mới
+        updateCertificate(certIndex, 'imageUrl', newUrl);
+      } catch (error) {
+        // Nếu xóa thất bại, không cho phép thay đổi URL
+        alert("❌ Không thể xóa file trong Firebase. Vui lòng thử lại hoặc liên hệ admin.");
+        // Khôi phục URL cũ
+        return;
+      }
+    } else {
+      // Không phải URL từ Firebase, chỉ cập nhật bình thường
+      updateCertificate(certIndex, 'imageUrl', newUrl);
     }
   };
 
@@ -817,12 +1163,18 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       setTalentWorkExperiences([]);
       setTalentProjects([]);
       setTalentCertificates([]);
-      setTalentJobRoleLevels([]);
+      // Reset job role levels về mặc định (bắt buộc phải có ít nhất 1)
+      // CV có thể tự động thêm job role levels sau đó
+      setTalentJobRoleLevels([{
+        jobRoleLevelId: 0,
+        yearsOfExp: 0,
+        ratePerMonth: undefined
+      }]);
 
       // Note: formData cơ bản (fullName, email, phone, etc.) sẽ được ghi đè bởi CV mới
       // nếu CV mới có dữ liệu, hoặc giữ nguyên nếu user đã điền thủ công và CV không có
 
-      const result: TalentCVExtractResponse = await talentCVService.extractFromPDF(cvFile);
+      const result: TalentCVExtractResponse = await talentCVService.extractFromPDFWithOllama(cvFile);
 
       if (result.isSuccess && result.generateText) {
         try {
@@ -1058,32 +1410,8 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
             setUnmatchedData(prev => ({ ...prev, skills: unmatchedSkills.length > 0 ? unmatchedSkills : undefined }));
           }
 
-          // Auto-add work experiences from CV to form
-          let addedWorkExpCount = 0;
-          if (parsedData.workExperiences && Array.isArray(parsedData.workExperiences) && parsedData.workExperiences.length > 0) {
-            const newWorkExperiences: TalentWorkExperienceCreateModel[] = parsedData.workExperiences.map((exp: any) => {
-              // Convert YYYY-MM format to YYYY-MM-DD for date inputs (thêm ngày 01)
-              const formatDateForInput = (dateStr: string | null | undefined): string => {
-                if (!dateStr || dateStr === 'Present') return "";
-                // Nếu đã có format YYYY-MM-DD, giữ nguyên
-                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-                // Nếu có format YYYY-MM, thêm -01
-                if (/^\d{4}-\d{2}$/.test(dateStr)) return `${dateStr}-01`;
-                return dateStr;
-              };
-
-              return {
-                company: exp.company || "",
-                position: exp.position || "",
-                startDate: formatDateForInput(exp.startDate),
-                endDate: exp.endDate && exp.endDate !== 'Present' ? formatDateForInput(exp.endDate) : undefined,
-                description: exp.description || ""
-              };
-            });
-            addedWorkExpCount = newWorkExperiences.length;
-            // Thêm vào đầu danh sách (giữ lại các work experiences đã có)
-            setTalentWorkExperiences(prev => [...newWorkExperiences, ...prev]);
-          }
+          // Không tự động thêm work experiences từ CV vào form (người dùng sẽ nhập thủ công)
+          // Work experiences vẫn được hiển thị trong sidebar "Dữ Liệu Đã Trích Xuất" để tham khảo
 
           // Auto-add projects from CV to form
           let addedProjectsCount = 0;
@@ -1099,33 +1427,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
             setTalentProjects(prev => [...newProjects, ...prev]);
           }
 
-          // Auto-add certificates from CV to form - CHỈ thêm nếu có trong hệ thống
+          // Auto-add certificates from CV to form - Tự động điền thông tin, KHÔNG tự động chọn loại chứng chỉ
           let addedCertificatesCount = 0;
-          const unmatchedCertTypes: string[] = [];
           if (parsedData.certificates && Array.isArray(parsedData.certificates) && parsedData.certificates.length > 0) {
             const newCertificates: TalentCertificateCreateModel[] = [];
 
             parsedData.certificates.forEach((cert: any) => {
-              // Tìm certificate type trong hệ thống (fuzzy matching)
-              let matchedCertType = certificateTypes.find(ct =>
-                ct.name.toLowerCase().trim() === cert.certificateName.toLowerCase().trim()
-              );
-
-              // Nếu không tìm thấy exact match, thử fuzzy matching
-              if (!matchedCertType) {
-                matchedCertType = certificateTypes.find(ct => fuzzyMatch(cert.certificateName, ct.name));
-              }
-
-              if (!matchedCertType) {
-                // Thêm vào unmatched nếu chưa có
-                if (!unmatchedCertTypes.includes(cert.certificateName)) {
-                  unmatchedCertTypes.push(cert.certificateName);
-                }
-                // KHÔNG thêm vào form nếu không tìm thấy trong hệ thống
-                return;
-              }
-
-              // CHỈ thêm vào form nếu tìm thấy trong hệ thống
               // Convert YYYY-MM format to YYYY-MM-DD for date inputs
               const formatDateForInput = (dateStr: string | null | undefined): string | undefined => {
                 if (!dateStr) return undefined;
@@ -1136,8 +1443,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                 return dateStr;
               };
 
+              // Thêm vào form với certificateTypeId = 0 (người dùng phải chọn thủ công)
+              // Tự động điền: certificateName, certificateDescription, imageUrl
               newCertificates.push({
-                certificateTypeId: matchedCertType.id,
+                certificateTypeId: 0, // Không tự động chọn, người dùng phải chọn thủ công
+                certificateName: cert.certificateName || "",
+                certificateDescription: cert.certificateDescription || "",
                 issuedDate: formatDateForInput(cert.issuedDate),
                 isVerified: false,
                 imageUrl: cert.imageUrl || ""
@@ -1149,8 +1460,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
             if (newCertificates.length > 0) {
               setTalentCertificates(prev => [...newCertificates, ...prev]);
             }
-            // Update unmatched certificate types
-            setUnmatchedData(prev => ({ ...prev, certificateTypes: unmatchedCertTypes.length > 0 ? unmatchedCertTypes : undefined }));
+            // Bỏ phần unmatched certificate types - không cần đề xuất nữa
           }
 
           // Auto-add job role levels from CV to form
@@ -1247,9 +1557,6 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
             }${addedSkillsCount > 0
               ? `\nĐã tự động thêm ${addedSkillsCount} kỹ năng vào form.`
               : ''
-            }${addedWorkExpCount > 0
-              ? `\nĐã tự động thêm ${addedWorkExpCount} kinh nghiệm làm việc vào form.`
-              : ''
             }${addedProjectsCount > 0
               ? `\nĐã tự động thêm ${addedProjectsCount} dự án vào form.`
               : ''
@@ -1334,8 +1641,8 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
       return;
     }
-    if (!cv.versionName || cv.versionName.trim() === "") {
-      alert("⚠️ Vui lòng nhập tên phiên bản CV!");
+    if (!cv.version || cv.version <= 0) {
+      alert("⚠️ Vui lòng nhập version CV!");
       return;
     }
     if (!cv.cvFileUrl || cv.cvFileUrl.trim() === "") {
@@ -1384,6 +1691,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       }
     });
 
+    // Validation Job Role Levels bắt buộc
+    if (talentJobRoleLevels.length === 0) {
+      alert("⚠️ Vui lòng thêm ít nhất 1 vị trí & mức lương!");
+      return;
+    }
+
     // Validate Job Role Levels: jobRoleLevelId phải > 0
     talentJobRoleLevels.forEach((jrl, index) => {
       if (!jrl.jobRoleLevelId || jrl.jobRoleLevelId === 0) {
@@ -1391,10 +1704,19 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
       }
     });
 
-    // Validate Certificates: certificateTypeId phải > 0
+    // Validate Certificates: certificateTypeId phải > 0, certificateName bắt buộc
     talentCertificates.forEach((cert, index) => {
       if (!cert.certificateTypeId || cert.certificateTypeId === 0) {
         newErrors[`certificate_${index}`] = `Chứng chỉ #${index + 1}: Vui lòng chọn loại chứng chỉ`;
+      }
+      if (!cert.certificateName || cert.certificateName.trim() === "") {
+        newErrors[`certificate_name_${index}`] = `Chứng chỉ #${index + 1}: Vui lòng nhập tên chứng chỉ`;
+      }
+      if (cert.certificateName && cert.certificateName.length > 255) {
+        newErrors[`certificate_name_${index}`] = `Chứng chỉ #${index + 1}: Tên chứng chỉ không được vượt quá 255 ký tự`;
+      }
+      if (cert.certificateDescription && cert.certificateDescription.length > 1000) {
+        newErrors[`certificate_description_${index}`] = `Chứng chỉ #${index + 1}: Mô tả chứng chỉ không được vượt quá 1000 ký tự`;
       }
     });
 
@@ -1462,7 +1784,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
           const cv = initialCVs[0];
           return {
             jobRoleId: cv.jobRoleId!,
-            versionName: cv.versionName!,
+            version: cv.version!,
             cvFileUrl: cv.cvFileUrl!,
             isActive: true, // CV mới khi tạo talent luôn mặc định active
             summary: cv.summary || "",
@@ -1540,6 +1862,8 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
   const addCertificate = () => {
     setTalentCertificates([...talentCertificates, {
       certificateTypeId: 0,
+      certificateName: "",
+      certificateDescription: "",
       issuedDate: undefined,
       isVerified: false,
       imageUrl: ""
@@ -1565,6 +1889,11 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
   };
 
   const removeJobRoleLevel = (index: number) => {
+    // Không cho phép xóa nếu chỉ còn 1 item (bắt buộc)
+    if (talentJobRoleLevels.length <= 1) {
+      alert("⚠️ Vị trí & mức lương là bắt buộc. Phải có ít nhất 1 vị trí.");
+      return;
+    }
     setTalentJobRoleLevels(talentJobRoleLevels.filter((_, i) => i !== index));
   };
 
@@ -1685,136 +2014,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                         />
                       </div>
                     </div>
-                  )}
-
-                  {/* Extracted Data Summary */}
-                  {extractedData && (
-                    <div className="mt-6 p-6 bg-gradient-to-br from-green-50 via-emerald-50/50 to-green-50 border-2 border-green-200 rounded-2xl shadow-md">
-                      <div className="flex items-center gap-3 mb-4 pb-4 border-b border-green-200">
-                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
-                          <FileText className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-base font-bold text-green-800">
-                            ✅ Đã trích xuất thành công!
-                          </p>
-                          <p className="text-xs text-green-600 mt-0.5">Thông tin đã được điền tự động vào form</p>
-                        </div>
-                      </div>
-
-                      {/* Display extracted information in a more readable format */}
-                      <div className="space-y-4">
-                        {extractedData.fullName && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <User className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Họ và tên</span>
-                            </div>
-                            <p className="text-sm font-medium text-green-900 ml-6">{extractedData.fullName}</p>
-                          </div>
-                        )}
-                        {extractedData.email && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Mail className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Email</span>
-                            </div>
-                            <p className="text-sm font-medium text-green-900 ml-6 break-all">{extractedData.email}</p>
-                          </div>
-                        )}
-                        {extractedData.phone && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Phone className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Số điện thoại</span>
-                            </div>
-                            <p className="text-sm font-medium text-green-900 ml-6">{extractedData.phone}</p>
-                          </div>
-                        )}
-                        {extractedData.locationName && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <MapPin className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Khu vực làm việc</span>
-                            </div>
-                            <p className="text-sm font-medium text-green-900 ml-6">{extractedData.locationName}</p>
-                          </div>
-                        )}
-                        {extractedData.skills && extractedData.skills.length > 0 && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Briefcase className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Kỹ năng</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 ml-6">
-                              {extractedData.skills.map((skill, index: number) => {
-                                const skillName = typeof skill === 'string' ? skill : skill.skillName;
-                                return (
-                                  <span key={index} className="px-2.5 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-medium shadow-sm">
-                                    {skillName}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        {extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Workflow className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Kinh nghiệm</span>
-                            </div>
-                            <div className="ml-6 space-y-2">
-                              {extractedData.workExperiences.slice(0, 3).map((exp, index: number) => (
-                                <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                                  <p className="font-semibold text-green-900">{exp.position || 'N/A'}</p>
-                                  <p className="text-green-700">{exp.company || 'N/A'}</p>
-                                  <p className="text-green-600">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</p>
-                                </div>
-                              ))}
-                              {extractedData.workExperiences.length > 3 && (
-                                <div className="text-xs text-green-600 italic">... và {extractedData.workExperiences.length - 3} kinh nghiệm khác</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        {extractedData.projects && extractedData.projects.length > 0 && (
-                          <div className="bg-white/60 rounded-lg p-3 border border-green-200">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Briefcase className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dự án</span>
-                            </div>
-                            <div className="ml-6 space-y-2">
-                              {extractedData.projects.slice(0, 3).map((project, index: number) => (
-                                <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                                  <p className="font-semibold text-green-900">{project.projectName || 'N/A'}</p>
-                                  {project.technologies && (
-                                    <p className="text-green-700">Tech: {project.technologies}</p>
-                                  )}
-                                  {project.description && (
-                                    <p className="text-green-600 text-xs mt-1">{project.description}</p>
-                                  )}
-                                </div>
-                              ))}
-                              {extractedData.projects.length > 3 && (
-                                <div className="text-xs text-green-600 italic">... và {extractedData.projects.length - 3} dự án khác</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Raw JSON for debugging */}
-                      <details className="mt-4 pt-4 border-t border-green-200">
-                        <summary className="text-xs font-medium text-green-600 cursor-pointer hover:text-green-800 transition-colors">
-                          🔍 Xem dữ liệu JSON đầy đủ
-                        </summary>
-                        <pre className="mt-3 p-3 bg-green-100/80 rounded-lg text-xs overflow-auto max-h-40 border border-green-200">
-                          {JSON.stringify(extractedData, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  )}
+                  )}              
                 </div>
                 {/* Họ tên */}
                 <div>
@@ -1972,9 +2172,38 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Đối tác <span className="text-red-500">*</span>
+                    {partners && partners.length > 4 && (
+                      <span className="ml-2 text-xs font-normal text-neutral-500">({partners.length} đối tác - có thể tìm kiếm)</span>
+                    )}
                   </label>
+
+                  {/* Partner Search Input - Chỉ hiển thị khi có nhiều partners */}
+                  {partners && partners.length > 4 && (
+                    <div className="mb-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm..."
+                          value={partnerSearchQuery}
+                          onChange={(e) => setPartnerSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white/50 border-neutral-300 focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                        />
+                        {partnerSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setPartnerSearchQuery("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="relative group">
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5 z-10" />
                     <select
                       name="currentPartnerId"
                       value={formData.currentPartnerId}
@@ -1985,11 +2214,23 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                     >
                       <option value="">-- Chọn đối tác --</option>
                       {partners && partners.length > 0 ? (
-                        partners.map((partner) => (
-                          <option key={partner.id} value={partner.id}>
-                            {partner.companyName}
-                          </option>
-                        ))
+                        (() => {
+                          const filteredPartners = partnerSearchQuery
+                            ? partners.filter(p =>
+                              p.companyName?.toLowerCase().includes(partnerSearchQuery.toLowerCase())
+                            )
+                            : partners;
+
+                          if (filteredPartners.length === 0) {
+                            return <option value="" disabled>Không tìm thấy đối tác nào</option>;
+                          }
+
+                          return filteredPartners.map((partner) => (
+                            <option key={partner.id} value={partner.id}>
+                              {partner.companyName}
+                            </option>
+                          ));
+                        })()
                       ) : (
                         <option value="" disabled>Đang tải dữ liệu...</option>
                       )}
@@ -2101,7 +2342,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                               <button
                                 type="button"
                                 onClick={() => handleUploadCV(index)}
-                                disabled={!cvFile || uploadingCV || !cv.versionName?.trim() || isUploadedFromFirebase}
+                                disabled={!cvFile || uploadingCV || !cv.version || cv.version <= 0 || !cv.jobRoleId || isUploadedFromFirebase}
                                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {uploadingCV && uploadingCVIndex === index ? (
@@ -2126,9 +2367,9 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                                   ✓ File đã được upload lên Firebase, không thể upload lại
                                 </p>
                               )}
-                              {!cv.versionName?.trim() && !isUploadedFromFirebase && (
+                              {(!cv.version || cv.version <= 0) && !isUploadedFromFirebase && (
                                 <p className="text-xs text-red-600 italic">
-                                  ⚠️ Vui lòng nhập tên phiên bản CV trước khi upload
+                                  ⚠️ Vui lòng nhập version CV trước khi upload
                                 </p>
                               )}
                             </div>
@@ -2156,6 +2397,11 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                                 <option value="" disabled>Đang tải dữ liệu...</option>
                               )}
                             </select>
+                            {!cv.jobRoleId && !isUploadedFromFirebase && (
+                              <p className="text-xs text-orange-600 mt-1">
+                                ⚠️ Phải chọn vị trí công việc trước khi upload CV lên Firebase
+                              </p>
+                            )}
                             {isUploadedFromFirebase && (
                               <p className="text-xs text-green-600 mt-1">
                                 File đã được upload lên Firebase, không thể thay đổi vị trí công việc
@@ -2164,13 +2410,15 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                              Tên phiên bản <span className="text-red-500">*</span>
+                              Version <span className="text-red-500">*</span>
                             </label>
                             <input
-                              type="text"
-                              value={cv.versionName || ""}
-                              onChange={(e) => updateInitialCV(index, 'versionName', e.target.value)}
-                              placeholder="CV v1.0"
+                              type="number"
+                              value={cv.version || 1}
+                              onChange={(e) => updateInitialCV(index, 'version', Number(e.target.value))}
+                              placeholder="1"
+                              min="1"
+                              step="1"
                               required={cvFile ? true : false}
                               disabled={isUploadedFromFirebase}
                               className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : ''
@@ -2178,7 +2426,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                             />
                             {isUploadedFromFirebase && (
                               <p className="text-xs text-green-600 mt-1">
-                                File đã được upload lên Firebase, không thể thay đổi tên phiên bản CV
+                                File đã được upload lên Firebase, không thể thay đổi version CV
                               </p>
                             )}
                             {cvFile && !isUploadedFromFirebase && (
@@ -2191,38 +2439,55 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">
                               URL file CV <span className="text-red-500">*</span> {cv.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
                             </label>
+
+                            {/* Warning when URL is from Firebase */}
+                            {cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl && (
+                              <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-xs text-orange-700 flex items-center gap-1.5">
+                                  <span className="font-semibold">🔒</span>
+                                  <span>URL này đã được upload từ Firebase và đã bị khóa. Không thể chỉnh sửa trực tiếp. Để nhập URL thủ công, bạn PHẢI nhấn nút "Xóa" để xóa file trong Firebase trước.</span>
+                                </p>
+                              </div>
+                            )}
+
                             <div className="flex gap-2">
                               <input
                                 type="url"
                                 value={cv.cvFileUrl || ""}
-                                onChange={(e) => updateInitialCV(index, 'cvFileUrl', e.target.value)}
+                                onChange={(e) => handleCVUrlChange(index, e.target.value)}
                                 placeholder="https://... hoặc upload từ file CV đã chọn"
-                                className={`flex-1 py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : ''
+                                disabled={!!(cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl) || (uploadingCV && uploadingCVIndex === index)}
+                                className={`flex-1 py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl
+                                    ? 'bg-gray-100 cursor-not-allowed opacity-75 border-gray-300'
+                                    : isUploadedFromFirebase
+                                      ? 'border-green-300 bg-green-50'
+                                      : ''
                                   }`}
-                                readOnly={isUploadedFromFirebase || (uploadingCV && uploadingCVIndex === index)}
                               />
                               {cv.cvFileUrl && (
-                                <a
-                                  href={cv.cvFileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Xem
-                                </a>
+                                <>
+                                  <a
+                                    href={cv.cvFileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    Xem
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCVFile(index)}
+                                    disabled={uploadingCV && uploadingCVIndex === index}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title={uploadedCVUrl === cv.cvFileUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                                  >
+                                    <X className="w-4 h-4" />
+                                    Xóa
+                                  </button>
+                                </>
                               )}
                             </div>
-                            {isUploadedFromFirebase && (
-                              <p className="text-xs text-green-600 mt-1">
-                                File đã được upload lên Firebase, không thể thay đổi URL file CV
-                              </p>
-                            )}
-                            {!isUploadedFromFirebase && (
-                              <p className="text-xs text-neutral-500 mt-1">
-                                URL sẽ tự động điền sau khi upload, hoặc bạn có thể nhập thủ công
-                              </p>
-                            )}
                           </div>
                           <div className="md:col-span-2">
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả/Tóm tắt</label>
@@ -2234,36 +2499,114 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                               className="w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                             />
                           </div>
-                          <div>
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                              CV này đang active?
-                            </label>
-                            <select
-                              value="true"
-                              disabled
-                              className="w-full py-2 px-4 border rounded-lg bg-green-50 border-green-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 cursor-not-allowed opacity-75"
-                            >
-                              <option value="true">Có</option>
-                            </select>
-                            <p className="text-xs text-green-600 mt-1">
-                              CV mới khi tạo talent sẽ mặc định ở trạng thái "Đang hoạt động" (không thể thay đổi khi tạo mới)
-                            </p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">Được tạo từ template?</label>
-                            <select
-                              value={cv.isGeneratedFromTemplate !== undefined ? cv.isGeneratedFromTemplate.toString() : "false"}
-                              onChange={(e) => updateInitialCV(index, 'isGeneratedFromTemplate', e.target.value === 'true')}
-                              className="w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                            >
-                              <option value="false">Không</option>
-                              <option value="true">Có</option>
-                            </select>
-                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Job Role Levels Section - Bắt buộc */}
+                <div className="pt-6 border-t border-neutral-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Target className="w-5 h-5 text-primary-600" />
+                      <h3 className="text-lg font-semibold text-neutral-800">
+                        Vị Trí & Mức Lương <span className="text-red-500">*</span>
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addJobRoleLevel}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Thêm
+                    </button>
+                  </div>
+                  {talentJobRoleLevels.map((jrl, index) => (
+                    <div key={index} className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-semibold text-neutral-700">Vị trí #{index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeJobRoleLevel(index)}
+                          disabled={talentJobRoleLevels.length <= 1}
+                          className={`text-red-600 hover:text-red-700 transition-colors ${talentJobRoleLevels.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={talentJobRoleLevels.length <= 1 ? 'Vị trí & mức lương là bắt buộc. Phải có ít nhất 1 vị trí.' : 'Xóa vị trí'}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm text-neutral-600 mb-1">
+                            Vị trí & cấp độ <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={jrl.jobRoleLevelId}
+                            onChange={(e) => {
+                              updateJobRoleLevel(index, 'jobRoleLevelId', Number(e.target.value));
+                              // Xóa lỗi khi người dùng chọn
+                              if (Number(e.target.value) > 0) {
+                                const newErrors = { ...errors };
+                                delete newErrors[`jobrolelevel_${index}`];
+                                setErrors(newErrors);
+                              }
+                            }}
+                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`jobrolelevel_${index}`] ? 'border-red-500' : 'border-neutral-300'
+                              }`}
+                          >
+                            <option value={0}>-- Chọn --</option>
+                            {jobRoleLevels && jobRoleLevels.length > 0 ? (
+                              jobRoleLevels.map((level) => {
+                                // Lấy danh sách jobRoleLevelId đã được chọn ở các item khác (trừ item hiện tại)
+                                const selectedJobRoleLevelIds = talentJobRoleLevels
+                                  .filter((_, i) => i !== index)
+                                  .map(jrl => jrl.jobRoleLevelId)
+                                  .filter(id => id > 0);
+                                const isDisabled = selectedJobRoleLevelIds.includes(level.id);
+
+                                return (
+                                  <option
+                                    key={level.id}
+                                    value={level.id}
+                                    disabled={isDisabled}
+                                    style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                                  >
+                                    {level.name}{isDisabled ? ' (đã chọn)' : ''}
+                                  </option>
+                                );
+                              })
+                            ) : (
+                              <option value={0} disabled>Đang tải dữ liệu...</option>
+                            )}
+                          </select>
+                          {errors[`jobrolelevel_${index}`] && (
+                            <p className="mt-1 text-xs text-red-500">{errors[`jobrolelevel_${index}`]}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm text-neutral-600 mb-1">Số năm kinh nghiệm</label>
+                          <input
+                            type="number"
+                            value={jrl.yearsOfExp}
+                            onChange={(e) => updateJobRoleLevel(index, 'yearsOfExp', Number(e.target.value))}
+                            min="0"
+                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn (VNĐ)</label>
+                          <input
+                            type="number"
+                            value={jrl.ratePerMonth || ""}
+                            onChange={(e) => updateJobRoleLevel(index, 'ratePerMonth', e.target.value ? Number(e.target.value) : undefined)}
+                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Projects Section */}
@@ -2363,102 +2706,6 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                   ))}
                 </div>
 
-                {/* Job Role Levels Section */}
-                <div className="pt-6 border-t border-neutral-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Target className="w-5 h-5 text-primary-600" />
-                      <h3 className="text-lg font-semibold text-neutral-800">Vị Trí & Mức Lương</h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addJobRoleLevel}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Thêm
-                    </button>
-                  </div>
-                  {talentJobRoleLevels.map((jrl, index) => (
-                    <div key={index} className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-semibold text-neutral-700">Vị trí #{index + 1}</span>
-                        <button type="button" onClick={() => removeJobRoleLevel(index)} className="text-red-600 hover:text-red-700">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm text-neutral-600 mb-1">
-                            Vị trí & cấp độ <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={jrl.jobRoleLevelId}
-                            onChange={(e) => {
-                              updateJobRoleLevel(index, 'jobRoleLevelId', Number(e.target.value));
-                              // Xóa lỗi khi người dùng chọn
-                              if (Number(e.target.value) > 0) {
-                                const newErrors = { ...errors };
-                                delete newErrors[`jobrolelevel_${index}`];
-                                setErrors(newErrors);
-                              }
-                            }}
-                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`jobrolelevel_${index}`] ? 'border-red-500' : 'border-neutral-300'
-                              }`}
-                          >
-                            <option value={0}>-- Chọn --</option>
-                            {jobRoleLevels && jobRoleLevels.length > 0 ? (
-                              jobRoleLevels.map((level) => {
-                                // Lấy danh sách jobRoleLevelId đã được chọn ở các item khác (trừ item hiện tại)
-                                const selectedJobRoleLevelIds = talentJobRoleLevels
-                                  .filter((_, i) => i !== index)
-                                  .map(jrl => jrl.jobRoleLevelId)
-                                  .filter(id => id > 0);
-                                const isDisabled = selectedJobRoleLevelIds.includes(level.id);
-
-                                return (
-                                  <option
-                                    key={level.id}
-                                    value={level.id}
-                                    disabled={isDisabled}
-                                    style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                  >
-                                    {level.name}{isDisabled ? ' (đã chọn)' : ''}
-                                  </option>
-                                );
-                              })
-                            ) : (
-                              <option value={0} disabled>Đang tải dữ liệu...</option>
-                            )}
-                          </select>
-                          {errors[`jobrolelevel_${index}`] && (
-                            <p className="mt-1 text-xs text-red-500">{errors[`jobrolelevel_${index}`]}</p>
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Số năm kinh nghiệm</label>
-                          <input
-                            type="number"
-                            value={jrl.yearsOfExp}
-                            onChange={(e) => updateJobRoleLevel(index, 'yearsOfExp', Number(e.target.value))}
-                            min="0"
-                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Mức lương/tháng (VNĐ)</label>
-                          <input
-                            type="number"
-                            value={jrl.ratePerMonth || ""}
-                            onChange={(e) => updateJobRoleLevel(index, 'ratePerMonth', e.target.value ? Number(e.target.value) : undefined)}
-                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
                 {/* Skills Section */}
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
@@ -2475,6 +2722,104 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                       Thêm
                     </button>
                   </div>
+
+                  {/* Skill Filter and Search - Chỉ hiển thị khi đã có ít nhất 1 kỹ năng được thêm */}
+                  {talentSkills.length > 0 && skills && skills.length > 0 && (
+                    <div className="mb-4 space-y-4">
+                      {/* Lọc theo nhóm kỹ năng */}
+                      {skillGroups && skillGroups.length > 0 && (
+                        <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+                          <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+                            <Filter className="w-3.5 h-3.5" />
+                            Lọc danh sách kỹ năng theo nhóm
+                          </label>
+                          <div className="space-y-2">
+                            {/* Search nhóm kỹ năng - Chỉ hiển thị khi có nhiều nhóm */}
+                            {skillGroups.length > 5 && (
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                                <input
+                                  type="text"
+                                  placeholder={`Tìm kiếm nhóm kỹ năng... (${skillGroups.length} nhóm)`}
+                                  value={skillGroupSearchQuery}
+                                  onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
+                                  className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                />
+                                {skillGroupSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSkillGroupSearchQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Dropdown chọn nhóm kỹ năng */}
+                            <div className="relative">
+                              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5 pointer-events-none z-10" />
+                              <select
+                                value={selectedSkillGroupId || ""}
+                                onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
+                                className="w-full pl-8 pr-4 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                              >
+                                <option value="">Tất cả nhóm kỹ năng</option>
+                                {(() => {
+                                  // Filter skill groups theo search query
+                                  const filteredGroups = skillGroupSearchQuery
+                                    ? skillGroups.filter(g =>
+                                      g.name.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()) ||
+                                      (g.description && g.description.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()))
+                                    )
+                                    : skillGroups;
+
+                                  if (filteredGroups.length === 0) {
+                                    return <option value="" disabled>Không tìm thấy nhóm kỹ năng</option>;
+                                  }
+
+                                  return filteredGroups.map((group) => (
+                                    <option key={group.id} value={group.id}>
+                                      {group.name}
+                                    </option>
+                                  ));
+                                })()}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tìm kiếm kỹ năng để chọn */}
+                      <div className="bg-green-50/50 border border-green-200 rounded-lg p-3">
+                        <label className="block text-xs font-semibold text-green-800 mb-2 flex items-center gap-1.5">
+                          <Search className="w-3.5 h-3.5" />
+                          Tìm kiếm kỹ năng để chọn
+                        </label>
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                          <input
+                            type="text"
+                            placeholder="Nhập tên kỹ năng để tìm kiếm..."
+                            value={skillSearchQuery}
+                            onChange={(e) => setSkillSearchQuery(e.target.value)}
+                            className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                          />
+                          {skillSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSkillSearchQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {talentSkills.map((skill, index) => (
                     <div key={index} className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
                       <div className="flex justify-between items-center mb-3">
@@ -2504,25 +2849,40 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                           >
                             <option value={0}>-- Chọn kỹ năng --</option>
                             {skills && skills.length > 0 ? (
-                              skills.map((s) => {
-                                // Lấy danh sách skillId đã được chọn ở các item khác (trừ item hiện tại)
-                                const selectedSkillIds = talentSkills
-                                  .filter((_, i) => i !== index)
-                                  .map(skill => skill.skillId)
-                                  .filter(id => id > 0);
-                                const isDisabled = selectedSkillIds.includes(s.id);
+                              (() => {
+                                // Filter skills theo search query và skill group
+                                const filteredSkills = skills.filter((s) => {
+                                  const matchesSearch = !skillSearchQuery ||
+                                    s.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                                    (s.description && s.description.toLowerCase().includes(skillSearchQuery.toLowerCase()));
+                                  const matchesGroup = !selectedSkillGroupId || s.skillGroupId === selectedSkillGroupId;
+                                  return matchesSearch && matchesGroup;
+                                });
 
-                                return (
-                                  <option
-                                    key={s.id}
-                                    value={s.id}
-                                    disabled={isDisabled}
-                                    style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                  >
-                                    {s.name}{isDisabled ? ' (đã chọn)' : ''}
-                                  </option>
-                                );
-                              })
+                                if (filteredSkills.length === 0) {
+                                  return <option value={0} disabled>Không tìm thấy kỹ năng nào</option>;
+                                }
+
+                                return filteredSkills.map((s) => {
+                                  // Lấy danh sách skillId đã được chọn ở các item khác (trừ item hiện tại)
+                                  const selectedSkillIds = talentSkills
+                                    .filter((_, i) => i !== index)
+                                    .map(skill => skill.skillId)
+                                    .filter(id => id > 0);
+                                  const isDisabled = selectedSkillIds.includes(s.id);
+
+                                  return (
+                                    <option
+                                      key={s.id}
+                                      value={s.id}
+                                      disabled={isDisabled}
+                                      style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                                    >
+                                      {s.name}{isDisabled ? ' (đã chọn)' : ''}
+                                    </option>
+                                  );
+                                });
+                              })()
                             ) : (
                               <option value={0} disabled>Đang tải dữ liệu...</option>
                             )}
@@ -2583,72 +2943,240 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-neutral-600 mb-1">
+                              Loại chứng chỉ <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={cert.certificateTypeId}
+                              onChange={(e) => {
+                                updateCertificate(index, 'certificateTypeId', Number(e.target.value));
+                                // Xóa lỗi khi người dùng chọn
+                                if (Number(e.target.value) > 0) {
+                                  const newErrors = { ...errors };
+                                  delete newErrors[`certificate_${index}`];
+                                  setErrors(newErrors);
+                                }
+                              }}
+                              className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`certificate_${index}`] ? 'border-red-500' : 'border-neutral-300'
+                                }`}
+                            >
+                              <option value={0}>-- Chọn loại --</option>
+                              {certificateTypes && certificateTypes.length > 0 ? (
+                                certificateTypes.map((type) => {
+                                  // Lấy danh sách certificateTypeId đã được chọn ở các item khác (trừ item hiện tại)
+                                  const selectedCertificateTypeIds = talentCertificates
+                                    .filter((_, i) => i !== index)
+                                    .map(cert => cert.certificateTypeId)
+                                    .filter(id => id > 0);
+                                  const isDisabled = selectedCertificateTypeIds.includes(type.id);
+
+                                  return (
+                                    <option
+                                      key={type.id}
+                                      value={type.id}
+                                      disabled={isDisabled}
+                                      style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
+                                    >
+                                      {type.name}{isDisabled ? ' (đã chọn)' : ''}
+                                    </option>
+                                  );
+                                })
+                              ) : (
+                                <option value={0} disabled>Đang tải dữ liệu...</option>
+                              )}
+                            </select>
+                            {errors[`certificate_${index}`] && (
+                              <p className="mt-1 text-xs text-red-500">{errors[`certificate_${index}`]}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm text-neutral-600 mb-1">Ngày cấp</label>
+                            <input
+                              type="date"
+                              value={cert.issuedDate || ""}
+                              onChange={(e) => updateCertificate(index, 'issuedDate', e.target.value || undefined)}
+                              className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Tên chứng chỉ */}
                         <div>
                           <label className="block text-sm text-neutral-600 mb-1">
-                            Loại chứng chỉ <span className="text-red-500">*</span>
+                            Tên chứng chỉ <span className="text-red-500">*</span>
                           </label>
-                          <select
-                            value={cert.certificateTypeId}
+                          <input
+                            type="text"
+                            value={cert.certificateName || ""}
                             onChange={(e) => {
-                              updateCertificate(index, 'certificateTypeId', Number(e.target.value));
-                              // Xóa lỗi khi người dùng chọn
-                              if (Number(e.target.value) > 0) {
+                              updateCertificate(index, 'certificateName', e.target.value);
+                              // Xóa lỗi khi người dùng nhập
+                              if (e.target.value.trim() !== '') {
                                 const newErrors = { ...errors };
-                                delete newErrors[`certificate_${index}`];
+                                delete newErrors[`certificate_name_${index}`];
                                 setErrors(newErrors);
                               }
                             }}
-                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`certificate_${index}`] ? 'border-red-500' : 'border-neutral-300'
+                            maxLength={255}
+                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`certificate_name_${index}`] ? 'border-red-500' : 'border-neutral-300'
                               }`}
-                          >
-                            <option value={0}>-- Chọn loại --</option>
-                            {certificateTypes && certificateTypes.length > 0 ? (
-                              certificateTypes.map((type) => {
-                                // Lấy danh sách certificateTypeId đã được chọn ở các item khác (trừ item hiện tại)
-                                const selectedCertificateTypeIds = talentCertificates
-                                  .filter((_, i) => i !== index)
-                                  .map(cert => cert.certificateTypeId)
-                                  .filter(id => id > 0);
-                                const isDisabled = selectedCertificateTypeIds.includes(type.id);
-
-                                return (
-                                  <option
-                                    key={type.id}
-                                    value={type.id}
-                                    disabled={isDisabled}
-                                    style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                  >
-                                    {type.name}{isDisabled ? ' (đã chọn)' : ''}
-                                  </option>
-                                );
-                              })
-                            ) : (
-                              <option value={0} disabled>Đang tải dữ liệu...</option>
-                            )}
-                          </select>
-                          {errors[`certificate_${index}`] && (
-                            <p className="mt-1 text-xs text-red-500">{errors[`certificate_${index}`]}</p>
+                            placeholder="Nhập tên chứng chỉ"
+                          />
+                          {errors[`certificate_name_${index}`] && (
+                            <p className="mt-1 text-xs text-red-500">{errors[`certificate_name_${index}`]}</p>
                           )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Tối đa 255 ký tự
+                          </p>
                         </div>
+
+                        {/* Mô tả chứng chỉ */}
                         <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Ngày cấp</label>
-                          <input
-                            type="date"
-                            value={cert.issuedDate || ""}
-                            onChange={(e) => updateCertificate(index, 'issuedDate', e.target.value || undefined)}
-                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
+                          <label className="block text-sm text-neutral-600 mb-1">
+                            Mô tả chứng chỉ (tùy chọn)
+                          </label>
+                          <textarea
+                            value={cert.certificateDescription || ""}
+                            onChange={(e) => {
+                              updateCertificate(index, 'certificateDescription', e.target.value);
+                              // Xóa lỗi khi người dùng nhập
+                              if (!e.target.value || e.target.value.length <= 1000) {
+                                const newErrors = { ...errors };
+                                delete newErrors[`certificate_description_${index}`];
+                                setErrors(newErrors);
+                              }
+                            }}
+                            maxLength={1000}
+                            rows={3}
+                            className={`w-full py-2 px-3 border rounded-lg bg-white resize-none ${errors[`certificate_description_${index}`] ? 'border-red-500' : 'border-neutral-300'
+                              }`}
+                            placeholder="Nhập mô tả về chứng chỉ..."
                           />
+                          {errors[`certificate_description_${index}`] && (
+                            <p className="mt-1 text-xs text-red-500">{errors[`certificate_description_${index}`]}</p>
+                          )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Tối đa 1000 ký tự
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-sm text-neutral-600 mb-1">URL hình ảnh</label>
-                          <input
-                            type="url"
-                            value={cert.imageUrl}
-                            onChange={(e) => updateCertificate(index, 'imageUrl', e.target.value)}
-                            placeholder="https://..."
-                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
-                          />
+                        <div className="md:col-span-2">
+                          <label className="block text-sm text-neutral-600 mb-2">
+                            URL hình ảnh {cert.imageUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
+                          </label>
+
+                          {/* Upload Image Section */}
+                          <div className="mb-3 p-3 bg-gradient-to-r from-primary-50 to-blue-50 rounded-lg border border-primary-200">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Upload className="w-4 h-4 text-primary-600" />
+                              <label className="block text-xs font-semibold text-neutral-700">
+                                Upload ảnh chứng chỉ
+                              </label>
+                            </div>
+
+                            <div className="space-y-2">
+                              {/* File Input */}
+                              <div>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleFileChangeCertificate(index, e)}
+                                  disabled={uploadingCertificateIndex === index}
+                                  className="w-full text-xs py-1.5 px-2 border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                {certificateImageFiles[index] && (
+                                  <div className="flex items-center gap-2 text-xs text-neutral-600 mt-1">
+                                    <FileText className="w-3 h-3" />
+                                    <span>Đã chọn: <span className="font-medium">{certificateImageFiles[index].name}</span> ({(certificateImageFiles[index].size / 1024).toFixed(2)} KB)</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Upload Progress */}
+                              {uploadingCertificateIndex === index && (
+                                <div className="space-y-1">
+                                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                    <div
+                                      className="bg-gradient-to-r from-primary-500 to-blue-500 h-2 rounded-full transition-all duration-300 animate-pulse"
+                                      style={{ width: `${certificateUploadProgress[index] || 0}%` }}
+                                    ></div>
+                                  </div>
+                                  <p className="text-xs text-center text-primary-700 font-medium">
+                                    Đang upload... {certificateUploadProgress[index] || 0}%
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Upload Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleUploadCertificateImage(index)}
+                                disabled={!certificateImageFiles[index] || uploadingCertificateIndex === index}
+                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                              >
+                                {uploadingCertificateIndex === index ? (
+                                  <>
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    Đang upload...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-3.5 h-3.5" />
+                                    Upload ảnh lên Firebase
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Manual URL Input */}
+                          <div className="space-y-2">
+                            {cert.imageUrl && uploadedCertificateUrls[index] === cert.imageUrl && (
+                              <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-xs text-orange-700 flex items-center gap-1.5">
+                                  <span className="font-semibold">🔒</span>
+                                  <span>URL này đã được upload từ Firebase và đã bị khóa. Không thể chỉnh sửa trực tiếp. Để nhập URL thủ công, bạn PHẢI nhấn nút "Xóa" để xóa file trong Firebase trước.</span>
+                                </p>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={cert.imageUrl || ""}
+                                onChange={(e) => handleCertificateImageUrlChange(index, e.target.value)}
+                                placeholder="https://... hoặc upload từ file ảnh đã chọn"
+                                disabled={!!(cert.imageUrl && uploadedCertificateUrls[index] === cert.imageUrl)}
+                                className={`flex-1 py-2 px-3 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm ${cert.imageUrl && uploadedCertificateUrls[index] === cert.imageUrl
+                                    ? 'bg-gray-100 cursor-not-allowed opacity-75 border-gray-300'
+                                    : ''
+                                  }`}
+                              />
+                              {cert.imageUrl && (
+                                <>
+                                  <a
+                                    href={cert.imageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all text-xs"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    Xem
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCertificateImage(index)}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all text-xs"
+                                    title={uploadedCertificateUrls[index] === cert.imageUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    Xóa
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-sm text-neutral-600 mb-1">Đã xác thực?</label>
@@ -2894,6 +3422,15 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                               <p className="text-sm font-medium text-green-900 ml-5">{extractedData.phone}</p>
                             </div>
                           )}
+                          {extractedData.dateOfBirth && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Calendar className="w-3.5 h-3.5 text-green-600" />
+                                <span className="text-xs font-semibold text-green-700">Ngày sinh</span>
+                              </div>
+                              <p className="text-sm font-medium text-green-900 ml-5">{extractedData.dateOfBirth}</p>
+                            </div>
+                          )}
                           {extractedData.locationName && (
                             <div>
                               <div className="flex items-center gap-2 mb-1">
@@ -2949,17 +3486,8 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                                 {extractedData.portfolioUrl}
                               </a>
                             </div>
-                          )}
+                          )}       
                         </div>
-                      </div>
-                    )}
-                    {extractedData.dateOfBirth && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Ngày sinh</span>
-                        </div>
-                        <p className="text-sm font-medium text-green-900 ml-6">{extractedData.dateOfBirth}</p>
                       </div>
                     )}
                     {/* Dự án */}
@@ -2972,12 +3500,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                         <div className="ml-6 space-y-2">
                           {extractedData.projects.map((project, index: number) => (
                             <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-900">{project.projectName || 'N/A'}</p>
+                              <p className="font-semibold text-green-700">Tên dự án: <span className="text-neutral-900">{project.projectName || 'N/A'}</span></p>
                               {project.technologies && (
-                                <p className="text-green-700">Tech: {project.technologies}</p>
+                                <p className="text-green-700">Tech: <span className="text-neutral-900">{project.technologies}</span></p>
                               )}
                               {project.description && (
-                                <p className="text-green-600 text-xs mt-1">{project.description}</p>
+                                <p className="text-green-600 text-xs mt-1">Mô tả: <span className="text-neutral-900">{project.description}</span></p>
                               )}
                             </div>
                           ))}
@@ -2994,15 +3522,15 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                         <div className="ml-6 space-y-2">
                           {extractedData.jobRoleLevels.map((jrl, index: number) => (
                             <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-900">{jrl.position || 'N/A'}</p>
+                              <p className="font-semibold text-green-700">Vị trí: <span className="text-neutral-900">{jrl.position || 'N/A'}</span></p>
                               {jrl.level && (
-                                <p className="text-green-700">Cấp độ: {jrl.level}</p>
+                                <p className="text-green-700">Cấp độ: <span className="text-neutral-900">{jrl.level}</span></p>
                               )}
                               {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
-                                <p className="text-green-700">Kinh nghiệm: {jrl.yearsOfExp} năm</p>
+                                <p className="text-green-700">Kinh nghiệm: <span className="text-neutral-900">{jrl.yearsOfExp} năm</span></p>
                               )}
                               {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
-                                <p className="text-green-600">Mức lương: {jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng</p>
+                                <p className="text-green-600">Mức lương: <span className="text-neutral-900">{jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng</span></p>
                               )}
                             </div>
                           ))}
@@ -3029,6 +3557,7 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                       </div>
                     )}
 
+                    {/* Chứng chỉ */}
                     {extractedData.certificates && extractedData.certificates.length > 0 && (
                       <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
                         <div className="flex items-center gap-2 mb-2">
@@ -3038,9 +3567,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                         <div className="ml-6 space-y-2">
                           {extractedData.certificates.map((cert, index: number) => (
                             <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-900">{cert.certificateName || 'N/A'}</p>
+                              <p className="font-semibold text-green-700">Tên chứng chỉ: <span className="text-neutral-900">{cert.certificateName || 'N/A'}</span></p>
+                              {cert.certificateDescription && (
+                                <p className="text-green-700">Mô tả: <span className="text-neutral-900">{cert.certificateDescription}</span></p>
+                              )}
                               {cert.issuedDate && (
-                                <p className="text-green-700">Ngày cấp: {cert.issuedDate}</p>
+                                <p className="text-green-700">Ngày cấp: <span className="text-neutral-900">{cert.issuedDate}</span></p>
                               )}
                               {cert.imageUrl && (
                                 <a
@@ -3067,11 +3599,12 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                         <div className="ml-6 space-y-2">
                           {extractedData.workExperiences.map((exp, index: number) => (
                             <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-900">{exp.position || 'N/A'}</p>
-                              <p className="text-green-700">{exp.company || 'N/A'}</p>
-                              <p className="text-green-600">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</p>
+                              <p className="text-green-700">Công ty: <span className="text-neutral-900">{exp.company || 'N/A'}</span></p>
+                              <p className="font-semibold text-green-700">Vị trí: <span className="text-neutral-900">{exp.position || 'N/A'}</span></p>
+                              <p className="text-green-600">Ngày bắt đầu: <span className="text-neutral-900">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</span></p>
+                              
                               {exp.description && (
-                                <p className="text-green-600 text-xs mt-1 italic">{exp.description}</p>
+                                <p className="text-neutral-900 text-xs mt-1 italic">{exp.description}</p>
                               )}
                             </div>
                           ))}
@@ -3082,7 +3615,6 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                     {/* Unmatched Data Warnings - Hệ thống thiếu dữ liệu */}
                     {(unmatchedData.location ||
                       (unmatchedData.skills && unmatchedData.skills.length > 0) ||
-                      (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0) ||
                       (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0)) && (
                         <div className="mt-4 pt-4 border-t border-orange-300">
                           <div className="flex items-center gap-2 mb-3">
@@ -3183,46 +3715,6 @@ const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useS
                                     </span>
                                   ))}
                                 </div>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Thêm các kỹ năng này vào hệ thống trước khi tạo nhân sự để tự động điền.
-                                </p>
-                              </div>
-                            )}
-                            {unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0 && (
-                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Award className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-semibold text-orange-700">Chứng chỉ</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendSuggestion("certificateType", "/admin/categories/certificate-types/create")}
-                                    disabled={
-                                      suggestionLoading === "certificateType" || isSuggestionPending("certificateType")
-                                    }
-                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                  >
-                                    {suggestionLoading === "certificateType"
-                                      ? "Đang gửi..."
-                                      : isSuggestionPending("certificateType")
-                                        ? "Đã gửi (chờ Admin)"
-                                        : "Gửi đề xuất cho Admin"}
-                                  </button>
-                                </div>
-                                <p className="text-xs text-orange-800 ml-5 mb-1">
-                                  CV có {unmatchedData.certificateTypes.length} loại chứng chỉ không tìm thấy trong hệ thống:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 ml-5 mb-2">
-                                  {unmatchedData.certificateTypes.map((certType, index) => (
-                                    <span key={index} className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                      {certType}
-                                    </span>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Thêm các loại chứng chỉ này vào hệ thống trước khi tạo nhân sự để tự động điền.
-                                </p>
                               </div>
                             )}
                           </div>

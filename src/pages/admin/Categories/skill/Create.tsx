@@ -1,45 +1,50 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
-import { 
-  Code, 
+import {  
   ArrowLeft, 
   Plus, 
   Save, 
   FileText, 
   AlertCircle, 
   CheckCircle,
-  X
+  X,
+  Star
 } from "lucide-react";
-import { type SkillCreateModel, skillService } from "../../../../services/Skill";
+import { type SkillCreate, skillService } from "../../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../../services/SkillGroup";
 
 export default function SkillCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
 
-  const [form, setForm] = useState<SkillCreateModel>({
-    skillGroupId: 0,
+  // Lấy skillGroupId từ query string nếu có
+  const skillGroupIdFromQuery = searchParams.get('skillGroupId');
+  const initialSkillGroupId = skillGroupIdFromQuery ? Number(skillGroupIdFromQuery) : 0;
+
+  const [form, setForm] = useState<SkillCreate>({
+    skillGroupId: initialSkillGroupId,
     name: "",
     description: "",
   });
 
   // Load skill groups
-  useState(() => {
+  useEffect(() => {
     const loadSkillGroups = async () => {
       try {
         const data = await skillGroupService.getAll();
-        setSkillGroups(data);
+        setSkillGroups(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("❌ Lỗi khi tải danh sách nhóm kỹ năng:", err);
       }
     };
     loadSkillGroups();
-  });
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -74,7 +79,12 @@ export default function SkillCreatePage() {
     try {
       await skillService.create(form);
       setSuccess(true);
-      setTimeout(() => navigate("/admin/categories/skills"), 1500);
+      // Nếu có skillGroupId từ query, quay lại trang detail của skill group
+      if (skillGroupIdFromQuery) {
+        setTimeout(() => navigate(`/admin/categories/skill-groups/${skillGroupIdFromQuery}`), 1500);
+      } else {
+        setTimeout(() => navigate("/admin/categories/skill-groups"), 1500);
+      }
     } catch (err) {
       console.error("❌ Lỗi khi tạo kỹ năng:", err);
       setError("Không thể tạo kỹ năng. Vui lòng thử lại.");
@@ -92,11 +102,11 @@ export default function SkillCreatePage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link 
-              to="/admin/categories/skills"
+              to={skillGroupIdFromQuery ? `/admin/categories/skill-groups/${skillGroupIdFromQuery}` : "/admin/categories/skill-groups"}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
+              <span className="font-medium">Quay lại</span>
             </Link>
           </div>
 
@@ -125,7 +135,7 @@ export default function SkillCreatePage() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-100 rounded-lg">
-                  <Code className="w-5 h-5 text-primary-600" />
+                  <Star className="w-5 h-5 text-primary-600" />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">Thông tin kỹ năng</h2>
               </div>
@@ -134,8 +144,8 @@ export default function SkillCreatePage() {
               {/* Nhóm kỹ năng */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Code className="w-4 h-4" />
-                  Nhóm kỹ năng
+                  <Star className="w-4 h-4" />
+                  Nhóm kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="skillGroupId"
@@ -156,8 +166,8 @@ export default function SkillCreatePage() {
               {/* Tên kỹ năng */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <Code className="w-4 h-4" />
-                  Tên kỹ năng
+                  <Star className="w-4 h-4" />
+                  Tên kỹ năng <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -211,7 +221,7 @@ export default function SkillCreatePage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to="/admin/categories/skills"
+              to={skillGroupIdFromQuery ? `/admin/categories/skill-groups/${skillGroupIdFromQuery}` : "/admin/categories/skill-groups"}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

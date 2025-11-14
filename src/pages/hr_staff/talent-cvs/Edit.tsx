@@ -26,7 +26,7 @@ export default function TalentCVEditPage() {
   const [formData, setFormData] = useState<TalentCVCreate>({
     talentId: 0,
     jobRoleId: 0,
-    versionName: "",
+    version: 1,
     cvFileUrl: "",
     isActive: true,
     summary: "",
@@ -53,7 +53,7 @@ export default function TalentCVEditPage() {
         setFormData({
           talentId: data.talentId,
           jobRoleId: data.jobRoleId,
-          versionName: data.versionName,
+          version: data.version,
           cvFileUrl: data.cvFileUrl,
           isActive: data.isActive,
           summary: data.summary,
@@ -98,7 +98,7 @@ export default function TalentCVEditPage() {
 
     const newValue = type === 'checkbox'
       ? (e.target as HTMLInputElement).checked
-      : name === "jobRoleId" || name === "sourceTemplateId"
+      : type === 'number' || name === "jobRoleId" || name === "sourceTemplateId" || name === "version"
       ? Number(value)
       : value;
 
@@ -263,19 +263,22 @@ export default function TalentCVEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Tên phiên bản CV <span className="text-red-500">*</span>
+                    Version CV <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    name="versionName"
-                    value={formData.versionName}
+                    type="number"
+                    name="version"
+                    value={formData.version}
+                    min="1"
+                    step="1"
                     onChange={handleChange}
-                    placeholder="VD: CV v1.0, CV Frontend Developer..."
+                    placeholder="VD: 1, 2, 3..."
                     required
                     disabled
                     className="w-full border-neutral-300 bg-neutral-50 rounded-xl cursor-not-allowed opacity-75"
                   />
                   <p className="text-xs text-amber-600 mt-1">
-                    ⚠️ Không thể thay đổi tên phiên bản CV khi chỉnh sửa
+                    ⚠️ Không thể thay đổi version CV khi chỉnh sửa
                   </p>
                 </div>
 
