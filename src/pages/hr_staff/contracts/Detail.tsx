@@ -38,6 +38,7 @@ export default function ContractDetailPage() {
             
             // Fetch contract detail
             const contractData = await partnerContractService.getById(Number(id));
+            console.log("contractData", contractData);
             setContract(contractData);
             // Fetch related partner and talent data
             try {

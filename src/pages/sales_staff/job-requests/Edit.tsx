@@ -46,6 +46,8 @@ export default function JobRequestEditPage() {
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState("");
+  const [skillGroupQuery, setSkillGroupQuery] = useState("");
+  const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
   const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<JobRequestPayload>({
     projectId: 0,
@@ -69,6 +71,15 @@ export default function JobRequestEditPage() {
     const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
     return matchesSearch && matchesGroup;
   });
+  const filteredSkillGroups = skillGroups.filter(group =>
+    group.name.toLowerCase().includes(skillGroupQuery.toLowerCase())
+  );
+
+  const handleSkillGroupSelect = (groupId?: number) => {
+    setSelectedSkillGroupId(groupId);
+    setIsSkillGroupDropdownOpen(false);
+    setSkillGroupQuery(groupId ? (skillGroups.find(group => group.id === groupId)?.name ?? "") : "");
+  };
 
   const handleRichTextChange = (field: "description" | "requirements", value: string) => {
     setFormData((prev) => ({
@@ -616,23 +627,79 @@ export default function JobRequestEditPage() {
                   )}
                 </div>
                 <div className="relative w-full lg:w-72">
-                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                  <select
-                    value={selectedSkillGroupId ?? ""}
-                    onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  <button
+                    type="button"
+                    onClick={() => setIsSkillGroupDropdownOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
                   >
-                    <option value="">Tất cả nhóm kỹ năng</option>
-                    {skillGroups.length === 0 ? (
-                      <option value="" disabled>Đang tải nhóm kỹ năng...</option>
-                    ) : (
-                      skillGroups.map(group => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Filter className="w-4 h-4 text-neutral-400" />
+                      <span>
+                        {selectedSkillGroupId
+                          ? skillGroups.find(group => group.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
+                          : "Tất cả nhóm kỹ năng"}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                  </button>
+                  {isSkillGroupDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div className="p-3 border-b border-neutral-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={skillGroupQuery}
+                            onChange={(e) => setSkillGroupQuery(e.target.value)}
+                            placeholder="Tìm nhóm kỹ năng..."
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                          />
+                          {skillGroupQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSkillGroupQuery("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => handleSkillGroupSelect(undefined)}
+                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                            selectedSkillGroupId === undefined
+                              ? "bg-primary-50 text-primary-700"
+                              : "hover:bg-neutral-50 text-neutral-700"
+                          }`}
+                        >
+                          Tất cả nhóm kỹ năng
+                        </button>
+                        {skillGroups.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Đang tải nhóm kỹ năng...</p>
+                        ) : filteredSkillGroups.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Không có nhóm phù hợp</p>
+                        ) : (
+                          filteredSkillGroups.map(group => (
+                            <button
+                              type="button"
+                              key={group.id}
+                              onClick={() => handleSkillGroupSelect(group.id)}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                selectedSkillGroupId === group.id
+                                  ? "bg-primary-50 text-primary-700"
+                                  : "hover:bg-neutral-50 text-neutral-700"
+                              }`}
+                            >
+                              {group.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">

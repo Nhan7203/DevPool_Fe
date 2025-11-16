@@ -291,6 +291,7 @@ export default function CreateTalent() {
   }, [isUploadedFromFirebase]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string>("");
 
   const handleSendSuggestion = async (
     category: "location" | "jobRole" | "skill" | "certificateType",
@@ -1797,8 +1798,44 @@ export default function CreateTalent() {
       await talentService.createWithRelatedData(payload);
       alert("✅ Tạo nhân sự thành công!");
       navigate('/hr/developers');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      // Thu thập thông điệp lỗi từ mọi trường khả dĩ (kể cả objecterror)
+      const data = error?.response?.data;
+      let combined = "";
+      if (typeof data === "string") {
+        combined = data;
+      } else if (data && typeof data === "object") {
+        try {
+          // Thu thập các field phổ biến
+          const candidates: string[] = [];
+          const tryPush = (v: unknown) => {
+            if (typeof v === "string" && v) candidates.push(v);
+          };
+          tryPush((data as any).error);
+          tryPush((data as any).message);
+          tryPush((data as any).objecterror);
+          tryPush((data as any).Objecterror);
+          tryPush((data as any).detail);
+          tryPush((data as any).title);
+          // Nếu có mảng/lỗi chi tiết
+          const values = Object.values(data)
+            .map((v) => (typeof v === "string" ? v : ""))
+            .filter(Boolean);
+          candidates.push(...values);
+          combined = candidates.join(" ");
+          if (!combined) combined = JSON.stringify(data);
+        } catch {
+          combined = JSON.stringify(data);
+        }
+      }
+      const lower = (combined || error?.message || "").toLowerCase();
+      if (lower.includes("email already exists") || (lower.includes("already exists") && lower.includes("email"))) {
+        setErrors(prev => ({ ...prev, email: "Email đã tồn tại trong hệ thống" }));
+        setFormError("Email đã tồn tại trong hệ thống");
+        alert("❌ Email đã tồn tại trong hệ thống. Vui lòng dùng email khác.");
+        return;
+      }
       alert("❌ Lỗi khi tạo nhân sự!");
     } finally {
       setLoading(false);
@@ -1910,6 +1947,11 @@ export default function CreateTalent() {
       <div className="flex-1 min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/30 to-secondary-50/30">
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* Header */}
+          {formError && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3">
+              {formError}
+            </div>
+          )}
           <div className="text-center mb-8 animate-fade-in-up">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
               <User className="text-white font-bold text-2xl" />

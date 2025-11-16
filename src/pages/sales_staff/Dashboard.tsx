@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import {
   Users, Target, Handshake, FileText,
-  TrendingUp, Clock, PlusCircle, Briefcase, AlertCircle
+  TrendingUp, Clock, PlusCircle, Briefcase, AlertCircle, XCircle
 } from "lucide-react";
 import Sidebar from "../../components/common/Sidebar";
 import { sidebarItems } from "../../components/sales_staff/SidebarItems";
@@ -92,7 +92,6 @@ export default function SalesDashboard() {
   const totalApplications = applications.length;
   const interviewScheduledApplications = applications.filter(app => app.status === "Interviewing").length;
   const interviewingApplications = applications.filter(app => app.status === "Interviewing").length;
-  const offeredApplications = applications.filter(app => app.status === "Offered").length;
   const hiredApplications = applications.filter(app => app.status === "Hired").length;
   const rejectedApplications = applications.filter(app => app.status === "Rejected").length;
   const withdrawnApplications = applications.filter(app => app.status === "Withdrawn").length;
@@ -143,7 +142,6 @@ export default function SalesDashboard() {
   const stageFunnelData = [
     { stage: "Đã lên lịch", count: interviewScheduledApplications },
     { stage: "Phỏng vấn", count: interviewingApplications },
-    { stage: "Đã bàn bạc", count: offeredApplications },
     { stage: "Đã tuyển", count: hiredApplications },
     { stage: "Từ chối", count: rejectedApplications },
     { stage: "Đã rút", count: withdrawnApplications }
@@ -193,11 +191,11 @@ export default function SalesDashboard() {
       color: "green"
     },
     {
-      title: "Hồ sơ đã đề xuất",
-      value: offeredApplications.toString(),
-      description: "Offer đã gửi tới khách hàng",
-      icon: TrendingUp,
-      color: "primary"
+      title: "Hồ sơ đã rút",
+      value: withdrawnApplications.toString(),
+      description: "Ứng viên đã rời khỏi quy trình",
+      icon: XCircle,
+      color: "orange"
     },
     {
       title: "Hồ sơ bị từ chối",

@@ -5,11 +5,11 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyService } from "../../../services/Apply";
+import { jobRequestService } from "../../../services/JobRequest";
 import { Button } from "../../../components/ui/button";
 import {
   ArrowLeft,
   Edit,
-  Trash2,
   FileText,
   Calendar,
   AlertCircle,
@@ -73,6 +73,7 @@ export default function ApplyActivityDetailPage() {
   const [allActivities, setAllActivities] = useState<ApplyActivity[]>([]);
   const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
   const [activityIndex, setActivityIndex] = useState<number | null>(null);
+  const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
 
   const fetchData = async () => {
     try {
@@ -91,7 +92,7 @@ export default function ApplyActivityDetailPage() {
       } catch { }
       setCurrentStepOrder(stepOrder);
 
-      // Fetch application info
+      // Fetch application info & related process steps
       let applicationInfo;
       try {
         const app = await applyService.getById(activityData.applyId);
@@ -99,6 +100,34 @@ export default function ApplyActivityDetailPage() {
           id: app.id,
           status: app.status
         };
+
+        let resolvedSteps: ApplyProcessStep[] = [];
+        try {
+          const jobRequest = await jobRequestService.getById(app.jobRequestId);
+          if (jobRequest?.applyProcessTemplateId) {
+            const stepsResponse = await applyProcessStepService.getAll({
+              templateId: jobRequest.applyProcessTemplateId,
+              excludeDeleted: true
+            });
+            resolvedSteps = Array.isArray(stepsResponse)
+              ? stepsResponse
+              : Array.isArray(stepsResponse?.data)
+                ? stepsResponse.data
+                : [];
+          }
+        } catch (err) {
+          console.error("⚠️ Không thể tải quy trình áp dụng cho activity:", err);
+        }
+
+        if (!resolvedSteps.length) {
+          const fallbackSteps = await applyProcessStepService.getAll();
+          resolvedSteps = Array.isArray(fallbackSteps)
+            ? fallbackSteps
+            : Array.isArray(fallbackSteps?.data)
+              ? fallbackSteps.data
+              : [];
+        }
+        setProcessSteps(resolvedSteps);
       } catch { }
 
       const activityWithExtra: ApplyActivityDetail = {
@@ -136,27 +165,6 @@ export default function ApplyActivityDetailPage() {
     fetchData();
   }, [id]);
 
-  const handleDelete = async () => {
-    if (!id) return;
-
-    if (activity?.status !== ApplyActivityStatus.Scheduled || activity?.applicationInfo?.status !== 'Interviewing') {
-      alert("⚠️ Chỉ có thể xóa hoạt động khi hoạt động đang ở trạng thái Đã lên lịch và hồ sơ ở trạng thái Đang xem xét phỏng vấn!");
-      return;
-    }
-
-    const confirm = window.confirm("⚠️ Bạn có chắc muốn xóa hoạt động này?");
-    if (!confirm) return;
-
-    try {
-      await applyActivityService.delete(Number(id));
-      alert("✅ Đã xóa hoạt động thành công!");
-      navigate(`/hr/applications/${activity?.applyId}`);
-    } catch (err) {
-      console.error("❌ Lỗi khi xóa:", err);
-      alert("Không thể xóa hoạt động!");
-    }
-  };
-
   const handleEdit = () => {
     if (!activity) return;
 
@@ -175,41 +183,65 @@ export default function ApplyActivityDetailPage() {
 
   // Kiểm tra xem bước trước đã pass chưa
   const checkCanUpdateStep = async (stepOrder: number): Promise<boolean> => {
-    if (stepOrder === 1) return true; // Bước đầu tiên luôn có thể cập nhật
+    const stepOrders = processSteps.map(step => step.stepOrder);
+    const minStepOrder = stepOrders.length > 0 ? Math.min(...stepOrders) : 1;
+    if (stepOrder <= minStepOrder) return true;
 
-    // Lấy tất cả process steps
-    const allSteps = (await applyProcessStepService.getAll()) as ApplyProcessStep[];
+    let relevantSteps = processSteps;
+    if (!relevantSteps.length) {
+      const allSteps = await applyProcessStepService.getAll();
+      relevantSteps = Array.isArray(allSteps)
+        ? allSteps
+        : Array.isArray(allSteps?.data)
+          ? allSteps.data
+          : [];
+    }
 
-    // Tìm process step ID của bước trước
-    const previousStep = allSteps.find(step => step.stepOrder === stepOrder - 1);
-    if (!previousStep) return true; // Không tìm thấy bước trước thì cho phép
+    const previousStep = relevantSteps.find(step => step.stepOrder === stepOrder - 1);
+    if (!previousStep) return true;
 
-    // Tìm activity của bước trước
     const previousStepActivity = allActivities.find(act => act.processStepId === previousStep.id);
+    if (!previousStepActivity) return true;
 
-    if (!previousStepActivity) return false; // Chưa có bước trước
-
-    // Kiểm tra bước trước có đạt hay không
     return previousStepActivity.status === ApplyActivityStatus.Passed;
   };
 
   const getAllowedNextStatuses = (currentStatus: number): number[] => {
-    // Nếu application status là Withdrawn thì không cho cập nhật
     if (activity?.applicationInfo?.status === 'Withdrawn') {
       return [];
     }
 
+    // Không cho đổi trạng thái cho tới khi TẤT CẢ các bước của quy trình đã được tạo activity
+    try {
+      if (processSteps.length > 0) {
+        const requiredStepIds = new Set(processSteps.map(s => s.id));
+        const createdStepIds = new Set(allActivities.map(a => a.processStepId));
+        const allCreated = Array.from(requiredStepIds).every(id => createdStepIds.has(id));
+        if (!allCreated) {
+          return [];
+        }
+      }
+    } catch {}
+
+    const canUpdateStep = () => {
+      if (currentStepOrder <= 1) return true;
+      const previousStep = processSteps.find(step => step.stepOrder === currentStepOrder - 1);
+      if (!previousStep) return true;
+      const previousActivity = allActivities.find(act => act.processStepId === previousStep.id);
+      return previousActivity?.status === ApplyActivityStatus.Passed;
+    };
+
+    const canUpdate = canUpdateStep();
+
     switch (currentStatus) {
-      case ApplyActivityStatus.Scheduled: // 0
-        return [ApplyActivityStatus.Completed]; // → 1
-      case ApplyActivityStatus.Completed: // 1
-        return [ApplyActivityStatus.Failed, ApplyActivityStatus.Passed]; // → 3, 2
-      case ApplyActivityStatus.Failed: // 3
-        return []; // Không cho cập nhật
-      case ApplyActivityStatus.Passed: // 2
-        return []; // Bước đã đạt, không cần cập nhật thêm
-      case ApplyActivityStatus.NoShow: // 4
-        return []; // Không cho cập nhật
+      case ApplyActivityStatus.Scheduled:
+        return canUpdate ? [ApplyActivityStatus.Completed] : [];
+      case ApplyActivityStatus.Completed:
+        return [ApplyActivityStatus.Failed, ApplyActivityStatus.Passed];
+      case ApplyActivityStatus.Failed:
+      case ApplyActivityStatus.Passed:
+      case ApplyActivityStatus.NoShow:
+        return [];
       default:
         return [];
     }
@@ -223,7 +255,7 @@ export default function ApplyActivityDetailPage() {
 
     try {
       // Kiểm tra xem bước trước đã pass chưa (chỉ khi đổi sang Completed hoặc Passed)
-      if ((newStatus === ApplyActivityStatus.Completed || newStatus === ApplyActivityStatus.Passed) && currentStepOrder > 1) {
+      if (newStatus === ApplyActivityStatus.Completed && currentStepOrder > 1) {
         const canUpdate = await checkCanUpdateStep(currentStepOrder);
         if (!canUpdate) {
           alert("⚠️ Không thể cập nhật! Bước trước chưa đạt. Vui lòng hoàn thành bước trước trước.");
@@ -238,7 +270,7 @@ export default function ApplyActivityDetailPage() {
         try {
           const currentAppStatus = activity.applicationInfo.status;
           // Chỉ cập nhật nếu application chưa ở trạng thái Interviewing hoặc sau đó
-          if (currentAppStatus !== 'Interviewing' && currentAppStatus !== 'Offered' && currentAppStatus !== 'Hired' && currentAppStatus !== 'Rejected' && currentAppStatus !== 'Withdrawn') {
+          if (currentAppStatus !== 'Interviewing' && currentAppStatus !== 'Hired' && currentAppStatus !== 'Rejected' && currentAppStatus !== 'Withdrawn') {
             await applyService.updateStatus(activity.applicationInfo.id, { status: 'Interviewing' });
           }
         } catch (err) {
@@ -246,31 +278,59 @@ export default function ApplyActivityDetailPage() {
         }
       }
 
-      // Kiểm tra nếu tất cả các bước đều pass, tự động chuyển application sang Offered
+      // Kiểm tra nếu tất cả các bước trong quy trình của JobRequest đều pass, tự động chuyển application sang Hired
       if (newStatus === ApplyActivityStatus.Passed && activity.applicationInfo) {
         try {
           // Reload activities để lấy dữ liệu mới nhất
           const activitiesData = await applyActivityService.getAll({ applyId: activity.applyId });
           setAllActivities(activitiesData);
 
-          // Lấy tất cả process steps
-          const allSteps = await applyProcessStepService.getAll();
+          // Lấy danh sách bước thuộc template của JobRequest liên quan
+          let relevantSteps: ApplyProcessStep[] = [];
+          try {
+            const app = await applyService.getById(activity.applyId);
+            const jobReq = await jobRequestService.getById(app.jobRequestId);
+            if (jobReq?.applyProcessTemplateId) {
+              const stepsResponse = await applyProcessStepService.getAll({
+                templateId: jobReq.applyProcessTemplateId,
+                excludeDeleted: true
+              });
+              relevantSteps = Array.isArray(stepsResponse)
+                ? stepsResponse
+                : Array.isArray(stepsResponse?.data)
+                  ? stepsResponse.data
+                  : [];
+            }
+          } catch {
+            relevantSteps = [];
+          }
 
-          // Đếm số bước đã pass
+          // Fallback: nếu không lấy được theo template, dùng processSteps đã có trong state (nếu có)
+          if (!relevantSteps.length && processSteps.length) {
+            relevantSteps = processSteps;
+          }
+
+          // Nếu vẫn không có danh sách bước, không tự động chuyển Hired
+          if (!relevantSteps.length) {
+            await fetchData();
+            return;
+          }
+
+          // Kiểm tra tất cả bước trong quy trình đều đã có activity và ở trạng thái Passed
           let allStepsPassed = true;
-          for (const step of allSteps) {
+          for (const step of relevantSteps) {
             const stepActivity = activitiesData.find(act => act.processStepId === step.id);
-            if (stepActivity && stepActivity.status !== ApplyActivityStatus.Passed) {
+            if (!stepActivity || stepActivity.status !== ApplyActivityStatus.Passed) {
               allStepsPassed = false;
               break;
             }
           }
 
-          // Nếu tất cả bước đều pass và application đang ở Interviewing, chuyển sang Offered
+          // Nếu tất cả bước đều pass và application đang ở Interviewing, chuyển sang Hired
           if (allStepsPassed && activity.applicationInfo.status === 'Interviewing') {
-            await applyService.updateStatus(activity.applicationInfo.id, { status: 'Offered' });
+            await applyService.updateStatus(activity.applicationInfo.id, { status: 'Hired' });
 
-            alert(`✅ Đã cập nhật trạng thái thành công!\n🎉 Tất cả các bước đã hoàn thành, tự động chuyển application sang trạng thái Offered!`);
+            alert(`✅ Đã cập nhật trạng thái thành công!\n🎉 Tất cả các bước đã hoàn thành, tự động chuyển application sang trạng thái Hired (Đã tuyển)!`);
             // Reload dữ liệu để cập nhật UI
             await fetchData();
             return;
@@ -333,7 +393,9 @@ export default function ApplyActivityDetailPage() {
       hour: '2-digit',
       minute: '2-digit'
     })
-    : null;
+    : "—";
+
+  const canModifyActivity = activity.status === ApplyActivityStatus.Scheduled;
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -375,33 +437,14 @@ export default function ApplyActivityDetailPage() {
             <div className="flex gap-3">
               <Button
                 onClick={handleEdit}
-                disabled={
-                  activity.status !== ApplyActivityStatus.Scheduled ||
-                  activity.applicationInfo?.status !== 'Interviewing'
-                }
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
-                    activity.applicationInfo?.status !== 'Interviewing'
+                disabled={!canModifyActivity}
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${!canModifyActivity
                     ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
                   }`}
               >
                 <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Sửa
-              </Button>
-              <Button
-                onClick={handleDelete}
-                disabled={
-                  activity.status !== ApplyActivityStatus.Scheduled ||
-                  activity.applicationInfo?.status !== 'Interviewing'
-                }
-                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${activity.status !== ApplyActivityStatus.Scheduled ||
-                    activity.applicationInfo?.status !== 'Interviewing'
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  }`}
-              >
-                <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                Xóa
               </Button>
             </div>
           </div>
@@ -422,9 +465,12 @@ export default function ApplyActivityDetailPage() {
               const allowedStatuses = getAllowedNextStatuses(activity.status);
 
               if (allowedStatuses.length === 0) {
-                const message = activity.applicationInfo?.status === 'Withdrawn'
-                  ? "Không thể cập nhật trạng thái vì ứng viên đã rút khỏi quy trình tuyển dụng"
-                  : "Không thể cập nhật trạng thái từ trạng thái hiện tại";
+                let message = "Không thể cập nhật trạng thái từ trạng thái hiện tại";
+                if (activity.applicationInfo?.status === 'Withdrawn') {
+                  message = "Không thể cập nhật trạng thái vì ứng viên đã rút khỏi quy trình tuyển dụng";
+                } else if (activity.status === ApplyActivityStatus.Scheduled && currentStepOrder > 1) {
+                  message = "⚠️ Vui lòng hoàn thành bước trước (đạt trạng thái Đạt)";
+                }
 
                 return (
                   <div className="text-center py-4">
@@ -501,13 +547,11 @@ export default function ApplyActivityDetailPage() {
                   icon={<Briefcase className="w-4 h-4" />}
                 />
               )}
-              {formattedDate && (
-                <InfoItem
-                  label="Ngày lên lịch"
-                  value={formattedDate}
-                  icon={<Calendar className="w-4 h-4" />}
-                />
-              )}
+              <InfoItem
+                label="Ngày lên lịch"
+                value={formattedDate}
+                icon={<Calendar className="w-4 h-4" />}
+              />
             </div>
           </div>
         </div>

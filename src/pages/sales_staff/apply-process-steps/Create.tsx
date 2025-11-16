@@ -16,7 +16,6 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  Calendar,
   Hash,
   Building2,
 } from "lucide-react";
@@ -36,7 +35,6 @@ export default function SalesApplyProcessStepCreatePage() {
     stepOrder: 1,
     stepName: "",
     description: "",
-    estimatedDays: 1,
   });
 
   useEffect(() => {
@@ -62,8 +60,16 @@ export default function SalesApplyProcessStepCreatePage() {
         setIsFetchingSteps(true);
         const steps = await applyProcessStepService.getAll({ templateId: form.templateId, excludeDeleted: true });
         const castSteps = (steps ?? []) as ApplyProcessStep[];
-        const nextOrder = castSteps.length > 0 ? Math.max(...castSteps.map((step) => step.stepOrder)) + 1 : 1;
-        setForm((prev) => ({ ...prev, stepOrder: nextOrder }));
+        if (castSteps.length === 0) {
+          setForm((prev) => ({ ...prev, stepOrder: 1 }));
+        } else {
+          const takenOrders = new Set(castSteps.map((step) => step.stepOrder).filter((n) => n > 0));
+          let candidate = 1;
+          while (takenOrders.has(candidate)) {
+            candidate += 1;
+          }
+          setForm((prev) => ({ ...prev, stepOrder: candidate }));
+        }
       } catch (err) {
         console.error("❌ Error loading steps for template", err);
         setForm((prev) => ({ ...prev, stepOrder: 1 }));
@@ -113,7 +119,6 @@ export default function SalesApplyProcessStepCreatePage() {
         stepOrder: Number(form.stepOrder),
         stepName: form.stepName,
         description: form.description,
-        estimatedDays: Number(form.estimatedDays),
       };
 
       await applyProcessStepService.create(payload);
@@ -143,7 +148,7 @@ export default function SalesApplyProcessStepCreatePage() {
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
               <span className="font-medium">
-                {form.templateId ? "Quay lại chi tiết template" : "Quay lại danh sách"}
+                {form.templateId ? "Quay lại chi tiết mẫu quy trình" : "Quay lại danh sách"}
               </span>
             </Link>
           </div>
@@ -194,9 +199,6 @@ export default function SalesApplyProcessStepCreatePage() {
                     </option>
                   ))}
                 </select>
-                {templateIdFromUrl && (
-                  <p className="text-sm text-neutral-500 mt-2">Template đã được chọn từ trang chi tiết</p>
-                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -234,21 +236,6 @@ export default function SalesApplyProcessStepCreatePage() {
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Ngày ước tính <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="estimatedDays"
-                    value={form.estimatedDays}
-                    onChange={handleChange}
-                    min={1}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
-                  />
-                </div>
               </div>
             </div>
           </div>

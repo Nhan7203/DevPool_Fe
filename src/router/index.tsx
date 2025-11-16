@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import UnauthorizedRedirectListener from '../components/common/UnauthorizedRedirectListener';
 
 // Layouts
 import PublicLayout from '../components/layouts/PublicLayout';
@@ -187,7 +188,9 @@ const AppRouter: React.FC = () => {
   const { user } = useAuth();
 
   return (
-    <Routes>
+    <>
+      <UnauthorizedRedirectListener />
+      <Routes>
       {/* ======================================== */}
       {/* PUBLIC ROUTES (với PublicLayout) */}
       {/* ======================================== */}
@@ -483,8 +486,9 @@ const AppRouter: React.FC = () => {
       {/* ======================================== */}
       {/* CATCH ALL ROUTE */}
       {/* ======================================== */}
-      <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+      </Routes>
+    </>
   );
 };
 

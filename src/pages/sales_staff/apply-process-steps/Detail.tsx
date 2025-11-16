@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
+import { applyProcessStepService } from "../../../services/ApplyProcessStep";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { Button } from "../../../components/ui/button";
 import {
@@ -10,11 +10,9 @@ import {
   Edit,
   Trash2,
   FileText,
-  Calendar,
   Hash,
   Building2,
   AlertCircle,
-  TrendingUp,
 } from "lucide-react";
 
 interface ApplyProcessStepDetail {
@@ -24,12 +22,15 @@ interface ApplyProcessStepDetail {
   stepOrder: number;
   stepName: string;
   description: string;
-  estimatedDays: number;
 }
 
 export default function SalesApplyProcessStepDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTarget =
+    (location.state as { fromTemplate?: string } | null)?.fromTemplate ??
+    "/sales/apply-process-steps";
   const [step, setStep] = useState<ApplyProcessStepDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,7 +65,7 @@ export default function SalesApplyProcessStepDetailPage() {
     try {
       await applyProcessStepService.deleteById(Number(id));
       alert("✅ Đã xóa bước quy trình thành công!");
-      navigate("/sales/apply-process-steps");
+      navigate(backTarget);
     } catch (err) {
       console.error("❌ Lỗi khi xóa:", err);
       alert("Không thể xóa bước quy trình!");
@@ -72,7 +73,9 @@ export default function SalesApplyProcessStepDetailPage() {
   };
 
   const handleEdit = () => {
-    navigate(`/sales/apply-process-steps/edit/${id}`);
+    const state =
+      backTarget !== "/sales/apply-process-steps" ? { fromTemplate: backTarget } : undefined;
+    navigate(`/sales/apply-process-steps/edit/${id}`, { state });
   };
 
   if (loading) {
@@ -119,11 +122,13 @@ export default function SalesApplyProcessStepDetailPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link
-              to="/sales/apply-process-steps"
+              to={backTarget}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
+              <span className="font-medium">
+                {backTarget !== "/sales/apply-process-steps" ? "Quay lại mẫu quy trình" : "Quay lại danh sách"}
+              </span>
             </Link>
           </div>
 
@@ -157,30 +162,6 @@ export default function SalesApplyProcessStepDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in">
-          <StatCard
-            title="Thứ tự"
-            value={`Bước ${step.stepOrder}`}
-            icon={<Hash className="w-6 h-6" />}
-            color="blue"
-            change="Thứ tự trong quy trình"
-          />
-          <StatCard
-            title="Ngày ước tính"
-            value={`${step.estimatedDays} ngày`}
-            icon={<Calendar className="w-6 h-6" />}
-            color="green"
-            change="Thời gian dự kiến"
-          />
-          <StatCard
-            title="Mẫu quy trình"
-            value={step.templateName ?? "—"}
-            icon={<Building2 className="w-6 h-6" />}
-            color="orange"
-            change="Thuộc template"
-          />
-        </div>
-
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
@@ -198,8 +179,6 @@ export default function SalesApplyProcessStepDetailPage() {
                 value={step.templateName ?? "—"}
                 icon={<Building2 className="w-4 h-4" />}
               />
-              <InfoItem label="Thứ tự" value={`${step.stepOrder}`} icon={<Hash className="w-4 h-4" />} />
-              <InfoItem label="Ngày ước tính" value={`${step.estimatedDays} ngày`} icon={<Calendar className="w-4 h-4" />} />
             </div>
           </div>
         </div>
@@ -222,55 +201,6 @@ export default function SalesApplyProcessStepDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  icon,
-  color,
-  change,
-}: {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  color: string;
-  change: string;
-}) {
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case "blue":
-        return "bg-primary-100 text-primary-600 group-hover:bg-primary-200";
-      case "green":
-        return "bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200";
-      case "purple":
-        return "bg-accent-100 text-accent-600 group-hover:bg-accent-200";
-      case "orange":
-        return "bg-warning-100 text-warning-600 group-hover:bg-warning-200";
-      default:
-        return "bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200";
-    }
-  };
-
-  return (
-    <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-            {title}
-          </p>
-          <p className="text-2xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">
-            {value}
-          </p>
-        </div>
-        <div className={`p-3 rounded-full ${getColorClasses(color)} transition-all duration-300`}>{icon}</div>
-      </div>
-      <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
-        <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-        {change}
-      </p>
     </div>
   );
 }

@@ -11,7 +11,6 @@ import {
   Eye,
   Plus,
   FileText,
-  Calendar,
   Building2,
   Hash,
   ChevronLeft,
@@ -225,14 +224,13 @@ export default function SalesApplyProcessStepListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên bước</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mẫu quy trình</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thứ tự</th>
-                  <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngày ước tính</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
                 {filteredSteps.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12">
+                    <td colSpan={5} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <FileText className="w-8 h-8 text-neutral-400" />
@@ -265,12 +263,6 @@ export default function SalesApplyProcessStepListPage() {
                           <Hash className="w-3 h-3 mr-1" />
                           {s.stepOrder}
                         </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Calendar className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm font-medium text-neutral-700">{s.estimatedDays} ngày</span>
-                        </div>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <Link
