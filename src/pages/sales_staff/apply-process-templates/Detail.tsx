@@ -34,8 +34,9 @@ export default function SalesApplyProcessTemplateDetailPage() {
         setTemplate(templateData);
 
         try {
-          const stepsData = await applyProcessStepService.getAll({ templateId: Number(id) });
-          setSteps(stepsData);
+          const stepsData = (await applyProcessStepService.getAll({ templateId: Number(id) })) as ApplyProcessStep[];
+          const sorted = [...(stepsData ?? [])].sort((a, b) => a.stepOrder - b.stepOrder);
+          setSteps(sorted);
         } catch (err) {
           console.error("❌ Lỗi tải steps:", err);
           setSteps([]);
@@ -77,11 +78,38 @@ export default function SalesApplyProcessTemplateDetailPage() {
     try {
       await Promise.all(selectedSteps.map((stepId) => applyProcessStepService.deleteById(stepId)));
       alert("✅ Đã xóa các bước thành công!");
-      setSteps((prev) => prev.filter((step) => !selectedSteps.includes(step.id)));
+      const remainingSteps = steps
+        .filter((step) => !selectedSteps.includes(step.id))
+        .sort((a, b) => a.stepOrder - b.stepOrder);
+      await reindexSteps(remainingSteps);
       setSelectedSteps([]);
     } catch (err) {
       console.error("❌ Lỗi khi xóa:", err);
       alert("Không thể xóa các bước!");
+    }
+  };
+
+  const reindexSteps = async (orderedSteps: ApplyProcessStep[]) => {
+    try {
+      await Promise.all(
+        orderedSteps.map((step, index) => {
+          const targetOrder = index + 1;
+          if (step.stepOrder === targetOrder) {
+            return Promise.resolve();
+          }
+          return applyProcessStepService.update(step.id, {
+            stepName: step.stepName,
+            description: step.description,
+            stepOrder: targetOrder,
+            templateId: step.templateId ?? template?.id ?? Number(id),
+          });
+        })
+      );
+      setSteps(orderedSteps.map((step, index) => ({ ...step, stepOrder: index + 1 })));
+    } catch (err) {
+      console.error("❌ Lỗi cập nhật lại thứ tự bước:", err);
+      alert("Không thể cập nhật lại thứ tự bước sau khi xóa!");
+      setSteps(orderedSteps.map((step, index) => ({ ...step, stepOrder: index + 1 })));
     }
   };
 
@@ -272,11 +300,11 @@ export default function SalesApplyProcessTemplateDetailPage() {
                           </div>
                           <div>
                             <h3 className="text-lg font-semibold text-gray-900">{step.stepName}</h3>
-                            <p className="text-sm text-neutral-500">Ước tính: {step.estimatedDays} ngày</p>
                           </div>
                         </div>
                         <Link
                           to={`/sales/apply-process-steps/${step.id}`}
+                          state={{ fromTemplate: `/sales/apply-process-templates/${template.id}` }}
                           className="group inline-flex items-center gap-1 px-3 py-2 text-secondary-600 hover:text-secondary-800 hover:bg-secondary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                         >
                           <AlertCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

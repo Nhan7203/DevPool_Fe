@@ -99,12 +99,12 @@ export default function SalesApplyProcessTemplateEditPage() {
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa template quy trình</h1>
-              <p className="text-neutral-600 mb-4">Cập nhật thông tin template quy trình tuyển dụng</p>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh sửa mẫu quy trình</h1>
+              <p className="text-neutral-600 mb-4">Cập nhật thông tin mẫu quy trình tuyển dụng</p>
 
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-50 border border-yellow-200">
                 <AlertCircle className="w-4 h-4 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-800">Chỉnh sửa template</span>
+                <span className="text-sm font-medium text-yellow-800">Chỉnh sửa mẫu quy trình</span>
               </div>
             </div>
           </div>
@@ -124,13 +124,13 @@ export default function SalesApplyProcessTemplateEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên template <span className="text-red-500">*</span>
+                  Tên mẫu quy trình <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Nhập tên template..."
+                  placeholder="Nhập tên mẫu quy trình..."
                   required
                   className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
                 />

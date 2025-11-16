@@ -28,28 +28,68 @@ import {
   MapPin,
   History,
   AlertCircle,
+  Eye,
 } from "lucide-react";
 import { projectService } from "../../../services/Project";
 import { clientCompanyService } from "../../../services/ClientCompany";
 import { jobRoleLevelService } from "../../../services/JobRoleLevel";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
+import { jobRoleService } from "../../../services/JobRole";
+import { Button } from "../../../components/ui/button";
 
 interface SalesActivity extends ApplyActivity {
   processStepName?: string;
 }
 
-const statusLabels: Record<string, string> = {
-  Submitted: "Đã nộp hồ sơ",
-  Interviewing: "Đang xem xét phỏng vấn",
-  Offered: "Đã bàn bạc",
-  Hired: "Đã tuyển",
-  Rejected: "Đã từ chối",
-  Withdrawn: "Đã rút",
+const getStatusConfig = (status: string) => {
+  const configs: Record<
+    string,
+    {
+      label: string;
+      badgeClass: string;
+      textClass: string;
+    }
+  > = {
+    Submitted: {
+      label: "Đã nộp hồ sơ",
+      badgeClass: "bg-sky-50 border border-sky-100",
+      textClass: "text-sky-700",
+    },
+    Interviewing: {
+      label: "Đang xem xét phỏng vấn",
+      badgeClass: "bg-cyan-50 border border-cyan-100",
+      textClass: "text-cyan-700",
+    },
+    Hired: {
+      label: "Đã tuyển",
+      badgeClass: "bg-purple-50 border border-purple-100",
+      textClass: "text-purple-700",
+    },
+    Rejected: {
+      label: "Đã từ chối",
+      badgeClass: "bg-red-50 border border-red-100",
+      textClass: "text-red-700",
+    },
+    Withdrawn: {
+      label: "Đã rút",
+      badgeClass: "bg-neutral-50 border border-neutral-200",
+      textClass: "text-neutral-600",
+    },
+  };
+
+  return (
+    configs[status] ?? {
+      label: status,
+      badgeClass: "bg-neutral-50 border border-neutral-200",
+      textClass: "text-neutral-700",
+    }
+  );
 };
 
 interface JobDisplayInfo {
   title: string;
+  jobRoleName?: string;
   projectName?: string;
   clientCompany?: {
     name?: string;
@@ -75,14 +115,39 @@ const workingModeLabels: Record<number, string> = {
   [WorkingModeEnum.None]: "—",
 };
 
-const formatCurrency = (value?: number | null) => {
-  if (value === undefined || value === null) return "—";
-  return value.toLocaleString("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  });
+const talentStatusLabels: Record<string, string> = {
+  Available: "Sẵn sàng làm việc",
+  Working: "Đang làm việc",
+  Applying: "Đang ứng tuyển",
+  Unavailable: "Không sẵn sàng",
+  Busy: "Đang bận",
+  Interviewing: "Đang phỏng vấn",
+  OfferPending: "Đang chờ offer",
+  Hired: "Đã tuyển",
+  Inactive: "Không hoạt động",
+  OnProject: "Đang tham gia dự án",
 };
+
+const talentStatusStyles: Record<
+  string,
+  {
+    badgeClass: string;
+    textClass: string;
+  }
+> = {
+  Available: { badgeClass: "bg-emerald-50 border border-emerald-100", textClass: "text-emerald-700" },
+  Working: { badgeClass: "bg-blue-50 border border-blue-100", textClass: "text-blue-700" },
+  Applying: { badgeClass: "bg-sky-50 border border-sky-100", textClass: "text-sky-700" },
+  Unavailable: { badgeClass: "bg-neutral-50 border border-neutral-200", textClass: "text-neutral-600" },
+  Busy: { badgeClass: "bg-orange-50 border border-orange-100", textClass: "text-orange-700" },
+  Interviewing: { badgeClass: "bg-cyan-50 border border-cyan-100", textClass: "text-cyan-700" },
+  OfferPending: { badgeClass: "bg-teal-50 border border-teal-100", textClass: "text-teal-700" },
+  Hired: { badgeClass: "bg-purple-50 border border-purple-100", textClass: "text-purple-700" },
+  Inactive: { badgeClass: "bg-neutral-50 border border-neutral-200", textClass: "text-neutral-600" },
+  OnProject: { badgeClass: "bg-indigo-50 border border-indigo-100", textClass: "text-indigo-700" },
+};
+
+// (no-op) kept for potential future use
 
 const activityTypeLabels: Record<number, string> = {
   [ApplyActivityType.Online]: "Trực tuyến",
@@ -105,6 +170,9 @@ export default function SalesApplicationDetailPage() {
   const [jobInfo, setJobInfo] = useState<JobDisplayInfo | null>(null);
   const [talentLocationName, setTalentLocationName] = useState<string>("—");
   const [activities, setActivities] = useState<SalesActivity[]>([]);
+  const [showDob, setShowDob] = useState(false);
+  const [showFullCVSummary, setShowFullCVSummary] = useState(false);
+  const [showJobDetails, setShowJobDetails] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -180,11 +248,24 @@ export default function SalesApplicationDetailPage() {
             try {
               const level = await jobRoleLevelService.getById(jobReqRaw.jobRoleLevelId);
               display.jobRoleLevelName = level?.name ?? "—";
+
+              if (level?.jobRoleId) {
+                try {
+                  const role = await jobRoleService.getById(level.jobRoleId);
+                  display.jobRoleName = role?.name ?? "—";
+                } catch {
+                  display.jobRoleName = "—";
+                }
+              } else {
+                display.jobRoleName = "—";
+              }
             } catch {
               display.jobRoleLevelName = "—";
+              display.jobRoleName = "—";
             }
           } else {
             display.jobRoleLevelName = "—";
+            display.jobRoleName = "—";
           }
 
           if (jobReqRaw.locationId) {
@@ -309,6 +390,7 @@ export default function SalesApplicationDetailPage() {
     jobInfo && jobInfo.workingMode !== undefined
       ? workingModeLabels[jobInfo.workingMode] ?? "—"
       : "—";
+  const statusConfig = getStatusConfig(application.status);
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -328,15 +410,13 @@ export default function SalesApplicationDetailPage() {
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ sơ #{application.id}</h1>
-              <p className="text-neutral-600">Thông tin tổng quan hồ sơ ứng tuyển</p>
+              <p className="text-neutral-600 mb-4">Thông tin chi tiết hồ sơ ứng viên</p>
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.badgeClass}`}>
+                <span className={`text-sm font-medium ${statusConfig.textClass}`}>
+                  {statusConfig.label}
+                </span>
+              </div>
             </div>
-            <span
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
-                statusLabels[application.status] ? "bg-teal-50 text-teal-700" : "bg-neutral-100 text-neutral-700"
-              }`}
-            >
-              {statusLabels[application.status] ?? application.status}
-            </span>
           </div>
         </div>
 
@@ -354,22 +434,12 @@ export default function SalesApplicationDetailPage() {
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoRow label="Mã hồ sơ" value={`#${application.id}`} icon={<FileText className="w-4 h-4" />} />
                 <InfoRow
-                  label="Vị trí tuyển dụng"
-                  value={jobInfo?.title ?? "—"}
-                  icon={<Briefcase className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Tên ứng viên"
-                  value={application.talent?.fullName ?? "—"}
-                  icon={<UserIcon className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="HR phụ trách"
+                  label="Người nộp"
                   value={application.submitterName ?? application.submittedBy}
                   icon={<UserIcon className="w-4 h-4" />}
                 />
                 <InfoRow
-                  label="Ngày nộp"
+                  label="Thời gian nộp hồ sơ"
                   value={new Date(application.createdAt).toLocaleString("vi-VN")}
                   icon={<Calendar className="w-4 h-4" />}
                 />
@@ -383,14 +453,22 @@ export default function SalesApplicationDetailPage() {
               </div>
             </div>
 
+            {/* Job info - sync fields and collapsed like HR */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
-              <div className="p-6 border-b border-neutral-200">
+              <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-secondary-100 rounded-lg">
                     <Briefcase className="w-5 h-5 text-secondary-600" />
                   </div>
                   <h2 className="text-lg font-semibold text-gray-900">Thông tin tuyển dụng</h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowJobDetails(!showJobDetails)}
+                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition"
+                >
+                  {showJobDetails ? "Thu gọn" : "Xem chi tiết"}
+                </button>
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoRow
@@ -399,38 +477,14 @@ export default function SalesApplicationDetailPage() {
                   icon={<Building2 className="w-4 h-4" />}
                 />
                 <InfoRow
-                  label="Dự án"
-                  value={jobInfo?.projectName ?? "—"}
-                  icon={<UserIcon className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Vị trí tuyển dụng"
-                  value={jobInfo?.title ?? "—"}
+                  label="Loại vị trí tuyển dụng"
+                  value={jobInfo?.jobRoleName ?? "—"}
                   icon={<Briefcase className="w-4 h-4" />}
                 />
                 <InfoRow
-                  label="Cấp độ chuyên môn"
+                  label="Vị trí tuyển dụng"
                   value={jobInfo?.jobRoleLevelName ?? "—"}
                   icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Số lượng tuyển dụng"
-                  value={jobInfo?.quantity !== undefined ? String(jobInfo.quantity) : "—"}
-                  icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Ngân sách/tháng"
-                  value={formatCurrency(jobInfo?.budgetPerMonth)}
-                  icon={<FileText className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Khu vực làm việc"
-                  value={
-                    jobInfo?.locationName ??
-                    jobInfo?.clientCompany?.address ??
-                    "—"
-                  }
-                  icon={<MapPin className="w-4 h-4" />}
                 />
                 <InfoRow
                   label="Chế độ làm việc"
@@ -438,18 +492,52 @@ export default function SalesApplicationDetailPage() {
                   icon={<Briefcase className="w-4 h-4" />}
                 />
                 <InfoRow
-                  label="Mẫu CV khách hàng"
-                  value={jobInfo?.clientCompanyCVTemplateName ?? "—"}
+                  label="Số lượng tuyển dụng"
+                  value={jobInfo?.quantity !== undefined ? String(jobInfo.quantity) : "—"}
                   icon={<FileText className="w-4 h-4" />}
                 />
                 <InfoRow
-                  label="Quy trình Apply"
+                  label="Quy trình ứng tuyển"
                   value={jobInfo?.applyProcessTemplateName ?? "—"}
                   icon={<FileText className="w-4 h-4" />}
                 />
+                {showJobDetails && (
+                  <>
+                    <div className="md:col-span-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <p className="text-neutral-500 text-sm font-medium">Mô tả công việc</p>
+                      </div>
+                      {application.jobRequest?.description ? (
+                        <div
+                          className="prose prose-sm text-gray-700 leading-relaxed max-w-none"
+                          dangerouslySetInnerHTML={{ __html: application.jobRequest.description }}
+                        />
+                      ) : (
+                        <p className="text-gray-500 italic">Chưa có mô tả</p>
+                      )}
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <p className="text-neutral-500 text-sm font-medium">Yêu cầu ứng viên</p>
+                      </div>
+                      {application.jobRequest?.requirements ? (
+                        <div
+                          className="prose prose-sm text-gray-700 leading-relaxed max-w-none"
+                          dangerouslySetInnerHTML={{ __html: application.jobRequest.requirements }}
+                        />
+                      ) : (
+                        <p className="text-gray-500 italic">Chưa có yêu cầu cụ thể cho ứng viên</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
+            {/* Hoạt động gần đây (moved from right column) */}
+            {/* Lịch sử hoạt động (moved from left column) */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200">
                 <div className="flex items-center gap-3">
@@ -487,6 +575,7 @@ export default function SalesApplicationDetailPage() {
           </div>
 
           <div className="space-y-6">
+            {/* Candidate info - order + badge + DOB collapsed like HR */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200">
                 <div className="flex items-center gap-3">
@@ -497,28 +586,97 @@ export default function SalesApplicationDetailPage() {
                 </div>
               </div>
               <div className="p-6 space-y-4">
-                <InfoRow
-                  label="Tên ứng viên"
-                  value={application.talent?.fullName ?? "—"}
-                  icon={<UserIcon className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Email"
-                  value={application.talent?.email ?? "—"}
-                  icon={<Mail className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Số điện thoại"
-                  value={application.talent?.phone ?? "—"}
-                  icon={<Phone className="w-4 h-4" />}
-                />
-                <InfoRow
-                  label="Địa điểm mong muốn"
-                  value={talentLocationName}
-                  icon={<MapPin className="w-4 h-4" />}
-                />
+                <InfoRow label="Tên ứng viên" value={application.talent?.fullName ?? "—"} icon={<UserIcon className="w-4 h-4" />} />
+                <InfoRow label="Email" value={application.talent?.email ?? "—"} icon={<Mail className="w-4 h-4" />} />
+                <InfoRow label="Phone" value={application.talent?.phone ?? "—"} icon={<Phone className="w-4 h-4" />} />
+                <InfoRow label="Working Mode" value={getTalentWorkingModeDisplay(application.talent?.workingMode)} icon={<Briefcase className="w-4 h-4" />} />
+                <InfoRow label="Desired Location" value={talentLocationName} icon={<MapPin className="w-4 h-4" />} />
+                <div className="group">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="text-neutral-400">
+                      <AlertCircle className="w-4 h-4" />
+                    </div>
+                    <p className="text-neutral-500 text-sm font-medium">Current Status</p>
+                  </div>
+                  <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-semibold ${talentStatusStyles[application.talent?.status ?? ""]?.badgeClass || "bg-neutral-50 border border-neutral-200"}`}>
+                    <span className={talentStatusStyles[application.talent?.status ?? ""]?.textClass || "text-neutral-700"}>
+                      {getTalentStatusLabel(application.talent?.status)}
+                    </span>
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <button type="button" onClick={() => setShowDob(!showDob)} className="text-sm px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition">
+                    {showDob ? "Ẩn ngày sinh" : "Hiện ngày sinh"}
+                  </button>
+                  {showDob && (
+                    <InfoRow label="Date of Birth" value={application.talent?.dateOfBirth ? new Date(application.talent.dateOfBirth).toLocaleDateString("vi-VN") : "—"} icon={<Calendar className="w-4 h-4" />} />
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* CV info - summary card and updated date behavior */}
+            {application.cv && (
+              <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
+                <div className="p-6 border-b border-neutral-200 flex flex-col md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-secondary-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-secondary-600" />
+                    </div>
+                    <h2 className="text-lg font-semibold text-gray-900">Thông tin CV</h2>
+                  </div>
+                  {application.cv.cvFileUrl && (
+                    <Button
+                      onClick={() => window.open(application.cv!.cvFileUrl, "_blank")}
+                      className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transform hover:scale-105"
+                    >
+                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                      Xem CV
+                    </Button>
+                  )}
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <InfoRow
+                      label="Phiên bản CV"
+                      value={application.cv.version ? `v${application.cv.version}` : "—"}
+                      icon={<FileText className="w-4 h-4" />}
+                    />
+                    <InfoRow
+                      label="Ngày cập nhật CV"
+                      value={(application.cv as any)?.updatedAt ? new Date((application.cv as any).updatedAt).toLocaleString("vi-VN") : "Chưa cập nhật"}
+                      icon={<Calendar className="w-4 h-4" />}
+                    />
+                  </div>
+                  {application.cv.summary && (
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-neutral-400" />
+                          <p className="text-neutral-500 text-sm font-medium">Tóm tắt</p>
+                        </div>
+                        {application.cv.summary.length > 240 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullCVSummary(!showFullCVSummary)}
+                            className="text-xs px-2 py-1 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition"
+                          >
+                            {showFullCVSummary ? "Thu gọn" : "Xem thêm"}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-gray-700 leading-relaxed">
+                        {showFullCVSummary
+                          ? application.cv.summary
+                          : (application.cv.summary.length > 240
+                            ? application.cv.summary.slice(0, 240) + "…"
+                            : application.cv.summary)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200">
@@ -576,13 +734,36 @@ function InfoRow({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      {icon && <div className="mt-1 text-neutral-400">{icon}</div>}
-      <div>
-        <p className="text-xs uppercase text-neutral-400 tracking-wider">{label}</p>
-        <p className="text-sm font-semibold text-gray-900 mt-1">{value || "—"}</p>
+    <div className="group">
+      <div className="flex items-center gap-2 mb-2">
+        {icon && <div className="text-neutral-400">{icon}</div>}
+        <p className="text-neutral-500 text-sm font-medium">{label}</p>
       </div>
+      <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+        {value || "—"}
+      </p>
     </div>
   );
+}
+
+function getTalentWorkingModeDisplay(workingMode?: number | null) {
+  if (!workingMode) return "—";
+  const options = [
+    { value: WorkingModeEnum.Onsite, label: "Tại văn phòng" },
+    { value: WorkingModeEnum.Remote, label: "Làm từ xa" },
+    { value: WorkingModeEnum.Hybrid, label: "Kết hợp" },
+    { value: WorkingModeEnum.Flexible, label: "Linh hoạt" },
+  ];
+
+  const matched = options
+    .filter((item) => (workingMode & item.value) === item.value)
+    .map((item) => item.label);
+
+  return matched.length > 0 ? matched.join(", ") : "—";
+}
+
+function getTalentStatusLabel(status?: string | null) {
+  if (!status) return "—";
+  return talentStatusLabels[status] ?? status;
 }
 

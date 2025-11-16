@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { applyProcessStepService, type ApplyProcessStepCreate } from "../../../services/ApplyProcessStep";
+import {
+  applyProcessStepService,
+  type ApplyProcessStep,
+  type ApplyProcessStepCreate,
+} from "../../../services/ApplyProcessStep";
 import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
 import { Button } from "../../../components/ui/button";
 import {
@@ -10,7 +14,6 @@ import {
   Save,
   X,
   FileText,
-  Calendar,
   Hash,
   Building2,
   AlertCircle,
@@ -19,14 +22,19 @@ import {
 export default function SalesApplyProcessStepEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromTemplate } = (location.state as { fromTemplate?: string } | null) ?? {};
+  const isTemplateLocked = Boolean(fromTemplate);
   const [templates, setTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCheckingOrder, setIsCheckingOrder] = useState(false);
+  const [templateSteps, setTemplateSteps] = useState<ApplyProcessStep[]>([]);
+  const [orderError, setOrderError] = useState("");
   const [formData, setFormData] = useState<ApplyProcessStepCreate>({
     templateId: 0,
     stepOrder: 1,
     stepName: "",
     description: "",
-    estimatedDays: 1,
   });
 
   useEffect(() => {
@@ -39,7 +47,6 @@ export default function SalesApplyProcessStepEditPage() {
           stepOrder: step.stepOrder,
           stepName: step.stepName,
           description: step.description,
-          estimatedDays: step.estimatedDays,
         });
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu bước:", err);
@@ -62,13 +69,50 @@ export default function SalesApplyProcessStepEditPage() {
     fetchTemplates();
   }, [id]);
 
+  useEffect(() => {
+    const fetchStepsByTemplate = async () => {
+      if (!formData.templateId) {
+        setTemplateSteps([]);
+        setOrderError("");
+        return;
+      }
+      try {
+        setIsCheckingOrder(true);
+        const steps = await applyProcessStepService.getAll({
+          templateId: formData.templateId,
+          excludeDeleted: true,
+        });
+        setTemplateSteps((steps ?? []) as ApplyProcessStep[]);
+      } catch (err) {
+        console.error("❌ Lỗi tải danh sách bước theo template:", err);
+        setTemplateSteps([]);
+      } finally {
+        setIsCheckingOrder(false);
+      }
+    };
+
+    void fetchStepsByTemplate();
+  }, [formData.templateId]);
+
+  useEffect(() => {
+    if (!formData.templateId) {
+      setOrderError("");
+      return;
+    }
+    const currentStepId = Number(id);
+    const hasDuplicate = templateSteps.some(
+      (step) => step.id !== currentStepId && step.stepOrder === formData.stepOrder,
+    );
+    setOrderError(hasDuplicate ? "⚠️ Thứ tự bước đã tồn tại trong template này. Vui lòng chọn thứ tự khác." : "");
+  }, [formData.stepOrder, templateSteps, id, formData.templateId]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: ["templateId", "stepOrder", "estimatedDays"].includes(name) ? Number(value) : value,
+      [name]: ["templateId", "stepOrder"].includes(name) ? Number(value) : value,
     }));
   };
 
@@ -88,11 +132,16 @@ export default function SalesApplyProcessStepEditPage() {
       alert("⚠️ Vui lòng nhập tên bước trước khi lưu!");
       return;
     }
+    if (orderError) {
+      return;
+    }
 
     try {
       await applyProcessStepService.update(Number(id), formData);
       alert("✅ Cập nhật bước quy trình thành công!");
-      navigate(`/sales/apply-process-steps/${id}`);
+      navigate(`/sales/apply-process-steps/${id}`, {
+        state: fromTemplate ? { fromTemplate } : undefined,
+      });
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
       alert("Không thể cập nhật bước quy trình!");
@@ -122,6 +171,7 @@ export default function SalesApplyProcessStepEditPage() {
           <div className="flex items-center gap-4 mb-6">
             <Link
               to={`/sales/apply-process-steps/${id}`}
+              state={fromTemplate ? { fromTemplate } : undefined}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -162,7 +212,10 @@ export default function SalesApplyProcessStepEditPage() {
                   name="templateId"
                   value={formData.templateId}
                   onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  disabled={isTemplateLocked}
+                  className={`w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 ${
+                    isTemplateLocked ? "bg-neutral-100 cursor-not-allowed" : "bg-white"
+                  }`}
                 >
                   <option value="0">-- Chọn mẫu quy trình --</option>
                   {templates.map((t) => (
@@ -170,7 +223,7 @@ export default function SalesApplyProcessStepEditPage() {
                       {t.name}
                     </option>
                   ))}
-                </select>
+                </select>            
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -201,22 +254,14 @@ export default function SalesApplyProcessStepEditPage() {
                     min={1}
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
+                  <p className={`text-xs mt-2 ${orderError ? "text-red-600" : "text-neutral-500"}`}>
+                    {orderError ||
+                      (isCheckingOrder
+                        ? "Đang kiểm tra thứ tự khả dụng..."
+                        : "Mỗi bước trong cùng mẫu quy trình phải có thứ tự duy nhất.")}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Ngày ước tính
-                  </label>
-                  <input
-                    type="number"
-                    name="estimatedDays"
-                    value={formData.estimatedDays}
-                    onChange={handleChange}
-                    min={1}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -245,6 +290,7 @@ export default function SalesApplyProcessStepEditPage() {
           <div className="flex justify-end gap-4 pt-6">
             <Link
               to={`/sales/apply-process-steps/${id}`}
+              state={fromTemplate ? { fromTemplate } : undefined}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
@@ -252,7 +298,8 @@ export default function SalesApplyProcessStepEditPage() {
             </Link>
             <Button
               type="submit"
-              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+              disabled={!!orderError}
+              className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
               Lưu thay đổi

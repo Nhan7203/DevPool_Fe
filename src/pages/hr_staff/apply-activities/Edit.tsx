@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
+import { applyService } from "../../../services/Apply";
+import { jobRequestService } from "../../../services/JobRequest";
 import { 
   ArrowLeft, 
   Save, 
@@ -31,7 +33,7 @@ export default function ApplyActivityEditPage() {
     status: ApplyActivityStatus.Scheduled,
     notes: "",
   });
-  const [existingActivities, setExistingActivities] = useState<number[]>([]);
+  const [activitySchedules, setActivitySchedules] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,20 +61,51 @@ export default function ApplyActivityEditPage() {
           notes: activityData.notes || "",
         });
 
-        // Fetch process steps
-        const steps = await applyProcessStepService.getAll();
-        setProcessSteps(steps);
+        // Fetch related apply & job request to load template steps
+        let templateSteps: ApplyProcessStep[] = [];
+        try {
+          const apply = await applyService.getById(activityData.applyId);
+          if (apply?.jobRequestId) {
+            const jobRequest = await jobRequestService.getById(apply.jobRequestId);
+            if (jobRequest?.applyProcessTemplateId) {
+              const stepsResponse = await applyProcessStepService.getAll({
+                templateId: jobRequest.applyProcessTemplateId,
+                excludeDeleted: true,
+              });
+              templateSteps = Array.isArray(stepsResponse)
+                ? stepsResponse
+                : Array.isArray(stepsResponse?.data)
+                  ? stepsResponse.data
+                  : [];
+            }
+          }
+        } catch (templateErr) {
+          console.error("⚠️ Không thể tải quy trình mẫu của job request:", templateErr);
+        }
+
+        if (templateSteps.length === 0) {
+          const fallbackSteps = await applyProcessStepService.getAll();
+          templateSteps = Array.isArray(fallbackSteps)
+            ? fallbackSteps
+            : Array.isArray(fallbackSteps?.data)
+              ? fallbackSteps.data
+              : [];
+        }
+        setProcessSteps(templateSteps);
 
         // Fetch existing activities of this applyId to disable used steps (excluding current activity's step)
         try {
           const activities = await applyActivityService.getAll({ applyId: activityData.applyId });
-          const usedSteps = activities
-            .filter(activity => activity.id !== activityData.id && activity.processStepId > 0)
-            .map(activity => activity.processStepId);
-          setExistingActivities(usedSteps);
+          const scheduleMap: Record<number, string> = {};
+          activities
+            .filter(activity => activity.id !== activityData.id && activity.processStepId && activity.scheduledDate)
+            .forEach(activity => {
+              scheduleMap[activity.processStepId] = activity.scheduledDate!;
+            });
+          setActivitySchedules(scheduleMap);
         } catch (err) {
           console.error("❌ Lỗi tải danh sách hoạt động để disable bước:", err);
-          setExistingActivities([]);
+          setActivitySchedules({});
         }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
@@ -83,6 +116,32 @@ export default function ApplyActivityEditPage() {
     };
     fetchData();
   }, [id]);
+
+  const sortedSteps = useMemo(
+    () => [...processSteps].sort((a, b) => a.stepOrder - b.stepOrder),
+    [processSteps]
+  );
+
+  const previousConstraint = useMemo(() => {
+    if (!form.processStepId) return null;
+    const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
+    if (selectedIndex <= 0) return null;
+    for (let i = selectedIndex - 1; i >= 0; i--) {
+      const prevStep = sortedSteps[i];
+      const schedule = activitySchedules[prevStep.id];
+      if (schedule) {
+        return { step: prevStep, date: schedule };
+      }
+    }
+    return null;
+  }, [form.processStepId, sortedSteps, activitySchedules]);
+
+  const todayMinValue = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tzOffset = today.getTimezoneOffset() * 60000;
+    return new Date(today.getTime() - tzOffset).toISOString().slice(0, 16);
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -108,16 +167,33 @@ export default function ApplyActivityEditPage() {
 
     try {
       // Convert local datetime to UTC
-      let scheduledDateUTC: string | undefined = undefined;
+      let scheduledDateUTC: string | null = null;
       if (form.scheduledDate) {
         const localDate = new Date(form.scheduledDate);
-        const minAllowed = new Date();
-        minAllowed.setDate(minAllowed.getDate() + 1);
 
-        if (localDate.getTime() < minAllowed.getTime()) {
-          setError("⚠️ Ngày lên lịch phải từ ngày mai trở đi.");
-          setSaving(false);
-          return;
+        const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
+        if (selectedIndex > 0) {
+          const previousSteps = sortedSteps.slice(0, selectedIndex).reverse();
+          const previousWithSchedule = previousSteps.find(step => activitySchedules[step.id]);
+          if (previousWithSchedule) {
+            const previousDate = new Date(activitySchedules[previousWithSchedule.id]);
+            if (localDate.getTime() < previousDate.getTime()) {
+              setError(`⚠️ Thời gian cho bước hiện tại phải sau hoặc bằng bước "${previousWithSchedule.stepName}".`);
+              setSaving(false);
+              return;
+            }
+          }
+        }
+
+        const nextSteps = sortedSteps.slice(selectedIndex + 1);
+        const nextWithSchedule = nextSteps.find(step => activitySchedules[step.id]);
+        if (nextWithSchedule) {
+          const nextDate = new Date(activitySchedules[nextWithSchedule.id]);
+          if (localDate.getTime() > nextDate.getTime()) {
+            setError(`⚠️ Thời gian cho bước hiện tại phải trước hoặc bằng bước "${nextWithSchedule.stepName}".`);
+            setSaving(false);
+            return;
+          }
         }
 
         const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
@@ -235,23 +311,17 @@ export default function ApplyActivityEditPage() {
                   name="processStepId"
                   value={form.processStepId}
                   onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-100 cursor-not-allowed"
+                  disabled
                 >
-                  <option value="0">-- Không chọn bước --</option>
-                  {processSteps.map(step => {
-                    const isDisabled = existingActivities.includes(step.id);
-                    return (
-                      <option
-                        key={step.id}
-                        value={step.id.toString()}
-                        disabled={isDisabled}
-                        className={isDisabled ? "text-neutral-400" : ""}
-                      >
-                        {step.stepOrder}. {step.stepName}
-                        {isDisabled ? " (đã chọn)" : ""}
-                      </option>
-                    );
-                  })}
+                  {processSteps.map(step => (
+                    <option
+                      key={step.id}
+                      value={step.id.toString()}
+                    >
+                      {step.stepOrder}. {step.stepName}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -274,9 +344,6 @@ export default function ApplyActivityEditPage() {
                   <option value="3">Failed - Không đạt</option>
                   <option value="4">NoShow - Không có mặt</option>
                 </select>
-                <p className="text-sm text-neutral-500 mt-2">
-                  ⚠️ Trạng thái không thể chỉnh sửa. Vui lòng sử dụng trang chi tiết để thay đổi trạng thái.
-                </p>
               </div>
             </div>
           </div>
@@ -298,19 +365,42 @@ export default function ApplyActivityEditPage() {
                   <Calendar className="w-4 h-4" />
                   Ngày đã lên lịch
                 </label>
-                <input
-                  type="datetime-local"
-                  name="scheduledDate"
-                  value={form.scheduledDate}
-                  onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  min={(() => {
-                    const minDate = new Date();
-                    minDate.setDate(minDate.getDate() + 1);
-                    const tzOffset = minDate.getTimezoneOffset() * 60000;
-                    return new Date(minDate.getTime() - tzOffset).toISOString().slice(0, 16);
-                  })()}
-                />
+                <div className="flex items-center gap-3">
+                  <input
+                    type="datetime-local"
+                    name="scheduledDate"
+                    value={form.scheduledDate}
+                    onChange={handleChange}
+                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    min={todayMinValue}
+                  />
+                  {form.scheduledDate && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, scheduledDate: "" }))}
+                      className="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                      title="Xóa lịch"
+                    >
+                      Xóa lịch
+                    </button>
+                  )}
+                </div>
+                {form.scheduledDate && previousConstraint && (
+                  <div className="mt-3 px-4 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm font-medium">
+                    ⚠️ Phải sau {new Date(previousConstraint.date).toLocaleString('vi-VN')} (bước {previousConstraint.step.stepOrder}. {previousConstraint.step.stepName})
+                  </div>
+                )}
+                {form.scheduledDate && (() => {
+                  const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
+                  const nextSteps = sortedSteps.slice(selectedIndex + 1);
+                  const nextWithSchedule = nextSteps.find(step => activitySchedules[step.id]);
+                  if (!nextWithSchedule) return null;
+                  return (
+                    <div className="mt-3 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
+                      ⚠️ Phải trước {new Date(activitySchedules[nextWithSchedule.id]).toLocaleString('vi-VN')} (bước {nextWithSchedule.stepOrder}. {nextWithSchedule.stepName})
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

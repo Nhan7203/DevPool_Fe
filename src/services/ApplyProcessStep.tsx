@@ -7,14 +7,11 @@ export interface ApplyProcessStep {
   stepOrder: number;
   stepName: string;
   description: string;
-  estimatedDays: number;
 }
 
 export interface ApplyProcessStepFilter {
   templateId?: number;
   stepName?: string;
-  minEstimatedDays?: number;
-  maxEstimatedDays?: number;
   excludeDeleted?: boolean;
 }
 
@@ -23,7 +20,6 @@ export interface ApplyProcessStepCreate {
   stepOrder: number;
   stepName: string;
   description: string;
-  estimatedDays: number;
 }
 
 export const applyProcessStepService = {
@@ -32,8 +28,6 @@ export const applyProcessStepService = {
       const params = new URLSearchParams();
       if (filter?.templateId) params.append("TemplateId", filter.templateId.toString());
       if (filter?.stepName) params.append("StepName", filter.stepName);
-      if (filter?.minEstimatedDays) params.append("MinEstimatedDays", filter.minEstimatedDays.toString());
-      if (filter?.maxEstimatedDays) params.append("MaxEstimatedDays", filter.maxEstimatedDays.toString());
       if (filter?.excludeDeleted !== undefined) params.append("ExcludeDeleted", filter.excludeDeleted.toString());
       const url = `/applyprocessstep${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);

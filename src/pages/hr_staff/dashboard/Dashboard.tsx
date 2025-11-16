@@ -253,8 +253,8 @@ export default function HRDashboard() {
 
   // Applications by status
   const interviewingCount = applications.filter(app => app.status === 'Interviewing').length;
-  const offeredCount = applications.filter(app => app.status === 'Offered').length;
   const rejectedCount = applications.filter(app => app.status === 'Rejected').length;
+  const withdrawnCount = applications.filter(app => app.status === 'Withdrawn').length;
 
   const stats = [
     {
@@ -295,7 +295,6 @@ export default function HRDashboard() {
     switch (status) {
       case 'Submitted': return 'bg-sky-100 text-sky-800';
       case 'Interviewing': return 'bg-cyan-100 text-cyan-800';
-      case 'Offered': return 'bg-teal-100 text-teal-800';
       case 'Hired': return 'bg-purple-100 text-purple-800';
       case 'Rejected': return 'bg-red-100 text-red-800';
       case 'Withdrawn': return 'bg-gray-100 text-gray-800';
@@ -307,7 +306,6 @@ export default function HRDashboard() {
     switch (status) {
       case 'Submitted': return 'Đã nộp hồ sơ';
       case 'Interviewing': return 'Đang xem xét phỏng vấn';
-      case 'Offered': return 'Đã bàn bạc';
       case 'Hired': return 'Đã tuyển';
       case 'Rejected': return 'Đã từ chối';
       case 'Withdrawn': return 'Đã rút';
@@ -407,6 +405,149 @@ export default function HRDashboard() {
           ))}
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
+          {/* Recent Job Requests */}
+          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
+                <button
+                  onClick={() => navigate('/hr/job-requests')}
+                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
+                >
+                  Xem tất cả
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {recentJobRequests.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentJobRequests.map((jr) => (
+                    <div
+                      key={jr.id}
+                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
+                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
+                    >
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          <span className="flex items-center">
+                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {jr.companyName}
+                          </span>
+                          <span className="flex items-center">
+                            <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {jr.quantity} vị trí
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
+                            jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
+                              jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
+                                'bg-red-100 text-red-800'
+                          }`}>
+                          {jr.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Contracts */}
+          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
+                <button
+                  onClick={() => navigate('/hr/contracts')}
+                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
+                >
+                  Xem tất cả
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {recentContracts.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <p className="text-neutral-500 text-lg font-medium">Chưa có hợp đồng nào</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentContracts.map((contract) => (
+                    <div
+                      key={contract.id}
+                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
+                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
+                    >
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          <span className="flex items-center">
+                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {contract.partnerName}
+                          </span>
+                          <span className="flex items-center">
+                            <UserPlus className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                            {contract.talentName}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getContractStatusColor(contract.status)}`}>
+                          {getContractStatusText(contract.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Applications by Status */}
+        <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <h2 className="text-lg font-semibold text-gray-900">Thống Kê Ứng Tuyển Theo Trạng Thái</h2>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="text-2xl font-bold text-blue-700">{interviewingCount}</div>
+                <div className="text-sm text-blue-600 mt-1">Đang Phỏng Vấn</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="text-2xl font-bold text-gray-700">{withdrawnCount}</div>
+                <div className="text-sm text-gray-600 mt-1">Đã Rút</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-xl border border-purple-100">
+                <div className="text-2xl font-bold text-purple-700">{hiredCount}</div>
+                <div className="text-sm text-purple-600 mt-1">Đã Tuyển</div>
+              </div>
+              <div className="text-center p-4 bg-red-50 rounded-xl border border-red-100">
+                <div className="text-2xl font-bold text-red-700">{rejectedCount}</div>
+                <div className="text-sm text-red-600 mt-1">Đã Từ Chối</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* Recent Applications & Activities Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
           {/* Recent Applications */}
           <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
@@ -513,149 +654,6 @@ export default function HRDashboard() {
                           <span className="text-xs text-neutral-400">•</span>
                           <p className="text-xs text-neutral-500 group-hover:text-neutral-600 transition-colors duration-300">{activity.time}</p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Applications by Status */}
-        <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <h2 className="text-lg font-semibold text-gray-900">Thống Kê Ứng Tuyển Theo Trạng Thái</h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <div className="text-2xl font-bold text-blue-700">{interviewingCount}</div>
-                <div className="text-sm text-blue-600 mt-1">Đang Phỏng Vấn</div>
-              </div>
-              <div className="text-center p-4 bg-teal-50 rounded-xl border border-teal-100">
-                <div className="text-2xl font-bold text-teal-700">{offeredCount}</div>
-                <div className="text-sm text-teal-600 mt-1">Đã Đề Xuất</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-xl border border-purple-100">
-                <div className="text-2xl font-bold text-purple-700">{hiredCount}</div>
-                <div className="text-sm text-purple-600 mt-1">Đã Tuyển</div>
-              </div>
-              <div className="text-center p-4 bg-red-50 rounded-xl border border-red-100">
-                <div className="text-2xl font-bold text-red-700">{rejectedCount}</div>
-                <div className="text-sm text-red-600 mt-1">Đã Từ Chối</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-        {/* Job Requests & Contracts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
-          {/* Recent Job Requests */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
-                <button
-                  onClick={() => navigate('/hr/job-requests')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentJobRequests.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Target className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentJobRequests.map((jr) => (
-                    <div
-                      key={jr.id}
-                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.companyName}
-                          </span>
-                          <span className="flex items-center">
-                            <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.quantity} vị trí
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
-                            jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
-                              jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
-                                'bg-red-100 text-red-800'
-                          }`}>
-                          {jr.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Contracts */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
-                <button
-                  onClick={() => navigate('/hr/contracts')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentContracts.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FileText className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có hợp đồng nào</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentContracts.map((contract) => (
-                    <div
-                      key={contract.id}
-                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.partnerName}
-                          </span>
-                          <span className="flex items-center">
-                            <UserPlus className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.talentName}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getContractStatusColor(contract.status)}`}>
-                          {getContractStatusText(contract.status)}
-                        </span>
                       </div>
                     </div>
                   ))}

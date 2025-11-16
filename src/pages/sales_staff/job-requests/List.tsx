@@ -19,7 +19,6 @@ import {
   ChevronLeft,
   ChevronRight,
   XCircle,
-  DollarSign,
   FileText,
 } from "lucide-react";
 
@@ -229,7 +228,7 @@ export default function JobRequestListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các yêu cầu từ công ty khách hàng</p>
             </div>
             <Link to="/sales/job-requests/create">
-              <Button className="roup flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo yêu cầu mới
               </Button>
@@ -507,12 +506,9 @@ export default function JobRequestListPage() {
                         <span className="text-sm font-medium text-neutral-700">{r.quantity}</span>
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <DollarSign className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm font-medium text-neutral-700">
-                            {r.budgetPerMonth?.toLocaleString("vi-VN") ?? "—"}
-                          </span>
-                        </div>
+                        <span className="text-sm font-medium text-neutral-700">
+                          {r.budgetPerMonth?.toLocaleString("vi-VN")  ?? "—"}
+                        </span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[r.status]}`}>

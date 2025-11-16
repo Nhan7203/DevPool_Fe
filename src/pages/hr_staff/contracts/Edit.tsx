@@ -34,7 +34,7 @@ export default function EditPartnerContractPage() {
         devRate: undefined,
         rateType: '',
         contractNumber: '',
-        status: 'draft',
+        status: 'Draft',
         startDate: '',
         endDate: undefined,
         contractFileUrl: undefined,
@@ -265,7 +265,7 @@ export default function EditPartnerContractPage() {
             const updatePayload: PartnerContractUpdatePayload = {
                 ...form,
                 contractNumber: contractNumberUpper, // Đảm bảo gửi lên BE là chữ hoa
-                status: 'draft', // Giữ nguyên status là draft khi edit
+                status: 'Draft', // Giữ nguyên status là draft khi edit
                 contractFileUrl: fileUrl,
             };
 
@@ -499,7 +499,7 @@ export default function EditPartnerContractPage() {
                                         onChange={handleChange}
                                         required
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                        min={minStartDate}
+                                        // min={minStartDate}
                                         max={form.endDate || undefined}
                                     />
                                 </div>

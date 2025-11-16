@@ -58,6 +58,7 @@ export default function TalentEditPage() {
 
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string>("");
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -305,8 +306,41 @@ export default function TalentEditPage() {
 
       alert("✅ Cập nhật nhân sự thành công!");
       navigate(`/hr/developers/${id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Lỗi khi cập nhật:", err);
+      const data = err?.response?.data;
+      let combined = "";
+      if (typeof data === "string") {
+        combined = data;
+      } else if (data && typeof data === "object") {
+        try {
+          const candidates: string[] = [];
+          const tryPush = (v: unknown) => {
+            if (typeof v === "string" && v) candidates.push(v);
+          };
+          tryPush((data as any).error);
+          tryPush((data as any).message);
+          tryPush((data as any).objecterror);
+          tryPush((data as any).Objecterror);
+          tryPush((data as any).detail);
+          tryPush((data as any).title);
+          const values = Object.values(data)
+            .map((v) => (typeof v === "string" ? v : ""))
+            .filter(Boolean);
+          candidates.push(...values);
+          combined = candidates.join(" ");
+          if (!combined) combined = JSON.stringify(data);
+        } catch {
+          combined = JSON.stringify(data);
+        }
+      }
+      const lower = (combined || err?.message || "").toLowerCase();
+      if (lower.includes("email already exists") || (lower.includes("already exists") && lower.includes("email"))) {
+        setErrors(prev => ({ ...prev, email: "Email đã tồn tại trong hệ thống" }));
+        setFormError("Email đã tồn tại trong hệ thống");
+        alert("❌ Email đã tồn tại trong hệ thống. Vui lòng dùng email khác.");
+        return;
+      }
       alert("Không thể cập nhật nhân sự!");
     }
   };
@@ -330,6 +364,11 @@ export default function TalentEditPage() {
 
       <div className="flex-1 p-8">
         {/* Header */}
+        {formError && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3">
+            {formError}
+          </div>
+        )}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link 

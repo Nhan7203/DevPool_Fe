@@ -17,7 +17,6 @@ import {
   CheckCircle,
   XCircle,
   X,
-  Send,
   ChevronLeft,
   ChevronRight,
   UserStar,
@@ -43,7 +42,6 @@ type AugmentedTalentApplication = TalentApplication & {
 const statusLabels: Record<string, string> = {
   Submitted: "Đã nộp hồ sơ",
   Interviewing: "Đang xem xét phỏng vấn",
-  Offered: "Đã bàn bạc",
   Hired: "Đã tuyển",
   Rejected: "Đã từ chối",
   Withdrawn: "Đã rút",
@@ -52,7 +50,6 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   Submitted: "bg-sky-100 text-sky-800",
   Interviewing: "bg-cyan-100 text-cyan-800",
-  Offered: "bg-teal-100 text-teal-800",
   Hired: "bg-purple-100 text-purple-800",
   Rejected: "bg-red-100 text-red-800",
   Withdrawn: "bg-gray-100 text-gray-800",
@@ -97,12 +94,6 @@ export default function TalentCVApplicationPage() {
       value: applications.filter(a => a.status === 'Interviewing').length.toString(),
       color: 'teal',
       icon: <Eye className="w-6 h-6" />,
-    },
-    {
-      title: 'Đã bàn bạc',
-      value: applications.filter(a => a.status === 'Offered').length.toString(),
-      color: 'green',
-      icon: <Send className="w-6 h-6" />,
     },
     {
       title: 'Đã Tuyển',
@@ -493,7 +484,6 @@ export default function TalentCVApplicationPage() {
                     <option value="">Tất cả trạng thái</option>
                     <option value="Submitted">Đã nộp hồ sơ</option>
                     <option value="Interviewing">Đang xem xét phỏng vấn</option>
-                    <option value="Offered">Đã bàn bạc</option>
                     <option value="Hired">Đã tuyển</option>
                     <option value="Rejected">Đã từ chối</option>
                     <option value="Withdrawn">Đã rút</option>

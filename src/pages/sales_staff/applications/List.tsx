@@ -12,10 +12,15 @@ import {
   Search,
   Filter,
   Briefcase,
-  Calendar,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  User as UserIcon,
+  UserStar,
+  FileUser,
+  Eye,
+  XCircle,
+  X,
 } from "lucide-react";
 
 type SalesTalentApplication = TalentApplication & {
@@ -36,7 +41,6 @@ type SalesTalentApplication = TalentApplication & {
 const statusLabels: Record<string, string> = {
   Submitted: "Đã nộp hồ sơ",
   Interviewing: "Đang xem xét phỏng vấn",
-  Offered: "Đã bàn bạc",
   Hired: "Đã tuyển",
   Rejected: "Đã từ chối",
   Withdrawn: "Đã rút",
@@ -45,7 +49,6 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   Submitted: "bg-sky-100 text-sky-700",
   Interviewing: "bg-cyan-100 text-cyan-700",
-  Offered: "bg-teal-100 text-teal-700",
   Hired: "bg-purple-100 text-purple-700",
   Rejected: "bg-red-100 text-red-700",
   Withdrawn: "bg-gray-100 text-gray-700",
@@ -92,9 +95,12 @@ export default function SalesApplicationListPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [filterJobRequestId, setFilterJobRequestId] = useState<string>(jobRequestIdFromQuery ?? "");
   const [jobRequestTitle, setJobRequestTitle] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -241,30 +247,63 @@ export default function SalesApplicationListPage() {
       {
         title: "Tổng hồ sơ",
         value: applications.length.toString(),
-        icon: <FileText className="w-6 h-6 text-primary-600" />,
-        accent: "bg-primary-100",
+        color: "blue",
+        icon: <FileText className="w-6 h-6" />,
       },
       {
-        title: "Đã lên lịch phỏng vấn",
+        title: "Đã nộp hồ sơ",
+        value: applications.filter((app) => app.status === "Submitted").length.toString(),
+        color: "blue",
+        icon: <FileUser className="w-6 h-6" />,
+      },
+      {
+        title: "Đang xem xét PV",
         value: applications.filter((app) => app.status === "Interviewing").length.toString(),
-        icon: <Calendar className="w-6 h-6 text-secondary-600" />,
-        accent: "bg-secondary-100",
-      },
-      {
-        title: "Đang xử lý",
-        value: applications.filter((app) => ["Interviewing", "Offered"].includes(app.status)).length.toString(),
-        icon: <Briefcase className="w-6 h-6 text-accent-600" />,
-        accent: "bg-accent-100",
+        color: "teal",
+        icon: <Eye className="w-6 h-6" />,
       },
       {
         title: "Đã tuyển",
         value: applications.filter((app) => app.status === "Hired").length.toString(),
-        icon: <CheckCircle className="w-6 h-6 text-warning-600" />,
-        accent: "bg-warning-100",
+        color: "purple",
+        icon: <CheckCircle className="w-6 h-6" />,
+      },
+      {
+        title: "Đã từ chối",
+        value: applications.filter((app) => app.status === "Rejected").length.toString(),
+        color: "red",
+        icon: <XCircle className="w-6 h-6" />,
+      },
+      {
+        title: "Đã rút",
+        value: applications.filter((app) => app.status === "Withdrawn").length.toString(),
+        color: "gray",
+        icon: <X className="w-6 h-6" />,
       },
     ],
     [applications],
   );
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex((prev) => Math.min(prev, maxIndex));
+  }, [stats.length, statsPageSize]);
+
+  const statsSlice = stats.slice(statsStartIndex, Math.min(statsStartIndex + statsPageSize, stats.length));
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrevStats = canShowStatsNav && statsStartIndex > 0;
+  const canGoNextStats = canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
+  const handlePrevStats = () => {
+    setStatsStartIndex((prev) => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex((prev) => {
+      const maxIndex = Math.max(0, stats.length - statsPageSize);
+      return Math.min(maxIndex, prev + statsPageSize);
+    });
+  };
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -296,19 +335,109 @@ export default function SalesApplicationListPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {stats.map((stat, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-neutral-100 rounded-2xl shadow-soft p-6 flex items-center justify-between"
-              >
-                <div>
-                  <p className="text-sm text-neutral-500">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.accent}`}>{stat.icon}</div>
+          <div className="mb-8 animate-fade-in">
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statsSlice.map((stat, idx) => (
+                  <div
+                    key={`${stat.title}-${statsStartIndex + idx}`}
+                    className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                          {stat.title}
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">
+                          {stat.value}
+                        </p>
+                      </div>
+                      <div
+                        className={`p-3 rounded-full ${
+                          stat.color === "blue"
+                            ? "bg-primary-100 text-primary-600 group-hover:bg-primary-200"
+                            : stat.color === "green"
+                            ? "bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200"
+                            : stat.color === "purple"
+                            ? "bg-accent-100 text-accent-600 group-hover:bg-accent-200"
+                            : stat.color === "red"
+                            ? "bg-red-100 text-red-600 group-hover:bg-red-200"
+                            : stat.color === "gray"
+                            ? "bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200"
+                            : stat.color === "teal"
+                            ? "bg-teal-100 text-teal-600 group-hover:bg-teal-200"
+                            : "bg-warning-100 text-warning-600 group-hover:bg-warning-200"
+                        } transition-all duration-300`}
+                      >
+                        {stat.icon}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+              {canShowStatsNav && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoPrevStats
+                        ? "h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300"
+                        : "h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoNextStats
+                        ? "h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300"
+                        : "h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+            {canShowStatsNav && (
+              <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoPrevStats
+                        ? "bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300"
+                        : "bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoNextStats
+                        ? "bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300"
+                        : "bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed"
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    Tiếp
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {filterJobRequestId && (
@@ -334,41 +463,52 @@ export default function SalesApplicationListPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6">
-          <div className="p-6 space-y-4">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="relative flex-1 min-w-[260px]">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6 animate-fade-in">
+          <div className="p-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative flex-1 min-w-[300px]">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Tìm theo vị trí, ứng viên hoặc HR phụ trách..."
-                  className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-neutral-50 focus:bg-white"
+                  placeholder="Tìm kiếm theo tên, email, tiêu đề yêu cầu..."
+                  className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Filter className="w-5 h-5 text-neutral-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                >
-                  <option value="">Tất cả trạng thái</option>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <button
-                onClick={handleResetFilters}
-                className="px-4 py-2 text-sm font-medium border border-neutral-200 rounded-xl text-neutral-600 hover:text-primary-600 hover:border-primary-400 hover:bg-primary-50 transition-all duration-300"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className="group flex items-center gap-2 px-6 py-3 border border-neutral-200 rounded-xl hover:border-primary-500 hover:text-primary-600 hover:bg-primary-50 transition-all duration-300 bg-white"
               >
-                Đặt lại
+                <Filter className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                <span className="font-medium">{showFilters ? "Ẩn bộ lọc" : "Bộ lọc"}</span>
               </button>
             </div>
+
+            {showFilters && (
+              <div className="mt-6 pt-6 border-t border-neutral-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
+                  >
+                    <option value="">Tất cả trạng thái</option>
+                    {Object.entries(statusLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleResetFilters}
+                    className="group flex items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105 transform"
+                  >
+                    <span className="font-medium">Đặt lại</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -416,25 +556,25 @@ export default function SalesApplicationListPage() {
             <table className="w-full">
               <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     #
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Vị trí
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Ứng viên
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Trạng thái
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     HR phụ trách
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Ứng viên
+                  </th>                 
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Yêu cầu tuyển dụng
+                  </th>
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Trạng thái
+                  </th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Cập nhật
                   </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Thao tác
                   </th>
                 </tr>
@@ -454,18 +594,37 @@ export default function SalesApplicationListPage() {
                   </tr>
                 ) : (
                   paginatedApplications.map((app, index) => (
-                    <tr key={app.id} className="hover:bg-neutral-50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-neutral-900">{startIndex + index + 1}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-primary-700">
-                        {app.jobRequest?.title ?? "—"}
+                    <tr
+                      key={app.id}
+                      className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
+                    >
+                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + index + 1}</td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm font-medium text-neutral-700">{app.submitterName ?? "—"}</span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-neutral-700">
-                        {app.talentName ?? (app.talentCV?.version ? `v${app.talentCV.version}` : "—")}
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <UserStar className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-700">
+                            {app.talentName ?? (app.talentCV?.version ? `v${app.talentCV.version}` : "—")}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm font-semibold text-primary-700">
+                            {app.jobRequest?.title ?? "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="flex justify-center">
                           <span
-                            className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium ${
+                            className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap text-center ${
                               statusColors[app.status] ?? "bg-neutral-100 text-neutral-600"
                             }`}
                           >
@@ -473,19 +632,19 @@ export default function SalesApplicationListPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-neutral-700">{app.submitterName ?? "—"}</td>
-                      <td className="px-6 py-4 text-sm text-neutral-500">
+                      <td className="py-4 px-6 text-sm text-neutral-500">
                         <div className="flex flex-col">
                           <span className="font-medium text-neutral-700">{formatTime(app.updatedAt ?? app.createdAt)}</span>
                           <span className="text-xs text-neutral-400">{formatDate(app.updatedAt ?? app.createdAt)}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="py-4 px-6 text-center">
                         <Link
                           to={`/sales/applications/${app.id}`}
                           className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm font-medium"
                         >
-                          Xem chi tiết
+                          <Eye className="w-4 h-4" />
+                          <span>Xem</span>
                         </Link>
                       </td>
                     </tr>

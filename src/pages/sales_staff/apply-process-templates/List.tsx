@@ -15,13 +15,30 @@ export default function SalesApplyProcessTemplateListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
 
+  const sortByNewest = (items: ApplyProcessTemplate[]) => {
+    return [...items].sort((a, b) => {
+      const getTimestamp = (item: ApplyProcessTemplate) => {
+        const createdAt = (item as { createdAt?: string | number | Date | null }).createdAt;
+        if (createdAt) {
+          return new Date(createdAt).getTime();
+        }
+        return typeof item.id === "number" ? item.id : 0;
+      };
+
+      const diff = getTimestamp(b) - getTimestamp(a);
+      if (diff !== 0) return diff;
+      return (b.id ?? 0) - (a.id ?? 0);
+    });
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         const data = await applyProcessTemplateService.getAll();
-        setTemplates(data);
-        setFilteredTemplates(data);
+        const sorted = sortByNewest(data);
+        setTemplates(sorted);
+        setFilteredTemplates(sorted);
       } catch (err) {
         console.error("❌ Lỗi khi tải danh sách Apply Process Templates:", err);
       } finally {
@@ -73,13 +90,13 @@ export default function SalesApplyProcessTemplateListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Quy trình Apply</h1>
-              <p className="text-neutral-600 mt-1">Quản lý các template quy trình tuyển dụng dành cho Sales</p>
+              <h1 className="text-3xl font-bold text-gray-900">Mẫu Quy Trình</h1>
+              <p className="text-neutral-600 mt-1">Quản lý các mẫu quy trình tuyển dụng</p>
             </div>
             <Link to="/sales/apply-process-templates/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                Tạo template mới
+                Tạo mẫu mới
               </Button>
             </Link>
           </div>

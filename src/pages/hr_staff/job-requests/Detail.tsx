@@ -12,7 +12,7 @@ import { applyProcessTemplateService } from "../../../services/ApplyProcessTempl
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
-import { talentApplicationService, TalentApplicationStatusConstants } from "../../../services/TalentApplication";
+import { talentApplicationService } from "../../../services/TalentApplication";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { 
   ArrowLeft, 
@@ -64,7 +64,7 @@ export default function JobRequestDetailHRPage() {
     const [jobRoleName, setJobRoleName] = useState<string>("—");
     const [locationName, setLocationName] = useState<string>("—");
     const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
-    const [hiredCount, setHiredCount] = useState<number>(0);
+    const [effectiveSubmittedCount, setEffectiveSubmittedCount] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
     const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -151,18 +151,19 @@ export default function JobRequestDetailHRPage() {
             setJobRequest(jobReqWithExtra);
             setJobSkills(skills);
 
-            // Fetch số lượng hồ sơ ở trạng thái "Hired" cho job request này
+            // Đếm hồ sơ theo yêu cầu: Submitted/Interviewing/Hired
             try {
-                const applications = await talentApplicationService.getAll({ 
+                const allApplications = await talentApplicationService.getAll({
                     jobRequestId: Number(id),
-                    status: TalentApplicationStatusConstants.Hired,
-                    excludeDeleted: true 
+                    excludeDeleted: true
                 });
-                const applicationsArray = Array.isArray(applications) ? applications : [];
-                setHiredCount(applicationsArray.length);
+                const appsArray: any[] = Array.isArray(allApplications) ? allApplications : [];
+                const qualifyingStatuses = new Set<string>(["Submitted", "Interviewing", "Hired"]);
+                const totalQualifying = appsArray.filter((app) => qualifyingStatuses.has(app.status)).length;
+                setEffectiveSubmittedCount(totalQualifying);
             } catch (err) {
-                console.error("❌ Lỗi tải số lượng hồ sơ đã tuyển:", err);
-                setHiredCount(0);
+                console.error("❌ Lỗi tải số lượng hồ sơ:", err);
+                setEffectiveSubmittedCount(0);
             }
         } catch (err) {
             console.error("❌ Lỗi tải chi tiết Job Request:", err);
@@ -398,18 +399,22 @@ export default function JobRequestDetailHRPage() {
 
                         <div className="flex gap-3">
                             <Button
-                    onClick={handleMatchingCV}
-                                disabled={Number(jobRequest.status) !== 1 || hiredCount >= jobRequest.quantity}
+                                onClick={handleMatchingCV}
+                                disabled={
+                                    Number(jobRequest.status) !== 1 ||
+                                    effectiveSubmittedCount >= jobRequest.quantity
+                                }
                                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                    Number(jobRequest.status) !== 1 || hiredCount >= jobRequest.quantity
+                                    Number(jobRequest.status) !== 1 ||
+                                    effectiveSubmittedCount >= jobRequest.quantity
                                         ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                                         : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
                                 }`}
                                 title={
                                     Number(jobRequest.status) !== 1 
                                         ? "Cần duyệt yêu cầu trước khi matching CV" 
-                                        : hiredCount >= jobRequest.quantity
-                                        ? `Đã đủ số lượng tuyển dụng (${hiredCount}/${jobRequest.quantity})`
+                                        : effectiveSubmittedCount >= jobRequest.quantity
+                                        ? `Đã có ${effectiveSubmittedCount}/${jobRequest.quantity} hồ sơ ở trạng thái Submitted/Interviewing/Hired`
                                         : ""
                                 }
                             >
@@ -473,12 +478,12 @@ export default function JobRequestDetailHRPage() {
                                 icon={<Briefcase className="w-4 h-4" />}
                             />                          
                             <InfoItem 
-                                label="Vị trí tuyển dụng" 
+                                label="Loại vị trí tuyển dụng" 
                                 value={jobRoleName} 
                                 icon={<Users className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Cấp độ chuyên môn" 
+                                label="Vị trí tuyển dụng" 
                                 value={jobRequest.jobPositionName ?? "—"} 
                                 icon={<Users className="w-4 h-4" />}
                             />
@@ -508,7 +513,7 @@ export default function JobRequestDetailHRPage() {
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Quy trình Apply" 
+                                label="Quy trình ứng tuyển" 
                                 value={applyProcessTemplateName} 
                                 icon={<FileText className="w-4 h-4" />}
                             />

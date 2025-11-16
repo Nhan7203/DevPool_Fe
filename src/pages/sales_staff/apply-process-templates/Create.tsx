@@ -25,7 +25,7 @@ export default function SalesApplyProcessTemplateCreatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo template quy trình mới không?");
+    const confirmed = window.confirm("Bạn có chắc chắn muốn tạo mẫu quy trình mới không?");
     if (!confirmed) return;
 
     if (!form.name.trim()) {
@@ -70,14 +70,14 @@ export default function SalesApplyProcessTemplateCreatePage() {
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo template quy trình Apply</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo mẫu quy trình mới</h1>
               <p className="text-neutral-600 mb-4">
-                Nhập thông tin để tạo template quy trình tuyển dụng dành cho Sales
+                Nhập thông tin để tạo mẫu quy trình tuyển dụng
               </p>
 
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
                 <Plus className="w-4 h-4 text-primary-600" />
-                <span className="text-sm font-medium text-primary-800">Tạo template mới</span>
+                <span className="text-sm font-medium text-primary-800">Tạo mẫu mới</span>
               </div>
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function SalesApplyProcessTemplateCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Tên template <span className="text-red-500">*</span>
+                  Tên mẫu quy trình <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="name"
@@ -119,7 +119,7 @@ export default function SalesApplyProcessTemplateCreatePage() {
                   value={form.description}
                   onChange={handleChange}
                   rows={6}
-                  placeholder="Nhập mô tả chi tiết về template quy trình..."
+                  placeholder="Nhập mô tả chi tiết về mẫu quy trình..."
                   className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl resize-none"
                 />
               </div>
