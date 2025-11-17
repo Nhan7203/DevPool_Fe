@@ -6,18 +6,19 @@ import { projectService, type Project, type ProjectPayload } from "../../../serv
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { marketService, type Market } from "../../../services/Market";
 import { industryService, type Industry } from "../../../services/Industry";
-import { 
-  Briefcase, 
-  ArrowLeft, 
-  Save, 
-  FileText, 
-  CalendarDays, 
-  Building2, 
-  Globe2, 
-  Factory, 
+import {
+  Briefcase,
+  ArrowLeft,
+  Save,
+  FileText,
+  CalendarDays,
+  Building2,
+  Globe2,
+  Factory,
   CheckCircle,
   AlertCircle,
-  X
+  X,
+  Search
 } from "lucide-react";
 
 export default function ProjectEditPage() {
@@ -28,6 +29,8 @@ export default function ProjectEditPage() {
     const [markets, setMarkets] = useState<Market[]>([]);
     const [industries, setIndustries] = useState<Industry[]>([]);
     const [industrySearch, setIndustrySearch] = useState("");
+    const [marketSearch, setMarketSearch] = useState("");
+    const [isMarketDropdownOpen, setIsMarketDropdownOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -54,7 +57,7 @@ export default function ProjectEditPage() {
                 // Lấy dự án
                 const proj = await projectService.getById(Number(id));
                 setProject(proj);
-
+                
                 // Lấy công ty
                 const comp = await clientCompanyService.getById(proj.clientCompanyId);
                 setCompany(comp);
@@ -107,6 +110,10 @@ export default function ProjectEditPage() {
 
     const filteredIndustries = industries.filter(industry =>
         industry.name.toLowerCase().includes(industrySearch.toLowerCase())
+    );
+
+    const filteredMarkets = markets.filter(m =>
+        !marketSearch || m.name.toLowerCase().includes(marketSearch.toLowerCase())
     );
 
     const formatDate = (dateStr?: string | null) => {
@@ -181,6 +188,9 @@ export default function ProjectEditPage() {
             setSaving(false);
         }
     };
+
+    const isReadOnly =
+        project?.status === "Ongoing" || project?.status === "Completed";
 
     if (loading) {
         return (
@@ -278,6 +288,7 @@ export default function ProjectEditPage() {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
+                                    disabled={isReadOnly}
                                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     placeholder="Nhập tên dự án"
                                 />
@@ -293,6 +304,7 @@ export default function ProjectEditPage() {
                                     name="description"
                                     value={formData.description}
                                     onChange={handleChange}
+                                    disabled={isReadOnly}
                                     rows={4}
                                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                                     placeholder="Nhập mô tả dự án..."
@@ -312,6 +324,7 @@ export default function ProjectEditPage() {
                                         value={formData.startDate}
                                         onChange={handleChange}
                                         max={formData.endDate || undefined}
+                                        disabled={isReadOnly}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                 </div>
@@ -326,6 +339,7 @@ export default function ProjectEditPage() {
                                         value={formData.endDate ?? ""}
                                         onChange={handleChange}
                                         min={formData.startDate || undefined}
+                                        disabled={isReadOnly}
                                         className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                     />
                                 </div>
@@ -360,18 +374,78 @@ export default function ProjectEditPage() {
                                     <Globe2 className="w-4 h-4" />
                                     Thị trường <span className="text-red-500">*</span>
                                 </label>
-                                <select
-                                    name="marketId"
-                                    value={formData.marketId}
-                                    onChange={handleChange}
-                                    required
-                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                >
-                                    <option value="">-- Chọn thị trường --</option>
-                                    {markets.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        disabled={isReadOnly}
+                                        onClick={() => !isReadOnly && setIsMarketDropdownOpen(prev => !prev)}
+                                        className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                                    >
+                                        <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                            <Globe2 className="w-4 h-4 text-neutral-400" />
+                                            <span>
+                                                {formData.marketId
+                                                    ? markets.find(m => m.id === Number(formData.marketId))?.name || "Chọn thị trường"
+                                                    : "Chọn thị trường"}
+                                            </span>
+                                        </div>
+                                        <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                                    </button>
+                                    {isMarketDropdownOpen && (
+                                        <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                            <div className="p-3 border-b border-neutral-100">
+                                                <div className="relative">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                                    <input
+                                                        type="text"
+                                                        value={marketSearch}
+                                                        onChange={(e) => setMarketSearch(e.target.value)}
+                                                        placeholder="Tìm thị trường..."
+                                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="max-h-56 overflow-y-auto">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, marketId: undefined }));
+                                                        setMarketSearch("");
+                                                        setIsMarketDropdownOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                        !formData.marketId
+                                                            ? "bg-primary-50 text-primary-700"
+                                                            : "hover:bg-neutral-50 text-neutral-700"
+                                                    }`}
+                                                >
+                                                    Tất cả thị trường
+                                                </button>
+                                                {filteredMarkets.length === 0 ? (
+                                                    <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy thị trường phù hợp</p>
+                                                ) : (
+                                                    filteredMarkets.map(m => (
+                                                        <button
+                                                            type="button"
+                                                            key={m.id}
+                                                            onClick={() => {
+                                                                setFormData(prev => ({ ...prev, marketId: m.id }));
+                                                                setIsMarketDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                                formData.marketId === m.id
+                                                                    ? "bg-primary-50 text-primary-700"
+                                                                    : "hover:bg-neutral-50 text-neutral-700"
+                                                            }`}
+                                                        >
+                                                            {m.name}
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
@@ -384,6 +458,7 @@ export default function ProjectEditPage() {
                                             type="text"
                                             value={industrySearch}
                                             onChange={(e) => setIndustrySearch(e.target.value)}
+                                            disabled={isReadOnly}
                                             placeholder="Tìm kiếm ngành..."
                                             className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 bg-white"
                                         />
@@ -407,13 +482,14 @@ export default function ProjectEditPage() {
                                         </span>
                                         <button
                                             type="button"
+                                            disabled={isReadOnly}
                                             onClick={() =>
                                                 setFormData((prev) => ({
                                                     ...prev,
                                                     industryIds: [],
                                                 }))
                                             }
-                                            className="text-primary-600 hover:text-primary-800"
+                                            className="text-primary-600 hover:text-primary-800 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             Bỏ chọn hết
                                         </button>
@@ -432,6 +508,7 @@ export default function ProjectEditPage() {
                                                     type="checkbox"
                                                     className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                                                     checked={formData.industryIds.includes(industry.id)}
+                                                    disabled={isReadOnly}
                                                     onChange={(e) =>
                                                         handleIndustryChange(
                                                             industry.id,
@@ -457,13 +534,14 @@ export default function ProjectEditPage() {
                             <div>
                                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                     <CheckCircle className="w-4 h-4" />
-                                    Trạng thái
+                                    Trạng thái <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     name="status"
                                     value={formData.status}
                                     onChange={handleChange}
                                     required
+                                    disabled={isReadOnly}
                                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                                 >
                                     <option value="">-- Chọn trạng thái --</option>
@@ -506,7 +584,7 @@ export default function ProjectEditPage() {
                         </Link>
                         <button
                             type="submit"
-                            disabled={saving}
+                            disabled={saving || isReadOnly}
                             className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {saving ? (

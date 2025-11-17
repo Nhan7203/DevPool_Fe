@@ -12,7 +12,9 @@ import {
   Plus,
   Save,
   AlertCircle,
-  X
+  X,
+  Search,
+  Layers
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
@@ -45,6 +47,10 @@ export default function ProjectCreatePage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [industrySearch, setIndustrySearch] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
+  const [marketSearch, setMarketSearch] = useState("");
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [isMarketDropdownOpen, setIsMarketDropdownOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,6 +83,14 @@ export default function ProjectCreatePage() {
 
   const filteredIndustries = industries.filter((industry) =>
     industry.name.toLowerCase().includes(industrySearch.toLowerCase())
+  );
+
+  const filteredClients = clients.filter((c) =>
+    !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase())
+  );
+
+  const filteredMarkets = markets.filter((m) =>
+    !marketSearch || m.name.toLowerCase().includes(marketSearch.toLowerCase())
   );
 
   const toggleIndustry = (id: number, checked: boolean) => {
@@ -198,7 +212,7 @@ export default function ProjectCreatePage() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-primary-600" />
+                  <Layers className="w-5 h-5 text-primary-600" />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">Thông tin dự án</h2>
               </div>
@@ -207,7 +221,7 @@ export default function ProjectCreatePage() {
               {/* Tên dự án */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
+                  <Layers className="w-4 h-4" />
                   Tên dự án <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -283,48 +297,162 @@ export default function ProjectCreatePage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
-              {/* Công ty khách hàng */}
+              {/* Công ty khách hàng - popover có ô tìm kiếm */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
                   Công ty khách hàng <span className="text-red-500">*</span>
                 </label>
-                <select
-                name="clientCompanyId"
-                value={form.clientCompanyId?.toString() || ""}
-                onChange={handleChange}
-                required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                >
-                  <option value="">-- Chọn công ty --</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id.toString()}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsCompanyDropdownOpen((prev) => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Building2 className="w-4 h-4 text-neutral-400" />
+                      <span>
+                        {form.clientCompanyId
+                          ? clients.find((c) => c.id === Number(form.clientCompanyId))?.name || "Chọn công ty"
+                          : "Chọn công ty"}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                  </button>
+                  {isCompanyDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div className="p-3 border-b border-neutral-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={companySearch}
+                            onChange={(e) => setCompanySearch(e.target.value)}
+                            placeholder="Tìm công ty..."
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, clientCompanyId: undefined }));
+                            setCompanySearch("");
+                            setIsCompanyDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                            !form.clientCompanyId
+                              ? "bg-primary-50 text-primary-700"
+                              : "hover:bg-neutral-50 text-neutral-700"
+                          }`}
+                        >
+                          Tất cả công ty
+                        </button>
+                        {filteredClients.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy công ty phù hợp</p>
+                        ) : (
+                          filteredClients.map((c) => (
+                            <button
+                              type="button"
+                              key={c.id}
+                              onClick={() => {
+                                setForm((prev) => ({ ...prev, clientCompanyId: c.id }));
+                                setIsCompanyDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                form.clientCompanyId === c.id
+                                  ? "bg-primary-50 text-primary-700"
+                                  : "hover:bg-neutral-50 text-neutral-700"
+                              }`}
+                            >
+                              {c.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Thị trường & Ngành */}
+              {/* Thị trường - popover có ô tìm kiếm */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Globe2 className="w-4 h-4" />
                   Thị trường <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="marketId"
-                  value={form.marketId?.toString() || ""}
-                  onChange={handleChange}
-                  required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                >
-                  <option value="">-- Chọn thị trường --</option>
-                  {markets.map((m) => (
-                    <option key={m.id} value={m.id.toString()}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsMarketDropdownOpen((prev) => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Globe2 className="w-4 h-4 text-neutral-400" />
+                      <span>
+                        {form.marketId
+                          ? markets.find((m) => m.id === Number(form.marketId))?.name || "Chọn thị trường"
+                          : "Chọn thị trường"}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                  </button>
+                  {isMarketDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div className="p-3 border-b border-neutral-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={marketSearch}
+                            onChange={(e) => setMarketSearch(e.target.value)}
+                            placeholder="Tìm thị trường..."
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, marketId: undefined }));
+                            setMarketSearch("");
+                            setIsMarketDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                            !form.marketId
+                              ? "bg-primary-50 text-primary-700"
+                              : "hover:bg-neutral-50 text-neutral-700"
+                          }`}
+                        >
+                          Tất cả thị trường
+                        </button>
+                        {filteredMarkets.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy thị trường phù hợp</p>
+                        ) : (
+                          filteredMarkets.map((m) => (
+                            <button
+                              type="button"
+                              key={m.id}
+                              onClick={() => {
+                                setForm((prev) => ({ ...prev, marketId: m.id }));
+                                setIsMarketDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                form.marketId === m.id
+                                  ? "bg-primary-50 text-primary-700"
+                                  : "hover:bg-neutral-50 text-neutral-700"
+                              }`}
+                            >
+                              {m.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -398,7 +526,7 @@ export default function ProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
-                  Trạng thái
+                  Trạng thái <span className="text-red-500">*</span>
                 </label>
                 <select
                 name="status"

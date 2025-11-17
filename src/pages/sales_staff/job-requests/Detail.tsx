@@ -21,13 +21,14 @@ import {
   Briefcase, 
   Users, 
   DollarSign, 
-  Calendar, 
   FileText, 
   Target,
   CheckCircle,
   Clock,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Layers,
+  Star
 } from "lucide-react";
 
 interface JobRequestDetail {
@@ -337,15 +338,15 @@ export default function JobRequestDetailPage() {
               <InfoItem 
                 label="Dự án" 
                 value={jobRequest.projectName ?? "—"} 
-                icon={<Briefcase className="w-4 h-4" />}
+                icon={<Layers className="w-4 h-4" />}
               />
               <InfoItem 
-                label="Vị trí tuyển dụng" 
+                label="Loại vị trí tuyển dụng" 
                 value={jobRoleName} 
                 icon={<Users className="w-4 h-4" />}
               />
               <InfoItem 
-                label="Cấp độ chuyên môn" 
+                label="Vị trí tuyển dụng" 
                 value={jobRequest.jobPositionName ?? "—"} 
                 icon={<Users className="w-4 h-4" />}
               />            
@@ -355,7 +356,7 @@ export default function JobRequestDetailPage() {
                 icon={<Users className="w-4 h-4" />}
               />
               <InfoItem 
-                label="Ngân sách/tháng" 
+                label="Ngân sách/tháng (VND)" 
                 value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
                 icon={<DollarSign className="w-4 h-4" />}
               />
@@ -367,7 +368,7 @@ export default function JobRequestDetailPage() {
               <InfoItem 
                 label="Chế độ làm việc" 
                 value={workingModeLabels[Number(jobRequest.workingMode ?? 0)] ?? "—"} 
-                icon={<Calendar className="w-4 h-4" />}
+                icon={<Target className="w-4 h-4" />}
               />
               <InfoItem 
                 label="Mẫu CV khách hàng" 
@@ -375,7 +376,7 @@ export default function JobRequestDetailPage() {
                 icon={<FileText className="w-4 h-4" />}
               />
               <InfoItem 
-                label="Quy trình Apply" 
+                label="Mẫu quy trình ứng tuyển" 
                 value={applyProcessTemplateName} 
                 icon={<FileText className="w-4 h-4" />}
               />
@@ -409,7 +410,7 @@ export default function JobRequestDetailPage() {
             <div className="p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-accent-100 rounded-lg">
-                  <Target className="w-5 h-5 text-accent-600" />
+                  <Briefcase className="w-5 h-5 text-accent-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
               </div>
@@ -429,7 +430,7 @@ export default function JobRequestDetailPage() {
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-warning-100 rounded-lg">
-                <Briefcase className="w-5 h-5 text-warning-600" />
+                <Star className="w-5 h-5 text-warning-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
             </div>

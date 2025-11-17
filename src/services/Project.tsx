@@ -39,6 +39,28 @@ export interface ProjectFilter {
   excludeDeleted?: boolean;
 }
 
+export interface ProjectDetailedModel {
+  id: number;
+  clientCompanyId?: number | null;
+  marketId?: number | null;
+  industryIds: number[];
+  name: string;
+  description?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Navigation Properties
+  clientCompanyName?: string | null;
+  marketName?: string | null;
+  industryNames: string[];
+  // Related Collections
+  jobRequests?: any[];
+  clientContracts?: any[];
+  staffAssignments?: any[];
+}
+
 export const projectService = {
   async getAll(filter?: ProjectFilter) {
     try {
@@ -82,6 +104,18 @@ export const projectService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tải thông tin dự án" };
       throw { message: "Lỗi không xác định khi tải dữ liệu" };
+    }
+  },
+
+  async getDetailedById(id: number): Promise<ProjectDetailedModel> {
+    try {
+      const response = await axios.get(`/project/${id}/detailed`);
+      // Backend trả về { success: true, message: "...", data: ProjectDetailedModel }
+      return response.data.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể tải thông tin chi tiết dự án" };
+      throw { message: "Lỗi không xác định khi tải thông tin chi tiết dự án" };
     }
   },
 

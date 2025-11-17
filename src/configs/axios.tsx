@@ -19,6 +19,35 @@ const refreshClient = axios.create({
 let isRefreshing = false;
 let refreshSubscribers: Array<(token: string | null) => void> = [];
 
+// 🔎 Chuẩn hóa message lỗi trả về từ BE để hiển thị cho người dùng
+const extractServerMessage = (data: unknown): string => {
+	try {
+		if (!data) return '';
+		if (typeof data === 'string') return data;
+		if (typeof data === 'object') {
+			const obj = data as Record<string, unknown>;
+			const candidates: string[] = [];
+			const tryPush = (v: unknown) => {
+				if (typeof v === 'string' && v.trim()) candidates.push(v.trim());
+			};
+			// Các field phổ biến từ BE
+			tryPush(obj.error);
+			tryPush(obj.message);
+			tryPush((obj as any).objecterror);
+			tryPush((obj as any).Objecterror);
+			tryPush((obj as any).detail);
+			tryPush((obj as any).title);
+			// Thu thập thêm các string values khác (tránh đè lên candidates đã có)
+			Object.values(obj).forEach((v) => tryPush(v));
+			// Loại trùng và nối lại
+			return Array.from(new Set(candidates)).join(' ').trim();
+		}
+		return '';
+	} catch {
+		return '';
+	}
+};
+
 const addRefreshSubscriber = (callback: (token: string | null) => void) => {
     refreshSubscribers.push(callback);
 };
@@ -71,6 +100,13 @@ axiosInstance.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
         const status = error.response?.status;
+		// Gắn normalizedMessage để màn FE có thể đọc thống nhất
+		const normalized = extractServerMessage(error.response?.data);
+		(error as any).normalizedMessage = normalized || error.message;
+		if (normalized && typeof error.message === 'string') {
+			// Cập nhật luôn error.message để các nơi chỉ đọc message vẫn thấy nội dung từ BE
+			error.message = normalized;
+		}
         const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
         if (status === 401 && !originalRequest?._retry) {
@@ -113,11 +149,24 @@ axiosInstance.interceptors.response.use(
             localStorage.removeItem('devpool_user');
             window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
         } else if (status && status >= 400 && status < 500) {
-            console.error('⚠️ Client Error:', error.response?.data || error.message);
+			console.error('⚠️ Client Error:', error.response?.data || error.message);
+			// Hiển thị cảnh báo thân thiện cho một số lỗi phổ biến
+			const lower = (normalized || '').toLowerCase();
+			if (lower.includes('email') && lower.includes('already exists')) {
+				alert('❌ Email đã tồn tại trong hệ thống. Vui lòng dùng email khác.');
+			}
         } else if (status && status >= 500) {
-            console.error('💥 Server Error:', error.response?.data || error.message);
+			// Ưu tiên in ra thông điệp chuẩn hóa nếu có (ví dụ: "Email already exists")
+			console.error('💥 Server Error:', normalized || error.response?.data || error.message);
+			// Hiển thị cảnh báo nếu có thông điệp cụ thể
+			if (normalized) {
+				const lower = normalized.toLowerCase();
+				if (lower.includes('email') && lower.includes('already exists')) {
+					alert('❌ Email đã tồn tại trong hệ thống. Vui lòng dùng email khác.');
+				}
+			}
         } else {
-            console.error('❗ Unexpected Error:', error.message);
+			console.error('❗ Unexpected Error:', error.message);
         }
 
         return Promise.reject(error);

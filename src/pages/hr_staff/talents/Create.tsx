@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Phone, Briefcase, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow, Search, Filter } from "lucide-react";
+import { User, Mail, Phone, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow, Search, Filter, Layers } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import {
@@ -35,15 +35,26 @@ export default function CreateTalent() {
   const [extractingCV, setExtractingCV] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [partnerSearchQuery, setPartnerSearchQuery] = useState<string>("");
+  const [isPartnerDropdownOpen, setIsPartnerDropdownOpen] = useState(false);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
-  const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+  const [skillSearchQuery, setSkillSearchQuery] = useState<Record<number, string>>({});
+  const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState<Record<number, boolean>>({});
   const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState<string>("");
+  const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
   const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [jobRoleSearch, setJobRoleSearch] = useState<string>("");
+  const [isJobRoleDropdownOpen, setIsJobRoleDropdownOpen] = useState<Record<number, boolean>>({});
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [certificateTypeSearch, setCertificateTypeSearch] = useState<Record<number, string>>({});
+  const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState<Record<number, boolean>>({});
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
+  const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<Record<number, string>>({});
+  const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState<Record<number, boolean>>({});
+  const [workExperiencePositionSearch, setWorkExperiencePositionSearch] = useState<Record<number, string>>({});
+  const [isWorkExperiencePositionDropdownOpen, setIsWorkExperiencePositionDropdownOpen] = useState<Record<number, boolean>>({});
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [uploadingCV, setUploadingCV] = useState(false);
@@ -92,6 +103,24 @@ export default function CreateTalent() {
     sourceTemplateId: undefined
   }]); // Tự động tạo CV mặc định vì bắt buộc
   const [uploadingCVIndex, setUploadingCVIndex] = useState<number | null>(null);
+
+  // Danh sách vị trí công việc cho Kinh Nghiệm
+  const workExperiencePositions = [
+    "Frontend Developer (React, Angular, Vue)",
+    "Backend Developer (Node.js, .NET, Java, Go)",
+    "Fullstack Developer",
+    "Mobile Developer (iOS/Android/Flutter/React Native)",
+    "AI/ML Engineer",
+    "Data Engineer",
+    "Data Scientist",
+    "DevOps Engineer",
+    "Cloud Engineer",
+    "QA/QC Engineer (Manual / Automation)",
+    "Test Lead",
+    "Solution Architect",
+    "Technical Lead (Tech Lead)",
+    "Software Architect"
+  ];
 
   // Interface for extracted CV data
   interface ExtractedCVData {
@@ -202,21 +231,10 @@ export default function CreateTalent() {
                 ? (skillGroupsData as any).data
                 : []));
           setSkillGroups(skillGroupsArray);
-          console.log("✅ Skill Groups loaded:", skillGroupsArray.length, skillGroupsArray);
         } catch (skillGroupsError) {
           console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
           setSkillGroups([]); // Set empty array nếu có lỗi
         }
-
-        // Debug: Log dữ liệu để kiểm tra
-        console.log("✅ Dữ liệu đã load:", {
-          partners: partnersArray.length,
-          locations: locationsArray.length,
-          skills: skillsArray.length,
-          jobRoles: jobRolesArray.length,
-          certificateTypes: certificateTypesArray.length,
-          jobRoleLevels: jobRoleLevelsArray.length,
-        });
       } catch (error) {
         console.error("❌ Lỗi khi tải dữ liệu:", error);
       }
@@ -323,8 +341,8 @@ export default function CreateTalent() {
         defaultActionUrl: "/admin/categories/skills/create",
       },
       certificateType: {
-        label: "loại chứng chỉ",
-        title: "[Đề xuất] Thêm loại chứng chỉ mới",
+        label: "tên chứng chỉ có loại chứng chỉ không có trong hệ thống",
+        title: "[Đề xuất] Tên chứng chỉ có loại chứng chỉ không có trong hệ thống",
         defaultActionUrl: "/admin/categories/certificate-types/create",
       },
     };
@@ -387,10 +405,20 @@ export default function CreateTalent() {
 
     const potentialTalentName = (formData.fullName || extractedData?.fullName || "").trim();
     const messageLines = uniqueItems.map((item, idx) => `${idx + 1}. ${item}`).join("\n");
-    const message =
-      `${requesterName} đề xuất bổ sung ${config.label}` +
-      (potentialTalentName ? ` cho nhân sự "${potentialTalentName}"` : "") +
-      `:\n${messageLines}`;
+    let message = "";
+    if (category === "certificateType") {
+      // Đề xuất về tên chứng chỉ có loại chứng chỉ không có trong hệ thống
+      message =
+        `${requesterName} đề xuất:` +
+        (potentialTalentName ? `\nCho nhân sự "${potentialTalentName}"` : "") +
+        `\n\nCác tên chứng chỉ sau có loại chứng chỉ không có trong hệ thống:\n${messageLines}` +
+        `\n\nVui lòng thêm loại chứng chỉ tương ứng vào hệ thống.`;
+    } else {
+      message =
+        `${requesterName} đề xuất bổ sung ${config.label}` +
+        (potentialTalentName ? ` cho nhân sự "${potentialTalentName}"` : "") +
+        `:\n${messageLines}`;
+    }
 
     setSuggestionLoading(category);
     try {
@@ -888,9 +916,9 @@ export default function CreateTalent() {
       if (firebasePath) {
         const fileRef = ref(storage, firebasePath);
         await deleteObject(fileRef);
-        console.log("✅ Đã xóa CV file từ Firebase:", firebasePath);
+        // File đã được xóa từ Firebase
       } else {
-        console.warn("⚠️ Không thể extract path từ URL, chỉ xóa URL khỏi form");
+        // Không thể extract path từ URL, chỉ xóa URL khỏi form
       }
 
       // Xóa URL khỏi CV
@@ -984,9 +1012,9 @@ export default function CreateTalent() {
       if (firebasePath) {
         const fileRef = ref(storage, firebasePath);
         await deleteObject(fileRef);
-        console.log("✅ Đã xóa file từ Firebase:", firebasePath);
+        // File đã được xóa từ Firebase
       } else {
-        console.warn("⚠️ Không thể extract path từ URL, chỉ xóa URL khỏi form");
+        // Không thể extract path từ URL, chỉ xóa URL khỏi form
       }
 
       // Xóa URL khỏi certificate
@@ -1331,17 +1359,13 @@ export default function CreateTalent() {
 
             if (matchedLocation) {
               matchedLocationId = matchedLocation.id;
-              console.log(`✅ Matched location: "${locationNameFromCV}" -> "${matchedLocation.name}" (ID: ${matchedLocation.id})`);
               // Clear unmatched location if matched
               setUnmatchedData(prev => ({ ...prev, location: undefined }));
             } else {
-              console.log(`⚠️ Không tìm thấy location match: "${locationNameFromCV}"`);
-              console.log(`Available locations:`, locations.map(l => l.name));
               // Set unmatched location
               setUnmatchedData(prev => ({ ...prev, location: locationNameFromCV }));
             }
           } else if (locationNameFromCV && locations.length === 0) {
-            console.log(`⚠️ Location data chưa được load, không thể match: "${locationNameFromCV}"`);
             // Set unmatched location
             setUnmatchedData(prev => ({ ...prev, location: locationNameFromCV }));
           }
@@ -1428,8 +1452,11 @@ export default function CreateTalent() {
             setTalentProjects(prev => [...newProjects, ...prev]);
           }
 
-          // Auto-add certificates from CV to form - Tự động điền thông tin, KHÔNG tự động chọn loại chứng chỉ
+          // Auto-add certificates from CV to form - Tự động điền thông tin và tự động match loại chứng chỉ
           let addedCertificatesCount = 0;
+          let matchedCertificatesCount = 0;
+          let unmatchedCertificatesCount = 0;
+          const unmatchedCertificateTypes: string[] = [];
           if (parsedData.certificates && Array.isArray(parsedData.certificates) && parsedData.certificates.length > 0) {
             const newCertificates: TalentCertificateCreateModel[] = [];
 
@@ -1444,11 +1471,115 @@ export default function CreateTalent() {
                 return dateStr;
               };
 
-              // Thêm vào form với certificateTypeId = 0 (người dùng phải chọn thủ công)
-              // Tự động điền: certificateName, certificateDescription, imageUrl
+              const certificateName = cert.certificateName || "";
+              let matchedCertificateTypeId: number = 0;
+
+              // Tự động match loại chứng chỉ dựa trên keyword trong tên chứng chỉ
+              // CertificateType.name là tên loại chứng chỉ (ví dụ: "Chứng chỉ AWS (Cloud Practitioner, Architect...)")
+              // certificateName là tên chứng chỉ cụ thể (ví dụ: "AWS Certified Solutions Architect")
+              // Cần extract keyword từ tên loại chứng chỉ và tìm trong tên chứng chỉ
+              if (certificateName && certificateTypes.length > 0) {
+                // Helper function để extract keywords từ tên loại chứng chỉ
+                // Ưu tiên từ đầu tiên sau "Chứng chỉ" và các từ trong ngoặc
+                // Ví dụ: "Chứng chỉ AWS (Cloud Practitioner, Architect...)" → primary: ["aws"], secondary: ["cloud", "practitioner"]
+                // Ví dụ: "Chứng chỉ Tiếng Anh (IELTS, TOEIC, TOEFL...)" → primary: ["tiếng", "anh"], secondary: ["ielts", "toeic", "toefl"]
+                const extractKeywords = (typeName: string): { primary: string[], secondary: string[] } => {
+                  const normalized = typeName.toLowerCase().trim();
+                  
+                  // Lấy các từ trong ngoặc (thường là keyword chính)
+                  const inParentheses = normalized.match(/\(([^)]+)\)/);
+                  const parenthesesWords: string[] = [];
+                  if (inParentheses) {
+                    const parenthesesContent = inParentheses[1]
+                      .replace(/[^\w\s]/g, ' ')
+                      .split(/\s*[,\/]\s*/)
+                      .map(w => w.trim().toLowerCase())
+                      .filter(w => w.length >= 3);
+                    parenthesesWords.push(...parenthesesContent);
+                  }
+                  
+                  // Loại bỏ nội dung trong ngoặc để lấy phần chính
+                  let mainPart = normalized
+                    .replace(/\([^)]*\)/g, '') // Loại bỏ nội dung trong ngoặc
+                    .replace(/\[[^\]]*\]/g, '') // Loại bỏ nội dung trong ngoặc vuông
+                    .replace(/^chứng chỉ\s*/i, '')
+                    .replace(/^certificate\s*/i, '')
+                    .replace(/^cert\s*/i, '')
+                    .replace(/\.{2,}/g, '')
+                    .replace(/[^\w\s]/g, ' ')
+                    .trim();
+                  
+                  // Lấy từ đầu tiên (thường là keyword chính)
+                  const firstWord = mainPart.split(/\s+/)[0];
+                  const primary: string[] = [];
+                  if (firstWord && firstWord.length >= 3) {
+                    primary.push(firstWord);
+                  }
+                  
+                  // Lấy các từ còn lại làm secondary
+                  const remainingWords = mainPart.split(/\s+/).slice(1).filter(w => w.length >= 3);
+                  
+                  // Loại bỏ các từ stop words chung chung
+                  const stopWords = ['certified', 'certificate', 'cert', 'solutions', 'architect', 'practitioner', 'engineer', 'developer', 'professional', 'associate', 'specialist', 'expert', 'master', 'foundation', 'fundamentals', 'tiếng', 'anh', 'chứng', 'chỉ'];
+                  
+                  const filteredPrimary = primary.filter(word => !stopWords.includes(word));
+                  const filteredSecondary = [...remainingWords, ...parenthesesWords].filter(word => !stopWords.includes(word));
+                  
+                  return { primary: filteredPrimary, secondary: filteredSecondary };
+                };
+                
+                // Helper function để normalize tên chứng chỉ (loại bỏ các từ chung chung)
+                const normalizeCertificateName = (certName: string): string => {
+                  return certName.toLowerCase()
+                    .replace(/\b(certified|certificate|cert|solutions|architect|practitioner|engineer|developer|professional|associate|specialist|expert|master|foundation|fundamentals)\b/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                };
+                
+                // Tìm loại chứng chỉ mà keyword của nó có trong tên chứng chỉ
+                // Ưu tiên match với primary keywords (từ đầu tiên hoặc trong ngoặc)
+                // Ví dụ: "AWS Certified Solutions Architect" chứa "AWS" → match với loại "Chứng chỉ AWS (...)"
+                // Không match: "AWS Certified Solutions Architect" với "Chứng chỉ Tiếng Anh (...)" vì không có "tiếng", "anh", "ielts", "toeic", "toefl"
+                let matchedType = certificateTypes.find(ct => {
+                  const { primary, secondary } = extractKeywords(ct.name);
+                  if (primary.length === 0 && secondary.length === 0) return false;
+                  
+                  // Normalize tên chứng chỉ để loại bỏ các từ chung chung
+                  const normalizedCert = normalizeCertificateName(certificateName);
+                  
+                  // Ưu tiên match với primary keywords trước
+                  const primaryMatch = primary.some(keyword => {
+                    if (keyword.length < 3) return false;
+                    return normalizedCert.includes(keyword);
+                  });
+                  
+                  if (primaryMatch) return true;
+                  
+                  // Nếu không match primary, thử match với secondary
+                  return secondary.some(keyword => {
+                    if (keyword.length < 3) return false;
+                    return normalizedCert.includes(keyword);
+                  });
+                });
+
+                if (matchedType) {
+                  matchedCertificateTypeId = matchedType.id;
+                } else {
+                  // Thêm vào unmatched nếu chưa có
+                  if (!unmatchedCertificateTypes.includes(certificateName)) {
+                    unmatchedCertificateTypes.push(certificateName);
+                  }
+                }
+              } else if (certificateName && certificateTypes.length === 0) {
+                if (!unmatchedCertificateTypes.includes(certificateName)) {
+                  unmatchedCertificateTypes.push(certificateName);
+                }
+              }
+
+              // Tự động điền: certificateTypeId (nếu match được), certificateName, certificateDescription, imageUrl
               newCertificates.push({
-                certificateTypeId: 0, // Không tự động chọn, người dùng phải chọn thủ công
-                certificateName: cert.certificateName || "",
+                certificateTypeId: matchedCertificateTypeId, // Tự động match nếu tìm thấy, 0 nếu không
+                certificateName: certificateName,
                 certificateDescription: cert.certificateDescription || "",
                 issuedDate: formatDateForInput(cert.issuedDate),
                 isVerified: false,
@@ -1457,11 +1588,18 @@ export default function CreateTalent() {
             });
 
             addedCertificatesCount = newCertificates.length;
+            // Đếm số lượng chứng chỉ đã tự động match loại
+            matchedCertificatesCount = newCertificates.filter((cert: TalentCertificateCreateModel) => cert.certificateTypeId > 0).length;
+            unmatchedCertificatesCount = newCertificates.filter((cert: TalentCertificateCreateModel) => cert.certificateTypeId === 0).length;
             // Thêm vào đầu danh sách (giữ lại các certificates đã có)
             if (newCertificates.length > 0) {
               setTalentCertificates(prev => [...newCertificates, ...prev]);
             }
-            // Bỏ phần unmatched certificate types - không cần đề xuất nữa
+            // Update unmatched certificate types
+            setUnmatchedData(prev => ({ 
+              ...prev, 
+              certificateTypes: unmatchedCertificateTypes.length > 0 ? unmatchedCertificateTypes : undefined 
+            }));
           }
 
           // Auto-add job role levels from CV to form
@@ -1536,9 +1674,6 @@ export default function CreateTalent() {
             setUnmatchedData(prev => ({ ...prev, jobRoles: unmatchedJobRoles.length > 0 ? unmatchedJobRoles : undefined }));
           }
 
-          // Log extracted data for debugging
-          console.log("✅ Extracted CV data:", parsedData);
-
           // Tự động tạo và điền tóm tắt CV
           try {
             const summary = generateSummaryFromExtractedData(parsedData);
@@ -1562,7 +1697,7 @@ export default function CreateTalent() {
               ? `\nĐã tự động thêm ${addedProjectsCount} dự án vào form.`
               : ''
             }${addedCertificatesCount > 0
-              ? `\nĐã tự động thêm ${addedCertificatesCount} chứng chỉ vào form.`
+              ? `\nĐã tự động thêm ${addedCertificatesCount} chứng chỉ vào form.${matchedCertificatesCount > 0 ? `\n  - ${matchedCertificatesCount} chứng chỉ đã tự động match loại.` : ''}${unmatchedCertificatesCount > 0 ? `\n  - ${unmatchedCertificatesCount} chứng chỉ chưa match được loại (cần chọn thủ công).` : ''}`
               : ''
             }${addedJobRoleLevelsCount > 0
               ? `\nĐã tự động thêm ${addedJobRoleLevelsCount} vị trí công việc vào form.`
@@ -1571,11 +1706,9 @@ export default function CreateTalent() {
           alert(successMessage);
         } catch (parseError) {
           console.error("Lỗi parse JSON:", parseError);
-          console.error("Raw response:", result.generateText);
           alert("❌ Lỗi khi phân tích dữ liệu CV!");
         }
       } else {
-        console.error("CV extraction failed:", result);
         alert("❌ Không thể trích xuất thông tin từ CV!");
       }
     } catch (error) {
@@ -2139,7 +2272,7 @@ export default function CreateTalent() {
                       <input
                         type="date"
                         name="dateOfBirth"
-                        value={formData.dateOfBirth}
+                        value={formData.dateOfBirth || ""}
                         onChange={handleChange}
                         required
                         className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.dateOfBirth ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'
@@ -2214,69 +2347,72 @@ export default function CreateTalent() {
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Đối tác <span className="text-red-500">*</span>
-                    {partners && partners.length > 4 && (
-                      <span className="ml-2 text-xs font-normal text-neutral-500">({partners.length} đối tác - có thể tìm kiếm)</span>
-                    )}
                   </label>
 
-                  {/* Partner Search Input - Chỉ hiển thị khi có nhiều partners */}
-                  {partners && partners.length > 4 && (
-                    <div className="mb-2">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
-                        <input
-                          type="text"
-                          placeholder="Tìm kiếm..."
-                          value={partnerSearchQuery}
-                          onChange={(e) => setPartnerSearchQuery(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white/50 border-neutral-300 focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                        />
-                        {partnerSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setPartnerSearchQuery("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="relative group">
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5 z-10" />
-                    <select
-                      name="currentPartnerId"
-                      value={formData.currentPartnerId}
-                      onChange={handleChange}
-                      required
-                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 transition-all ${errors.currentPartnerId ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsPartnerDropdownOpen(prev => !prev)}
+                      className={`w-full flex items-center justify-between px-4 py-3.5 border rounded-xl bg-white/50 text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${errors.currentPartnerId ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'
                         }`}
                     >
-                      <option value="">-- Chọn đối tác --</option>
-                      {partners && partners.length > 0 ? (
-                        (() => {
-                          const filteredPartners = partnerSearchQuery
-                            ? partners.filter(p =>
-                              p.companyName?.toLowerCase().includes(partnerSearchQuery.toLowerCase())
-                            )
-                            : partners;
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Building2 className="w-5 h-5 text-neutral-400" />
+                        <span>
+                          {formData.currentPartnerId
+                            ? partners.find(p => p.id === formData.currentPartnerId)?.companyName || "Chọn đối tác"
+                            : "Chọn đối tác"}
+                        </span>
+                      </div>
+                    </button>
+                    {isPartnerDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={partnerSearchQuery}
+                              onChange={(e) => setPartnerSearchQuery(e.target.value)}
+                              placeholder="Tìm đối tác..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          {(() => {
+                            const filteredPartners = partnerSearchQuery
+                              ? partners.filter(p =>
+                                p.companyName?.toLowerCase().includes(partnerSearchQuery.toLowerCase())
+                              )
+                              : partners;
 
-                          if (filteredPartners.length === 0) {
-                            return <option value="" disabled>Không tìm thấy đối tác nào</option>;
-                          }
+                            if (filteredPartners.length === 0) {
+                              return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy đối tác nào</p>;
+                            }
 
-                          return filteredPartners.map((partner) => (
-                            <option key={partner.id} value={partner.id}>
-                              {partner.companyName}
-                            </option>
-                          ));
-                        })()
-                      ) : (
-                        <option value="" disabled>Đang tải dữ liệu...</option>
-                      )}
-                    </select>
+                            return filteredPartners.map((partner) => (
+                              <button
+                                type="button"
+                                key={partner.id}
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, currentPartnerId: partner.id }));
+                                  setIsPartnerDropdownOpen(false);
+                                  setPartnerSearchQuery("");
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  formData.currentPartnerId === partner.id
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {partner.companyName}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {errors.currentPartnerId && (
                     <p className="mt-1 text-sm text-red-500">{errors.currentPartnerId}</p>
@@ -2423,22 +2559,68 @@ export default function CreateTalent() {
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">
                               Vị trí công việc <span className="text-red-500">*</span>
                             </label>
-                            <select
-                              value={cv.jobRoleId || ""}
-                              onChange={(e) => updateInitialCV(index, 'jobRoleId', e.target.value ? Number(e.target.value) : undefined)}
-                              disabled={isUploadedFromFirebase}
-                              className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : ''
-                                }`}
-                            >
-                              <option value="">-- Chọn vị trí --</option>
-                              {jobRoles && jobRoles.length > 0 ? (
-                                jobRoles.map((role) => (
-                                  <option key={role.id} value={role.id}>{role.name}</option>
-                                ))
-                              ) : (
-                                <option value="" disabled>Đang tải dữ liệu...</option>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsJobRoleDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                disabled={isUploadedFromFirebase}
+                                className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white/50 text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : 'border-neutral-300 focus:border-primary-500'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <Target className="w-4 h-4 text-neutral-400" />
+                                  <span>
+                                    {cv.jobRoleId
+                                      ? jobRoles.find(r => r.id === cv.jobRoleId)?.name || "Chọn vị trí"
+                                      : "Chọn vị trí"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isJobRoleDropdownOpen[index] && !isUploadedFromFirebase && (
+                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={jobRoleSearch}
+                                        onChange={(e) => setJobRoleSearch(e.target.value)}
+                                        placeholder="Tìm vị trí..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    {(() => {
+                                      const filtered = jobRoleSearch
+                                        ? jobRoles.filter(r => r.name.toLowerCase().includes(jobRoleSearch.toLowerCase()))
+                                        : jobRoles;
+                                      if (filtered.length === 0) {
+                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                      }
+                                      return filtered.map((role) => (
+                                        <button
+                                          type="button"
+                                          key={role.id}
+                                          onClick={() => {
+                                            updateInitialCV(index, 'jobRoleId', role.id);
+                                            setIsJobRoleDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                            setJobRoleSearch("");
+                                          }}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            cv.jobRoleId === role.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {role.name}
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
                               )}
-                            </select>
+                            </div>
                             {!cv.jobRoleId && !isUploadedFromFirebase && (
                               <p className="text-xs text-orange-600 mt-1">
                                 ⚠️ Phải chọn vị trí công việc trước khi upload CV lên Firebase
@@ -2584,45 +2766,82 @@ export default function CreateTalent() {
                           <label className="block text-sm text-neutral-600 mb-1">
                             Vị trí & cấp độ <span className="text-red-500">*</span>
                           </label>
-                          <select
-                            value={jrl.jobRoleLevelId}
-                            onChange={(e) => {
-                              updateJobRoleLevel(index, 'jobRoleLevelId', Number(e.target.value));
-                              // Xóa lỗi khi người dùng chọn
-                              if (Number(e.target.value) > 0) {
-                                const newErrors = { ...errors };
-                                delete newErrors[`jobrolelevel_${index}`];
-                                setErrors(newErrors);
-                              }
-                            }}
-                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`jobrolelevel_${index}`] ? 'border-red-500' : 'border-neutral-300'
-                              }`}
-                          >
-                            <option value={0}>-- Chọn --</option>
-                            {jobRoleLevels && jobRoleLevels.length > 0 ? (
-                              jobRoleLevels.map((level) => {
-                                // Lấy danh sách jobRoleLevelId đã được chọn ở các item khác (trừ item hiện tại)
-                                const selectedJobRoleLevelIds = talentJobRoleLevels
-                                  .filter((_, i) => i !== index)
-                                  .map(jrl => jrl.jobRoleLevelId)
-                                  .filter(id => id > 0);
-                                const isDisabled = selectedJobRoleLevelIds.includes(level.id);
-
-                                return (
-                                  <option
-                                    key={level.id}
-                                    value={level.id}
-                                    disabled={isDisabled}
-                                    style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                  >
-                                    {level.name}{isDisabled ? ' (đã chọn)' : ''}
-                                  </option>
-                                );
-                              })
-                            ) : (
-                              <option value={0} disabled>Đang tải dữ liệu...</option>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                              className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${errors[`jobrolelevel_${index}`] ? 'border-red-500' : 'border-neutral-300 focus:border-primary-500'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Target className="w-4 h-4 text-neutral-400" />
+                                <span>
+                                  {jrl.jobRoleLevelId
+                                    ? jobRoleLevels.find(l => l.id === jrl.jobRoleLevelId)?.name || "Chọn vị trí & cấp độ"
+                                    : "Chọn vị trí & cấp độ"}
+                                </span>
+                              </div>
+                            </button>
+                            {isJobRoleLevelDropdownOpen[index] && (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={jobRoleLevelSearch[index] || ""}
+                                      onChange={(e) => setJobRoleLevelSearch(prev => ({ ...prev, [index]: e.target.value }))}
+                                      placeholder="Tìm vị trí & cấp độ..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  {(() => {
+                                    const selectedJobRoleLevelIds = talentJobRoleLevels
+                                      .filter((_, i) => i !== index)
+                                      .map(jrl => jrl.jobRoleLevelId)
+                                      .filter(id => id > 0);
+                                    const filtered = (jobRoleLevelSearch[index] || "")
+                                      ? jobRoleLevels.filter(l => l.name.toLowerCase().includes((jobRoleLevelSearch[index] || "").toLowerCase()))
+                                      : jobRoleLevels;
+                                    if (filtered.length === 0) {
+                                      return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                    }
+                                    return filtered.map((level) => {
+                                      const isDisabled = selectedJobRoleLevelIds.includes(level.id);
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={level.id}
+                                          onClick={() => {
+                                            if (!isDisabled) {
+                                              updateJobRoleLevel(index, 'jobRoleLevelId', level.id);
+                                              setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                              setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                              const newErrors = { ...errors };
+                                              delete newErrors[`jobrolelevel_${index}`];
+                                              setErrors(newErrors);
+                                            }
+                                          }}
+                                          disabled={isDisabled}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            jrl.jobRoleLevelId === level.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : isDisabled
+                                                ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                                : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {level.name}{isDisabled ? ' (đã chọn)' : ''}
+                                        </button>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
                             )}
-                          </select>
+                          </div>
                           {errors[`jobrolelevel_${index}`] && (
                             <p className="mt-1 text-xs text-red-500">{errors[`jobrolelevel_${index}`]}</p>
                           )}
@@ -2638,7 +2857,7 @@ export default function CreateTalent() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn (VNĐ)</label>
+                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn (VND)</label>
                           <input
                             type="number"
                             value={jrl.ratePerMonth || ""}
@@ -2655,7 +2874,7 @@ export default function CreateTalent() {
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <Briefcase className="w-5 h-5 text-primary-600" />
+                      <Layers className="w-5 h-5 text-primary-600" />
                       <h3 className="text-lg font-semibold text-neutral-800">Dự Án</h3>
                     </div>
                     <button
@@ -2765,97 +2984,91 @@ export default function CreateTalent() {
                     </button>
                   </div>
 
-                  {/* Skill Filter and Search - Chỉ hiển thị khi đã có ít nhất 1 kỹ năng được thêm */}
-                  {talentSkills.length > 0 && skills && skills.length > 0 && (
-                    <div className="mb-4 space-y-4">
-                      {/* Lọc theo nhóm kỹ năng */}
-                      {skillGroups && skillGroups.length > 0 && (
-                        <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
-                          <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
-                            <Filter className="w-3.5 h-3.5" />
-                            Lọc danh sách kỹ năng theo nhóm
-                          </label>
-                          <div className="space-y-2">
-                            {/* Search nhóm kỹ năng - Chỉ hiển thị khi có nhiều nhóm */}
-                            {skillGroups.length > 5 && (
-                              <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
-                                <input
-                                  type="text"
-                                  placeholder={`Tìm kiếm nhóm kỹ năng... (${skillGroups.length} nhóm)`}
-                                  value={skillGroupSearchQuery}
-                                  onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
-                                  className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                />
-                                {skillGroupSearchQuery && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setSkillGroupSearchQuery("")}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                )}
+                  {/* Skill Filter - Chỉ hiển thị khi đã có ít nhất 1 kỹ năng được thêm */}
+                  {talentSkills.length > 0 && skills && skills.length > 0 && skillGroups && skillGroups.length > 0 && (
+                    <div className="mb-4">
+                      {/* Lọc theo nhóm kỹ năng - Popover */}
+                      <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+                        <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+                          <Filter className="w-3.5 h-3.5" />
+                          Lọc danh sách kỹ năng theo nhóm
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsSkillGroupDropdownOpen(prev => !prev)}
+                            className="w-full flex items-center justify-between px-3 py-1.5 border rounded-lg bg-white text-left focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all border-neutral-300"
+                          >
+                            <div className="flex items-center gap-2 text-xs text-neutral-700">
+                              <Filter className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>
+                                {selectedSkillGroupId
+                                  ? skillGroups.find(g => g.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
+                                  : "Tất cả nhóm kỹ năng"}
+                              </span>
+                            </div>
+                          </button>
+                          {isSkillGroupDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={skillGroupSearchQuery}
+                                    onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
+                                    placeholder="Tìm nhóm kỹ năng..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                  />
+                                </div>
                               </div>
-                            )}
-
-                            {/* Dropdown chọn nhóm kỹ năng */}
-                            <div className="relative">
-                              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5 pointer-events-none z-10" />
-                              <select
-                                value={selectedSkillGroupId || ""}
-                                onChange={(e) => setSelectedSkillGroupId(e.target.value ? Number(e.target.value) : undefined)}
-                                className="w-full pl-8 pr-4 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                              >
-                                <option value="">Tất cả nhóm kỹ năng</option>
+                              <div className="max-h-56 overflow-y-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSkillGroupId(undefined);
+                                    setIsSkillGroupDropdownOpen(false);
+                                    setSkillGroupSearchQuery("");
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    !selectedSkillGroupId
+                                      ? "bg-primary-50 text-primary-700"
+                                      : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                >
+                                  Tất cả nhóm kỹ năng
+                                </button>
                                 {(() => {
-                                  // Filter skill groups theo search query
-                                  const filteredGroups = skillGroupSearchQuery
+                                  const filtered = skillGroupSearchQuery
                                     ? skillGroups.filter(g =>
                                       g.name.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()) ||
                                       (g.description && g.description.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()))
                                     )
                                     : skillGroups;
-
-                                  if (filteredGroups.length === 0) {
-                                    return <option value="" disabled>Không tìm thấy nhóm kỹ năng</option>;
+                                  if (filtered.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy nhóm kỹ năng</p>;
                                   }
-
-                                  return filteredGroups.map((group) => (
-                                    <option key={group.id} value={group.id}>
+                                  return filtered.map((group) => (
+                                    <button
+                                      type="button"
+                                      key={group.id}
+                                      onClick={() => {
+                                        setSelectedSkillGroupId(group.id);
+                                        setIsSkillGroupDropdownOpen(false);
+                                        setSkillGroupSearchQuery("");
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        selectedSkillGroupId === group.id
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
                                       {group.name}
-                                    </option>
+                                    </button>
                                   ));
                                 })()}
-                              </select>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tìm kiếm kỹ năng để chọn */}
-                      <div className="bg-green-50/50 border border-green-200 rounded-lg p-3">
-                        <label className="block text-xs font-semibold text-green-800 mb-2 flex items-center gap-1.5">
-                          <Search className="w-3.5 h-3.5" />
-                          Tìm kiếm kỹ năng để chọn
-                        </label>
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
-                          <input
-                            type="text"
-                            placeholder="Nhập tên kỹ năng để tìm kiếm..."
-                            value={skillSearchQuery}
-                            onChange={(e) => setSkillSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-7 py-1.5 text-xs border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                          />
-                          {skillSearchQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setSkillSearchQuery("")}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
                           )}
                         </div>
                       </div>
@@ -2875,60 +3088,90 @@ export default function CreateTalent() {
                           <label className="block text-sm text-neutral-600 mb-1">
                             Kỹ năng <span className="text-red-500">*</span>
                           </label>
-                          <select
-                            value={skill.skillId}
-                            onChange={(e) => {
-                              updateSkill(index, 'skillId', Number(e.target.value));
-                              // Xóa lỗi khi người dùng chọn
-                              if (Number(e.target.value) > 0) {
-                                const newErrors = { ...errors };
-                                delete newErrors[`skill_${index}`];
-                                setErrors(newErrors);
-                              }
-                            }}
-                            className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`skill_${index}`] ? 'border-red-500' : 'border-neutral-300'
-                              }`}
-                          >
-                            <option value={0}>-- Chọn kỹ năng --</option>
-                            {skills && skills.length > 0 ? (
-                              (() => {
-                                // Filter skills theo search query và skill group
-                                const filteredSkills = skills.filter((s) => {
-                                  const matchesSearch = !skillSearchQuery ||
-                                    s.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
-                                    (s.description && s.description.toLowerCase().includes(skillSearchQuery.toLowerCase()));
-                                  const matchesGroup = !selectedSkillGroupId || s.skillGroupId === selectedSkillGroupId;
-                                  return matchesSearch && matchesGroup;
-                                });
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsSkillDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                              className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${errors[`skill_${index}`] ? 'border-red-500' : 'border-neutral-300 focus:border-primary-500'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Star className="w-4 h-4 text-neutral-400" />
+                                <span>
+                                  {skill.skillId
+                                    ? skills.find(s => s.id === skill.skillId)?.name || "Chọn kỹ năng"
+                                    : "Chọn kỹ năng"}
+                                </span>
+                              </div>
+                            </button>
+                            {isSkillDropdownOpen[index] && (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={skillSearchQuery[index] || ""}
+                                      onChange={(e) => setSkillSearchQuery(prev => ({ ...prev, [index]: e.target.value }))}
+                                      placeholder="Tìm kỹ năng..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  {(() => {
+                                    // Filter skills theo search query và skill group
+                                    const filteredSkills = skills.filter((s) => {
+                                      const matchesSearch = !skillSearchQuery[index] ||
+                                        s.name.toLowerCase().includes((skillSearchQuery[index] || "").toLowerCase()) ||
+                                        (s.description && s.description.toLowerCase().includes((skillSearchQuery[index] || "").toLowerCase()));
+                                      const matchesGroup = !selectedSkillGroupId || s.skillGroupId === selectedSkillGroupId;
+                                      return matchesSearch && matchesGroup;
+                                    });
 
-                                if (filteredSkills.length === 0) {
-                                  return <option value={0} disabled>Không tìm thấy kỹ năng nào</option>;
-                                }
+                                    if (filteredSkills.length === 0) {
+                                      return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy kỹ năng nào</p>;
+                                    }
 
-                                return filteredSkills.map((s) => {
-                                  // Lấy danh sách skillId đã được chọn ở các item khác (trừ item hiện tại)
-                                  const selectedSkillIds = talentSkills
-                                    .filter((_, i) => i !== index)
-                                    .map(skill => skill.skillId)
-                                    .filter(id => id > 0);
-                                  const isDisabled = selectedSkillIds.includes(s.id);
+                                    const selectedSkillIds = talentSkills
+                                      .filter((_, i) => i !== index)
+                                      .map(skill => skill.skillId)
+                                      .filter(id => id > 0);
 
-                                  return (
-                                    <option
-                                      key={s.id}
-                                      value={s.id}
-                                      disabled={isDisabled}
-                                      style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                    >
-                                      {s.name}{isDisabled ? ' (đã chọn)' : ''}
-                                    </option>
-                                  );
-                                });
-                              })()
-                            ) : (
-                              <option value={0} disabled>Đang tải dữ liệu...</option>
+                                    return filteredSkills.map((s) => {
+                                      const isDisabled = selectedSkillIds.includes(s.id);
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={s.id}
+                                          onClick={() => {
+                                            if (!isDisabled) {
+                                              updateSkill(index, 'skillId', s.id);
+                                              setIsSkillDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                              setSkillSearchQuery(prev => ({ ...prev, [index]: "" }));
+                                              const newErrors = { ...errors };
+                                              delete newErrors[`skill_${index}`];
+                                              setErrors(newErrors);
+                                            }
+                                          }}
+                                          disabled={isDisabled}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            skill.skillId === s.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : isDisabled
+                                                ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                                : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {s.name}{isDisabled ? ' (đã chọn)' : ''}
+                                        </button>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
                             )}
-                          </select>
+                          </div>
                           {errors[`skill_${index}`] && (
                             <p className="mt-1 text-xs text-red-500">{errors[`skill_${index}`]}</p>
                           )}
@@ -2991,45 +3234,82 @@ export default function CreateTalent() {
                             <label className="block text-sm text-neutral-600 mb-1">
                               Loại chứng chỉ <span className="text-red-500">*</span>
                             </label>
-                            <select
-                              value={cert.certificateTypeId}
-                              onChange={(e) => {
-                                updateCertificate(index, 'certificateTypeId', Number(e.target.value));
-                                // Xóa lỗi khi người dùng chọn
-                                if (Number(e.target.value) > 0) {
-                                  const newErrors = { ...errors };
-                                  delete newErrors[`certificate_${index}`];
-                                  setErrors(newErrors);
-                                }
-                              }}
-                              className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`certificate_${index}`] ? 'border-red-500' : 'border-neutral-300'
-                                }`}
-                            >
-                              <option value={0}>-- Chọn loại --</option>
-                              {certificateTypes && certificateTypes.length > 0 ? (
-                                certificateTypes.map((type) => {
-                                  // Lấy danh sách certificateTypeId đã được chọn ở các item khác (trừ item hiện tại)
-                                  const selectedCertificateTypeIds = talentCertificates
-                                    .filter((_, i) => i !== index)
-                                    .map(cert => cert.certificateTypeId)
-                                    .filter(id => id > 0);
-                                  const isDisabled = selectedCertificateTypeIds.includes(type.id);
-
-                                  return (
-                                    <option
-                                      key={type.id}
-                                      value={type.id}
-                                      disabled={isDisabled}
-                                      style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                                    >
-                                      {type.name}{isDisabled ? ' (đã chọn)' : ''}
-                                    </option>
-                                  );
-                                })
-                              ) : (
-                                <option value={0} disabled>Đang tải dữ liệu...</option>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${errors[`certificate_${index}`] ? 'border-red-500' : 'border-neutral-300 focus:border-primary-500'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <Award className="w-4 h-4 text-neutral-400" />
+                                  <span>
+                                    {cert.certificateTypeId
+                                      ? certificateTypes.find(t => t.id === cert.certificateTypeId)?.name || "Chọn loại chứng chỉ"
+                                      : "Chọn loại chứng chỉ"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isCertificateTypeDropdownOpen[index] && (
+                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={certificateTypeSearch[index] || ""}
+                                        onChange={(e) => setCertificateTypeSearch(prev => ({ ...prev, [index]: e.target.value }))}
+                                        placeholder="Tìm loại chứng chỉ..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    {(() => {
+                                      const selectedCertificateTypeIds = talentCertificates
+                                        .filter((_, i) => i !== index)
+                                        .map(cert => cert.certificateTypeId)
+                                        .filter(id => id > 0);
+                                      const filtered = (certificateTypeSearch[index] || "")
+                                        ? certificateTypes.filter(t => t.name.toLowerCase().includes((certificateTypeSearch[index] || "").toLowerCase()))
+                                        : certificateTypes;
+                                      if (filtered.length === 0) {
+                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại chứng chỉ nào</p>;
+                                      }
+                                      return filtered.map((type) => {
+                                        const isDisabled = selectedCertificateTypeIds.includes(type.id);
+                                        return (
+                                          <button
+                                            type="button"
+                                            key={type.id}
+                                            onClick={() => {
+                                              if (!isDisabled) {
+                                                updateCertificate(index, 'certificateTypeId', type.id);
+                                                setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                                setCertificateTypeSearch(prev => ({ ...prev, [index]: "" }));
+                                                const newErrors = { ...errors };
+                                                delete newErrors[`certificate_${index}`];
+                                                setErrors(newErrors);
+                                              }
+                                            }}
+                                            disabled={isDisabled}
+                                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                                              cert.certificateTypeId === type.id
+                                                ? "bg-primary-50 text-primary-700"
+                                                : isDisabled
+                                                  ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                                  : "hover:bg-neutral-50 text-neutral-700"
+                                            }`}
+                                          >
+                                            {type.name}{isDisabled ? ' (đã chọn)' : ''}
+                                          </button>
+                                        );
+                                      });
+                                    })()}
+                                  </div>
+                                </div>
                               )}
-                            </select>
+                            </div>
                             {errors[`certificate_${index}`] && (
                               <p className="mt-1 text-xs text-red-500">{errors[`certificate_${index}`]}</p>
                             )}
@@ -3289,21 +3569,68 @@ export default function CreateTalent() {
                             <label className="block text-sm text-neutral-600 mb-1">
                               Vị trí <span className="text-red-500">*</span>
                             </label>
-                            <input
-                              type="text"
-                              value={exp.position}
-                              onChange={(e) => {
-                                updateWorkExperience(index, 'position', e.target.value);
-                                // Xóa lỗi khi người dùng nhập
-                                if (e.target.value.trim() !== '') {
-                                  const newErrors = { ...errors };
-                                  delete newErrors[`workexp_position_${index}`];
-                                  setErrors(newErrors);
-                                }
-                              }}
-                              className={`w-full py-2 px-3 border rounded-lg bg-white ${errors[`workexp_position_${index}`] ? 'border-red-500' : 'border-neutral-300'
-                                }`}
-                            />
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsWorkExperiencePositionDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${errors[`workexp_position_${index}`] ? 'border-red-500' : 'border-neutral-300 focus:border-primary-500'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <Target className="w-4 h-4 text-neutral-400" />
+                                  <span className={exp.position ? "text-neutral-800" : "text-neutral-500"}>
+                                    {exp.position || "Chọn vị trí"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isWorkExperiencePositionDropdownOpen[index] && (
+                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={workExperiencePositionSearch[index] || ""}
+                                        onChange={(e) => setWorkExperiencePositionSearch(prev => ({ ...prev, [index]: e.target.value }))}
+                                        placeholder="Tìm vị trí..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    {(() => {
+                                      const filtered = (workExperiencePositionSearch[index] || "")
+                                        ? workExperiencePositions.filter(p => p.toLowerCase().includes((workExperiencePositionSearch[index] || "").toLowerCase()))
+                                        : workExperiencePositions;
+                                      if (filtered.length === 0) {
+                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                      }
+                                      return filtered.map((position) => (
+                                        <button
+                                          type="button"
+                                          key={position}
+                                          onClick={() => {
+                                            updateWorkExperience(index, 'position', position);
+                                            setIsWorkExperiencePositionDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                            setWorkExperiencePositionSearch(prev => ({ ...prev, [index]: "" }));
+                                            const newErrors = { ...errors };
+                                            delete newErrors[`workexp_position_${index}`];
+                                            setErrors(newErrors);
+                                          }}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            exp.position === position
+                                              ? "bg-primary-50 text-primary-700"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {position}
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             {errors[`workexp_position_${index}`] && (
                               <p className="mt-1 text-xs text-red-500">{errors[`workexp_position_${index}`]}</p>
                             )}
@@ -3536,7 +3863,7 @@ export default function CreateTalent() {
                     {extractedData.projects && extractedData.projects.length > 0 && (
                       <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
                         <div className="flex items-center gap-2 mb-2">
-                          <Briefcase className="w-4 h-4 text-green-600" />
+                          <Layers className="w-4 h-4 text-green-600" />
                           <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dự án</span>
                         </div>
                         <div className="ml-6 space-y-2">
@@ -3572,7 +3899,7 @@ export default function CreateTalent() {
                                 <p className="text-green-700">Kinh nghiệm: <span className="text-neutral-900">{jrl.yearsOfExp} năm</span></p>
                               )}
                               {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
-                                <p className="text-green-600">Mức lương: <span className="text-neutral-900">{jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng</span></p>
+                                <p className="text-green-600">Mức lương: <span className="text-neutral-900">{jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</span></p>
                               )}
                             </div>
                           ))}
@@ -3657,7 +3984,8 @@ export default function CreateTalent() {
                     {/* Unmatched Data Warnings - Hệ thống thiếu dữ liệu */}
                     {(unmatchedData.location ||
                       (unmatchedData.skills && unmatchedData.skills.length > 0) ||
-                      (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0)) && (
+                      (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) ||
+                      (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) && (
                         <div className="mt-4 pt-4 border-t border-orange-300">
                           <div className="flex items-center gap-2 mb-3">
                             <X className="w-4 h-4 text-orange-600" />
@@ -3757,6 +4085,44 @@ export default function CreateTalent() {
                                     </span>
                                   ))}
                                 </div>
+                                <p className="text-xs text-orange-700 ml-5 italic">
+                                  💡 Đề xuất: Thêm các kỹ năng này vào hệ thống trước khi tạo nhân sự để tự động điền.
+                                </p>
+                              </div>
+                            )}
+                            {unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0 && (
+                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Award className="w-3.5 h-3.5 text-orange-600" />
+                                    <span className="text-xs font-semibold text-orange-700">Tên chứng chỉ</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendSuggestion("certificateType", "/admin/categories/certificate-types/create")}
+                                    disabled={suggestionLoading === "certificateType" || isSuggestionPending("certificateType")}
+                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                                  >
+                                    {suggestionLoading === "certificateType"
+                                      ? "Đang gửi..."
+                                      : isSuggestionPending("certificateType")
+                                        ? "Đã gửi (chờ Admin)"
+                                        : "Gửi đề xuất cho Admin"}
+                                  </button>
+                                </div>
+                                <p className="text-xs text-orange-800 ml-5 mb-1">
+                                  CV có {unmatchedData.certificateTypes.length} tên chứng chỉ có loại chứng chỉ không có trong hệ thống:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 ml-5 mb-2">
+                                  {unmatchedData.certificateTypes.map((certName, index) => (
+                                    <span key={index} className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                      {certName}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-orange-700 ml-5 italic">
+                                  💡 Đề xuất: Các tên chứng chỉ này có loại chứng chỉ không có trong hệ thống. Vui lòng thêm loại chứng chỉ tương ứng vào hệ thống hoặc chọn loại chứng chỉ thủ công.
+                                </p>
                               </div>
                             )}
                           </div>

@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService, getRoleFromToken, authenticateWithFirebase } from '../../services/Auth';
+import { startNotificationConnection, onReceiveNotification, onUnreadCountUpdated, getUnreadCount } from '../../services/notificationHub';
+import { useNotification } from '../../contexts/NotificationContext';
 
 
 export default function LoginForm() {
@@ -14,6 +16,7 @@ export default function LoginForm() {
   const [success, setSuccess] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { login, isLoading } = useAuth();
+  const { setUnread, pushItem } = useNotification();
   const navigate = useNavigate();
 
   // Validate email format
@@ -72,6 +75,29 @@ export default function LoginForm() {
         avatar: undefined
       };
       localStorage.setItem('devpool_user', JSON.stringify(userData));
+      
+      // Khởi tạo kết nối SignalR sau khi đã có token
+      try {
+        await startNotificationConnection();
+        // Lấy badge ban đầu
+        try {
+          const count = await getUnreadCount();
+          if (typeof count === 'number') setUnread(count);
+        } catch {}
+        // Lắng nghe realtime
+        onReceiveNotification((n: any) => {
+          pushItem(n);
+          // Nếu BE không gửi UnreadCountUpdated, có thể tự +1 (tùy chọn)
+          // setUnread(prev => prev + 1);
+          console.log('ReceiveNotification', n);
+        });
+        onUnreadCountUpdated((count: number) => {
+          if (typeof count === 'number') setUnread(count);
+        });
+      } catch (e) {
+        // Không chặn flow đăng nhập nếu WS lỗi
+        console.warn('Không thể khởi tạo kết nối thông báo realtime:', e);
+      }
       
       // Gọi login từ AuthContext để lưu thông tin user
       await login(

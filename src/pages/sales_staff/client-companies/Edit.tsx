@@ -32,6 +32,10 @@ export default function ClientCompanyEditPage() {
     address: "",
   });
   const [loading, setLoading] = useState(true);
+  const [formErrors, setFormErrors] = useState<{
+    email?: string;
+    phone?: string;
+  }>({});
 
   // 🧭 Load dữ liệu công ty
   useEffect(() => {
@@ -60,18 +64,71 @@ export default function ClientCompanyEditPage() {
     fetchCompany();
   }, [id]);
 
+  // Validation functions
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // Phone is optional
+    const phoneDigits = phone.replace(/\D/g, ""); // Remove non-digits
+    return phoneDigits.length === 10;
+  };
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    
+    // Chỉ cho phép số cho phone
+    if (name === "phone") {
+      const digitsOnly = value.replace(/\D/g, "");
+      if (digitsOnly.length <= 10) {
+        setFormData(prev => ({ ...prev, [name]: digitsOnly }));
+        // Clear error khi user đang nhập
+        if (formErrors.phone) {
+          setFormErrors((prev) => ({ ...prev, phone: undefined }));
+        }
+      }
+      return;
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error khi user đang nhập
+    if (name === "email" && formErrors.email) {
+      setFormErrors((prev) => ({ ...prev, email: undefined }));
+    }
   };
 
   // 💾 Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    // Validate form
+    const errors: { email?: string; phone?: string } = {};
+    
+    // Validate email
+    if (!formData.email.trim()) {
+      errors.email = "Email là bắt buộc";
+    } else if (!validateEmail(formData.email)) {
+      errors.email = "Email không hợp lệ";
+    }
+    
+    // Validate phone
+    if (formData.phone && !validatePhone(formData.phone)) {
+      errors.phone = "Số điện thoại phải có đúng 10 chữ số";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    
+    setFormErrors({});
 
     // Xác nhận trước khi lưu
     const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
@@ -85,10 +142,6 @@ export default function ClientCompanyEditPage() {
     }
     if (!formData.contactPerson.trim()) {
       alert("⚠️ Vui lòng nhập người liên hệ!");
-      return;
-    }
-    if (!formData.email.trim()) {
-      alert("⚠️ Vui lòng nhập email!");
       return;
     }
 
@@ -188,7 +241,7 @@ export default function ClientCompanyEditPage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
-                  Tên công ty
+                  Tên công ty <span className="text-red-500">*</span>
                 </label>
                 <Input
                   name="name"
@@ -220,7 +273,7 @@ export default function ClientCompanyEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Người liên hệ
+                    Người liên hệ <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="contactPerson"
@@ -266,7 +319,7 @@ export default function ClientCompanyEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Mail className="w-4 h-4" />
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="email"
@@ -275,8 +328,18 @@ export default function ClientCompanyEditPage() {
                     type="email"
                     placeholder="Nhập email..."
                     required
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      formErrors.email
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {formErrors.email && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {formErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 {/* Số điện thoại */}
@@ -289,9 +352,20 @@ export default function ClientCompanyEditPage() {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder="Nhập số điện thoại..."
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                    placeholder="Nhập số điện thoại (10 chữ số)..."
+                    maxLength={10}
+                    className={`w-full focus:ring-primary-500 rounded-xl ${
+                      formErrors.phone
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {formErrors.phone}
+                    </p>
+                  )}
                 </div>
 
                 {/* Địa chỉ */}

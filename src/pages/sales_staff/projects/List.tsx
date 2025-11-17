@@ -9,12 +9,12 @@ import {
   Filter,
   Plus,
   Eye,
-  Briefcase,
   Building2,
   CalendarDays,
   CheckCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Layers
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -31,13 +31,24 @@ export default function ProjectListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
 
+  const formatViDate = (value?: string | null) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  };
+
   // Stats data
   const stats = [
     {
       title: 'Tổng Dự Án',
       value: projects.length.toString(),
       color: 'blue',
-      icon: <Briefcase className="w-6 h-6" />
+      icon: <Layers className="w-6 h-6" />
     },
     {
       title: 'Đã Lên Kế Hoạch',
@@ -68,8 +79,18 @@ export default function ProjectListPage() {
           clientCompanyService.getAll({ excludeDeleted: true }),
         ]);
 
-        setProjects(projectRes);
-        setFilteredProjects(projectRes);
+        // Sắp xếp dự án: mới nhất lên đầu (theo createdAt hoặc id)
+        const sortedProjects = [...projectRes].sort((a, b) => {
+          const dateA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+          const dateB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
+          if (dateA !== 0 || dateB !== 0) {
+            return dateB - dateA; // Mới nhất lên đầu
+          }
+          return b.id - a.id; // Nếu không có createdAt, sắp xếp theo id giảm dần
+        });
+
+        setProjects(sortedProjects);
+        setFilteredProjects(sortedProjects);
         setCompanies(companyRes);
       } catch (err) {
         console.error("❌ Lỗi tải danh sách dự án:", err);
@@ -290,7 +311,7 @@ export default function ProjectListPage() {
                 <tr>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên dự án</th>
-                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty KH</th>
+                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty khách hàng</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngày bắt đầu</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngày kết thúc</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
@@ -303,7 +324,7 @@ export default function ProjectListPage() {
                     <td colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
-                          <Briefcase className="w-8 h-8 text-neutral-400" />
+                          <Layers className="w-8 h-8 text-neutral-400" />
                         </div>
                         <p className="text-neutral-500 text-lg font-medium">Không có dự án nào</p>
                         <p className="text-neutral-400 text-sm mt-1">Thử thay đổi từ khóa tìm kiếm hoặc tạo dự án mới</p>
@@ -318,24 +339,36 @@ export default function ProjectListPage() {
                         key={p.id}
                         className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                       >
-                        <td className="py-4 px-4 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                        <td className="py-4 px-4 text-sm font-medium text-neutral-900">
+                            <span>{startIndex + i + 1}</span>
+                        </td>
                         <td className="py-4 px-4">
-                          <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
-                            {p.name}
+                          <div className="inline-flex items-center gap-2 font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
+                            <Layers className="w-4 h-4 text-neutral-400" />
+                            <span>{p.name}</span>
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-sm text-neutral-700">{company?.name ?? "—"}</span>
+                          <span className="inline-flex items-center gap-2 text-sm text-neutral-700">
+                            <Building2 className="w-4 h-4 text-neutral-400" />
+                            <span>{company?.name ?? "—"}</span>
+                          </span>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-sm text-neutral-700">{p.startDate}</span>
+                          <span className="inline-flex items-center gap-2 text-sm text-neutral-700">
+                            <CalendarDays className="w-4 h-4 text-neutral-400" />
+                            <span>{formatViDate(p.startDate as string)}</span>
+                          </span>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-sm text-neutral-700">{p.endDate ?? "—"}</span>
+                          <span className="inline-flex items-center gap-2 text-sm text-neutral-700">
+                            <CalendarDays className="w-4 h-4 text-neutral-400" />
+                            <span>{formatViDate(p.endDate as string | null)}</span>
+                          </span>
                         </td>
                         <td className="py-4 px-4">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                               p.status === 'Completed'
                                 ? 'bg-green-100 text-green-800'
                                 : p.status === 'Ongoing'
@@ -343,7 +376,7 @@ export default function ProjectListPage() {
                                 : 'bg-yellow-100 text-yellow-800'
                             }`}
                           >
-                            {statusLabels[p.status] || "—"}
+                            <span>{statusLabels[p.status] || "—"}</span>
                           </span>
                         </td>
                         <td className="py-4 px-4 text-center">

@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -35,24 +34,34 @@ export default function RichTextEditor({
   const [, forceUpdate] = useState(0);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        bulletList: { keepMarks: true, keepAttributes: false },
-        orderedList: { keepMarks: true, keepAttributes: false },
-        code: false,
-        codeBlock: false,
-      }),
-      Underline,
-      TaskList.configure({
-        HTMLAttributes: { class: "rt-task-list" },
-      }),
-      TaskItem.configure({
-        nested: true,
-      }),
-      TextAlign.configure({
-        types: ["heading", "paragraph"],
-      }),
-    ],
+    extensions: (() => {
+      const raw = [
+        StarterKit.configure({
+          bulletList: { keepMarks: true, keepAttributes: false },
+          orderedList: { keepMarks: true, keepAttributes: false },
+          code: false,
+          codeBlock: false,
+        }),
+        TaskList.configure({
+          HTMLAttributes: { class: "rt-task-list" },
+        }),
+        TaskItem.configure({
+          nested: true,
+        }),
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+        }),
+      ];
+      // Deduplicate by extension name to avoid tiptap warning "Duplicate extension names"
+      const seen = new Set<string>();
+      return raw.filter((ext: any) => {
+        const name = ext?.name ?? ext?.config?.name;
+        if (!name) return true;
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+    })(),
     content: value || "",
     editorProps: {
       attributes: {
@@ -136,19 +145,7 @@ export default function RichTextEditor({
         }
       },
     },
-    {
-      key: "underline",
-      label: "Gạch dưới",
-      icon: <UnderlineIcon className="w-4 h-4" />,
-      isActive: editor.isActive("underline"),
-      onClick: () => {
-        if (editor.isActive("underline")) {
-          editor.chain().focus().unsetUnderline().run();
-        } else {
-          editor.chain().focus().setUnderline().run();
-        }
-      },
-    },
+    // underline button will be appended below if extension exists
     {
       key: "strike",
       label: "Gạch ngang",
@@ -266,7 +263,30 @@ export default function RichTextEditor({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 items-stretch max-h-[120px] overflow-y-visible overflow-x-auto pb-1">
-        <ToolbarGroup title="Định dạng">{renderButtons(inlineButtons)}</ToolbarGroup>
+        <ToolbarGroup title="Định dạng">
+          {renderButtons(inlineButtons)}
+          {/* Conditionally render underline if available */}
+          {editor.extensionManager.extensions.some((e: any) => e?.name === 'underline') && (
+            <button
+              key="underline"
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline?.().run?.(); }}
+              onKeyDown={(event) => {
+                if (event.key === " " || event.key === "Enter") {
+                  event.preventDefault();
+                  // @ts-ignore - toggleUnderline exists when underline extension is present
+                  editor.chain().focus().toggleUnderline().run();
+                }
+              }}
+              className={toolbarButtonClasses(editor.isActive("underline"))}
+              aria-label="Gạch dưới"
+              title="Gạch dưới"
+            >
+              <UnderlineIcon className="w-4 h-4" />
+              <span className={labelClass}>Gạch dưới</span>
+            </button>
+          )}
+        </ToolbarGroup>
         <ToolbarGroup title="Danh sách">{renderButtons(listButtons)}</ToolbarGroup>
         <ToolbarGroup title="Căn lề">{renderButtons(alignButtons)}</ToolbarGroup>
       </div>

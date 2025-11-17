@@ -25,6 +25,8 @@ export const NotificationType = {
   ContractExpiringSoon: 3004,
   ContractExpired: 3005,
   ContractTerminated: 3006,
+  ContractRejected: 3007,
+
 
   // Talent (5xxx)
   TalentStatusChanged: 5001,
@@ -32,6 +34,14 @@ export const NotificationType = {
 
   // Documents (6xxx)
   DocumentUploaded: 6001,
+
+  // Skills & CV Analysis (7xxx)
+  NewSkillDetectedFromCV: 7001,
+
+  // Payments (8xxx)
+  PaymentDueSoon: 8001,
+  PaymentOverdue: 8002,
+  PaymentReceived: 8003,
 } as const;
 
 export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
@@ -101,7 +111,7 @@ export const notificationService = {
     try {
       const params = new URLSearchParams();
 
-      if (filter?.userId) params.append("UserId", filter.userId);
+      // Không gửi UserId; BE lấy từ claims
       if (filter?.isRead !== undefined)
         params.append("IsRead", filter.isRead.toString());
       if (filter?.type !== undefined)
@@ -190,7 +200,8 @@ export const notificationService = {
 
   async markAllAsRead(userId: string): Promise<void> {
     try {
-      await axios.put(`/notification/mark-all-read`, { userId });
+      // Không gửi userId; BE lấy từ claims
+      await axios.put(`/notification/mark-all-read`, {});
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || {
@@ -200,10 +211,13 @@ export const notificationService = {
     }
   },
 
-  async getUnreadCount(userId: string): Promise<number> {
+  async getUnreadCount(): Promise<number> {
     try {
-      const response = await axios.get(`/notification/unread-count?userId=${userId}`);
-      return response.data.count || response.data;
+      // Không gửi userId; BE trả { unreadCount: number }
+      const response = await axios.get(`/notification/unread-count`);
+      return typeof response.data === 'number'
+        ? response.data
+        : (response.data?.unreadCount ?? 0);
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || {

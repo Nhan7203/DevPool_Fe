@@ -22,6 +22,10 @@ export default function ClientCompanyCreatePage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [formErrors, setFormErrors] = useState<{
+    email?: string;
+    phone?: string;
+  }>({});
   const [form, setForm] = useState<ClientCompanyPayload>({
     name: "",
     taxCode: "",
@@ -32,13 +36,66 @@ export default function ClientCompanyCreatePage() {
     address: "",
   });
 
+  // Validation functions
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // Phone is optional
+    const phoneDigits = phone.replace(/\D/g, ""); // Remove non-digits
+    return phoneDigits.length === 10;
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Chỉ cho phép số cho phone
+    if (name === "phone") {
+      const digitsOnly = value.replace(/\D/g, "");
+      if (digitsOnly.length <= 10) {
+        setForm((prev) => ({ ...prev, [name]: digitsOnly }));
+        // Clear error khi user đang nhập
+        if (formErrors.phone) {
+          setFormErrors((prev) => ({ ...prev, phone: undefined }));
+        }
+      }
+      return;
+    }
+    
     setForm((prev) => ({ ...prev, [name]: value }));
+    
+    // Clear error khi user đang nhập
+    if (name === "email" && formErrors.email) {
+      setFormErrors((prev) => ({ ...prev, email: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form
+    const errors: { email?: string; phone?: string } = {};
+    
+    // Validate email
+    if (!form.email.trim()) {
+      errors.email = "Email là bắt buộc";
+    } else if (!validateEmail(form.email)) {
+      errors.email = "Email không hợp lệ";
+    }
+    
+    // Validate phone
+    if (form.phone && !validatePhone(form.phone)) {
+      errors.phone = "Số điện thoại phải có đúng 10 chữ số";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    
+    setFormErrors({});
     
     // Xác nhận trước khi tạo
     const confirmed = window.confirm("Bạn có chắc chắn muốn tạo công ty mới không?");
@@ -114,7 +171,7 @@ export default function ClientCompanyCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
-                  Tên công ty
+                  Tên công ty <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="name"
@@ -146,7 +203,7 @@ export default function ClientCompanyCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Người liên hệ
+                    Người liên hệ <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="contactPerson"
@@ -192,7 +249,7 @@ export default function ClientCompanyCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Mail className="w-4 h-4" />
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="email"
@@ -201,8 +258,18 @@ export default function ClientCompanyCreatePage() {
                     type="email"
                     placeholder="Nhập email..."
                     required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      formErrors.email
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {formErrors.email && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {formErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 {/* Số điện thoại */}
@@ -215,9 +282,20 @@ export default function ClientCompanyCreatePage() {
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
-                    placeholder="Nhập số điện thoại..."
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    placeholder="Nhập số điện thoại (10 chữ số)..."
+                    maxLength={10}
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      formErrors.phone
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {formErrors.phone}
+                    </p>
+                  )}
                 </div>
 
                 {/* Địa chỉ */}

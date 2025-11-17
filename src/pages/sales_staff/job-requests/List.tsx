@@ -20,6 +20,7 @@ import {
   ChevronRight,
   XCircle,
   FileText,
+  Layers,
 } from "lucide-react";
 
 type AugmentedJobRequest = JobRequest & {
@@ -362,7 +363,7 @@ export default function JobRequestListPage() {
                     />
                   </div>
                   <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                    <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                     <input
                       type="text"
                       placeholder="Dự án"
@@ -447,7 +448,6 @@ export default function JobRequestListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Số lượng</th>
-                  <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngân sách</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
@@ -455,7 +455,7 @@ export default function JobRequestListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Briefcase className="w-8 h-8 text-neutral-400" />
@@ -485,7 +485,7 @@ export default function JobRequestListPage() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <Briefcase className="w-4 h-4 text-neutral-400" />
+                          <Layers className="w-4 h-4 text-neutral-400" />
                           <span className="text-sm text-neutral-700">{r.projectName}</span>
                         </div>
                       </td>
@@ -504,11 +504,6 @@ export default function JobRequestListPage() {
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm font-medium text-neutral-700">{r.quantity}</span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <span className="text-sm font-medium text-neutral-700">
-                          {r.budgetPerMonth?.toLocaleString("vi-VN")  ?? "—"}
-                        </span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[r.status]}`}>

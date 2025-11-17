@@ -27,6 +27,7 @@ import {
   X,
   Search,
   Filter,
+  Layers,
 } from "lucide-react";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
@@ -34,6 +35,7 @@ import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
 import RichTextEditor from "../../../components/common/RichTextEditor";
+import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
@@ -77,6 +79,21 @@ export default function JobRequestCreatePage() {
     return matchesName && matchesGroup;
   });
 
+  const [companies, setCompanies] = useState<ClientCompany[]>([]);
+  const [companySearch, setCompanySearch] = useState<string>("");
+  const filteredCompanies = companies.filter(c =>
+    !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase())
+  );
+  const [projectSearch, setProjectSearch] = useState<string>("");
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [locationSearch, setLocationSearch] = useState<string>("");
+  const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
+  const [applyTemplateSearch, setApplyTemplateSearch] = useState<string>("");
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
+  const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
+  const [isApplyTemplateDropdownOpen, setIsApplyTemplateDropdownOpen] = useState(false);
+
   const filteredSkillGroups = skillGroups.filter(group =>
     group.name.toLowerCase().includes(skillGroupQuery.toLowerCase())
   );
@@ -109,7 +126,7 @@ export default function JobRequestCreatePage() {
       const decoded = token ? decodeJWT(token) : null;
       const creatorName = user?.name || decoded?.unique_name || decoded?.email || "Nhân viên Sales";
 
-      await notificationService.create({
+      const notification = await notificationService.create({
         title: "Yêu cầu tuyển dụng mới",
         message: `${creatorName} vừa tạo yêu cầu tuyển dụng "${jobTitle}". Vui lòng kiểm tra và duyệt yêu cầu này.`,
         type: NotificationType.JobStatusChanged,
@@ -123,6 +140,7 @@ export default function JobRequestCreatePage() {
           createdBy: creatorName?.toString() ?? "Sales",
         },
       });
+      console.log("✅ Notification created:", notification);
     } catch (notifyError) {
       console.error("Không thể gửi thông báo tới HR:", notifyError);
     }
@@ -162,6 +180,26 @@ export default function JobRequestCreatePage() {
   }, []);
 
   useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const result = await clientCompanyService.getAll({ excludeDeleted: true });
+        const list = Array.isArray(result)
+          ? result
+          : Array.isArray((result as any)?.items)
+            ? (result as any).items
+            : Array.isArray((result as any)?.data)
+              ? (result as any).data
+              : [];
+        setCompanies(list as ClientCompany[]);
+      } catch (err) {
+        console.error("❌ Lỗi tải công ty khách hàng:", err);
+        setCompanies([]);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  useEffect(() => {
     const fetchTemplates = async () => {
       if (!selectedClientId) return;
       try {
@@ -184,23 +222,17 @@ export default function JobRequestCreatePage() {
     }
   };
 
-  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setForm(prev => ({ ...prev, projectId: value }));
-    const project = projects.find(p => p.id.toString() === value);
-    setSelectedClientId(project ? project.clientCompanyId : 0);
-    setForm(prev => ({ ...prev, clientCompanyCVTemplateId: 0 }));
-  };
+  // Company/Project selection được xử lý trực tiếp trong popover, nên không cần handler riêng cho <select>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Xác nhận trước khi tạo
     const confirmed = window.confirm("Bạn có chắc chắn muốn tạo yêu cầu tuyển dụng mới không?");
     if (!confirmed) {
       return;
     }
-    
+
     setLoading(true);
     setError("");
     setSuccess(false);
@@ -245,6 +277,22 @@ export default function JobRequestCreatePage() {
     }
   };
 
+  const projectsFiltered = selectedClientId
+    ? projects.filter(p => p.clientCompanyId === selectedClientId)
+    : projects;
+  const projectsFilteredBySearch = projectsFiltered.filter(p =>
+    !projectSearch || p.name.toLowerCase().includes(projectSearch.toLowerCase())
+  );
+  const locationsFiltered = locations.filter(l =>
+    !locationSearch || l.name.toLowerCase().includes(locationSearch.toLowerCase())
+  );
+  const jobRoleLevelsFiltered = jobRoleLevels.filter(j =>
+    !jobRoleLevelSearch || j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase())
+  );
+  const applyTemplatesFiltered = applyTemplates.filter(t =>
+    !applyTemplateSearch || t.name.toLowerCase().includes(applyTemplateSearch.toLowerCase())
+  );
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
@@ -253,7 +301,7 @@ export default function JobRequestCreatePage() {
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               to="/sales/job-requests"
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
@@ -268,7 +316,7 @@ export default function JobRequestCreatePage() {
               <p className="text-neutral-600 mb-4">
                 Nhập thông tin chi tiết để tạo yêu cầu tuyển dụng cho khách hàng
               </p>
-              
+
               {/* Status Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 border border-primary-200">
                 <Plus className="w-4 h-4 text-primary-600" />
@@ -310,120 +358,223 @@ export default function JobRequestCreatePage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Dự án */}
+                {/* Công ty khách hàng (popover) */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4" />
+                    <Building2 className="w-4 h-4" />
+                    Công ty khách hàng
+                  </label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsCompanyDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Building2 className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {selectedClientId
+                            ? companies.find(c => c.id === selectedClientId)?.name || "Chọn công ty"
+                            : "Chọn công ty"}
+                        </span>
+                      </div>
+                    </button>
+                    {isCompanyDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={companySearch}
+                              onChange={(e) => setCompanySearch(e.target.value)}
+                              placeholder="Tìm công ty..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedClientId(0);
+                              setCompanySearch("");
+                              setClientTemplates([]);
+                              setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0 }));
+                              setIsCompanyDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              selectedClientId === 0
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả công ty
+                          </button>
+                          {filteredCompanies.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy công ty phù hợp</p>
+                          ) : (
+                            filteredCompanies.map(c => (
+                              <button
+                                type="button"
+                                key={c.id}
+                                onClick={() => {
+                                  setSelectedClientId(c.id);
+                                  setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0 }));
+                                  setIsCompanyDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  selectedClientId === c.id
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {c.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mẫu CV khách hàng hiển thị theo Công ty */}
+                    {selectedClientId ? (
+                      <div className="mt-3">
+                        <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          Mẫu CV khách hàng
+                        </label>
+                        <select
+                          name="clientCompanyCVTemplateId"
+                          value={form.clientCompanyCVTemplateId ? form.clientCompanyCVTemplateId.toString() : ""}
+                          onChange={handleChange}
+                          className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                        >
+                          <option value="">
+                            {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
+                          </option>
+                          {clientTemplates.map(t => (
+                            <option key={t.templateId} value={t.templateId.toString()}>{t.templateName}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Dự án (popover) */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Layers className="w-4 h-4" />
                     Dự án <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="projectId"
-                    value={form.projectId}
-                    onChange={handleProjectChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
-                  >
-                    <option value="">-- Chọn dự án --</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Vị trí tuyển dụng (Job Role Level) */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Vị trí tuyển dụng <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="jobRoleLevelId"
-                    value={form.jobRoleLevelId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
-                  >
-                    <option value="">-- Chọn vị trí --</option>
-                    {jobRoleLevels.map(p => (
-                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Job Role (chỉ hiển thị khi đã chọn Job Role Level) */}
-                {form.jobRoleLevelId && selectedJobRoleId !== 0 && (
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      Loại vị trí tuyển dụng
-                    </label>
-                    <div className="w-full border border-neutral-200 rounded-xl px-4 py-3 bg-neutral-50 text-neutral-700">
-                      {jobRoles.find(r => r.id === selectedJobRoleId)?.name || "Không xác định"}
-                    </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left المقالة focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Layers className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {form.projectId
+                            ? projects.find(p => p.id.toString() === form.projectId)?.name || "Chọn dự án"
+                            : "Chọn dự án"}
+                        </span>
+                      </div>
+                    </button>
+                    {isProjectDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={projectSearch}
+                              onChange={(e) => setProjectSearch(e.target.value)}
+                              placeholder="Tìm dự án..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({ ...prev, projectId: "" }));
+                              setIsProjectDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              !form.projectId
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả dự án
+                          </button>
+                          {projectsFilteredBySearch.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
+                          ) : (
+                            projectsFilteredBySearch.map(p => (
+                              <button
+                                type="button"
+                                key={p.id}
+                                onClick={() => {
+                                  setForm(prev => ({ ...prev, projectId: p.id.toString(), clientCompanyCVTemplateId: 0 }));
+                                  setSelectedClientId(p.clientCompanyId);
+                                  setIsProjectDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  form.projectId === p.id.toString()
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {p.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Company info readonly when project selected */}
+                    {selectedClientId ? (
+                      <div className="mt-2 p-3 rounded-xl border border-neutral-200 bg-neutral-50">
+                        <p className="text-xs font-semibold text-neutral-600 mb-1">Công ty liên kết</p>
+                        {(() => {
+                          const company = companies.find(c => c.id === selectedClientId);
+                          return company ? (
+                            <div className="text-sm text-neutral-800 space-y-0.5">
+                              <div><span className="font-medium">Tên:</span> {company.name}</div>
+                              {company.contactPerson && (
+                                <div><span className="font-medium">Liên hệ:</span> {company.contactPerson}</div>
+                              )}
+                              {company.email && (
+                                <div><span className="font-medium">Email:</span> {company.email}</div>
+                              )}
+                              {company.phone && (
+                                <div><span className="font-medium">Điện thoại:</span> {company.phone}</div>
+                              )}
+                              {company.address && (
+                                <div><span className="font-medium">Địa chỉ:</span> {company.address}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-neutral-500">Không tìm thấy thông tin công ty.</div>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                   </div>
-                )}
+                </div>
+
+                {/* (đã di chuyển Vị trí tuyển dụng xuống Chi tiết yêu cầu) */}
               </div>
             </div>
           </div>
 
           {/* Project Details */}
-          {form.projectId && (
-            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-              <div className="p-6 border-b border-neutral-200">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-secondary-100 rounded-lg">
-                    <Building2 className="w-5 h-5 text-secondary-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Chi tiết dự án</h2>
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Mẫu CV khách hàng */}
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      Mẫu CV khách hàng
-                    </label>
-                    <select
-                      name="clientCompanyCVTemplateId"
-                      value={form.clientCompanyCVTemplateId ? form.clientCompanyCVTemplateId.toString() : ""}
-                      onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    >
-                      <option value="">
-                        {clientTemplates.length > 0 ? "-- Chọn mẫu CV --" : "-- Không có mẫu CV khả dụng --"}
-                      </option>
-                      {clientTemplates.map(t => (
-                        <option key={t.templateId} value={t.templateId.toString()}>{t.templateName}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Chế độ làm việc */}
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                      <Target className="w-4 h-4" />
-                      Chế độ làm việc <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="workingMode"
-                      value={form.workingMode}
-                      onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                      required
-                    >
-                      <option value={WorkingMode.None}>Không xác định</option>
-                      <option value={WorkingMode.Onsite}>Tại văn phòng</option>
-                      <option value={WorkingMode.Remote}>Từ xa</option>
-                      <option value={WorkingMode.Hybrid}>Kết hợp</option>
-                      <option value={WorkingMode.Flexible}>Linh hoạt</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* (đã bỏ Chi tiết dự án; Mẫu CV được đưa vào Thông tin cơ bản) */}
 
           {/* Job Details */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
@@ -432,7 +583,7 @@ export default function JobRequestCreatePage() {
                 <div className="p-2 bg-accent-100 rounded-lg">
                   <DollarSign className="w-5 h-5 text-accent-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Chi tiết công việc</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Chi tiết yêu cầu</h2>
               </div>
             </div>
             <div className="p-6">
@@ -454,61 +605,284 @@ export default function JobRequestCreatePage() {
                   />
                 </div>
 
-                {/* Khu vực làm việc */}
+                {/* Chế độ làm việc */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Target className="w-4 h-4" />
+                    Chế độ làm việc <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="workingMode"
+                    value={form.workingMode}
+                    onChange={handleChange}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    required
+                  >
+                    <option value={WorkingMode.None}>Không xác định</option>
+                    <option value={WorkingMode.Onsite}>Tại văn phòng</option>
+                    <option value={WorkingMode.Remote}>Từ xa</option>
+                    <option value={WorkingMode.Hybrid}>Kết hợp</option>
+                    <option value={WorkingMode.Flexible}>Linh hoạt</option>
+                  </select>
+                </div>
+
+                {/* Khu vực làm việc (popover) */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
                     Khu vực làm việc
                   </label>
-                  <select
-                    name="locationId"
-                    value={form.locationId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">-- Chọn khu vực làm việc --</option>
-                    {locations.map(l => (
-                      <option key={l.id} value={l.id.toString()}>{l.name}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Building2 className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {form.locationId
+                            ? locations.find(l => l.id.toString() === form.locationId)?.name || "Chọn khu vực làm việc"
+                            : "Chọn khu vực làm việc"}
+                        </span>
+                      </div>
+                    </button>
+                    {isLocationDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={locationSearch}
+                              onChange={(e) => setLocationSearch(e.target.value)}
+                              placeholder="Tìm khu vực..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({ ...prev, locationId: "" }));
+                              setIsLocationDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              !form.locationId
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả khu vực
+                          </button>
+                          {locationsFiltered.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy khu vực phù hợp</p>
+                          ) : (
+                            locationsFiltered.map(l => (
+                              <button
+                                type="button"
+                                key={l.id}
+                                onClick={() => {
+                                  setForm(prev => ({ ...prev, locationId: l.id.toString() }));
+                                  setIsLocationDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  form.locationId === l.id.toString()
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {l.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Quy trình mẫu ứng tuyển */}
+                {/* Vị trí tuyển dụng (Job Role Level) - popover */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Vị trí tuyển dụng <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsJobRoleLevelDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Users className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {form.jobRoleLevelId
+                            ? jobRoleLevels.find(j => j.id.toString() === form.jobRoleLevelId)?.name || "Chọn vị trí"
+                            : "Chọn vị trí"}
+                        </span>
+                      </div>
+                    </button>
+                    {isJobRoleLevelDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={jobRoleLevelSearch}
+                              onChange={(e) => setJobRoleLevelSearch(e.target.value)}
+                              placeholder="Tìm vị trí..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({ ...prev, jobRoleLevelId: "" }));
+                              setSelectedJobRoleId(0);
+                              setIsJobRoleLevelDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              !form.jobRoleLevelId
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả vị trí
+                          </button>
+                          {jobRoleLevelsFiltered.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí phù hợp</p>
+                          ) : (
+                            jobRoleLevelsFiltered.map(j => (
+                              <button
+                                type="button"
+                                key={j.id}
+                                onClick={() => {
+                                  setForm(prev => ({ ...prev, jobRoleLevelId: j.id.toString() }));
+                                  setSelectedJobRoleId(j.jobRoleId);
+                                  setIsJobRoleLevelDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  form.jobRoleLevelId === j.id.toString()
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {j.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {form.jobRoleLevelId && selectedJobRoleId !== 0 && (
+                    <div className="mt-2 text-xs text-neutral-600">
+                      Loại vị trí:{" "}
+                      <span className="font-medium text-neutral-800">
+                        {jobRoles.find(r => r.id === selectedJobRoleId)?.name || "Không xác định"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mẫu quy trình ứng tuyển - popover */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Quy trình mẫu ứng tuyển <span className="text-red-500">*</span>
+                    Mẫu quy trình ứng tuyển <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="applyProcessTemplateId"
-                    value={form.applyProcessTemplateId}
-                    onChange={handleChange}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    required
-                  >
-                    <option value="">-- Chọn quy trình --</option>
-                    {applyTemplates.map(t => (
-                      <option key={t.id} value={t.id.toString()}>{t.name}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsApplyTemplateDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {form.applyProcessTemplateId
+                            ? applyTemplates.find(t => t.id.toString() === form.applyProcessTemplateId)?.name || "Chọn quy trình"
+                            : "Chọn quy trình"}
+                        </span>
+                      </div>
+                    </button>
+                    {isApplyTemplateDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={applyTemplateSearch}
+                              onChange={(e) => setApplyTemplateSearch(e.target.value)}
+                              placeholder="Tìm quy trình..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({ ...prev, applyProcessTemplateId: "" }));
+                              setIsApplyTemplateDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              !form.applyProcessTemplateId
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả quy trình
+                          </button>
+                          {applyTemplatesFiltered.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy quy trình phù hợp</p>
+                          ) : (
+                            applyTemplatesFiltered.map(t => (
+                              <button
+                                type="button"
+                                key={t.id}
+                                onClick={() => {
+                                  setForm(prev => ({ ...prev, applyProcessTemplateId: t.id.toString() }));
+                                  setIsApplyTemplateDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  form.applyProcessTemplateId === t.id.toString()
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {t.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Ngân sách */}
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <DollarSign className="w-4 h-4" />
-                    Ngân sách/tháng (VNĐ)
+                    Ngân sách/tháng (VND)
                   </label>
                   <input
                     type="number"
                     name="budgetPerMonth"
                     value={form.budgetPerMonth}
                     onChange={handleChange}
+                    min={0}
                     placeholder="Nhập ngân sách..."
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
                 </div>
-
               </div>
             </div>
           </div>
@@ -539,7 +913,7 @@ export default function JobRequestCreatePage() {
               <div className="p-6 border-b border-neutral-200">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-accent-100 rounded-lg">
-                    <Target className="w-5 h-5 text-accent-600" />
+                    <Briefcase className="w-5 h-5 text-accent-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
                 </div>
@@ -592,70 +966,67 @@ export default function JobRequestCreatePage() {
                   )}
                 </div>
                 <div className="relative w-full lg:w-72">
-                    <button
-                      type="button"
-                      onClick={() => setIsSkillGroupDropdownOpen(prev => !prev)}
-                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
-                    >
-                      <div className="flex items-center gap-2 text-sm text-neutral-700">
-                        <Filter className="w-4 h-4 text-neutral-400" />
-                        <span>
-                          {selectedSkillGroupId
-                            ? skillGroups.find(group => group.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
-                            : "Tất cả nhóm kỹ năng"}
-                        </span>
-                      </div>
-                      <span className="text-neutral-400 text-xs uppercase">Chọn</span>
-                    </button>
-                    {isSkillGroupDropdownOpen && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
-                        <div className="p-3 border-b border-neutral-100">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                            <input
-                              type="text"
-                              value={skillGroupQuery}
-                              onChange={(e) => setSkillGroupQuery(e.target.value)}
-                              placeholder="Tìm nhóm kỹ năng..."
-                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
-                            />
-                          </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSkillGroupDropdownOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Filter className="w-4 h-4 text-neutral-400" />
+                      <span>
+                        {selectedSkillGroupId
+                          ? skillGroups.find(group => group.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
+                          : "Tất cả nhóm kỹ năng"}
+                      </span>
+                    </div>
+                  </button>
+                  {isSkillGroupDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div className="p-3 border-b border-neutral-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={skillGroupQuery}
+                            onChange={(e) => setSkillGroupQuery(e.target.value)}
+                            placeholder="Tìm nhóm kỹ năng..."
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                          />
                         </div>
-                        <div className="max-h-56 overflow-y-auto">
-                          <button
-                            type="button"
-                            onClick={() => handleSkillGroupSelect(undefined)}
-                            className={`w-full text-left px-4 py-2.5 text-sm ${
-                              selectedSkillGroupId === undefined
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => handleSkillGroupSelect(undefined)}
+                          className={`w-full text-left px-4 py-2.5 text-sm ${selectedSkillGroupId === undefined
+                            ? "bg-primary-50 text-primary-700"
+                            : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                        >
+                          Tất cả nhóm kỹ năng
+                        </button>
+                        {skillGroups.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Đang tải nhóm kỹ năng...</p>
+                        ) : filteredSkillGroups.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Không có nhóm phù hợp</p>
+                        ) : (
+                          filteredSkillGroups.map(group => (
+                            <button
+                              type="button"
+                              key={group.id}
+                              onClick={() => handleSkillGroupSelect(group.id)}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${selectedSkillGroupId === group.id
                                 ? "bg-primary-50 text-primary-700"
                                 : "hover:bg-neutral-50 text-neutral-700"
-                            }`}
-                          >
-                            Tất cả nhóm kỹ năng
-                          </button>
-                          {skillGroups.length === 0 ? (
-                            <p className="px-4 py-3 text-sm text-neutral-500">Đang tải nhóm kỹ năng...</p>
-                          ) : filteredSkillGroups.length === 0 ? (
-                            <p className="px-4 py-3 text-sm text-neutral-500">Không có nhóm phù hợp</p>
-                          ) : (
-                            filteredSkillGroups.map(group => (
-                              <button
-                                type="button"
-                                key={group.id}
-                                onClick={() => handleSkillGroupSelect(group.id)}
-                                className={`w-full text-left px-4 py-2.5 text-sm ${
-                                  selectedSkillGroupId === group.id
-                                    ? "bg-primary-50 text-primary-700"
-                                    : "hover:bg-neutral-50 text-neutral-700"
                                 }`}
-                              >
-                                {group.name}
-                              </button>
-                            ))
-                          )}
-                        </div>
+                            >
+                              {group.name}
+                            </button>
+                          ))
+                        )}
                       </div>
-                    )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -664,11 +1035,10 @@ export default function JobRequestCreatePage() {
                 {filteredSkills.map(skill => (
                   <label
                     key={skill.id}
-                    className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${
-                      form.skillIds.includes(skill.id)
-                        ? "bg-gradient-to-r from-primary-50 to-primary-100 border-primary-300 text-primary-800"
-                        : "bg-neutral-50 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300"
-                    }`}
+                    className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${form.skillIds.includes(skill.id)
+                      ? "bg-gradient-to-r from-primary-50 to-primary-100 border-primary-300 text-primary-800"
+                      : "bg-neutral-50 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300"
+                      }`}
                   >
                     <input
                       type="checkbox"
