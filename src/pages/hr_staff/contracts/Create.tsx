@@ -6,8 +6,6 @@ import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContractPayload, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
-import { talentApplicationService, type TalentApplication } from '../../../services/TalentApplication';
-import { talentCVService, type TalentCV } from '../../../services/TalentCV';
 import { uploadFile } from '../../../utils/firebaseStorage';
 
 export default function CreatePartnerContractPage() {
@@ -19,10 +17,7 @@ export default function CreatePartnerContractPage() {
     const [partners, setPartners] = useState<Partner[]>([]);
     const [talents, setTalents] = useState<Talent[]>([]);
     const [contractFile, setContractFile] = useState<File | null>(null);
-    const [eligibleTalentIds, setEligibleTalentIds] = useState<number[]>([]);
-    const [talentHireDates, setTalentHireDates] = useState<Record<number, string>>({});
     const [existingContracts, setExistingContracts] = useState<{ contractNumber: string }[]>([]);
-    const [partnerContracts, setPartnerContracts] = useState<PartnerContract[]>([]);
     const [filteredTalentIds, setFilteredTalentIds] = useState<number[]>([]);
     const [partnerSearch, setPartnerSearch] = useState<string>('');
     const [talentSearch, setTalentSearch] = useState<string>('');
@@ -41,60 +36,22 @@ export default function CreatePartnerContractPage() {
         contractFileUrl: undefined,
     });
 
-    const formatDateForInput = (date: Date) => {
-        const year = date.getFullYear();
-        const month = `${date.getMonth() + 1}`.padStart(2, '0');
-        const day = `${date.getDate()}`.padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [partnersData, talentsData, hiredApplications, talentCVs, contractsData] = await Promise.all([
+                const [partnersData, talentsData, contractsData] = await Promise.all([
                     partnerService.getAll(),
                     talentService.getAll({ excludeDeleted: true }),
-                    talentApplicationService.getAll({ excludeDeleted: true }),
-                    talentCVService.getAll({ excludeDeleted: true }),
                     partnerContractService.getAll({ excludeDeleted: true })
                 ]);
 
-                const cvTalentMap = new Map<number, number>();
-                (talentCVs as TalentCV[]).forEach(cv => {
-                    cvTalentMap.set(cv.id, cv.talentId);
-                });
-
-                const hiredTalentSet = new Set<number>();
-                const talentHireDateMap: Record<number, string> = {};
-
-                (hiredApplications as TalentApplication[])
-                    .filter(app => app.status === 'Hired')
-                    .forEach(app => {
-                        const talentId = cvTalentMap.get(app.cvId);
-                        if (!talentId) return;
-
-                        hiredTalentSet.add(talentId);
-
-                        const hireDate = app.updatedAt ?? app.createdAt;
-                        if (!hireDate) return;
-
-                        const existing = talentHireDateMap[talentId];
-                        if (!existing || new Date(hireDate).getTime() < new Date(existing).getTime()) {
-                            talentHireDateMap[talentId] = hireDate;
-                        }
-                    });
-
                 setPartners(partnersData);
                 setTalents(talentsData);
-                setEligibleTalentIds(Array.from(hiredTalentSet));
-                setTalentHireDates(talentHireDateMap);
-                
-                // Lưu danh sách hợp đồng đối tác để lọc nhân sự
-                const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
-                setPartnerContracts(contracts as PartnerContract[]);
                 
                 // Lưu danh sách mã hợp đồng hiện có để kiểm tra trùng
-                setExistingContracts(contracts.map((c: any) => ({ 
+                const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+                setExistingContracts((contracts as PartnerContract[]).map((c: PartnerContract) => ({ 
                     contractNumber: (c.contractNumber || '').toUpperCase() 
                 })));
             } catch (err) {
@@ -108,23 +65,13 @@ export default function CreatePartnerContractPage() {
     // Lọc nhân sự theo đối tác được chọn
     useEffect(() => {
         if (form.partnerId) {
-            // Lấy danh sách talentId đang có hợp đồng với đối tác này (status active)
-            const activeStatuses = ['Active', 'Pending', 'Draft']; // Các trạng thái hợp đồng đang hoạt động
-            const talentIdsWithPartner = new Set<number>();
-            
-            partnerContracts
-                .filter(contract => 
-                    contract.partnerId === form.partnerId && 
-                    activeStatuses.includes(contract.status)
+            // Lọc nhân sự: có currentPartnerId = partnerId đã chọn và status = "Working"
+            const filtered = talents
+                .filter(talent => 
+                    talent.currentPartnerId === form.partnerId && 
+                    talent.status === "Working"
                 )
-                .forEach(contract => {
-                    talentIdsWithPartner.add(contract.talentId);
-                });
-            
-            // Lọc nhân sự: phải vừa eligible (đã tuyển) vừa đang làm việc với đối tác này
-            const filtered = eligibleTalentIds.filter(talentId => 
-                talentIdsWithPartner.has(talentId)
-            );
+                .map(talent => talent.id);
             
             setFilteredTalentIds(filtered);
             
@@ -137,7 +84,7 @@ export default function CreatePartnerContractPage() {
             setFilteredTalentIds([]);
             setForm(prev => ({ ...prev, talentId: 0 }));
         }
-    }, [form.partnerId, partnerContracts, eligibleTalentIds]);
+    }, [form.partnerId, form.talentId, talents]);
 
     // Filtered lists for search
     const filteredPartners = partners.filter(partner =>
@@ -181,7 +128,7 @@ export default function CreatePartnerContractPage() {
         e.preventDefault();
         
         // Xác nhận trước khi tạo
-        const confirmed = window.confirm("Bạn có chắc chắn muốn tạo hợp đồng đối tác mới không?");
+        const confirmed = window.confirm("Bạn có chắc chắn muốn tạo hợp đồng nhân sự mới không?");
         if (!confirmed) {
             return;
         }
@@ -224,8 +171,9 @@ export default function CreatePartnerContractPage() {
                 return;
             }
 
-            if (!eligibleTalentIds.includes(selectedTalent.id)) {
-                setError("Talent chưa có hồ sơ ứng tuyển ở trạng thái Đã tuyển, không thể tạo hợp đồng.");
+            // Kiểm tra talent có đang làm việc với đối tác này không
+            if (selectedTalent.currentPartnerId !== form.partnerId || selectedTalent.status !== "Working") {
+                setError("Nhân sự này không đang làm việc với đối tác đã chọn hoặc không ở trạng thái 'Đang làm việc'.");
                 setLoading(false);
                 return;
             }
@@ -272,9 +220,9 @@ export default function CreatePartnerContractPage() {
             setTimeout(() => {
                 navigate("/hr/contracts");
             }, 1500);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("❌ Lỗi tạo hợp đồng:", err);
-            setError(err.message || "Không thể tạo hợp đồng. Vui lòng thử lại.");
+            setError(err instanceof Error ? err.message : "Không thể tạo hợp đồng. Vui lòng thử lại.");
         } finally {
             setLoading(false);
         }
@@ -299,8 +247,8 @@ export default function CreatePartnerContractPage() {
                     </div>
 
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo Hợp Đồng Đối Tác Mới</h1>
-                        <p className="text-neutral-600">Thêm hợp đồng đối tác mới vào hệ thống</p>
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo Hợp Đồng Nhân Sự Mới</h1>
+                        <p className="text-neutral-600">Thêm hợp đồng nhân sự mới vào hệ thống</p>
                     </div>
                 </div>
 

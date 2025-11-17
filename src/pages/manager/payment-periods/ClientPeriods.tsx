@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { clientPaymentPeriodService } from "../../../services/ClientPaymentPeriod";
 import type { ClientPaymentPeriod } from "../../../services/ClientPaymentPeriod";
 import { clientContractPaymentService } from "../../../services/ClientContractPayment";
 import type { ClientContractPayment } from "../../../services/ClientContractPayment";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { clientContractService, type ClientContract } from "../../../services/ClientContract";
+import { clientDocumentService, type ClientDocument } from "../../../services/ClientDocument";
+import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check } from "lucide-react";
+import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check, FileText, Eye, Download } from "lucide-react";
 
 const ManagerClientPeriods: React.FC = () => {
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
@@ -26,6 +29,16 @@ const ManagerClientPeriods: React.FC = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
   const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
+  
+  // Map contract ID to contract number for display
+  const [contractsMap, setContractsMap] = useState<Map<number, ClientContract>>(new Map());
+  
+  // Modal hiển thị tài liệu
+  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [selectedPaymentForDocuments, setSelectedPaymentForDocuments] = useState<ClientContractPayment | null>(null);
+  const [documents, setDocuments] = useState<ClientDocument[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
 
   // Lấy danh sách công ty có hợp đồng
   useEffect(() => {
@@ -86,16 +99,72 @@ const ManagerClientPeriods: React.FC = () => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
     try {
-      const data = await clientContractPaymentService.getAll({ 
-        clientPeriodId: periodId, 
-        excludeDeleted: true 
+      const [paymentsData, contractsData] = await Promise.all([
+        clientContractPaymentService.getAll({ 
+          clientPeriodId: periodId, 
+          excludeDeleted: true 
+        }),
+        clientContractService.getAll({ excludeDeleted: true })
+      ]);
+      
+      setPayments(paymentsData?.items ?? paymentsData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, ClientContract>();
+      contracts.forEach((c: ClientContract) => {
+        contractMap.set(c.id, c);
       });
-      setPayments(data?.items ?? data ?? []);
+      setContractsMap(contractMap);
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingPayments(false);
     }
+  };
+
+  // Load document types
+  useEffect(() => {
+    const loadDocumentTypes = async () => {
+      try {
+        const data = await documentTypeService.getAll({ excludeDeleted: true });
+        const types = Array.isArray(data) ? data : (data?.items || []);
+        const typesMap = new Map<number, DocumentType>();
+        types.forEach((type: DocumentType) => {
+          typesMap.set(type.id, type);
+        });
+        setDocumentTypes(typesMap);
+      } catch (e) {
+        console.error("Error loading document types:", e);
+      }
+    };
+    loadDocumentTypes();
+  }, []);
+
+  // Hàm mở modal hiển thị tài liệu
+  const handleViewDocuments = async (payment: ClientContractPayment) => {
+    setSelectedPaymentForDocuments(payment);
+    setShowDocumentsModal(true);
+    setLoadingDocuments(true);
+    try {
+      const data = await clientDocumentService.getAll({
+        clientContractPaymentId: payment.id,
+        excludeDeleted: true
+      });
+      setDocuments(Array.isArray(data) ? data : (data?.items || []));
+    } catch (e) {
+      console.error("Error loading documents:", e);
+      setDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  // Hàm đóng modal tài liệu
+  const handleCloseDocumentsModal = () => {
+    setShowDocumentsModal(false);
+    setSelectedPaymentForDocuments(null);
+    setDocuments([]);
   };
 
   // Hàm hủy (Cancelled) - Manager
@@ -131,8 +200,9 @@ const ManagerClientPeriods: React.FC = () => {
       }
 
       setTimeout(() => setStatusUpdateSuccess(false), 3000);
-    } catch (err: any) {
-      setStatusUpdateError(err.response?.data?.message || err.message || 'Không thể hủy thanh toán');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể hủy thanh toán');
       setTimeout(() => setStatusUpdateError(null), 5000);
     } finally {
       setUpdatingStatus(false);
@@ -172,8 +242,9 @@ const ManagerClientPeriods: React.FC = () => {
       }
 
       setTimeout(() => setStatusUpdateSuccess(false), 3000);
-    } catch (err: any) {
-      setStatusUpdateError(err.response?.data?.message || err.message || 'Không thể duyệt thanh toán');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể duyệt thanh toán');
       setTimeout(() => setStatusUpdateError(null), 5000);
     } finally {
       setUpdatingStatus(false);
@@ -379,7 +450,7 @@ const ManagerClientPeriods: React.FC = () => {
                   <select
                     className="px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm"
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    onChange={(e) => setStatusFilter(e.target.value as string | 'ALL')}
                   >
                     <option value="ALL">Tất cả trạng thái</option>
                     {Object.keys(statusCounts).map(s => (
@@ -404,11 +475,11 @@ const ManagerClientPeriods: React.FC = () => {
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
                       <th className="p-3 border-b text-left">ID</th>
-                      <th className="p-3 border-b text-left">Contract</th>
+                      <th className="p-3 border-b text-left">Hợp đồng</th>
                       <th className="p-3 border-b text-left">Giờ bill</th>
                       <th className="p-3 border-b text-left">Tính toán</th>
-                      <th className="p-3 border-b text-left">Invoice</th>
-                      <th className="p-3 border-b text-left">Received</th>
+                      <th className="p-3 border-b text-left">Hóa đơn</th>
+                      <th className="p-3 border-b text-left">Đã nhận</th>
                       <th className="p-3 border-b text-left">Trạng thái</th>
                       <th className="p-3 border-b text-left">Tiến độ</th>
                       <th className="p-3 border-b text-left">Thao tác</th>
@@ -418,11 +489,23 @@ const ManagerClientPeriods: React.FC = () => {
                     {filteredPayments.map(p => {
                       const availableStatuses = getAvailableStatuses(p.status);
                       const canChangeStatus = availableStatuses.length > 0;
+                      const contract = contractsMap.get(p.clientContractId);
                       
                       return (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="p-3">{p.id}</td>
-                          <td className="p-3">{p.clientContractId}</td>
+                          <td className="p-3">
+                            {contract ? (
+                              <Link
+                                to={`/manager/contracts/clients/${p.clientContractId}`}
+                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
+                              >
+                                {contract.contractNumber || p.clientContractId}
+                              </Link>
+                            ) : (
+                              p.clientContractId
+                            )}
+                          </td>
                           <td className="p-3">{p.billableHours}</td>
                           <td className="p-3">{p.calculatedAmount ?? "-"}</td>
                           <td className="p-3">{p.invoicedAmount ?? "-"}</td>
@@ -447,28 +530,37 @@ const ManagerClientPeriods: React.FC = () => {
                             })()}
                           </td>
                           <td className="p-3">
-                            {p.status === 'ReadyForInvoice' ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => handleCancel(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <X className="w-4 h-4" />
-                                  Hủy
-                                </button>
-                                <button
-                                  onClick={() => handleApprove(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <Check className="w-4 h-4" />
-                                  Đồng ý
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">Không thể đổi</span>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {p.status === 'ReadyForInvoice' ? (
+                                <>
+                                  <button
+                                    onClick={() => handleCancel(p)}
+                                    disabled={updatingStatus}
+                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    Hủy
+                                  </button>
+                                  <button
+                                    onClick={() => handleApprove(p)}
+                                    disabled={updatingStatus}
+                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    Đồng ý
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
+                              )}
+                              <button
+                                onClick={() => handleViewDocuments(p)}
+                                className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <FileText className="w-4 h-4" />
+                                Tài liệu
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -480,6 +572,111 @@ const ManagerClientPeriods: React.FC = () => {
           </div>
         )}
 
+        {/* Modal hiển thị tài liệu */}
+        {showDocumentsModal && selectedPaymentForDocuments && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseDocumentsModal();
+              }
+            }}
+          >
+            <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl border border-neutral-200 max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Tài liệu thanh toán</h3>
+                  <p className="text-sm text-neutral-600 mt-1">
+                    Hợp đồng: {contractsMap.get(selectedPaymentForDocuments.clientContractId)?.contractNumber || selectedPaymentForDocuments.clientContractId}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseDocumentsModal}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors p-2 hover:bg-neutral-100 rounded-lg"
+                  aria-label="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingDocuments ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mr-3"></div>
+                    <span className="text-gray-600">Đang tải tài liệu...</span>
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="w-12 h-12 text-neutral-400 mx-auto mb-3" />
+                    <p className="text-neutral-500">Chưa có tài liệu nào cho thanh toán này</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-4 rounded-xl border border-neutral-200 hover:border-primary-300 hover:shadow-sm transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="w-5 h-5 text-primary-600 flex-shrink-0" />
+                              <h4 className="font-semibold text-gray-900 truncate">{doc.fileName}</h4>
+                            </div>
+                            {documentTypes.get(doc.documentTypeId) && (
+                              <p className="text-sm text-neutral-600 mb-1">
+                                Loại: {documentTypes.get(doc.documentTypeId)?.typeName}
+                              </p>
+                            )}
+                            {doc.description && (
+                              <p className="text-sm text-neutral-500 mb-2">{doc.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-xs text-neutral-500">
+                              {doc.source && (
+                                <span>Nguồn: {doc.source}</span>
+                              )}
+                              {doc.uploadTimestamp && (
+                                <span>
+                                  {new Date(doc.uploadTimestamp).toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <a
+                              href={doc.filePath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Xem
+                            </a>
+                            <a
+                              href={doc.filePath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <Download className="w-4 h-4" />
+                              Tải xuống
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { partnerPaymentPeriodService } from "../../../services/PartnerPaymentPeriod";
 import type { PartnerPaymentPeriod } from "../../../services/PartnerPaymentPeriod";
 import { partnerContractPaymentService } from "../../../services/PartnerContractPayment";
@@ -7,6 +8,7 @@ import { partnerService, type Partner } from "../../../services/Partner";
 import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
 import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
 import { partnerDocumentService, type PartnerDocumentCreate } from "../../../services/PartnerDocument";
+import { talentService, type Talent } from "../../../services/Talent";
 import { uploadFile } from "../../../utils/firebaseStorage";
 import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -38,6 +40,10 @@ const HRPartnerPeriods: React.FC = () => {
   const [createDocumentSuccess, setCreateDocumentSuccess] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  
+  // Maps để lưu contracts và talents
+  const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
+  const [talentsMap, setTalentsMap] = useState<Map<number, Talent>>(new Map());
   
   const [documentFormData, setDocumentFormData] = useState({
     documentTypeId: 0,
@@ -101,11 +107,32 @@ const HRPartnerPeriods: React.FC = () => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
     try {
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: periodId, 
-        excludeDeleted: true 
+      const [paymentsData, contractsData, talentsData] = await Promise.all([
+        partnerContractPaymentService.getAll({ 
+          partnerPeriodId: periodId, 
+          excludeDeleted: true 
+        }),
+        partnerContractService.getAll({ excludeDeleted: true }),
+        talentService.getAll({ excludeDeleted: true })
+      ]);
+      
+      setPayments(paymentsData?.items ?? paymentsData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, PartnerContract>();
+      contracts.forEach((c: PartnerContract) => {
+        contractMap.set(c.id, c);
       });
-      setPayments(data?.items ?? data ?? []);
+      setContractsMap(contractMap);
+      
+      // Tạo talents map
+      const talents = talentsData?.items ?? talentsData ?? [];
+      const talentMap = new Map<number, Talent>();
+      talents.forEach((t: Talent) => {
+        talentMap.set(t.id, t);
+      });
+      setTalentsMap(talentMap);
     } catch (e) {
       console.error(e);
     } finally {
@@ -130,11 +157,32 @@ const HRPartnerPeriods: React.FC = () => {
       referencedClientDocumentId: 0
     });
 
-    // Load document types
+    // Load document types, contracts và talents
     setLoadingDocumentTypes(true);
     try {
-      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const [typesData, contractsData, talentsData] = await Promise.all([
+        documentTypeService.getAll({ excludeDeleted: true }),
+        partnerContractService.getAll({ excludeDeleted: true }),
+        talentService.getAll({ excludeDeleted: true })
+      ]);
+      
       setDocumentTypes(typesData?.items ?? typesData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, PartnerContract>();
+      contracts.forEach((c: PartnerContract) => {
+        contractMap.set(c.id, c);
+      });
+      setContractsMap(contractMap);
+      
+      // Tạo talents map
+      const talents = talentsData?.items ?? talentsData ?? [];
+      const talentMap = new Map<number, Talent>();
+      talents.forEach((t: Talent) => {
+        talentMap.set(t.id, t);
+      });
+      setTalentsMap(talentMap);
     } catch (e) {
       console.error(e);
     } finally {
@@ -249,8 +297,9 @@ const HRPartnerPeriods: React.FC = () => {
       setTimeout(() => {
         handleCloseCreateDocumentModal();
       }, 3000);
-    } catch (err: any) {
-      setCreateDocumentError(err.response?.data?.message || err.message || 'Không thể tạo tài liệu');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setCreateDocumentError(error.response?.data?.message || error.message || 'Không thể tạo tài liệu');
     } finally {
       setSubmittingDocument(false);
     }
@@ -311,20 +360,20 @@ const HRPartnerPeriods: React.FC = () => {
 
       <div className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Kỳ thanh toán Đối tác</h1>
-          <p className="text-neutral-600 mt-1">Chọn đối tác để xem các kỳ thanh toán</p>
+          <h1 className="text-3xl font-bold text-gray-900">Kỳ Thanh Toán Nhân Sự</h1>
+          <p className="text-neutral-600 mt-1">Chọn nhân sự để xem các kỳ thanh toán</p>
         </div>
 
         {/* Danh sách đối tác */}
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách đối tác có hợp đồng</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách nhân sự có hợp đồng</h2>
           {loadingPartners ? (
             <div className="flex items-center justify-center py-10 text-gray-600">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mr-3" />
-              Đang tải danh sách đối tác...
+              Đang tải danh sách nhân sự...
             </div>
           ) : partners.length === 0 ? (
-            <div className="text-gray-500 text-sm py-4">Chưa có đối tác nào có hợp đồng</div>
+            <div className="text-gray-500 text-sm py-4">Chưa có nhân sự nào có hợp đồng</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {partners.map(partner => (
@@ -428,7 +477,7 @@ const HRPartnerPeriods: React.FC = () => {
                 <select
                   className="px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                    onChange={(e) => setStatusFilter(e.target.value as string | 'ALL')}
                 >
                   <option value="ALL">Tất cả trạng thái</option>
                   {Object.keys(statusCounts).map(s => (
@@ -467,8 +516,8 @@ const HRPartnerPeriods: React.FC = () => {
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
                       <th className="p-3 border-b text-left">ID</th>
-                      <th className="p-3 border-b text-left">Contract</th>
-                      <th className="p-3 border-b text-left">Talent</th>
+                      <th className="p-3 border-b text-left">Hợp đồng</th>
+                      <th className="p-3 border-b text-left">Nhân sự</th>
                       <th className="p-3 border-b text-left">Giờ thực tế</th>
                       <th className="p-3 border-b text-left">OT</th>
                       <th className="p-3 border-b text-left">Tính toán</th>
@@ -479,11 +528,24 @@ const HRPartnerPeriods: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredPayments.map(p => {
+                      const contract = contractsMap.get(p.partnerContractId);
+                      const talent = talentsMap.get(p.talentId);
                       return (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="p-3">{p.id}</td>
-                          <td className="p-3">{p.partnerContractId}</td>
-                          <td className="p-3">{p.talentId}</td>
+                          <td className="p-3">
+                            {contract ? (
+                              <Link
+                                to={`/hr/contracts/${p.partnerContractId}`}
+                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
+                              >
+                                {contract.contractNumber || p.partnerContractId}
+                              </Link>
+                            ) : (
+                              p.partnerContractId
+                            )}
+                          </td>
+                          <td className="p-3">{talent?.fullName || p.talentId}</td>
                           <td className="p-3">{p.actualWorkHours}</td>
                           <td className="p-3">{p.otHours ?? "-"}</td>
                           <td className="p-3">{p.calculatedAmount ?? "-"}</td>
@@ -542,6 +604,32 @@ const HRPartnerPeriods: React.FC = () => {
 
               <form onSubmit={handleCreateDocument} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng
+                    </label>
+                    <input
+                      type="text"
+                      value={contractsMap.get(selectedPayment.partnerContractId)?.contractNumber || selectedPayment.partnerContractId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nhân sự
+                    </label>
+                    <input
+                      type="text"
+                      value={talentsMap.get(selectedPayment.talentId)?.fullName || selectedPayment.talentId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Partner Contract Payment ID

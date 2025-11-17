@@ -28,7 +28,7 @@ export const sidebarItems = [
     icon: CalendarClock,
     subItems: [
       { label: 'Khách hàng', href: '/manager/payment-periods/clients', icon: Wallet },
-      { label: 'Đối tác', href: '/manager/payment-periods/partners', icon: Wallet },
+      { label: 'Nhân sự', href: '/manager/payment-periods/partners', icon: Wallet },
     ]
   },
   {

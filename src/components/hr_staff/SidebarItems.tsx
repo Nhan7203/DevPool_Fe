@@ -58,7 +58,7 @@ export const sidebarItems = [
     // ]
   },
   {
-    label: 'Tạo tài liệu đối tác',
+    label: 'Tạo tài liệu nhân sự',
     href: '/hr/payment-periods/partners',
     icon: FileUp
   },

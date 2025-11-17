@@ -37,6 +37,31 @@ export default function ListClientContracts() {
   // Store client company and project data for display
   const [clientsMap, setClientsMap] = useState<Map<number, ClientCompany>>(new Map());
   const [projectsMap, setProjectsMap] = useState<Map<number, Project>>(new Map());
+  
+  // Filter states
+  const [filterClientId, setFilterClientId] = useState<number | null>(null);
+  const [filterProjectId, setFilterProjectId] = useState<number | null>(null);
+  const [clientSearch, setClientSearch] = useState<string>('');
+  const [projectSearch, setProjectSearch] = useState<string>('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  
+  // Get arrays for filtering
+  const clients = Array.from(clientsMap.values());
+  const projects = Array.from(projectsMap.values());
+  
+  const filteredClients = clients.filter(c =>
+    !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase())
+  );
+  
+  // Filter projects by selected client if client filter is active
+  const projectsByClient = filterClientId !== null
+    ? projects.filter(p => p.clientCompanyId === filterClientId)
+    : projects;
+  
+  const filteredProjects = projectsByClient.filter(p =>
+    !projectSearch || p.name.toLowerCase().includes(projectSearch.toLowerCase())
+  );
 
   // Stats data
   const normalizeStatus = (status?: string | null) => (status ?? '').toLowerCase();
@@ -174,9 +199,15 @@ export default function ListClientContracts() {
       const normalizedFilter = filterStatus.toLowerCase();
       filtered = filtered.filter(c => matchesStatus(c.status, normalizedFilter));
     }
+    if (filterClientId !== null) {
+      filtered = filtered.filter(c => c.clientCompanyId === filterClientId);
+    }
+    if (filterProjectId !== null) {
+      filtered = filtered.filter(c => c.projectId === filterProjectId);
+    }
     setFilteredContracts(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, contracts, clientsMap, projectsMap]);
+  }, [searchTerm, filterStatus, filterClientId, filterProjectId, contracts, clientsMap, projectsMap]);
   
   const totalPages = Math.ceil(filteredContracts.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -202,6 +233,24 @@ export default function ListClientContracts() {
     const maxIndex = Math.max(0, stats.length - statsPageSize);
     setStatsStartIndex(prev => Math.min(prev, maxIndex));
   }, [stats.length]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dropdown-container')) {
+        setIsClientDropdownOpen(false);
+        setIsProjectDropdownOpen(false);
+      }
+    };
+
+    if (isClientDropdownOpen || isProjectDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isClientDropdownOpen, isProjectDropdownOpen]);
 
   const getClientName = (clientCompanyId: number) => {
     return clientsMap.get(clientCompanyId)?.name || '—';
@@ -370,7 +419,7 @@ export default function ListClientContracts() {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6 animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6 animate-fade-in relative z-30">
           <div className="p-6">
             <div className="flex flex-wrap items-center gap-4">
               <div className="relative flex-1 min-w-[300px]">
@@ -395,7 +444,8 @@ export default function ListClientContracts() {
 
             {showFilters && (
               <div className="mt-6 pt-6 border-t border-neutral-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Filter by Status */}
                   <div className="relative">
                     <CheckCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                     <select 
@@ -412,9 +462,177 @@ export default function ListClientContracts() {
                       <option value="rejected">Đã từ chối</option>
                     </select>
                   </div>
+                  
+                  {/* Filter by Client */}
+                  <div className="relative dropdown-container">
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Khách hàng</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsClientDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-3 py-2 border border-neutral-200 rounded-lg bg-white text-left focus:border-primary-500 focus:ring-primary-500 text-sm"
+                    >
+                      <div className="flex items-center gap-2 text-neutral-700">
+                        <Building2 className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {filterClientId !== null
+                            ? clients.find(c => c.id === filterClientId)?.name || "Chọn khách hàng"
+                            : "Tất cả khách hàng"}
+                        </span>
+                      </div>
+                      <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                    </button>
+                    {isClientDropdownOpen && (
+                      <div className="absolute z-50 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={clientSearch}
+                              onChange={(e) => setClientSearch(e.target.value)}
+                              placeholder="Tìm khách hàng..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterClientId(null);
+                              setClientSearch("");
+                              setIsClientDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              filterClientId === null
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả khách hàng
+                          </button>
+                          {filteredClients.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy khách hàng phù hợp</p>
+                          ) : (
+                            filteredClients.map(c => (
+                              <button
+                                type="button"
+                                key={c.id}
+                                onClick={() => {
+                                  setFilterClientId(c.id);
+                                  setClientSearch("");
+                                  setIsClientDropdownOpen(false);
+                                  // Reset project filter if current project doesn't belong to selected client
+                                  if (filterProjectId !== null) {
+                                    const selectedProject = projects.find(p => p.id === filterProjectId);
+                                    if (!selectedProject || selectedProject.clientCompanyId !== c.id) {
+                                      setFilterProjectId(null);
+                                    }
+                                  }
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  filterClientId === c.id
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {c.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Filter by Project */}
+                  <div className="relative dropdown-container">
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Dự án</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-3 py-2 border border-neutral-200 rounded-lg bg-white text-left focus:border-primary-500 focus:ring-primary-500 text-sm"
+                    >
+                      <div className="flex items-center gap-2 text-neutral-700">
+                        <Briefcase className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {filterProjectId !== null
+                            ? projects.find(p => p.id === filterProjectId)?.name || "Chọn dự án"
+                            : "Tất cả dự án"}
+                        </span>
+                      </div>
+                      <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                    </button>
+                    {isProjectDropdownOpen && (
+                      <div className="absolute z-50 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={projectSearch}
+                              onChange={(e) => setProjectSearch(e.target.value)}
+                              placeholder="Tìm dự án..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterProjectId(null);
+                              setProjectSearch("");
+                              setIsProjectDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              filterProjectId === null
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả dự án
+                          </button>
+                          {filteredProjects.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
+                          ) : (
+                            filteredProjects.map(p => (
+                              <button
+                                type="button"
+                                key={p.id}
+                                onClick={() => {
+                                  setFilterProjectId(p.id);
+                                  setProjectSearch("");
+                                  setIsProjectDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  filterProjectId === p.id
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {p.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Reset Button */}
                   <button 
-                    onClick={() => { setFilterStatus(''); setSearchTerm(''); }}
-                    className="group flex items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105 transform"
+                    onClick={() => { 
+                      setFilterStatus(''); 
+                      setSearchTerm('');
+                      setFilterClientId(null);
+                      setFilterProjectId(null);
+                      setClientSearch('');
+                      setProjectSearch('');
+                    }}
+                    className="group flex items-center justify-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105 transform self-end"
                   >
                     <span className="font-medium">Đặt lại</span>
                   </button>

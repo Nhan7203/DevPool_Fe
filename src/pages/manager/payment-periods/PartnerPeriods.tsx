@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { partnerPaymentPeriodService } from "../../../services/PartnerPaymentPeriod";
 import type { PartnerPaymentPeriod } from "../../../services/PartnerPaymentPeriod";
 import { partnerContractPaymentService } from "../../../services/PartnerContractPayment";
 import type { PartnerContractPayment } from "../../../services/PartnerContractPayment";
 import { partnerService, type Partner } from "../../../services/Partner";
 import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
+import { partnerDocumentService, type PartnerDocument } from "../../../services/PartnerDocument";
+import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
+import { talentService, type Talent } from "../../../services/Talent";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check } from "lucide-react";
+import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check, FileText, Eye, Download } from "lucide-react";
 
 const ManagerPartnerPeriods: React.FC = () => {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -26,6 +30,17 @@ const ManagerPartnerPeriods: React.FC = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
   const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
+  
+  // Maps để lưu contracts và talents
+  const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
+  const [talentsMap, setTalentsMap] = useState<Map<number, Talent>>(new Map());
+  
+  // Modal hiển thị tài liệu
+  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [selectedPaymentForDocuments, setSelectedPaymentForDocuments] = useState<PartnerContractPayment | null>(null);
+  const [documents, setDocuments] = useState<PartnerDocument[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
 
   // Lấy danh sách đối tác có hợp đồng
   useEffect(() => {
@@ -80,16 +95,81 @@ const ManagerPartnerPeriods: React.FC = () => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
     try {
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: periodId, 
-        excludeDeleted: true 
+      const [paymentsData, contractsData, talentsData] = await Promise.all([
+        partnerContractPaymentService.getAll({ 
+          partnerPeriodId: periodId, 
+          excludeDeleted: true 
+        }),
+        partnerContractService.getAll({ excludeDeleted: true }),
+        talentService.getAll({ excludeDeleted: true })
+      ]);
+      
+      setPayments(paymentsData?.items ?? paymentsData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, PartnerContract>();
+      contracts.forEach((c: PartnerContract) => {
+        contractMap.set(c.id, c);
       });
-      setPayments(data?.items ?? data ?? []);
+      setContractsMap(contractMap);
+      
+      // Tạo talents map
+      const talents = talentsData?.items ?? talentsData ?? [];
+      const talentMap = new Map<number, Talent>();
+      talents.forEach((t: Talent) => {
+        talentMap.set(t.id, t);
+      });
+      setTalentsMap(talentMap);
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingPayments(false);
     }
+  };
+
+  // Load document types
+  useEffect(() => {
+    const loadDocumentTypes = async () => {
+      try {
+        const data = await documentTypeService.getAll({ excludeDeleted: true });
+        const types = Array.isArray(data) ? data : (data?.items || []);
+        const typesMap = new Map<number, DocumentType>();
+        types.forEach((type: DocumentType) => {
+          typesMap.set(type.id, type);
+        });
+        setDocumentTypes(typesMap);
+      } catch (e) {
+        console.error("Error loading document types:", e);
+      }
+    };
+    loadDocumentTypes();
+  }, []);
+
+  // Hàm mở modal hiển thị tài liệu
+  const handleViewDocuments = async (payment: PartnerContractPayment) => {
+    setSelectedPaymentForDocuments(payment);
+    setShowDocumentsModal(true);
+    setLoadingDocuments(true);
+    try {
+      const data = await partnerDocumentService.getAll({
+        partnerContractPaymentId: payment.id,
+        excludeDeleted: true
+      });
+      setDocuments(Array.isArray(data) ? data : (data?.items || []));
+    } catch (e) {
+      console.error("Error loading documents:", e);
+      setDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  // Hàm đóng modal tài liệu
+  const handleCloseDocumentsModal = () => {
+    setShowDocumentsModal(false);
+    setSelectedPaymentForDocuments(null);
+    setDocuments([]);
   };
 
   // Hàm từ chối (Rejected) - Manager
@@ -124,8 +204,9 @@ const ManagerPartnerPeriods: React.FC = () => {
       }
 
       setTimeout(() => setStatusUpdateSuccess(false), 3000);
-    } catch (err: any) {
-      setStatusUpdateError(err.response?.data?.message || err.message || 'Không thể từ chối thanh toán');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể từ chối thanh toán');
       setTimeout(() => setStatusUpdateError(null), 5000);
     } finally {
       setUpdatingStatus(false);
@@ -164,8 +245,9 @@ const ManagerPartnerPeriods: React.FC = () => {
       }
 
       setTimeout(() => setStatusUpdateSuccess(false), 3000);
-    } catch (err: any) {
-      setStatusUpdateError(err.response?.data?.message || err.message || 'Không thể chấp nhận thanh toán');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể chấp nhận thanh toán');
       setTimeout(() => setStatusUpdateError(null), 5000);
     } finally {
       setUpdatingStatus(false);
@@ -238,20 +320,20 @@ const ManagerPartnerPeriods: React.FC = () => {
 
       <div className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Kỳ thanh toán Đối tác</h1>
-          <p className="text-neutral-600 mt-1">Chọn đối tác để xem và quản lý các kỳ thanh toán</p>
+          <h1 className="text-3xl font-bold text-gray-900">Kỳ Thanh Toán Nhân Sự</h1>
+          <p className="text-neutral-600 mt-1">Chọn nhân sự để xem và quản lý các kỳ thanh toán</p>
         </div>
 
         {/* Danh sách đối tác */}
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách đối tác có hợp đồng</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách nhân sự có hợp đồng</h2>
           {loadingPartners ? (
             <div className="flex items-center justify-center py-10 text-gray-600">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mr-3" />
-              Đang tải danh sách đối tác...
+              Đang tải danh sách nhân sự...
             </div>
           ) : partners.length === 0 ? (
-            <div className="text-gray-500 text-sm py-4">Chưa có đối tác nào có hợp đồng</div>
+            <div className="text-gray-500 text-sm py-4">Chưa có nhân sự nào có hợp đồng</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {partners.map(partner => (
@@ -356,7 +438,7 @@ const ManagerPartnerPeriods: React.FC = () => {
                   <select
                     className="px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm"
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    onChange={(e) => setStatusFilter(e.target.value as string | 'ALL')}
                   >
                     <option value="ALL">Tất cả trạng thái</option>
                     {Object.keys(statusCounts).map(s => (
@@ -381,8 +463,8 @@ const ManagerPartnerPeriods: React.FC = () => {
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
                       <th className="p-3 border-b text-left">ID</th>
-                      <th className="p-3 border-b text-left">Contract</th>
-                      <th className="p-3 border-b text-left">Talent</th>
+                      <th className="p-3 border-b text-left">Hợp đồng</th>
+                      <th className="p-3 border-b text-left">Nhân sự</th>
                       <th className="p-3 border-b text-left">Giờ thực tế</th>
                       <th className="p-3 border-b text-left">OT</th>
                       <th className="p-3 border-b text-left">Tính toán</th>
@@ -394,11 +476,24 @@ const ManagerPartnerPeriods: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredPayments.map(p => {
+                      const contract = contractsMap.get(p.partnerContractId);
+                      const talent = talentsMap.get(p.talentId);
                       return (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="p-3">{p.id}</td>
-                          <td className="p-3">{p.partnerContractId}</td>
-                          <td className="p-3">{p.talentId}</td>
+                          <td className="p-3">
+                            {contract ? (
+                              <Link
+                                to={`/manager/contracts/devs/${p.partnerContractId}`}
+                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
+                              >
+                                {contract.contractNumber || p.partnerContractId}
+                              </Link>
+                            ) : (
+                              p.partnerContractId
+                            )}
+                          </td>
+                          <td className="p-3">{talent?.fullName || p.talentId}</td>
                           <td className="p-3">{p.actualWorkHours}</td>
                           <td className="p-3">{p.otHours ?? "-"}</td>
                           <td className="p-3">{p.calculatedAmount ?? "-"}</td>
@@ -423,28 +518,37 @@ const ManagerPartnerPeriods: React.FC = () => {
                             })()}
                           </td>
                           <td className="p-3">
-                            {p.status === 'PendingApproval' ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => handleReject(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <X className="w-4 h-4" />
-                                  Từ chối
-                                </button>
-                                <button
-                                  onClick={() => handleApprove(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <Check className="w-4 h-4" />
-                                  Chấp nhận
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">Không thể đổi</span>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {p.status === 'PendingApproval' ? (
+                                <>
+                                  <button
+                                    onClick={() => handleReject(p)}
+                                    disabled={updatingStatus}
+                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    Từ chối
+                                  </button>
+                                  <button
+                                    onClick={() => handleApprove(p)}
+                                    disabled={updatingStatus}
+                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    Chấp nhận
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
+                              )}
+                              <button
+                                onClick={() => handleViewDocuments(p)}
+                                className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <FileText className="w-4 h-4" />
+                                Tài liệu
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -456,6 +560,112 @@ const ManagerPartnerPeriods: React.FC = () => {
           </div>
         )}
 
+        {/* Modal hiển thị tài liệu */}
+        {showDocumentsModal && selectedPaymentForDocuments && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseDocumentsModal();
+              }
+            }}
+          >
+            <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl border border-neutral-200 max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Tài liệu thanh toán</h3>
+                  <p className="text-sm text-neutral-600 mt-1">
+                    Hợp đồng: {contractsMap.get(selectedPaymentForDocuments.partnerContractId)?.contractNumber || selectedPaymentForDocuments.partnerContractId} | 
+                    Nhân sự: {talentsMap.get(selectedPaymentForDocuments.talentId)?.fullName || selectedPaymentForDocuments.talentId}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseDocumentsModal}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors p-2 hover:bg-neutral-100 rounded-lg"
+                  aria-label="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingDocuments ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mr-3"></div>
+                    <span className="text-gray-600">Đang tải tài liệu...</span>
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="w-12 h-12 text-neutral-400 mx-auto mb-3" />
+                    <p className="text-neutral-500">Chưa có tài liệu nào cho thanh toán này</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-4 rounded-xl border border-neutral-200 hover:border-primary-300 hover:shadow-sm transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="w-5 h-5 text-primary-600 flex-shrink-0" />
+                              <h4 className="font-semibold text-gray-900 truncate">{doc.fileName}</h4>
+                            </div>
+                            {documentTypes.get(doc.documentTypeId) && (
+                              <p className="text-sm text-neutral-600 mb-1">
+                                Loại: {documentTypes.get(doc.documentTypeId)?.typeName}
+                              </p>
+                            )}
+                            {doc.description && (
+                              <p className="text-sm text-neutral-500 mb-2">{doc.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-xs text-neutral-500">
+                              {doc.source && (
+                                <span>Nguồn: {doc.source}</span>
+                              )}
+                              {doc.uploadTimestamp && (
+                                <span>
+                                  {new Date(doc.uploadTimestamp).toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <a
+                              href={doc.filePath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Xem
+                            </a>
+                            <a
+                              href={doc.filePath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <Download className="w-4 h-4" />
+                              Tải xuống
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

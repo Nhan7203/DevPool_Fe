@@ -129,6 +129,8 @@ import AccountantDashboard from '../pages/accountant_staff/Dashboard';
 import AccountantClientPeriods from '../pages/accountant_staff/payment-periods/ClientPeriods';
 import AccountantPartnerPeriods from '../pages/accountant_staff/payment-periods/PartnerPeriods';
 import AccountantDocumentsList from '../pages/accountant_staff/documents/List';
+import AccountantClientContractDetail from '../pages/accountant_staff/contracts/Detail';
+import AccountantPartnerContractDetail from '../pages/accountant_staff/contracts/PartnerDetail';
 
 // ========================================
 // DEVELOPER PAGES
@@ -362,6 +364,8 @@ const AppRouter: React.FC = () => {
             <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
             <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
             <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
+            <Route path="/accountant/contracts/clients/:id" element={<AccountantClientContractDetail />} />
+            <Route path="/accountant/contracts/partners/:id" element={<AccountantPartnerContractDetail />} />
           </Route>
         </Route>
 

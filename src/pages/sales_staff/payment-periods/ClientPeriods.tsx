@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { clientPaymentPeriodService } from "../../../services/ClientPaymentPeriod";
 import type { ClientPaymentPeriod } from "../../../services/ClientPaymentPeriod";
 import { clientContractPaymentService } from "../../../services/ClientContractPayment";
@@ -38,6 +39,9 @@ const SalesClientPeriods: React.FC = () => {
   const [createDocumentSuccess, setCreateDocumentSuccess] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  
+  // Map để lưu contracts
+  const [contractsMap, setContractsMap] = useState<Map<number, ClientContract>>(new Map());
   
   const [documentFormData, setDocumentFormData] = useState({
     documentTypeId: 0,
@@ -107,11 +111,23 @@ const SalesClientPeriods: React.FC = () => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
     try {
-      const data = await clientContractPaymentService.getAll({ 
-        clientPeriodId: periodId, 
-        excludeDeleted: true 
+      const [paymentsData, contractsData] = await Promise.all([
+        clientContractPaymentService.getAll({ 
+          clientPeriodId: periodId, 
+          excludeDeleted: true 
+        }),
+        clientContractService.getAll({ excludeDeleted: true })
+      ]);
+      
+      setPayments(paymentsData?.items ?? paymentsData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, ClientContract>();
+      contracts.forEach((c: ClientContract) => {
+        contractMap.set(c.id, c);
       });
-      setPayments(data?.items ?? data ?? []);
+      setContractsMap(contractMap);
     } catch (e) {
       console.error(e);
     } finally {
@@ -136,11 +152,23 @@ const SalesClientPeriods: React.FC = () => {
       referencedPartnerDocumentId: 0
     });
 
-    // Load document types
+    // Load document types và contracts
     setLoadingDocumentTypes(true);
     try {
-      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const [typesData, contractsData] = await Promise.all([
+        documentTypeService.getAll({ excludeDeleted: true }),
+        clientContractService.getAll({ excludeDeleted: true })
+      ]);
+      
       setDocumentTypes(typesData?.items ?? typesData ?? []);
+      
+      // Tạo contracts map
+      const contracts = contractsData?.items ?? contractsData ?? [];
+      const contractMap = new Map<number, ClientContract>();
+      contracts.forEach((c: ClientContract) => {
+        contractMap.set(c.id, c);
+      });
+      setContractsMap(contractMap);
     } catch (e) {
       console.error(e);
     } finally {
@@ -438,7 +466,7 @@ const SalesClientPeriods: React.FC = () => {
                 <select
                   className="px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  onChange={(e) => setStatusFilter(e.target.value as string | 'ALL')}
                 >
                   <option value="ALL">Tất cả trạng thái</option>
                   {Object.keys(statusCounts).map(s => (
@@ -476,21 +504,33 @@ const SalesClientPeriods: React.FC = () => {
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
                       <th className="p-3 border-b text-left">ID</th>
-                      <th className="p-3 border-b text-left">Contract</th>
+                      <th className="p-3 border-b text-left">Hợp đồng</th>
                       <th className="p-3 border-b text-left">Giờ bill</th>
                       <th className="p-3 border-b text-left">Tính toán</th>
-                      <th className="p-3 border-b text-left">Invoice</th>
-                      <th className="p-3 border-b text-left">Received</th>
+                      <th className="p-3 border-b text-left">Hóa đơn</th>
+                      <th className="p-3 border-b text-left">Đã nhận</th>
                       <th className="p-3 border-b text-left">Trạng thái</th>
                       <th className="p-3 border-b text-left">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredPayments.map(p => {
+                      const contract = contractsMap.get(p.clientContractId);
                       return (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="p-3">{p.id}</td>
-                          <td className="p-3">{p.clientContractId}</td>
+                          <td className="p-3">
+                            {contract ? (
+                              <Link
+                                to={`/sales/contracts/${p.clientContractId}`}
+                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
+                              >
+                                {contract.contractNumber || p.clientContractId}
+                              </Link>
+                            ) : (
+                              p.clientContractId
+                            )}
+                          </td>
                           <td className="p-3">{p.billableHours}</td>
                           <td className="p-3">{p.calculatedAmount ?? "-"}</td>
                           <td className="p-3">{p.invoicedAmount ?? "-"}</td>
@@ -549,6 +589,19 @@ const SalesClientPeriods: React.FC = () => {
 
               <form onSubmit={handleCreateDocument} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng
+                    </label>
+                    <input
+                      type="text"
+                      value={contractsMap.get(selectedPayment.clientContractId)?.contractNumber || selectedPayment.clientContractId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Client Contract Payment ID

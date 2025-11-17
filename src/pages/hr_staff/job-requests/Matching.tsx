@@ -7,6 +7,8 @@ import { jobRequestService, type JobRequest } from "../../../services/JobRequest
 import { talentService, type Talent } from "../../../services/Talent";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { locationService, type Location } from "../../../services/location";
+import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
+import { skillService, type Skill } from "../../../services/Skill";
 import { applyService } from "../../../services/Apply";
 import { talentApplicationService, TalentApplicationStatusConstants, type TalentApplication } from "../../../services/TalentApplication";
 import { decodeJWT } from "../../../services/Auth";
@@ -75,6 +77,94 @@ const formatLevel = (level?: number) => {
     return level !== undefined ? levelMap[level] || "N/A" : "N/A";
 };
 
+// Hàm tính điểm matching chi tiết cho CV không có trong kết quả backend
+const calculateMatchScore = async (
+    cv: TalentCV,
+    talent: Talent,
+    jobReq: JobRequest,
+    jobRoleLevel: JobRoleLevel | null,
+    jobLocation: Location | null
+): Promise<EnrichedMatchResult> => {
+    // Lấy skills của talent
+    const talentSkills = await talentSkillService.getAll({
+        talentId: talent.id,
+        excludeDeleted: true,
+    }) as TalentSkill[];
+    
+    // Lấy tất cả skills để map skillId -> skillName
+    const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
+    const skillMap = new Map<number, string>();
+    allSkills.forEach(skill => {
+        skillMap.set(skill.id, skill.name);
+    });
+    
+    // Lấy danh sách skill names của talent
+    const talentSkillNames = talentSkills.map(ts => skillMap.get(ts.skillId) || "").filter(Boolean);
+    
+    // Lấy danh sách skill names yêu cầu từ job request
+    const requiredSkillNames = jobReq.jobSkills?.map(js => js.skillName) || [];
+    
+    // So sánh skills
+    const matchedSkills: string[] = [];
+    const missingSkills: string[] = [];
+    
+    requiredSkillNames.forEach(skillName => {
+        if (talentSkillNames.includes(skillName)) {
+            matchedSkills.push(skillName);
+        } else {
+            missingSkills.push(skillName);
+        }
+    });
+    
+    // Tính điểm skills (50 điểm tối đa)
+    const totalRequiredSkills = requiredSkillNames.length;
+    const skillPoints = totalRequiredSkills > 0
+        ? Math.round((50.0 / totalRequiredSkills) * matchedSkills.length)
+        : 50;
+    
+    // Tính điểm working mode (10 điểm tối đa)
+    const jobWorkingMode = jobReq.workingMode ?? WorkingMode.None;
+    const talentWorkingMode = talent.workingMode ?? WorkingMode.None;
+    const workingModeRequired = jobWorkingMode !== WorkingMode.None;
+    const workingModeMatch = workingModeRequired
+        ? (talentWorkingMode !== WorkingMode.None && (talentWorkingMode & jobWorkingMode) !== 0)
+        : true;
+    const workingModePoints = workingModeRequired
+        ? (workingModeMatch ? 10 : 0)
+        : 10;
+    
+    // Tính điểm location (15 điểm tối đa)
+    const locationRequired = !!jobReq.locationId;
+    const talentLocationId = talent.locationId ?? null;
+    const isRemoteOrFlexible = workingModeRequired && (jobWorkingMode & (WorkingMode.Remote | WorkingMode.Hybrid)) !== 0;
+    const locationMatch = locationRequired ? talentLocationId === jobReq.locationId : true;
+    const locationPoints = isRemoteOrFlexible
+        ? 15 // Remote/Flexible thì cho đủ điểm
+        : locationRequired
+            ? (locationMatch ? 15 : 0)
+            : 15; // Nếu không yêu cầu thì cho đủ điểm
+    
+    // Tính điểm level (20 điểm tối đa)
+    // Kiểm tra xem CV có cùng jobRoleId với job request không
+    const levelMatch = cv.jobRoleId === jobRoleLevel?.jobRoleId;
+    const levelPoints = levelMatch ? 20 : 0;
+    
+    // Tính điểm availability bonus (+5 điểm nếu status === "Available")
+    const availabilityBonus = talent.status === "Available" ? 5 : 0;
+    
+    // Tổng điểm
+    const totalScore = skillPoints + workingModePoints + locationPoints + levelPoints + availabilityBonus;
+    
+    return {
+        talentCV: cv,
+        matchScore: totalScore,
+        matchedSkills: matchedSkills,
+        missingSkills: missingSkills,
+        levelMatch: levelMatch,
+        matchSummary: `Skills: ${matchedSkills.length}/${totalRequiredSkills}, WorkingMode: ${workingModeMatch ? "Match" : "No match"}, Location: ${locationMatch ? "Match" : "No match"}, Level: ${levelMatch ? "Match" : "No match"}${availabilityBonus > 0 ? ", Available bonus: +5" : ""}`,
+    };
+};
+
 export default function CVMatchingPage() {
     const { user } = useAuth();
     const [searchParams] = useSearchParams();
@@ -100,7 +190,7 @@ export default function CVMatchingPage() {
     // Search and pagination states
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
     
     const currentMatchingPath = `${location.pathname}${location.search}`;
 
@@ -211,32 +301,49 @@ export default function CVMatchingPage() {
                                     talentInfo: talentInfo,
                                 };
                             } else {
-                                // CV không có điểm số - tạo match result với điểm 0
-                                return {
-                                    talentCV: cv,
-                                    talentInfo: talentInfo,
-                                    matchScore: 0,
-                                    matchedSkills: [],
-                                    missingSkills: jobReq.jobSkills?.map(skill => skill.skillName) || [],
-                                    levelMatch: false,
-                                    matchSummary: "CV không khớp với yêu cầu tuyển dụng",
-                                };
+                                // CV không có điểm số - tính điểm chi tiết
+                                try {
+                                    const calculatedMatch = await calculateMatchScore(
+                                        cv,
+                                        talent,
+                                        jobReq,
+                                        level,
+                                        jobLocation
+                                    );
+                                    return {
+                                        ...calculatedMatch,
+                                        talentInfo: talentInfo,
+                                    };
+                                } catch (calcErr) {
+                                    console.warn("⚠️ Failed to calculate match score for CV:", cv.id, calcErr);
+                                    // Nếu không tính được, vẫn tạo với điểm 0
+                                    return {
+                                        talentCV: cv,
+                                        talentInfo: talentInfo,
+                                        matchScore: 0,
+                                        matchedSkills: [],
+                                        missingSkills: jobReq.jobSkills?.map((skill: { skillName: string }) => skill.skillName) || [],
+                                        levelMatch: false,
+                                        matchSummary: "Không thể tính điểm matching",
+                                    };
+                                }
                             }
                         } catch (err) {
                             console.warn("⚠️ Failed to load talent info for ID:", cv.talentId, err);
-                            // Nếu không load được talent info, vẫn tạo CV với điểm 0
+                            // Nếu không load được talent info, kiểm tra xem có match từ backend không
                             const match = matchMap.get(cv.id);
                             if (match) {
                                 return { ...match, talentInfo: undefined };
                             } else {
+                                // Nếu không có match và không load được talent, không thể tính điểm
                                 return {
                                     talentCV: cv,
                                     talentInfo: undefined,
                                     matchScore: 0,
                                     matchedSkills: [],
-                                    missingSkills: jobReq.jobSkills?.map(skill => skill.skillName) || [],
+                                    missingSkills: jobReq.jobSkills?.map((skill: { skillName: string }) => skill.skillName) || [],
                                     levelMatch: false,
-                                    matchSummary: "CV không khớp với yêu cầu tuyển dụng",
+                                    matchSummary: "Không thể tính điểm matching - thiếu thông tin talent",
                                 };
                             }
                         }
@@ -663,8 +770,9 @@ export default function CVMatchingPage() {
                             // Tính toán index thực tế trong danh sách đã filter
                             const actualIndex = startIndex + index;
                             
-                            // Nếu CV không có điểm số hoặc điểm = 0, hiển thị đơn giản
-                            if (!hasScore || cv.matchScore === 0) {
+                            // Nếu CV không có điểm số (undefined), hiển thị đơn giản
+                            // CV có điểm 0 vẫn hiển thị đầy đủ thông tin phân tích
+                            if (!hasScore && cv.matchScore === undefined) {
                                 return (
                                     <div
                                         key={cv.talentCV.id}
@@ -747,6 +855,8 @@ export default function CVMatchingPage() {
                             }
 
                             // CV có điểm số - hiển thị đầy đủ thông tin
+                            if (!match) return null; // Safety check
+                            
                             const totalRequiredSkills = (match.matchedSkills?.length || 0) + (match.missingSkills?.length || 0);
                             const skillMatchPercent = totalRequiredSkills > 0
                                 ? Math.round(((match.matchedSkills?.length || 0) / totalRequiredSkills) * 100)
@@ -787,10 +897,9 @@ export default function CVMatchingPage() {
                                 ? Math.round((50.0 / totalRequiredSkills) * (match.matchedSkills?.length || 0))
                                 : 50; // Nếu không có skill yêu cầu thì cho đủ điểm
                             
-                            // Availability bonus: 0-5 points (giả định, vì không có trong response)
-                            // Backend có thể đã tính sẵn trong matchScore
+                            // Availability bonus: +5 points nếu status === "Available"
+                            const availabilityBonus = match.talentInfo?.status === "Available" ? 5 : 0;
                             const baseScore = levelPoints + workingModePoints + locationPoints + skillPoints;
-                            const availabilityBonus = (match.matchScore || 0) - baseScore;
                             
                             // Xác định tiêu chí phù hợp - rút gọn
                             const jobLevelDisplay = jobRoleLevel 
@@ -806,7 +915,7 @@ export default function CVMatchingPage() {
                                     : `❌ Không khớp: Talent ${talentWorkingModeText || "chưa cập nhật"} ↔ Job yêu cầu ${workingModeRequirementText}`
                                 : "✅ Không yêu cầu: Job chấp nhận mọi chế độ làm việc";
                             
-                            const talentLocationName = (match.talentInfo as any)?.locationName || null;
+                            const talentLocationName = (match.talentInfo as Talent & { locationName?: string | null })?.locationName || null;
                             const locationMatchReason = isRemoteOrFlexible
                                 ? "✅ Remote/Hybrid: Job cho phép làm việc từ xa nên không yêu cầu địa điểm cố định"
                                 : locationRequired
@@ -1207,7 +1316,7 @@ export default function CVMatchingPage() {
                                 <Button
                                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                                     disabled={currentPage === 1}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-700 hover:text-gray-900"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-primary-50 border border-primary-200 hover:bg-primary-100 text-black hover:text-green disabled:bg-neutral-100 disabled:border-neutral-200 disabled:text-neutral-400"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                     Trước
@@ -1245,7 +1354,7 @@ export default function CVMatchingPage() {
                                 <Button
                                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                                     disabled={currentPage === totalPages}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-700 hover:text-gray-900"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-primary-50 border border-primary-200 hover:bg-primary-100 text-black hover:text-green disabled:bg-neutral-100 disabled:border-neutral-200 disabled:text-neutral-400"
                                 >
                                     Sau
                                     <ChevronRight className="w-4 h-4" />
