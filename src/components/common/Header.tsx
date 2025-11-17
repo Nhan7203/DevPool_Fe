@@ -25,6 +25,7 @@ import {
   NotificationPriority,
 } from '../../services/Notification';
 import { decodeJWT } from '../../services/Auth';
+import { useNotification } from '../../contexts/NotificationContext';
 
 type ExtendedNotification = Notification & {
   metaData?: Record<string, string | number | boolean> | null;
@@ -67,12 +68,11 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [notifications, setNotifications] = useState<ExtendedNotification[]>([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [viewNotification, setViewNotification] = useState<ExtendedNotification | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { unread, items, setUnread, setItems, updateItemById } = useNotification();
 
   const resolvedUserId = useMemo(() => {
     if (!user) return null;
@@ -86,42 +86,58 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   useEffect(() => {
     const fetchNotifications = async () => {
       if (!resolvedUserId) {
-        setNotifications([]);
-        setUnreadCount(0);
+        setItems([]);
+        setUnread(0);
         return;
       }
       try {
         setIsLoadingNotifications(true);
         const result = await notificationService.getAll({
-          userId: resolvedUserId,
           pageNumber: 1,
           pageSize: 20,
         });
-        setNotifications((result.notifications || []) as ExtendedNotification[]);
-        setUnreadCount(result.unreadCount ?? 0);
+        const notifications = (result.notifications || []) as ExtendedNotification[];
+        setItems(notifications);
+        // unread sẽ được tự động tính bởi useEffect dựa trên items
       } catch (error) {
         console.error('Không thể tải thông báo:', error);
+        setItems([]);
+        setUnread(0);
       } finally {
         setIsLoadingNotifications(false);
       }
     };
 
     fetchNotifications();
-  }, [resolvedUserId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedUserId]); // Chỉ fetch khi resolvedUserId thay đổi
+
+  // Đồng bộ unread với items mỗi khi items thay đổi (ví dụ từ realtime updates)
+  // React sẽ tự động optimize nếu giá trị không thay đổi
+  // Tính unread: !n.isRead (bao gồm false, null, undefined)
+  useEffect(() => {
+    if (!items || items.length === 0) {
+      setUnread(0);
+      return;
+    }
+    const actualUnreadCount = items.filter(n => !n.isRead).length;
+    setUnread(actualUnreadCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]); // Chỉ phụ thuộc vào items
 
   const groupedNotifications: GroupedNotifications[] = useMemo(() => {
-    if (!notifications.length) return [];
+    if (!items.length) return [];
 
-    const unread = notifications.filter((n) => !n.isRead);
-    const read = notifications
+    const unreadList = items.filter((n) => !n.isRead);
+    const read = items
       .filter((n) => n.isRead)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const groups: GroupedNotifications[] = [];
 
-    if (unread.length) {
+    if (unreadList.length) {
       const unreadMap = new Map<string, ExtendedNotification[]>();
-      unread.forEach((notification) => {
+      unreadList.forEach((notification) => {
         const group = getNotificationGroup(notification.type);
         if (!unreadMap.has(group)) unreadMap.set(group, []);
         unreadMap.get(group)!.push(notification);
@@ -140,14 +156,14 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
     }
 
     return groups;
-  }, [notifications]);
+  }, [items]);
 
   const markNotificationAsRead = async (notification: ExtendedNotification) => {
     if (notification.isRead) return notification;
     try {
       const updated = (await notificationService.markAsRead(notification.id)) as ExtendedNotification;
-      setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-      setUnreadCount((prev) => Math.max(prev - 1, 0));
+      updateItemById(updated.id, { isRead: true, readAt: updated.readAt });
+      // unread sẽ được tự động tính lại bởi useEffect dựa trên items
       return updated;
     } catch (error) {
       console.error('Không thể đánh dấu thông báo đã đọc:', error);
@@ -156,8 +172,8 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
         isRead: true,
         readAt: new Date().toISOString(),
       } as ExtendedNotification;
-      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? fallback : n)));
-      setUnreadCount((prev) => Math.max(prev - 1, 0));
+      updateItemById(fallback.id, { isRead: true, readAt: fallback.readAt });
+      // unread sẽ được tự động tính lại bởi useEffect dựa trên items
       return fallback;
     }
   };
@@ -313,34 +329,26 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                     className="group relative p-2 text-neutral-600 hover:text-primary-600 rounded-lg hover:bg-primary-50 transition-all duration-300"
                   >
                     <Bell className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                    {unreadCount > 0 && (
+                    {unread > 0 && (
                       <span className="absolute -top-1 -right-1 bg-error-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center animate-pulse-gentle">
-                        {unreadCount > 9 ? '9+' : unreadCount}
+                        {unread > 9 ? '9+' : unread}
                       </span>
                     )}
                   </button>
 
                   {isNotificationOpen && (
-                    <div className="absolute right-0 mt-3 w-80 max-h-[420px] overflow-hidden bg-white rounded-2xl shadow-medium border border-neutral-200 z-50 animate-slide-down">
-                      <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+                    <div className="absolute right-0 mt-3 w-80 max-h-[420px] bg-white rounded-2xl shadow-medium border border-neutral-200 z-50 animate-slide-down flex flex-col">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 flex-shrink-0">
                         <div>
                           <p className="text-sm font-semibold text-neutral-800">Thông báo</p>
                           <div className="flex items-center gap-2 text-xs text-neutral-500">
-                            <span>Bạn có {unreadCount} thông báo chưa đọc</span>
+                            <span>Bạn có {unread} thông báo chưa đọc</span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            setIsNotificationOpen(false);
-                            navigate(NOTIFICATION_CENTER_ROUTE);
-                          }}
-                          className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                        >
-                          Xem tất cả
-                        </button>
+                       
                       </div>
 
-                      <div className="max-h-[340px] overflow-y-auto">
+                      <div className="flex-1 overflow-y-auto min-h-0">
                         {isLoadingNotifications ? (
                           <div className="flex items-center justify-center py-10 text-neutral-500">
                             <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -493,7 +501,7 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                           ))
                         )}
                       </div>
-                      <div className="px-4 py-3 border-t border-neutral-200 bg-neutral-50">
+                      <div className="px-4 py-3 border-t border-neutral-200 bg-neutral-50 flex-shrink-0">
                         <button
                           onClick={() => {
                             setIsNotificationOpen(false);

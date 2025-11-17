@@ -249,7 +249,7 @@ export default function DevDetailPage() {
           await notificationService.create({
             title: "Hợp đồng nhân sự bị từ chối",
             message: `${updatedBy} đã từ chối hợp đồng ${contract.contractNumber}. Lý do: ${trimmedReason}.`,
-            type: NotificationType.ContractTerminated,
+            type: NotificationType.ContractRejected,
             priority: NotificationPriority.Medium,
             userIds: hrIds,
             entityType: "PartnerContract",

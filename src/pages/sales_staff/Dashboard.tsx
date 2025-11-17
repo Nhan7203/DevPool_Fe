@@ -224,10 +224,6 @@ export default function SalesDashboard() {
             <h1 className="text-3xl font-bold text-gray-900">Sales Dashboard</h1>
             <p className="text-neutral-600">Theo dõi hiệu suất và pipeline bán hàng</p>
           </div>
-          <button className="flex items-center space-x-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-5 py-2 rounded-xl hover:scale-105 transition-all shadow-soft hover:shadow-glow">
-            <PlusCircle className="w-5 h-5" />
-            <span>Thêm Lead</span>
-          </button>
         </div>
 
         {loading ? (

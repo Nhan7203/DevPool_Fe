@@ -66,8 +66,19 @@ export default function ClientCompanyListPage() {
       try {
         setLoading(true);
         const res = await clientCompanyService.getAll();
-        setCompanies(res);
-        setFilteredCompanies(res);
+        
+        // Sắp xếp công ty: mới nhất lên đầu (theo createdAt hoặc id)
+        const sortedCompanies = [...res].sort((a, b) => {
+          const dateA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+          const dateB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
+          if (dateA !== 0 || dateB !== 0) {
+            return dateB - dateA; // Mới nhất lên đầu
+          }
+          return b.id - a.id; // Nếu không có createdAt, sắp xếp theo id giảm dần
+        });
+        
+        setCompanies(sortedCompanies);
+        setFilteredCompanies(sortedCompanies);
       } catch (err) {
         console.error("❌ Lỗi khi load danh sách công ty:", err);
       } finally {
@@ -142,7 +153,7 @@ export default function ClientCompanyListPage() {
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các công ty khách hàng</p>
             </div>
             <Link to="/sales/clients/create">
-              <Button className="group bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl px-6 py-3 shadow-soft hover:shadow-glow transform hover:scale-105 transition-all duration-300">
+              <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo công ty mới
               </Button>

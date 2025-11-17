@@ -29,6 +29,7 @@ import {
   History,
   AlertCircle,
   Eye,
+  Target,
 } from "lucide-react";
 import { projectService } from "../../../services/Project";
 import { clientCompanyService } from "../../../services/ClientCompany";
@@ -489,7 +490,7 @@ export default function SalesApplicationDetailPage() {
                 <InfoRow
                   label="Chế độ làm việc"
                   value={workingModeText}
-                  icon={<Briefcase className="w-4 h-4" />}
+                  icon={<Target className="w-4 h-4" />}
                 />
                 <InfoRow
                   label="Số lượng tuyển dụng"

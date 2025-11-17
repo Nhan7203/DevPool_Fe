@@ -6,7 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const PublicLayout: React.FC = () => {
   const { user } = useAuth();
-  const showPublicBranding = user?.role !== 'Admin';
+  // Chỉ hiển thị public branding khi user chưa đăng nhập (không có role)
+  const showPublicBranding = !user || !user.role;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
