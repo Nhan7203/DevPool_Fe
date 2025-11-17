@@ -16,7 +16,8 @@ import {
   AlertCircle, 
   X,
   ExternalLink,
-  FileText
+  FileText,
+  Search
 } from "lucide-react";
 
 function TalentCertificateCreatePage() {
@@ -37,9 +38,12 @@ function TalentCertificateCreatePage() {
   });
 
   const [allCertificateTypes, setAllCertificateTypes] = useState<CertificateType[]>([]);
-  const [existingCertificateTypeIds, setExistingCertificateTypeIds] = useState<number[]>([]);
   const [analysisCertificates, setAnalysisCertificates] = useState<ExtractedCertificate[]>([]);
   const analysisStorageKey = talentId ? `talent-analysis-prefill-certificates-${talentId}` : null;
+
+  // State cho certificate type dropdown
+  const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState(false);
+  const [certificateTypeSearch, setCertificateTypeSearch] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,22 +57,22 @@ function TalentCertificateCreatePage() {
     fetchData();
   }, []);
 
-  // Fetch existing certificates for this talent to disable them in dropdown
+  // Đóng dropdown khi click bên ngoài
   useEffect(() => {
-    const fetchExistingCertificates = async () => {
-      if (!talentId) return;
-      try {
-        const existingCertificates = await talentCertificateService.getAll({ talentId: Number(talentId), excludeDeleted: true });
-        const certificateTypeIds = (existingCertificates as TalentCertificate[])
-          .map((certificate) => certificate.certificateTypeId ?? 0)
-          .filter((certificateTypeId): certificateTypeId is number => certificateTypeId > 0);
-        setExistingCertificateTypeIds(certificateTypeIds);
-      } catch (error) {
-        console.error("❌ Error loading existing certificates", error);
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isCertificateTypeDropdownOpen && !target.closest('.certificate-type-dropdown-container')) {
+        setIsCertificateTypeDropdownOpen(false);
       }
     };
-    fetchExistingCertificates();
-  }, [talentId]);
+
+    if (isCertificateTypeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isCertificateTypeDropdownOpen]);
 
   useEffect(() => {
     if (!analysisStorageKey) return;
@@ -316,28 +320,92 @@ function TalentCertificateCreatePage() {
                   <Award className="w-4 h-4" />
                   Loại chứng chỉ <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="certificateTypeId"
-                  value={form.certificateTypeId}
-                  onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  required
-                >
-                  <option value="0">-- Chọn loại chứng chỉ --</option>
-                  {allCertificateTypes.map(certType => {
-                    const isDisabled = existingCertificateTypeIds.includes(certType.id);
-                    return (
-                      <option 
-                        key={certType.id} 
-                        value={certType.id}
-                        disabled={isDisabled}
-                        style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
-                      >
-                        {certType.name}{isDisabled ? ' (đã chọn)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="relative certificate-type-dropdown-container">
+                  <button
+                    type="button"
+                    onClick={() => setIsCertificateTypeDropdownOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Award className="w-4 h-4 text-neutral-400" />
+                      <span className={form.certificateTypeId ? "text-neutral-800" : "text-neutral-500"}>
+                        {form.certificateTypeId
+                          ? allCertificateTypes.find(ct => ct.id === form.certificateTypeId)?.name || "Chọn loại chứng chỉ"
+                          : "Chọn loại chứng chỉ"}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                  </button>
+                  {isCertificateTypeDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div className="p-3 border-b border-neutral-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={certificateTypeSearch}
+                            onChange={(e) => setCertificateTypeSearch(e.target.value)}
+                            placeholder="Tìm loại chứng chỉ..."
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        {(() => {
+                          const filtered = certificateTypeSearch
+                            ? allCertificateTypes.filter(ct =>
+                              ct.name.toLowerCase().includes(certificateTypeSearch.toLowerCase()) ||
+                              (ct.description && ct.description.toLowerCase().includes(certificateTypeSearch.toLowerCase()))
+                            )
+                            : allCertificateTypes;
+
+                          if (filtered.length === 0) {
+                            return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại chứng chỉ phù hợp</p>;
+                          }
+
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setForm(prev => ({ ...prev, certificateTypeId: 0 }));
+                                  setCertificateTypeSearch("");
+                                  setIsCertificateTypeDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  !form.certificateTypeId
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                Chọn loại chứng chỉ
+                              </button>
+                              {filtered.map(certType => (
+                                <button
+                                  type="button"
+                                  key={certType.id}
+                                  onClick={() => {
+                                    setForm(prev => ({ ...prev, certificateTypeId: certType.id }));
+                                    setCertificateTypeSearch("");
+                                    setIsCertificateTypeDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    form.certificateTypeId === certType.id
+                                      ? "bg-primary-50 text-primary-700"
+                                      : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                >
+                                  {certType.name}
+                                </button>
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {form.certificateTypeId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">
                     Đã chọn: <span className="font-medium text-neutral-700">

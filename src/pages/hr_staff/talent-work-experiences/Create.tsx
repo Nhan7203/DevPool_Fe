@@ -15,7 +15,9 @@ import {
   FileText,
   AlertCircle, 
   CheckCircle,
-  X
+  X,
+  Search,
+  Target
 } from "lucide-react";
 
 export default function TalentWorkExperienceCreatePage() {
@@ -39,6 +41,29 @@ export default function TalentWorkExperienceCreatePage() {
   const [analysisExperiences, setAnalysisExperiences] = useState<ExtractedWorkExperience[]>([]);
   const analysisStorageKey = talentId ? `talent-analysis-prefill-experiences-${talentId}` : null;
   const cvIdStorageKey = talentId ? `talent-analysis-prefill-cv-id-${talentId}` : null;
+
+  // Danh sách vị trí công việc
+  const workExperiencePositions = [
+    "Backend",
+    "Frontend",
+    "BA",
+    "Fullstack Developer",
+    "Mobile Developer (iOS/Android/Flutter/React Native)",
+    "AI/ML Engineer",
+    "Data Engineer",
+    "Data Scientist",
+    "DevOps Engineer",
+    "Cloud Engineer",
+    "QA/QC Engineer (Manual / Automation)",
+    "Test Lead",
+    "Solution Architect",
+    "Technical Lead (Tech Lead)",
+    "Software Architect"
+  ];
+
+  // State cho position dropdown
+  const [isPositionDropdownOpen, setIsPositionDropdownOpen] = useState(false);
+  const [positionSearch, setPositionSearch] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,6 +107,23 @@ export default function TalentWorkExperienceCreatePage() {
       console.error("❌ Không thể đọc CV ID từ phân tích", error);
     }
   }, [cvIdStorageKey, talentCVs]);
+
+  // Đóng dropdown khi click bên ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isPositionDropdownOpen && !target.closest('.position-dropdown-container')) {
+        setIsPositionDropdownOpen(false);
+      }
+    };
+
+    if (isPositionDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isPositionDropdownOpen]);
 
   // Validate start date similar to talents/Create.tsx
   const validateStartDate = (date: string): boolean => {
@@ -389,14 +431,91 @@ export default function TalentWorkExperienceCreatePage() {
                     <Workflow className="w-4 h-4" />
                     Vị trí <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    name="position"
-                    value={form.position}
-                    onChange={handleChange}
-                    placeholder="VD: Software Engineer, Product Manager..."
-                    required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
+                  <div className="relative position-dropdown-container">
+                    <button
+                      type="button"
+                      onClick={() => setIsPositionDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Target className="w-4 h-4 text-neutral-400" />
+                        <span className={form.position ? "text-neutral-800" : "text-neutral-500"}>
+                          {form.position || "Chọn vị trí"}
+                        </span>
+                      </div>
+                      <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                    </button>
+                    {isPositionDropdownOpen && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={positionSearch}
+                              onChange={(e) => setPositionSearch(e.target.value)}
+                              placeholder="Tìm vị trí..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          {(() => {
+                            const filtered = positionSearch
+                              ? workExperiencePositions.filter(p => p.toLowerCase().includes(positionSearch.toLowerCase()))
+                              : workExperiencePositions;
+                            if (filtered.length === 0) {
+                              return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                            }
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setForm(prev => ({ ...prev, position: "" }));
+                                    setPositionSearch("");
+                                    setIsPositionDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    !form.position
+                                      ? "bg-primary-50 text-primary-700"
+                                      : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                >
+                                  Chọn vị trí
+                                </button>
+                                {filtered.map((position) => (
+                                  <button
+                                    type="button"
+                                    key={position}
+                                    onClick={() => {
+                                      setForm(prev => ({ ...prev, position }));
+                                      setPositionSearch("");
+                                      setIsPositionDropdownOpen(false);
+                                      const newErrors = { ...fieldErrors };
+                                      delete newErrors.position;
+                                      setFieldErrors(newErrors);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm ${
+                                      form.position === position
+                                        ? "bg-primary-50 text-primary-700"
+                                        : "hover:bg-neutral-50 text-neutral-700"
+                                    }`}
+                                  >
+                                    {position}
+                                  </button>
+                                ))}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {fieldErrors.position && (
+                    <p className="mt-1 text-xs text-red-500">{fieldErrors.position}</p>
+                  )}
                 </div>
               </div>
 

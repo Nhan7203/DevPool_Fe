@@ -15,7 +15,8 @@ import {
   AlertCircle,
   CheckCircle,
   Briefcase,
-  Tag
+  Tag,
+  XCircle
 } from "lucide-react";
 
 interface ApplyActivityDetail extends ApplyActivity {
@@ -74,6 +75,16 @@ export default function ApplyActivityDetailPage() {
   const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
   const [activityIndex, setActivityIndex] = useState<number | null>(null);
   const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  const quickRejectNotes = [
+    "Ứng viên không đáp ứng yêu cầu kỹ năng kỹ thuật.",
+    "Ứng viên thiếu kinh nghiệm làm việc cần thiết.",
+    "Ứng viên không phù hợp với văn hóa công ty.",
+    "Kết quả phỏng vấn không đạt yêu cầu.",
+  ];
 
   const fetchData = async () => {
     try {
@@ -250,20 +261,55 @@ export default function ApplyActivityDetailPage() {
   const handleStatusUpdate = async (newStatus: ApplyActivityStatus) => {
     if (!id || !activity) return;
 
+    // Nếu là trạng thái "Không đạt", hiển thị modal dialog
+    if (newStatus === ApplyActivityStatus.Failed) {
+      setShowRejectDialog(true);
+      setRejectNote("");
+      return;
+    }
+
     const confirm = window.confirm(`⚠️ Bạn có chắc muốn thay đổi trạng thái thành "${getActivityStatusLabel(newStatus)}"?`);
     if (!confirm) return;
 
+    await performStatusUpdate(newStatus);
+  };
+
+  const handleCancelReject = () => {
+    setShowRejectDialog(false);
+    setRejectNote("");
+  };
+
+  const handleConfirmReject = async () => {
+    const note = rejectNote.trim();
+    if (!note) {
+      alert("⚠️ Vui lòng ghi rõ lý do từ chối");
+      return;
+    }
+    
+    await performStatusUpdate(ApplyActivityStatus.Failed, note);
+    setShowRejectDialog(false);
+    setRejectNote("");
+  };
+
+  const performStatusUpdate = async (newStatus: ApplyActivityStatus, notes?: string) => {
+    if (!id || !activity) return;
+
     try {
+      setIsUpdatingStatus(true);
       // Kiểm tra xem bước trước đã pass chưa (chỉ khi đổi sang Completed hoặc Passed)
       if (newStatus === ApplyActivityStatus.Completed && currentStepOrder > 1) {
         const canUpdate = await checkCanUpdateStep(currentStepOrder);
         if (!canUpdate) {
           alert("⚠️ Không thể cập nhật! Bước trước chưa đạt. Vui lòng hoàn thành bước trước trước.");
+          setIsUpdatingStatus(false);
           return;
         }
       }
 
-      await applyActivityService.updateStatus(Number(id), { status: newStatus });
+      await applyActivityService.updateStatus(Number(id), { 
+        status: newStatus,
+        ...(notes ? { notes } : {})
+      });
 
       // Nếu status là Completed, tự động cập nhật application status thành Interviewing
       if (newStatus === ApplyActivityStatus.Completed && activity.applicationInfo) {
@@ -346,6 +392,8 @@ export default function ApplyActivityDetailPage() {
     } catch (err) {
       console.error("❌ Lỗi cập nhật trạng thái:", err);
       alert("Không thể cập nhật trạng thái!");
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -484,7 +532,8 @@ export default function ApplyActivityDetailPage() {
                   {allowedStatuses.includes(ApplyActivityStatus.Completed) && (
                     <button
                       onClick={() => handleStatusUpdate(ApplyActivityStatus.Completed)}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                      disabled={isUpdatingStatus}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                       Hoàn thành
@@ -493,7 +542,8 @@ export default function ApplyActivityDetailPage() {
                   {allowedStatuses.includes(ApplyActivityStatus.Passed) && (
                     <button
                       onClick={() => handleStatusUpdate(ApplyActivityStatus.Passed)}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                      disabled={isUpdatingStatus}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                       Đạt
@@ -502,7 +552,8 @@ export default function ApplyActivityDetailPage() {
                   {allowedStatuses.includes(ApplyActivityStatus.Failed) && (
                     <button
                       onClick={() => handleStatusUpdate(ApplyActivityStatus.Failed)}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                      disabled={isUpdatingStatus}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <AlertCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                       Không đạt
@@ -511,7 +562,8 @@ export default function ApplyActivityDetailPage() {
                   {allowedStatuses.includes(ApplyActivityStatus.NoShow) && (
                     <button
                       onClick={() => handleStatusUpdate(ApplyActivityStatus.NoShow)}
-                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white"
+                      disabled={isUpdatingStatus}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <AlertCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                       Không có mặt
@@ -572,6 +624,76 @@ export default function ApplyActivityDetailPage() {
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">
                   {activity.notes}
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Dialog */}
+        {showRejectDialog && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isUpdatingStatus) {
+                handleCancelReject();
+              }
+            }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Ghi rõ lý do từ chối</h3>
+                <button
+                  onClick={handleCancelReject}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                  aria-label="Đóng"
+                  disabled={isUpdatingStatus}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <p className="text-sm text-neutral-600">
+                  Vui lòng nhập lý do để ứng viên và các bộ phận liên quan dễ dàng xử lý và điều chỉnh.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {quickRejectNotes.map((note) => (
+                    <button
+                      key={note}
+                      type="button"
+                      onClick={() => setRejectNote((prev) => (prev ? `${prev}\n${note}` : note))}
+                      disabled={isUpdatingStatus}
+                      className="px-3 py-1.5 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {note}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  rows={4}
+                  placeholder="Nhập lý do từ chối..."
+                  className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-800 focus:border-red-500 focus:ring-2 focus:ring-red-200 resize-none"
+                  disabled={isUpdatingStatus}
+                />
+              </div>
+              <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelReject}
+                  disabled={isUpdatingStatus}
+                  className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={isUpdatingStatus}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUpdatingStatus ? "Đang xử lý..." : "Xác nhận từ chối"}
+                </button>
               </div>
             </div>
           </div>

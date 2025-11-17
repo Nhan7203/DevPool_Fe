@@ -3266,10 +3266,6 @@ export default function CreateTalent() {
                                   </div>
                                   <div className="max-h-56 overflow-y-auto">
                                     {(() => {
-                                      const selectedCertificateTypeIds = talentCertificates
-                                        .filter((_, i) => i !== index)
-                                        .map(cert => cert.certificateTypeId)
-                                        .filter(id => id > 0);
                                       const filtered = (certificateTypeSearch[index] || "")
                                         ? certificateTypes.filter(t => t.name.toLowerCase().includes((certificateTypeSearch[index] || "").toLowerCase()))
                                         : certificateTypes;
@@ -3277,31 +3273,25 @@ export default function CreateTalent() {
                                         return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại chứng chỉ nào</p>;
                                       }
                                       return filtered.map((type) => {
-                                        const isDisabled = selectedCertificateTypeIds.includes(type.id);
                                         return (
                                           <button
                                             type="button"
                                             key={type.id}
                                             onClick={() => {
-                                              if (!isDisabled) {
-                                                updateCertificate(index, 'certificateTypeId', type.id);
-                                                setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: false }));
-                                                setCertificateTypeSearch(prev => ({ ...prev, [index]: "" }));
-                                                const newErrors = { ...errors };
-                                                delete newErrors[`certificate_${index}`];
-                                                setErrors(newErrors);
-                                              }
+                                              updateCertificate(index, 'certificateTypeId', type.id);
+                                              setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                              setCertificateTypeSearch(prev => ({ ...prev, [index]: "" }));
+                                              const newErrors = { ...errors };
+                                              delete newErrors[`certificate_${index}`];
+                                              setErrors(newErrors);
                                             }}
-                                            disabled={isDisabled}
                                             className={`w-full text-left px-4 py-2.5 text-sm ${
                                               cert.certificateTypeId === type.id
                                                 ? "bg-primary-50 text-primary-700"
-                                                : isDisabled
-                                                  ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
-                                                  : "hover:bg-neutral-50 text-neutral-700"
+                                                : "hover:bg-neutral-50 text-neutral-700"
                                             }`}
                                           >
-                                            {type.name}{isDisabled ? ' (đã chọn)' : ''}
+                                            {type.name}
                                           </button>
                                         );
                                       });

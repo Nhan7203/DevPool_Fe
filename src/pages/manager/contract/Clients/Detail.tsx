@@ -119,6 +119,13 @@ export default function ClientDetailPage() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState<string | null>(null);
+  
+  const quickRejectNotes = [
+    "Thông tin hợp đồng chưa đầy đủ hoặc không chính xác.",
+    "Điều khoản hợp đồng không phù hợp với chính sách công ty.",
+    "Thiếu các tài liệu cần thiết hoặc chữ ký.",
+    "Ngân sách hoặc điều kiện không phù hợp.",
+  ];
   const [isRejecting, setIsRejecting] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
 
@@ -496,46 +503,72 @@ export default function ClientDetailPage() {
           </div>
         )}
 
-        {contract.status === "Pending" && showRejectForm && (
-          <div className="bg-white rounded-2xl shadow-soft border border-rose-100 mb-8">
-            <div className="p-6 border-b border-rose-100 flex items-center gap-3">
-              <div className="p-2 bg-rose-100 rounded-lg">
-                <XCircle className="w-5 h-5 text-rose-600" />
+        {showRejectForm && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isRejecting) {
+                handleCancelReject();
+              }
+            }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Ghi rõ lý do từ chối hợp đồng</h3>
+                <button
+                  onClick={handleCancelReject}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                  aria-label="Đóng"
+                  disabled={isRejecting}
+                >
+                  ×
+                </button>
               </div>
-              <h2 className="text-xl font-semibold text-gray-900">Lý do từ chối</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-600 mb-2">
-                  Lý do từ chối <span className="text-red-500">*</span>
-                </label>
+              <div className="px-6 py-4 space-y-4">
+                <p className="text-sm text-neutral-600">
+                  Vui lòng nhập lý do để các bộ phận liên quan dễ dàng xử lý và điều chỉnh thông tin hợp đồng.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {quickRejectNotes.map((note) => (
+                    <button
+                      key={note}
+                      type="button"
+                      onClick={() => setRejectReason((prev) => (prev ? `${prev}\n${note}` : note))}
+                      disabled={isRejecting}
+                      className="px-3 py-1.5 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {note}
+                    </button>
+                  ))}
+                </div>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full h-28 px-4 py-2 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition resize-none bg-white"
-                  placeholder="Nhập lý do từ chối hợp đồng..."
+                  rows={4}
+                  placeholder="Nhập lý do từ chối..."
+                  className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-800 focus:border-red-500 focus:ring-2 focus:ring-red-200 resize-none"
                   disabled={isRejecting}
                 />
                 {rejectError && (
-                  <p className="text-sm text-red-500 mt-1">{rejectError}</p>
+                  <p className="text-sm text-red-500">{rejectError}</p>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
                 <button
-                  onClick={handleConfirmReject}
-                  disabled={isRejecting}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white font-medium hover:bg-rose-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <XCircle className="w-4 h-4" />
-                  {isRejecting ? "Đang xử lý..." : "Xác nhận từ chối"}
-                </button>
-                <button
+                  type="button"
                   onClick={handleCancelReject}
                   disabled={isRejecting}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <X className="w-4 h-4" />
                   Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={isRejecting}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRejecting ? "Đang xử lý..." : "Xác nhận từ chối"}
                 </button>
               </div>
             </div>

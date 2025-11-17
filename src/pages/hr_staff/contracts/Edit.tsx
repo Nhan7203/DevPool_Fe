@@ -220,19 +220,6 @@ export default function EditPartnerContractPage() {
                 return;
             }
 
-            const talentHireDate = talentHireDates[selectedTalent.id];
-            if (talentHireDate) {
-                const hireDateValue = new Date(talentHireDate);
-                const startDateValue = new Date(form.startDate);
-                if (!Number.isNaN(hireDateValue.getTime()) && !Number.isNaN(startDateValue.getTime())) {
-                    if (startDateValue <= hireDateValue) {
-                        setError("Ngày bắt đầu hợp đồng phải sau ngày được tuyển dụng.");
-                        setSaving(false);
-                        return;
-                    }
-                }
-            }
-
             if (form.endDate) {
                 const start = new Date(form.startDate);
                 const end = new Date(form.endDate);
@@ -283,13 +270,6 @@ export default function EditPartnerContractPage() {
         }
     };
 
-    const selectedTalentHireDate = form.talentId ? talentHireDates[form.talentId] : undefined;
-    const minStartDate = selectedTalentHireDate ? (() => {
-        const date = new Date(selectedTalentHireDate);
-        if (Number.isNaN(date.getTime())) return undefined;
-        date.setDate(date.getDate() + 1);
-        return formatDateForInput(date);
-    })() : undefined;
 
     if (loading) {
         return (

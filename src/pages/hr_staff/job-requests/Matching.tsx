@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentCVService, type TalentCVMatchResult } from "../../../services/TalentCV";
+import { talentCVService, type TalentCVMatchResult, type TalentCV } from "../../../services/TalentCV";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { talentService, type Talent } from "../../../services/Talent";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
@@ -30,12 +30,24 @@ import {
     Filter,
     X,
     SlidersHorizontal,
+    Search,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { WorkingMode } from "../../../types/WorkingMode";
 
 interface EnrichedMatchResult extends TalentCVMatchResult {
     talentInfo?: Talent;
+}
+
+interface EnrichedCVWithoutScore {
+    talentCV: TalentCV;
+    talentInfo?: Talent;
+    matchScore?: number; // undefined nếu không có điểm số
+    matchedSkills?: string[];
+    missingSkills?: string[];
+    levelMatch?: boolean;
 }
 
 const WORKING_MODE_OPTIONS = [
@@ -72,6 +84,8 @@ export default function CVMatchingPage() {
 
     const [matchResults, setMatchResults] = useState<EnrichedMatchResult[]>([]);
     const [allMatchResults, setAllMatchResults] = useState<EnrichedMatchResult[]>([]);
+    const [allCVs, setAllCVs] = useState<(EnrichedMatchResult | EnrichedCVWithoutScore)[]>([]);
+    const [filteredCVs, setFilteredCVs] = useState<(EnrichedMatchResult | EnrichedCVWithoutScore)[]>([]);
     const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
     const [jobRoleLevel, setJobRoleLevel] = useState<JobRoleLevel | null>(null);
     const [jobLocation, setJobLocation] = useState<Location | null>(null);
@@ -82,6 +96,12 @@ export default function CVMatchingPage() {
     const [minScore, setMinScore] = useState(0);
     const [showMissingSkillsOnly, setShowMissingSkillsOnly] = useState(false);
     const [hideLowScore, setHideLowScore] = useState(false);
+    
+    // Search and pagination states
+    const [searchQuery, setSearchQuery] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    
     const currentMatchingPath = `${location.pathname}${location.search}`;
 
     useEffect(() => {
@@ -100,11 +120,13 @@ export default function CVMatchingPage() {
                 setJobRequest(jobReq);
 
                 // Fetch job role level to get level information
+                let level: JobRoleLevel | null = null;
                 try {
-                    const level = await jobRoleLevelService.getById(jobReq.jobRoleLevelId);
+                    level = await jobRoleLevelService.getById(jobReq.jobRoleLevelId);
                     setJobRoleLevel(level);
                 } catch (err) {
                     console.warn("⚠️ Không thể tải thông tin JobRoleLevel:", err);
+                    throw new Error("Không thể tải thông tin JobRoleLevel");
                 }
 
                 // Fetch job location if exists
@@ -117,20 +139,6 @@ export default function CVMatchingPage() {
                     }
                 }
 
-                // Tính số lượng match mong muốn: quantity + 5
-                const desiredMatchCount = jobReq.quantity ? jobReq.quantity + 5 : 5;
-
-                // Fetch matching CVs
-                console.log("🔍 Fetching matching CVs for Job Request ID:", jobRequestId);
-                console.log("📊 Desired match count:", desiredMatchCount, "(Quantity:", jobReq.quantity, "+ 5)");
-                const matches = await talentCVService.getMatchesForJobRequest({
-                    jobRequestId: Number(jobRequestId),
-                    excludeDeleted: true,
-                    maxResults: desiredMatchCount, // Gửi số lượng mong muốn cho backend
-                });
-                console.log("✅ Matching CVs received:", matches);
-                console.log("📊 Total matches found:", matches?.length || 0);
-                
                 // Lấy danh sách đơn ứng tuyển đã tồn tại cho job request này để loại bỏ các CV đã nộp
                 const existingApplications = await talentApplicationService.getAll({
                     jobRequestId: Number(jobRequestId),
@@ -145,27 +153,42 @@ export default function CVMatchingPage() {
                         .map((app) => app.cvId)
                 );
 
-                const filteredMatches = matches.filter((match: TalentCVMatchResult) => {
-                    const alreadyApplied = excludedCvIds.has(match.talentCV.id);
-                    if (alreadyApplied) {
-                        console.log(
-                            "ℹ️ Bỏ qua CV có hồ sơ ứng tuyển ở trạng thái Hired:",
-                            match.talentCV.id,
-                            `v${match.talentCV.version}`
-                        );
-                    }
-                    return !alreadyApplied;
-                });
-                console.log("📉 Số CV sau khi loại trừ đã ứng tuyển:", filteredMatches.length);
+                // Fetch toàn bộ CV trong hệ thống (không filter theo jobRoleId)
+                console.log("🔍 Fetching all CVs in system...");
+                const allCVsData = await talentCVService.getAll({
+                    isActive: true,
+                    excludeDeleted: true,
+                }) as TalentCV[];
+                console.log("✅ All CVs received:", allCVsData.length);
 
-                // Enrich with talent information and location names
-                const enrichedMatches = await Promise.all(
-                    filteredMatches.map(async (match: TalentCVMatchResult) => {
+                // Lọc bỏ CV đã ứng tuyển ở trạng thái Hired
+                const availableCVs = allCVsData.filter(cv => !excludedCvIds.has(cv.id));
+                console.log("📊 CVs available (after excluding Hired):", availableCVs.length);
+
+                // Fetch matching CVs (có điểm số từ backend)
+                console.log("🔍 Fetching matching CVs for Job Request ID:", jobRequestId);
+                const matches = await talentCVService.getMatchesForJobRequest({
+                    jobRequestId: Number(jobRequestId),
+                    excludeDeleted: true,
+                });
+                console.log("✅ Matching CVs received:", matches);
+                console.log("📊 Total matches found:", matches?.length || 0);
+
+                // Tạo map của CV có điểm số để dễ dàng tra cứu
+                const matchMap = new Map<number, TalentCVMatchResult>();
+                matches.forEach((match: TalentCVMatchResult) => {
+                    if (!excludedCvIds.has(match.talentCV.id)) {
+                        matchMap.set(match.talentCV.id, match);
+                    }
+                });
+                console.log("📉 Số CV có điểm số sau khi loại trừ đã ứng tuyển:", matchMap.size);
+
+                // Enrich tất cả CV với talent information và tính điểm
+                const enrichedCVs = await Promise.all(
+                    availableCVs.map(async (cv: TalentCV): Promise<EnrichedMatchResult | EnrichedCVWithoutScore> => {
                         try {
-                            const talent = await talentService.getById(match.talentCV.talentId);
-                            console.log("✅ Talent info loaded for ID:", match.talentCV.talentId, talent);
+                            const talent = await talentService.getById(cv.talentId);
                             
-                            // Load talent location name if exists
                             let talentLocationName: string | null = null;
                             if (talent.locationId) {
                                 try {
@@ -176,20 +199,64 @@ export default function CVMatchingPage() {
                                 }
                             }
                             
-                            return { 
-                                ...match, 
-                                talentInfo: { ...talent, locationName: talentLocationName } as Talent & { locationName?: string | null }
-                            };
+                            const talentInfo = { ...talent, locationName: talentLocationName } as Talent & { locationName?: string | null };
+                            
+                            // Kiểm tra xem CV này có trong kết quả matching không
+                            const match = matchMap.get(cv.id);
+                            
+                            if (match) {
+                                // CV có điểm số từ backend
+                                return {
+                                    ...match,
+                                    talentInfo: talentInfo,
+                                };
+                            } else {
+                                // CV không có điểm số - tạo match result với điểm 0
+                                return {
+                                    talentCV: cv,
+                                    talentInfo: talentInfo,
+                                    matchScore: 0,
+                                    matchedSkills: [],
+                                    missingSkills: jobReq.jobSkills?.map(skill => skill.skillName) || [],
+                                    levelMatch: false,
+                                    matchSummary: "CV không khớp với yêu cầu tuyển dụng",
+                                };
+                            }
                         } catch (err) {
-                            console.warn("⚠️ Failed to load talent info for ID:", match.talentCV.talentId, err);
-                            return { ...match, talentInfo: undefined };
+                            console.warn("⚠️ Failed to load talent info for ID:", cv.talentId, err);
+                            // Nếu không load được talent info, vẫn tạo CV với điểm 0
+                            const match = matchMap.get(cv.id);
+                            if (match) {
+                                return { ...match, talentInfo: undefined };
+                            } else {
+                                return {
+                                    talentCV: cv,
+                                    talentInfo: undefined,
+                                    matchScore: 0,
+                                    matchedSkills: [],
+                                    missingSkills: jobReq.jobSkills?.map(skill => skill.skillName) || [],
+                                    levelMatch: false,
+                                    matchSummary: "CV không khớp với yêu cầu tuyển dụng",
+                                };
+                            }
                         }
                     })
                 );
 
-                console.log("✅ Final enriched matches:", enrichedMatches);
-                setAllMatchResults(enrichedMatches);
-                setMatchResults(enrichedMatches);
+                // Sắp xếp theo điểm từ cao xuống thấp
+                const sortedCVs = enrichedCVs.sort((a, b) => {
+                    const scoreA = a.matchScore ?? 0;
+                    const scoreB = b.matchScore ?? 0;
+                    return scoreB - scoreA;
+                });
+
+                console.log("✅ Final enriched CVs:", sortedCVs.length);
+                console.log("📊 CVs with score > 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) > 0).length);
+                console.log("📊 CVs with score = 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) === 0).length);
+                
+                setAllMatchResults(sortedCVs.filter(cv => (cv.matchScore ?? 0) > 0) as EnrichedMatchResult[]);
+                setAllCVs(sortedCVs);
+                setFilteredCVs(sortedCVs);
             } catch (err) {
                 console.error("❌ Lỗi khi tải danh sách CV matching:", err);
                 alert(`❌ Lỗi: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
@@ -215,25 +282,57 @@ export default function CVMatchingPage() {
         return "Thấp";
     };
 
-    // Apply filters
+    // Apply filters, search and pagination
     useEffect(() => {
-        let filtered = [...allMatchResults];
+        let filtered = [...allCVs];
         
-        // Filter by min score
-        filtered = filtered.filter(r => r.matchScore >= minScore);
+        // Filter by search query
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase().trim();
+            filtered = filtered.filter(cv => {
+                const talentName = cv.talentInfo?.fullName?.toLowerCase() || "";
+                const email = cv.talentInfo?.email?.toLowerCase() || "";
+                const phone = cv.talentInfo?.phone?.toLowerCase() || "";
+                const cvVersion = `v${cv.talentCV.version}`.toLowerCase();
+                
+                return talentName.includes(query) || 
+                       email.includes(query) || 
+                       phone.includes(query) ||
+                       cvVersion.includes(query);
+            });
+        }
+        
+        // Filter by min score (chỉ áp dụng cho CV có điểm số)
+        filtered = filtered.filter(cv => {
+            if (cv.matchScore === undefined) return true; // CV không có điểm số luôn pass
+            return cv.matchScore >= minScore;
+        });
         
         // Filter by hiding low score
         if (hideLowScore) {
-            filtered = filtered.filter(r => r.matchScore >= 60);
+            filtered = filtered.filter(cv => {
+                if (cv.matchScore === undefined) return true; // CV không có điểm số luôn pass
+                return cv.matchScore >= 60;
+            });
         }
         
-        // Filter by missing skills only
+        // Filter by missing skills only (chỉ áp dụng cho CV có điểm số)
         if (showMissingSkillsOnly) {
-            filtered = filtered.filter(r => r.missingSkills.length === 0);
+            filtered = filtered.filter(cv => {
+                if (cv.matchScore === undefined) return true; // CV không có điểm số luôn pass
+                return cv.missingSkills?.length === 0;
+            });
         }
         
-        setMatchResults(filtered);
-    }, [minScore, showMissingSkillsOnly, hideLowScore, allMatchResults]);
+        setFilteredCVs(filtered);
+        setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
+    }, [searchQuery, minScore, showMissingSkillsOnly, hideLowScore, allCVs]);
+    
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredCVs.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedCVs = filteredCVs.slice(startIndex, endIndex);
 
     const resetFilters = () => {
         setMinScore(0);
@@ -318,12 +417,13 @@ export default function CVMatchingPage() {
         );
     }
 
-    const avgScore = matchResults.length > 0
-        ? Math.round(matchResults.reduce((sum, r) => sum + r.matchScore, 0) / matchResults.length)
+    const cvWithScores = filteredCVs.filter(cv => cv.matchScore !== undefined) as EnrichedMatchResult[];
+    const avgScore = cvWithScores.length > 0
+        ? Math.round(cvWithScores.reduce((sum, r) => sum + r.matchScore, 0) / cvWithScores.length)
         : 0;
 
-    const excellentCount = matchResults.filter(r => r.matchScore >= 80).length;
-    const totalMatched = matchResults.length;
+    const excellentCount = cvWithScores.filter(r => r.matchScore >= 80).length;
+    const totalMatched = filteredCVs.length;
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
@@ -356,9 +456,33 @@ export default function CVMatchingPage() {
                             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-50 border border-purple-200">
                                 <Target className="w-4 h-4 text-purple-600" />
                                 <span className="text-sm font-medium text-purple-800">
-                                    {totalMatched} CVs được tìm thấy (yêu cầu: {jobRequest?.quantity || 0} vị trí, match: {jobRequest?.quantity ? jobRequest.quantity + 5 : 5} CVs)
+                                    {filteredCVs.length} CVs trong hệ thống (yêu cầu: {jobRequest?.quantity || 0} vị trí)
                                 </span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+                    <div className="p-6">
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-400" />
+                            <input
+                                type="text"
+                                placeholder="Tìm kiếm CV theo tên, email, số điện thoại hoặc phiên bản CV..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 rounded-xl border border-neutral-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all duration-300 text-gray-900 placeholder:text-neutral-400"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery("")}
+                                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -488,11 +612,11 @@ export default function CVMatchingPage() {
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-fade-in">
                     <StatCard
-                        title="Tổng CVs Matching"
+                        title="Tổng CVs"
                         value={totalMatched.toString()}
                         icon={<FileText className="w-6 h-6" />}
                         color="blue"
-                        change={`Yêu cầu: ${jobRequest?.quantity || 0}, Match: ${jobRequest?.quantity ? jobRequest.quantity + 5 : 5}`}
+                        change={`Tất cả CV trong hệ thống`}
                     />
                     <StatCard
                         title="Điểm Trung Bình"
@@ -519,7 +643,7 @@ export default function CVMatchingPage() {
 
                 {/* CV List */}
                 <div className="space-y-6 animate-fade-in">
-                    {matchResults.length === 0 ? (
+                    {paginatedCVs.length === 0 ? (
                         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 p-12">
                             <div className="text-center mb-8">
                                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -531,10 +655,101 @@ export default function CVMatchingPage() {
                                                       
                         </div>
                     ) : (
-                        matchResults.map((match, index) => {
-                            const totalRequiredSkills = match.matchedSkills.length + match.missingSkills.length;
+                        paginatedCVs.map((cv, index) => {
+                            // Kiểm tra xem CV có điểm số hay không
+                            const hasScore = cv.matchScore !== undefined;
+                            const match = hasScore ? cv as EnrichedMatchResult : null;
+                            
+                            // Tính toán index thực tế trong danh sách đã filter
+                            const actualIndex = startIndex + index;
+                            
+                            // Nếu CV không có điểm số hoặc điểm = 0, hiển thị đơn giản
+                            if (!hasScore || cv.matchScore === 0) {
+                                return (
+                                    <div
+                                        key={cv.talentCV.id}
+                                        className="group bg-white rounded-2xl shadow-soft hover:shadow-medium border border-neutral-100 hover:border-primary-200 p-6 transition-all duration-300 transform hover:-translate-y-1"
+                                    >
+                                        <div className="flex items-start gap-6">
+                                            {/* Rank Badge */}
+                                            <div className="flex flex-col items-center">
+                                                <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold bg-neutral-100 text-neutral-600">
+                                                    #{actualIndex + 1}
+                                                </div>
+                                            </div>
+
+                                            {/* CV Info */}
+                                            <div className="flex-1">
+                                                <div className="flex items-start justify-between mb-4">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors duration-300">
+                                                            {cv.talentInfo?.fullName || `Talent #${cv.talentCV.talentId}`}
+                                                        </h3>
+                                                        <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: v{cv.talentCV.version}</p>
+                                                        <div className="flex items-center gap-4 text-sm text-neutral-500">
+                                                            {cv.talentInfo?.email && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Users className="w-4 h-4" />
+                                                                    {cv.talentInfo.email}
+                                                                </span>
+                                                            )}
+                                                            {cv.talentInfo?.phone && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Phone className="w-4 h-4" />
+                                                                    {cv.talentInfo.phone}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* No Score Badge */}
+                                                    <div className="text-right">
+                                                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-lg border-2 ${getScoreColor(0)}`}>
+                                                            0
+                                                            <span className="text-sm font-medium">/100</span>
+                                                        </div>
+                                                        <p className="text-xs text-neutral-500 mt-1">Không khớp</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="flex items-center gap-3 mt-4 pt-4 border-t border-neutral-200">
+                                                    <Button
+                                                        onClick={() => window.open(cv.talentCV.cvFileUrl, '_blank')}
+                                                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transform hover:scale-105"
+                                                    >
+                                                        <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                        Xem CV
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() =>
+                                                            navigate(`/hr/developers/${cv.talentCV.talentId}`, {
+                                                                state: { returnTo: currentMatchingPath },
+                                                            })
+                                                        }
+                                                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transform hover:scale-105"
+                                                    >
+                                                        <Users className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                        Xem Talent
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => handleCreateApplication(cv as EnrichedMatchResult)}
+                                                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white transform hover:scale-105"
+                                                    >
+                                                        <FileText className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                        Tạo hồ sơ ứng tuyển
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            // CV có điểm số - hiển thị đầy đủ thông tin
+                            const totalRequiredSkills = (match.matchedSkills?.length || 0) + (match.missingSkills?.length || 0);
                             const skillMatchPercent = totalRequiredSkills > 0
-                                ? Math.round((match.matchedSkills.length / totalRequiredSkills) * 100)
+                                ? Math.round(((match.matchedSkills?.length || 0) / totalRequiredSkills) * 100)
                                 : 100;
 
                             const jobWorkingMode = jobRequest?.workingMode ?? WorkingMode.None;
@@ -569,13 +784,13 @@ export default function CVMatchingPage() {
                             
                             // Skills: 50 points
                             const skillPoints = totalRequiredSkills > 0
-                                ? Math.round((50.0 / totalRequiredSkills) * match.matchedSkills.length)
+                                ? Math.round((50.0 / totalRequiredSkills) * (match.matchedSkills?.length || 0))
                                 : 50; // Nếu không có skill yêu cầu thì cho đủ điểm
                             
                             // Availability bonus: 0-5 points (giả định, vì không có trong response)
                             // Backend có thể đã tính sẵn trong matchScore
                             const baseScore = levelPoints + workingModePoints + locationPoints + skillPoints;
-                            const availabilityBonus = match.matchScore - baseScore;
+                            const availabilityBonus = (match.matchScore || 0) - baseScore;
                             
                             // Xác định tiêu chí phù hợp - rút gọn
                             const jobLevelDisplay = jobRoleLevel 
@@ -603,7 +818,7 @@ export default function CVMatchingPage() {
                                     : "✅ Không yêu cầu: Job không yêu cầu địa điểm cụ thể";
                             
                             const skillMatchReason = totalRequiredSkills > 0
-                                ? `${match.matchedSkills.length}/${totalRequiredSkills} kỹ năng (${skillMatchPercent}%)`
+                                ? `${match.matchedSkills?.length || 0}/${totalRequiredSkills} kỹ năng (${skillMatchPercent}%)`
                                 : "Không yêu cầu kỹ năng cụ thể";
 
                             return (
@@ -615,12 +830,12 @@ export default function CVMatchingPage() {
                                     {/* Rank Badge */}
                                     <div className="flex flex-col items-center">
                                         <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
-                                            index === 0 ? 'bg-yellow-100 text-yellow-600 border-2 border-yellow-300' :
-                                            index === 1 ? 'bg-gray-100 text-gray-600 border-2 border-gray-300' :
-                                            index === 2 ? 'bg-orange-100 text-orange-600 border-2 border-orange-300' :
+                                            actualIndex === 0 ? 'bg-yellow-100 text-yellow-600 border-2 border-yellow-300' :
+                                            actualIndex === 1 ? 'bg-gray-100 text-gray-600 border-2 border-gray-300' :
+                                            actualIndex === 2 ? 'bg-orange-100 text-orange-600 border-2 border-orange-300' :
                                             'bg-neutral-100 text-neutral-600'
                                         }`}>
-                                            #{index + 1}
+                                            #{actualIndex + 1}
                                         </div>
                                     </div>
 
@@ -631,7 +846,7 @@ export default function CVMatchingPage() {
                                                 <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors duration-300">
                                                     {match.talentInfo?.fullName || `Talent #${match.talentCV.talentId}`}
                                                 </h3>
-                                                <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: {match.talentCV.version}</p>
+                                                <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: v{match.talentCV.version}</p>
                                                 <div className="flex items-center gap-4 text-sm text-neutral-500">
                                                     {match.talentInfo?.email && (
                                                         <span className="flex items-center gap-1">
@@ -920,16 +1135,16 @@ export default function CVMatchingPage() {
                                         {/* Skills */}
                                         <div className="space-y-3">
                                             {/* Matched Skills */}
-                                            {match.matchedSkills.length > 0 && (
+                                            {(match.matchedSkills?.length || 0) > 0 && (
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <CheckCircle2 className="w-4 h-4 text-green-600" />
                                                         <span className="text-sm font-semibold text-gray-900">
-                                                            Kỹ năng phù hợp ({match.matchedSkills.length})
+                                                            Kỹ năng phù hợp ({match.matchedSkills?.length || 0})
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {match.matchedSkills.map((skill, idx) => (
+                                                        {(match.matchedSkills || []).map((skill, idx) => (
                                                             <span
                                                                 key={idx}
                                                                 className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200"
@@ -980,6 +1195,65 @@ export default function CVMatchingPage() {
                         })
                     )}
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 p-6 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-neutral-600">
+                                Hiển thị <span className="font-semibold text-gray-900">{startIndex + 1}</span> - <span className="font-semibold text-gray-900">{Math.min(endIndex, filteredCVs.length)}</span> trong tổng số <span className="font-semibold text-gray-900">{filteredCVs.length}</span> CV
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-700 hover:text-gray-900"
+                                >
+                                    <ChevronLeft className="w-4 h-4" />
+                                    Trước
+                                </Button>
+                                
+                                <div className="flex items-center gap-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum;
+                                        if (totalPages <= 5) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage <= 3) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
+                                        } else {
+                                            pageNum = currentPage - 2 + i;
+                                        }
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-10 h-10 rounded-lg font-medium transition-all duration-300 ${
+                                                    currentPage === pageNum
+                                                        ? 'bg-primary-600 text-white shadow-md'
+                                                        : 'bg-white border border-neutral-200 text-gray-700 hover:bg-neutral-50'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                
+                                <Button
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-700 hover:text-gray-900"
+                                >
+                                    Sau
+                                    <ChevronRight className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, Search } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerContractService, type PartnerContractPayload } from '../../../services/PartnerContract';
+import { partnerContractService, type PartnerContractPayload, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
 import { talentApplicationService, type TalentApplication } from '../../../services/TalentApplication';
@@ -22,12 +22,18 @@ export default function CreatePartnerContractPage() {
     const [eligibleTalentIds, setEligibleTalentIds] = useState<number[]>([]);
     const [talentHireDates, setTalentHireDates] = useState<Record<number, string>>({});
     const [existingContracts, setExistingContracts] = useState<{ contractNumber: string }[]>([]);
+    const [partnerContracts, setPartnerContracts] = useState<PartnerContract[]>([]);
+    const [filteredTalentIds, setFilteredTalentIds] = useState<number[]>([]);
+    const [partnerSearch, setPartnerSearch] = useState<string>('');
+    const [talentSearch, setTalentSearch] = useState<string>('');
+    const [isPartnerDropdownOpen, setIsPartnerDropdownOpen] = useState(false);
+    const [isTalentDropdownOpen, setIsTalentDropdownOpen] = useState(false);
 
     const [form, setForm] = useState<PartnerContractPayload>({
         partnerId: 0,
         talentId: 0,
         devRate: undefined,
-        rateType: '',
+        rateType: '', // Giữ lại để tương thích với backend, nhưng không hiển thị trong UI
         contractNumber: '',
         status: 'Draft',
         startDate: '',
@@ -83,8 +89,11 @@ export default function CreatePartnerContractPage() {
                 setEligibleTalentIds(Array.from(hiredTalentSet));
                 setTalentHireDates(talentHireDateMap);
                 
-                // Lưu danh sách mã hợp đồng hiện có để kiểm tra trùng
+                // Lưu danh sách hợp đồng đối tác để lọc nhân sự
                 const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+                setPartnerContracts(contracts as PartnerContract[]);
+                
+                // Lưu danh sách mã hợp đồng hiện có để kiểm tra trùng
                 setExistingContracts(contracts.map((c: any) => ({ 
                     contractNumber: (c.contractNumber || '').toUpperCase() 
                 })));
@@ -96,6 +105,51 @@ export default function CreatePartnerContractPage() {
         fetchData();
     }, []);
 
+    // Lọc nhân sự theo đối tác được chọn
+    useEffect(() => {
+        if (form.partnerId) {
+            // Lấy danh sách talentId đang có hợp đồng với đối tác này (status active)
+            const activeStatuses = ['Active', 'Pending', 'Draft']; // Các trạng thái hợp đồng đang hoạt động
+            const talentIdsWithPartner = new Set<number>();
+            
+            partnerContracts
+                .filter(contract => 
+                    contract.partnerId === form.partnerId && 
+                    activeStatuses.includes(contract.status)
+                )
+                .forEach(contract => {
+                    talentIdsWithPartner.add(contract.talentId);
+                });
+            
+            // Lọc nhân sự: phải vừa eligible (đã tuyển) vừa đang làm việc với đối tác này
+            const filtered = eligibleTalentIds.filter(talentId => 
+                talentIdsWithPartner.has(talentId)
+            );
+            
+            setFilteredTalentIds(filtered);
+            
+            // Reset talentId nếu talent hiện tại không còn trong danh sách
+            if (form.talentId && !filtered.includes(form.talentId)) {
+                setForm(prev => ({ ...prev, talentId: 0 }));
+            }
+        } else {
+            // Nếu chưa chọn đối tác, không hiển thị nhân sự nào
+            setFilteredTalentIds([]);
+            setForm(prev => ({ ...prev, talentId: 0 }));
+        }
+    }, [form.partnerId, partnerContracts, eligibleTalentIds]);
+
+    // Filtered lists for search
+    const filteredPartners = partners.filter(partner =>
+        !partnerSearch || partner.companyName.toLowerCase().includes(partnerSearch.toLowerCase())
+    );
+
+    const filteredTalents = talents.filter(talent =>
+        filteredTalentIds.includes(talent.id) &&
+        (!talentSearch || 
+         talent.fullName.toLowerCase().includes(talentSearch.toLowerCase()) ||
+         talent.email.toLowerCase().includes(talentSearch.toLowerCase()))
+    );
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -139,7 +193,7 @@ export default function CreatePartnerContractPage() {
 
         try {
             // Validate required fields
-            if (!form.partnerId || !form.talentId || !form.contractNumber || !form.rateType || !form.startDate) {
+            if (!form.partnerId || !form.talentId || !form.contractNumber || !form.startDate) {
                 setError("Vui lòng điền đầy đủ các trường bắt buộc");
                 setLoading(false);
                 return;
@@ -176,19 +230,6 @@ export default function CreatePartnerContractPage() {
                 return;
             }
 
-            const talentHireDate = talentHireDates[selectedTalent.id];
-            if (talentHireDate) {
-                const hireDateValue = new Date(talentHireDate);
-                const startDateValue = new Date(form.startDate);
-                if (!Number.isNaN(hireDateValue.getTime()) && !Number.isNaN(startDateValue.getTime())) {
-                    if (startDateValue <= hireDateValue) {
-                        setError("Ngày bắt đầu hợp đồng phải sau ngày được tuyển dụng.");
-                        setLoading(false);
-                        return;
-                    }
-                }
-            }
-
             if (form.endDate) {
                 const start = new Date(form.startDate);
                 const end = new Date(form.endDate);
@@ -220,6 +261,7 @@ export default function CreatePartnerContractPage() {
                 contractNumber: contractNumberUpper, // Đảm bảo gửi lên BE là chữ hoa
                 status: 'Draft', // Luôn tạo với trạng thái Draft
                 contractFileUrl: fileUrl,
+                rateType: form.rateType || 'Fixed', // Giá trị mặc định nếu backend yêu cầu
             };
 
             await partnerContractService.create(payload);
@@ -238,13 +280,6 @@ export default function CreatePartnerContractPage() {
         }
     };
 
-    const selectedTalentHireDate = form.talentId ? talentHireDates[form.talentId] : undefined;
-    const minStartDate = selectedTalentHireDate ? (() => {
-        const date = new Date(selectedTalentHireDate);
-        if (Number.isNaN(date.getTime())) return undefined;
-        date.setDate(date.getDate() + 1);
-        return formatDateForInput(date);
-    })() : undefined;
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
@@ -307,27 +342,6 @@ export default function CreatePartnerContractPage() {
                                         placeholder="VD: PCTR-2025-010"
                                     />
                                 </div>
-
-                                {/* Hình thức tính lương */}
-                                <div>
-                                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                                        <DollarSign className="w-4 h-4" />
-                                        Hình thức tính lương <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        name="rateType"
-                                        value={form.rateType}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    >
-                                        <option value="">-- Chọn hình thức tính lương --</option>
-                                        <option value="Hourly">Theo giờ</option>
-                                        <option value="Daily">Theo ngày</option>
-                                        <option value="Monthly">Theo tháng</option>
-                                        <option value="Fixed">Cố định</option>
-                                    </select>
-                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -337,20 +351,79 @@ export default function CreatePartnerContractPage() {
                                         <Building2 className="w-4 h-4" />
                                         Đối tác <span className="text-red-500">*</span>
                                     </label>
-                                    <select
-                                        name="partnerId"
-                                        value={form.partnerId || ''}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    >
-                                        <option value="">-- Chọn đối tác --</option>
-                                        {partners.map(partner => (
-                                            <option key={partner.id} value={partner.id}>
-                                                {partner.companyName}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPartnerDropdownOpen(prev => !prev)}
+                                            className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                                        >
+                                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                                <Building2 className="w-4 h-4 text-neutral-400" />
+                                                <span>
+                                                    {form.partnerId
+                                                        ? partners.find(p => p.id === form.partnerId)?.companyName || "Chọn đối tác"
+                                                        : "Chọn đối tác"}
+                                                </span>
+                                            </div>
+                                            <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                                        </button>
+                                        {isPartnerDropdownOpen && (
+                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                                <div className="p-3 border-b border-neutral-100">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                                        <input
+                                                            type="text"
+                                                            value={partnerSearch}
+                                                            onChange={(e) => setPartnerSearch(e.target.value)}
+                                                            placeholder="Tìm đối tác..."
+                                                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="max-h-56 overflow-y-auto">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setForm(prev => ({ ...prev, partnerId: 0, talentId: 0 }));
+                                                            setPartnerSearch("");
+                                                            setIsPartnerDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                            !form.partnerId
+                                                                ? "bg-primary-50 text-primary-700"
+                                                                : "hover:bg-neutral-50 text-neutral-700"
+                                                        }`}
+                                                    >
+                                                        Chọn đối tác
+                                                    </button>
+                                                    {filteredPartners.length === 0 ? (
+                                                        <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy đối tác phù hợp</p>
+                                                    ) : (
+                                                        filteredPartners.map(partner => (
+                                                            <button
+                                                                type="button"
+                                                                key={partner.id}
+                                                                onClick={() => {
+                                                                    setForm(prev => ({ ...prev, partnerId: partner.id, talentId: 0 }));
+                                                                    setPartnerSearch("");
+                                                                    setIsPartnerDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                                    form.partnerId === partner.id
+                                                                        ? "bg-primary-50 text-primary-700"
+                                                                        : "hover:bg-neutral-50 text-neutral-700"
+                                                                }`}
+                                                            >
+                                                                {partner.companyName}
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Nhân sự */}
@@ -359,27 +432,87 @@ export default function CreatePartnerContractPage() {
                                         <UserCheck className="w-4 h-4" />
                                         Nhân sự <span className="text-red-500">*</span>
                                     </label>
-                                    <select
-                                        name="talentId"
-                                        value={form.talentId || ''}
-                                        onChange={handleChange}
-                                        required
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    >
-                                        <option value="">-- Chọn nhân sự --</option>
-                                        {eligibleTalentIds.length === 0 && (
-                                            <option disabled value="">
-                                                Không có nhân sự nào có hồ sơ ứng tuyển ở trạng thái Đã tuyển
-                                            </option>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => form.partnerId && setIsTalentDropdownOpen(prev => !prev)}
+                                            disabled={!form.partnerId}
+                                            className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500 disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                                        >
+                                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                                <UserCheck className="w-4 h-4 text-neutral-400" />
+                                                <span>
+                                                    {form.talentId
+                                                        ? talents.find(t => t.id === form.talentId)?.fullName || "Chọn nhân sự"
+                                                        : "Chọn nhân sự"}
+                                                </span>
+                                            </div>
+                                            <span className="text-neutral-400 text-xs uppercase">Chọn</span>
+                                        </button>
+                                        {isTalentDropdownOpen && form.partnerId && (
+                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                                <div className="p-3 border-b border-neutral-100">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                                        <input
+                                                            type="text"
+                                                            value={talentSearch}
+                                                            onChange={(e) => setTalentSearch(e.target.value)}
+                                                            placeholder="Tìm nhân sự..."
+                                                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="max-h-56 overflow-y-auto">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setForm(prev => ({ ...prev, talentId: 0 }));
+                                                            setTalentSearch("");
+                                                            setIsTalentDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                            !form.talentId
+                                                                ? "bg-primary-50 text-primary-700"
+                                                                : "hover:bg-neutral-50 text-neutral-700"
+                                                        }`}
+                                                    >
+                                                        Chọn nhân sự
+                                                    </button>
+                                                    {filteredTalents.length === 0 ? (
+                                                        <p className="px-4 py-3 text-sm text-neutral-500">
+                                                            {filteredTalentIds.length === 0
+                                                                ? "Không có nhân sự nào đang làm việc với đối tác này"
+                                                                : "Không tìm thấy nhân sự phù hợp"}
+                                                        </p>
+                                                    ) : (
+                                                        filteredTalents.map(talent => (
+                                                            <button
+                                                                type="button"
+                                                                key={talent.id}
+                                                                onClick={() => {
+                                                                    setForm(prev => ({ ...prev, talentId: talent.id }));
+                                                                    setTalentSearch("");
+                                                                    setIsTalentDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                                    form.talentId === talent.id
+                                                                        ? "bg-primary-50 text-primary-700"
+                                                                        : "hover:bg-neutral-50 text-neutral-700"
+                                                                }`}
+                                                            >
+                                                                {talent.fullName} ({talent.email})
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
                                         )}
-                                        {talents
-                                            .filter(talent => eligibleTalentIds.includes(talent.id))
-                                            .map(talent => (
-                                                <option key={talent.id} value={talent.id}>
-                                                    {talent.fullName} ({talent.email})
-                                                </option>
-                                            ))}
-                                    </select>
+                                    </div>
+                                    {!form.partnerId && (
+                                        <p className="text-xs text-neutral-500 mt-2">Vui lòng chọn đối tác trước để hiển thị danh sách nhân sự</p>
+                                    )}
                                 </div>
                             </div>
 
