@@ -13,13 +13,15 @@ import {
   AlertCircle,
   Clock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  User
 } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/sales_staff/SidebarItems';
 import { clientContractService, type ClientContract } from '../../../services/ClientContract';
 import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
 import { projectService, type Project } from '../../../services/Project';
+import { talentService, type Talent } from '../../../services/Talent';
 
 export default function ListClientContracts() {
   const [contracts, setContracts] = useState<ClientContract[]>([]);
@@ -34,9 +36,10 @@ export default function ListClientContracts() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
     
-  // Store client company and project data for display
+  // Store client company, project, and talent data for display
   const [clientsMap, setClientsMap] = useState<Map<number, ClientCompany>>(new Map());
   const [projectsMap, setProjectsMap] = useState<Map<number, Project>>(new Map());
+  const [talentsMap, setTalentsMap] = useState<Map<number, Talent>>(new Map());
   
   // Filter states
   const [filterClientId, setFilterClientId] = useState<number | null>(null);
@@ -142,11 +145,12 @@ export default function ListClientContracts() {
         setLoading(true);
         setError('');
         
-        // Fetch contracts, client companies, and projects in parallel
-        const [contractsData, clientsData, projectsData] = await Promise.all([
+        // Fetch contracts, client companies, projects, and talents in parallel
+        const [contractsData, clientsData, projectsData, talentsData] = await Promise.all([
           clientContractService.getAll({ excludeDeleted: true }),
           clientCompanyService.getAll({ excludeDeleted: true }),
-          projectService.getAll({ excludeDeleted: true })
+          projectService.getAll({ excludeDeleted: true }),
+          talentService.getAll({ excludeDeleted: true })
         ]);
 
         const sortedContracts = [...contractsData].sort((a, b) => {
@@ -170,6 +174,12 @@ export default function ListClientContracts() {
           projectsMapData.set(p.id, p);
         });
         setProjectsMap(projectsMapData);
+
+        const talentsMapData = new Map<number, Talent>();
+        talentsData.forEach((t: Talent) => {
+          talentsMapData.set(t.id, t);
+        });
+        setTalentsMap(talentsMapData);
       } catch (err: any) {
         console.error("❌ Lỗi tải danh sách hợp đồng:", err);
         setError(err.message || "Không thể tải danh sách hợp đồng");
@@ -188,11 +198,13 @@ export default function ListClientContracts() {
         const contractNumber = c.contractNumber?.toLowerCase() || '';
         const projectName = projectsMap.get(c.projectId)?.name?.toLowerCase() || '';
         const clientName = clientsMap.get(c.clientCompanyId)?.name?.toLowerCase() || '';
+        const talentName = talentsMap.get(c.talentId)?.fullName?.toLowerCase() || '';
         const searchLower = searchTerm.toLowerCase();
         
         return contractNumber.includes(searchLower) ||
                projectName.includes(searchLower) ||
-               clientName.includes(searchLower);
+               clientName.includes(searchLower) ||
+               talentName.includes(searchLower);
       });
     }
     if (filterStatus) {
@@ -207,7 +219,7 @@ export default function ListClientContracts() {
     }
     setFilteredContracts(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterClientId, filterProjectId, contracts, clientsMap, projectsMap]);
+  }, [searchTerm, filterStatus, filterClientId, filterProjectId, contracts, clientsMap, projectsMap, talentsMap]);
   
   const totalPages = Math.ceil(filteredContracts.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -258,6 +270,10 @@ export default function ListClientContracts() {
 
   const getProjectName = (projectId: number) => {
     return projectsMap.get(projectId)?.name || '—';
+  };
+
+  const getTalentName = (talentId: number) => {
+    return talentsMap.get(talentId)?.fullName || '—';
   };
 
   const getStatusColor = (status: string) => {
@@ -426,7 +442,7 @@ export default function ListClientContracts() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm theo số hợp đồng, dự án..."
+                  placeholder="Tìm kiếm theo số hợp đồng, khách hàng, nhân sự, dự án..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -720,6 +736,7 @@ export default function ListClientContracts() {
                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Khách hàng</th>
+                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Nhân sự</th>
                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
@@ -740,14 +757,26 @@ export default function ListClientContracts() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm text-neutral-700">{getClientName(contract.clientCompanyId)}</span>
+                          <Building2 className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                          <span className="text-sm text-neutral-700 truncate max-w-[200px]" title={getClientName(contract.clientCompanyId)}>
+                            {getClientName(contract.clientCompanyId)}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          <Briefcase className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm text-neutral-700">{getProjectName(contract.projectId)}</span>
+                          <User className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                          <span className="text-sm text-neutral-700 truncate max-w-[180px]" title={getTalentName(contract.talentId)}>
+                            {getTalentName(contract.talentId)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                          <span className="text-sm text-neutral-700 truncate max-w-[200px]" title={getProjectName(contract.projectId)}>
+                            {getProjectName(contract.projectId)}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">

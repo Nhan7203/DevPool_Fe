@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, Search } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
@@ -10,6 +10,7 @@ import { uploadFile } from '../../../utils/firebaseStorage';
 
 export default function CreatePartnerContractPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
@@ -18,6 +19,7 @@ export default function CreatePartnerContractPage() {
     const [talents, setTalents] = useState<Talent[]>([]);
     const [contractFile, setContractFile] = useState<File | null>(null);
     const [existingContracts, setExistingContracts] = useState<{ contractNumber: string }[]>([]);
+    const [allContracts, setAllContracts] = useState<PartnerContract[]>([]);
     const [filteredTalentIds, setFilteredTalentIds] = useState<number[]>([]);
     const [partnerSearch, setPartnerSearch] = useState<string>('');
     const [talentSearch, setTalentSearch] = useState<string>('');
@@ -51,32 +53,76 @@ export default function CreatePartnerContractPage() {
                 
                 // Lưu danh sách mã hợp đồng hiện có để kiểm tra trùng
                 const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
-                setExistingContracts((contracts as PartnerContract[]).map((c: PartnerContract) => ({ 
+                const contractsArray = contracts as PartnerContract[];
+                setAllContracts(contractsArray);
+                setExistingContracts(contractsArray.map((c: PartnerContract) => ({ 
                     contractNumber: (c.contractNumber || '').toUpperCase() 
                 })));
+
+                // Pre-fill form từ query params nếu có
+                const partnerIdParam = searchParams.get('partnerId');
+                const talentIdParam = searchParams.get('talentId');
+                
+                if (partnerIdParam && talentIdParam) {
+                    const partnerId = parseInt(partnerIdParam, 10);
+                    const talentId = parseInt(talentIdParam, 10);
+                    
+                    // Kiểm tra partner và talent có tồn tại không
+                    const partnerExists = partnersData.some((p: Partner) => p.id === partnerId);
+                    const talentExists = talentsData.some((t: Talent) => t.id === talentId);
+                    
+                    if (partnerExists && talentExists) {
+                        setForm(prev => ({
+                            ...prev,
+                            partnerId: partnerId,
+                            talentId: talentId
+                        }));
+                    }
+                }
             } catch (err) {
                 console.error("❌ Lỗi tải dữ liệu:", err);
                 setError("Không thể tải danh sách đối tác và nhân sự");
             }
         };
         fetchData();
-    }, []);
+    }, [searchParams]);
 
-    // Lọc nhân sự theo đối tác được chọn
+    // Lọc nhân sự theo đối tác được chọn và loại bỏ những talent đã có hợp đồng (trừ Rejected)
     useEffect(() => {
         if (form.partnerId) {
             // Lọc nhân sự: có currentPartnerId = partnerId đã chọn và status = "Working"
-            const filtered = talents
+            let filtered = talents
                 .filter(talent => 
                     talent.currentPartnerId === form.partnerId && 
                     talent.status === "Working"
-                )
-                .map(talent => talent.id);
+                );
+
+            // Lọc bỏ những talent đã có hợp đồng (trừ trạng thái Rejected)
+            filtered = filtered.filter(talent => {
+                // Tìm hợp đồng của talent này
+                const talentContracts = allContracts.filter(c => c.talentId === talent.id);
+                
+                if (talentContracts.length === 0) {
+                    // Chưa có hợp đồng nào, cho phép hiển thị
+                    return true;
+                }
+                
+                // Lấy hợp đồng mới nhất
+                const latestContract = talentContracts.sort((a, b) => {
+                    const dateA = new Date(a.startDate).getTime();
+                    const dateB = new Date(b.startDate).getTime();
+                    return dateB - dateA;
+                })[0];
+                
+                // Chỉ hiển thị nếu hợp đồng ở trạng thái Rejected
+                return latestContract.status === 'Rejected';
+            });
             
-            setFilteredTalentIds(filtered);
+            const filteredIds = filtered.map(talent => talent.id);
+            setFilteredTalentIds(filteredIds);
             
             // Reset talentId nếu talent hiện tại không còn trong danh sách
-            if (form.talentId && !filtered.includes(form.talentId)) {
+            if (form.talentId && !filteredIds.includes(form.talentId)) {
                 setForm(prev => ({ ...prev, talentId: 0 }));
             }
         } else {
@@ -84,7 +130,7 @@ export default function CreatePartnerContractPage() {
             setFilteredTalentIds([]);
             setForm(prev => ({ ...prev, talentId: 0 }));
         }
-    }, [form.partnerId, form.talentId, talents]);
+    }, [form.partnerId, form.talentId, talents, allContracts, searchParams]);
 
     // Filtered lists for search
     const filteredPartners = partners.filter(partner =>
@@ -217,8 +263,15 @@ export default function CreatePartnerContractPage() {
             // Việc gửi yêu cầu duyệt (chuyển sang pending và gửi thông báo) sẽ thực hiện ở bước riêng
             setSuccess(true);
             setContractFile(null);
+            
+            // Nếu có applicationId trong query params, quay lại trang application detail
+            const applicationId = searchParams.get('applicationId');
             setTimeout(() => {
-                navigate("/hr/contracts");
+                if (applicationId) {
+                    navigate(`/hr/applications/${applicationId}`);
+                } else {
+                    navigate("/hr/contracts");
+                }
             }, 1500);
         } catch (err: unknown) {
             console.error("❌ Lỗi tạo hợp đồng:", err);
@@ -459,7 +512,7 @@ export default function CreatePartnerContractPage() {
                                         )}
                                     </div>
                                     {!form.partnerId && (
-                                        <p className="text-xs text-neutral-500 mt-2">Vui lòng chọn đối tác trước để hiển thị danh sách nhân sự</p>
+                                        <p className="text-xs text-neutral-500 mt-2">Vui lòng chọn đối tác trước</p>
                                     )}
                                 </div>
                             </div>

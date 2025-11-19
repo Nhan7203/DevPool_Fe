@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import {
@@ -37,6 +37,7 @@ import { jobRoleLevelService } from "../../../services/JobRoleLevel";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
 import { jobRoleService } from "../../../services/JobRole";
+import { clientContractService, type ClientContract } from "../../../services/ClientContract";
 import { Button } from "../../../components/ui/button";
 
 interface SalesActivity extends ApplyActivity {
@@ -166,6 +167,7 @@ const activityStatusLabels: Record<number, string> = {
 export default function SalesApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [application, setApplication] = useState<TalentApplicationDetailed | null>(null);
   const [jobInfo, setJobInfo] = useState<JobDisplayInfo | null>(null);
@@ -174,6 +176,8 @@ export default function SalesApplicationDetailPage() {
   const [showDob, setShowDob] = useState(false);
   const [showFullCVSummary, setShowFullCVSummary] = useState(false);
   const [showJobDetails, setShowJobDetails] = useState(false);
+  const [existingContract, setExistingContract] = useState<ClientContract | null>(null);
+  const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -209,6 +213,7 @@ export default function SalesApplicationDetailPage() {
               display.projectName = project?.name ?? "—";
 
               if (project?.clientCompanyId) {
+                setClientCompanyId(project.clientCompanyId);
                 try {
                   const company = await clientCompanyService.getById(project.clientCompanyId);
                   display.clientCompany = {
@@ -315,6 +320,29 @@ export default function SalesApplicationDetailPage() {
           console.error("❌ Lỗi tải hoạt động:", err);
           setActivities([]);
         }
+
+        // Fetch existing contract for this talent (if application is Hired)
+        try {
+          if (applicationData.status === 'Hired' && applicationData.talent?.id) {
+            const contractsData = await clientContractService.getAll({
+              talentId: applicationData.talent.id,
+              excludeDeleted: true
+            });
+            const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+            // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo startDate
+            const sortedContracts = (contracts as ClientContract[]).sort((a, b) => {
+              const dateA = new Date(a.startDate).getTime();
+              const dateB = new Date(b.startDate).getTime();
+              return dateB - dateA;
+            });
+            setExistingContract(sortedContracts.length > 0 ? sortedContracts[0] : null);
+          } else {
+            setExistingContract(null);
+          }
+        } catch (err) {
+          console.error("❌ Lỗi tải thông tin hợp đồng:", err);
+          setExistingContract(null);
+        }
       } catch (err) {
         console.error("❌ Lỗi tải hồ sơ:", err);
         navigate("/sales/applications");
@@ -324,7 +352,7 @@ export default function SalesApplicationDetailPage() {
     };
 
     fetchData();
-  }, [id, navigate]);
+  }, [id, navigate, location.key]);
 
   const timeline = useMemo(() => {
     if (!application) return [];
@@ -354,6 +382,100 @@ export default function SalesApplicationDetailPage() {
 
     return events;
   }, [activities, application]);
+
+  // Hàm lấy nhãn trạng thái hợp đồng
+  const getContractStatusLabel = (status: string) => {
+    const normalized = status?.toLowerCase();
+    switch (normalized) {
+      case 'active':
+        return 'Đang hiệu lực';
+      case 'pending':
+        return 'Chờ duyệt';
+      case 'draft':
+        return 'Bản nháp';
+      case 'expired':
+        return 'Đã hết hạn';
+      case 'terminated':
+        return 'Đã chấm dứt';
+      case 'rejected':
+        return 'Đã từ chối';
+      default:
+        return status || '—';
+    }
+  };
+
+  // Hàm lấy màu trạng thái hợp đồng
+  const getContractStatusColor = (status: string) => {
+    const normalized = status?.toLowerCase();
+    switch (normalized) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
+      case 'expired':
+        return 'bg-blue-100 text-blue-800';
+      case 'terminated':
+        return 'bg-red-100 text-red-800';
+      case 'rejected':
+        return 'bg-rose-100 text-rose-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Kiểm tra xem có nên hiển thị nút "Tạo hợp đồng" hay không
+  const shouldShowCreateContractButton = useMemo(() => {
+    // Chỉ hiển thị khi application ở trạng thái Hired
+    if (application?.status !== 'Hired') {
+      return false;
+    }
+
+    // Nếu chưa có hợp đồng nào, hiển thị nút "Tạo hợp đồng"
+    if (!existingContract) {
+      return true;
+    }
+
+    // Nếu hợp đồng ở trạng thái "Rejected", hiển thị nút "Tạo hợp đồng khác"
+    if (existingContract.status === 'Rejected') {
+      return true;
+    }
+
+    // Các trạng thái khác thì không hiển thị nút tạo hợp đồng
+    return false;
+  }, [application?.status, existingContract]);
+
+  // Hàm xử lý khi click nút "Tạo hợp đồng"
+  const handleCreateContract = () => {
+    if (!application?.talent) {
+      alert("Không tìm thấy thông tin nhân sự");
+      return;
+    }
+
+    const talentId = application.talent.id;
+    
+    // Lấy clientCompanyId từ state hoặc từ application
+    const companyId = clientCompanyId || application.project?.clientCompanyId || application.clientCompany?.id;
+
+    if (!companyId) {
+      alert("Không tìm thấy thông tin công ty khách hàng. Vui lòng đảm bảo application có liên kết với project hoặc client company.");
+      return;
+    }
+
+    const projectId = application.project?.id;
+
+    // Chuyển đến trang tạo hợp đồng với query params
+    const params = new URLSearchParams({
+      clientCompanyId: companyId.toString(),
+      talentId: talentId.toString(),
+      applicationId: application.id.toString()
+    });
+    if (projectId) {
+      params.append('projectId', projectId.toString());
+    }
+    navigate(`/sales/contracts/create?${params.toString()}`);
+  };
 
   if (loading) {
     return (
@@ -417,6 +539,26 @@ export default function SalesApplicationDetailPage() {
                   {statusConfig.label}
                 </span>
               </div>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {application?.status === 'Hired' && existingContract && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 bg-white">
+                  <FileText className="w-4 h-4 text-neutral-600" />
+                  <span className="text-sm font-medium text-neutral-700">Đã có hợp đồng:</span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getContractStatusColor(existingContract.status)}`}>
+                    {getContractStatusLabel(existingContract.status)}
+                  </span>
+                </div>
+              )}
+              {shouldShowCreateContractButton && (
+                <Button
+                  onClick={handleCreateContract}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                >
+                  <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  {existingContract?.status === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -645,7 +787,10 @@ export default function SalesApplicationDetailPage() {
                     />
                     <InfoRow
                       label="Ngày cập nhật CV"
-                      value={(application.cv as any)?.updatedAt ? new Date((application.cv as any).updatedAt).toLocaleString("vi-VN") : "Chưa cập nhật"}
+                      value={(() => {
+                        const cvWithUpdatedAt = application.cv as { updatedAt?: string | null };
+                        return cvWithUpdatedAt?.updatedAt ? new Date(cvWithUpdatedAt.updatedAt).toLocaleString("vi-VN") : "Chưa cập nhật";
+                      })()}
                       icon={<Calendar className="w-4 h-4" />}
                     />
                   </div>

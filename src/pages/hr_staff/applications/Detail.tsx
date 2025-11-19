@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyService, type Apply } from "../../../services/Apply";
@@ -16,6 +16,7 @@ import { talentApplicationService, type TalentApplicationDetailed } from "../../
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { locationService } from "../../../services/location";
 import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
+import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
 import { Button } from "../../../components/ui/button";
 import {
   ArrowLeft,
@@ -87,6 +88,7 @@ const getActivityStatusLabel = (status: number): string => {
 export default function TalentCVApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [application, setApplication] = useState<Apply | null>(null);
   const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
   const [talentCV, setTalentCV] = useState<TalentCV | null>(null);
@@ -106,6 +108,7 @@ export default function TalentCVApplicationDetailPage() {
   const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
   const [showDob, setShowDob] = useState(false);
   const [showFullCVSummary, setShowFullCVSummary] = useState(false);
+  const [existingContract, setExistingContract] = useState<PartnerContract | null>(null);
 
   const fetchData = useCallback(async () => {
     let currentApplication: Apply | null = null;
@@ -223,9 +226,10 @@ export default function TalentCVApplicationDetailPage() {
       }
 
       // Fetch detailed application info (talent, project, client company)
+      let foundApplication: TalentApplicationDetailed | null = null;
       try {
         const detailedResponse = await talentApplicationService.getByJobRequest(appData.jobRequestId);
-        const foundApplication = detailedResponse?.data?.applications?.find(app => app.id === appData.id) ?? null;
+        foundApplication = detailedResponse?.data?.applications?.find(app => app.id === appData.id) ?? null;
         setDetailedApplication(foundApplication);
 
         if (foundApplication?.talent?.locationId) {
@@ -242,6 +246,29 @@ export default function TalentCVApplicationDetailPage() {
         console.error("❌ Lỗi tải thông tin chi tiết ứng viên:", err);
         setDetailedApplication(null);
         setTalentLocationName("—");
+      }
+
+      // Fetch existing contract for this talent (if application is Hired)
+      try {
+        if (currentApplication.status === 'Hired' && foundApplication?.talent?.id) {
+          const contractsData = await partnerContractService.getAll({
+            talentId: foundApplication.talent.id,
+            excludeDeleted: true
+          });
+          const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+          // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo startDate
+          const sortedContracts = (contracts as PartnerContract[]).sort((a, b) => {
+            const dateA = new Date(a.startDate).getTime();
+            const dateB = new Date(b.startDate).getTime();
+            return dateB - dateA;
+          });
+          setExistingContract(sortedContracts.length > 0 ? sortedContracts[0] : null);
+        } else {
+          setExistingContract(null);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải thông tin hợp đồng:", err);
+        setExistingContract(null);
       }
 
       // Fetch submitter name
@@ -378,7 +405,7 @@ export default function TalentCVApplicationDetailPage() {
 
   useEffect(() => {
     fetchData();
-  }, [id, fetchData]);
+  }, [id, fetchData, location.key]);
 
   // Giữ lại nếu cần dùng cho mục đích khác trong tương lai (hiện không dùng để ẩn nút)
   // const allProcessStepsCovered = useMemo(() => {
@@ -393,6 +420,69 @@ export default function TalentCVApplicationDetailPage() {
     const existingByStepId = new Set<number>(activities.map(a => a.processStepId));
     return templateSteps.some(step => !existingByStepId.has(step.id));
   }, [templateSteps, activities]);
+
+  // Hàm lấy nhãn trạng thái hợp đồng
+  const getContractStatusLabel = (status: string) => {
+    const normalized = status?.toLowerCase();
+    switch (normalized) {
+      case 'active':
+        return 'Đang hiệu lực';
+      case 'pending':
+        return 'Chờ duyệt';
+      case 'draft':
+        return 'Bản nháp';
+      case 'expired':
+        return 'Đã hết hạn';
+      case 'terminated':
+        return 'Đã chấm dứt';
+      case 'rejected':
+        return 'Đã từ chối';
+      default:
+        return status || '—';
+    }
+  };
+
+  // Hàm lấy màu trạng thái hợp đồng
+  const getContractStatusColor = (status: string) => {
+    const normalized = status?.toLowerCase();
+    switch (normalized) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
+      case 'expired':
+        return 'bg-blue-100 text-blue-800';
+      case 'terminated':
+        return 'bg-red-100 text-red-800';
+      case 'rejected':
+        return 'bg-rose-100 text-rose-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Kiểm tra xem có nên hiển thị nút "Tạo hợp đồng" hay không
+  const shouldShowCreateContractButton = useMemo(() => {
+    // Chỉ hiển thị khi application ở trạng thái Hired
+    if (application?.status !== 'Hired') {
+      return false;
+    }
+
+    // Nếu chưa có hợp đồng nào, hiển thị nút "Tạo hợp đồng"
+    if (!existingContract) {
+      return true;
+    }
+
+    // Nếu hợp đồng ở trạng thái "Rejected", hiển thị nút "Tạo hợp đồng khác"
+    if (existingContract.status === 'Rejected') {
+      return true;
+    }
+
+    // Các trạng thái khác thì không hiển thị nút tạo hợp đồng
+    return false;
+  }, [application?.status, existingContract]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!id || !application) return;
@@ -580,6 +670,25 @@ export default function TalentCVApplicationDetailPage() {
     }
   };
 
+  // Hàm xử lý khi click nút "Tạo hợp đồng"
+  const handleCreateContract = () => {
+    if (!detailedApplication?.talent) {
+      alert("Không tìm thấy thông tin nhân sự");
+      return;
+    }
+
+    const talentId = detailedApplication.talent.id;
+    const partnerId = detailedApplication.talent.currentPartnerId;
+
+    if (!partnerId) {
+      alert("Nhân sự này chưa có đối tác được gán");
+      return;
+    }
+
+    // Chuyển đến trang tạo hợp đồng với query params
+    navigate(`/hr/contracts/create?partnerId=${partnerId}&talentId=${talentId}&applicationId=${application?.id}`);
+  };
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="HR Staff" />
@@ -607,6 +716,24 @@ export default function TalentCVApplicationDetailPage() {
             </div>
 
             <div className="flex gap-3 flex-wrap">
+              {application?.status === 'Hired' && existingContract && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 bg-white">
+                  <FileText className="w-4 h-4 text-neutral-600" />
+                  <span className="text-sm font-medium text-neutral-700">Đã có hợp đồng:</span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getContractStatusColor(existingContract.status)}`}>
+                    {getContractStatusLabel(existingContract.status)}
+                  </span>
+                </div>
+              )}
+              {shouldShowCreateContractButton && (
+                <Button
+                  onClick={handleCreateContract}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                >
+                  <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  {existingContract?.status === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
+                </Button>
+              )}
               {application.status === 'Submitted' ? (
                 <Button
                   onClick={() => handleStatusUpdate('Withdrawn')}

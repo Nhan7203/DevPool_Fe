@@ -212,4 +212,36 @@ export const talentService = {
       throw { message: "Unexpected error occurred during status change" };
     }
   },
+
+  async getByClientOrProject(clientCompanyId?: number, projectId?: number) {
+    try {
+      if (!clientCompanyId && !projectId) {
+        throw { message: "Either clientCompanyId or projectId must be provided" };
+      }
+
+      const params = new URLSearchParams();
+      if (clientCompanyId) params.append("clientCompanyId", clientCompanyId.toString());
+      if (projectId) params.append("projectId", projectId.toString());
+
+      const url = `/talent/by-client-or-project${params.toString() ? `?${params}` : ""}`;
+      const response = await axios.get(url);
+      
+      // Backend trả về format { success, message, data }
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
+      }
+      
+      // Fallback nếu format khác
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to fetch talents by client or project" };
+      }
+      throw error || { message: "Unexpected error occurred" };
+    }
+  },
 };
