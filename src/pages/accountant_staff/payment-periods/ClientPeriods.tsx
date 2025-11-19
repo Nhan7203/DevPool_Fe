@@ -616,7 +616,7 @@ const AccountantClientPeriods: React.FC = () => {
 
       <div className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Kỳ thanh toán Khách hàng</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Kỳ Thanh Toán Khách hàng</h1>
           <p className="text-neutral-600 mt-1">Chọn công ty để xem các kỳ thanh toán</p>
         </div>
 

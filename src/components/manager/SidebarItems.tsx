@@ -1,44 +1,52 @@
-import { 
-  BarChart3, 
-  LineChart, 
-  Users, 
+import {
+  BarChart3,
+  LineChart,
+  Users,
   DollarSign,
   CalendarClock,
-  Wallet
+  Wallet,
 } from "lucide-react";
 
 export const sidebarItems = [
   {
-    label: 'Tổng Quan',
-    href: '/manager/dashboard',
-    icon: BarChart3
+    label: "Tổng Quan",
+    href: "/manager/dashboard",
+    icon: BarChart3,
   },
   {
-    label: 'Hợp Đồng',
-    href: '/manager/contract',
+    label: "Hợp Đồng",
+    href: "/manager/contract",
     icon: Users,
     subItems: [
-      { label: 'Hợp Đồng Khách Hàng', href: '/manager/contracts/clients' },
-      { label: 'Hợp Đồng Nhân Sự', href: '/manager/contracts/developers' },
-    ]
+      { label: "Hợp Đồng Khách Hàng", href: "/manager/contracts/clients" },
+      { label: "Hợp Đồng Nhân Sự", href: "/manager/contracts/developers" },
+    ],
   },
   {
-    label: 'Kỳ Thanh Toán',
-    href: '/manager/payment-periods',
+    label: "Kỳ Thanh Toán",
+    href: "/manager/payment-periods",
     icon: CalendarClock,
     subItems: [
-      { label: 'Khách hàng', href: '/manager/payment-periods/clients', icon: Wallet },
-      { label: 'Nhân sự', href: '/manager/payment-periods/partners', icon: Wallet },
-    ]
+      {
+        label: "Nhân sự",
+        href: "/manager/payment-periods/partners",
+        icon: Wallet,
+      },
+      {
+        label: "Khách hàng",
+        href: "/manager/payment-periods/clients",
+        icon: Wallet,
+      },
+    ],
   },
   {
-    label: 'Báo cáo Kinh doanh',
-    href: '/manager/business',
+    label: "Báo cáo Kinh doanh",
+    href: "/manager/business",
     icon: LineChart,
     subItems: [
-      { label: 'Tổng quan kinh doanh', href: '/manager/business/overview' },
-      { label: 'Doanh thu', href: '/manager/business/revenue' },
-    ]
+      { label: "Tổng quan kinh doanh", href: "/manager/business/overview" },
+      { label: "Doanh thu", href: "/manager/business/revenue" },
+    ],
   },
   // {
   //   label: 'Báo cáo Nhân sự',
@@ -52,14 +60,14 @@ export const sidebarItems = [
   //   ]
   // },
   {
-    label: 'Báo cáo Tài chính',
-    href: '/manager/finance',
+    label: "Báo cáo Tài chính",
+    href: "/manager/finance",
     icon: DollarSign,
     subItems: [
-      { label: 'Tổng quan tài chính', href: '/manager/finance/overview' },
-      { label: 'Dòng tiền', href: '/manager/finance/cashflow' },
-      { label: 'Công nợ', href: '/manager/finance/debt' },
-      { label: 'Lợi nhuận', href: '/manager/finance/profit' }
-    ]
+      { label: "Tổng quan tài chính", href: "/manager/finance/overview" },
+      { label: "Dòng tiền", href: "/manager/finance/cashflow" },
+      { label: "Công nợ", href: "/manager/finance/debt" },
+      { label: "Lợi nhuận", href: "/manager/finance/profit" },
+    ],
   },
 ];
