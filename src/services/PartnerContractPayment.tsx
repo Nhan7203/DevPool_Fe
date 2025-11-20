@@ -41,6 +41,30 @@ export interface PartnerContractPaymentFilter {
   excludeDeleted?: boolean;
 }
 
+// Interface cho PartnerContractPaymentCalculateModel (Payload để tính toán và submit)
+export interface PartnerContractPaymentCalculateModel {
+  actualWorkHours: number;
+  otHours?: number | null;
+  notes?: string | null;
+}
+
+// Interface cho PartnerContractPaymentApproveModel (Payload để approve)
+export interface PartnerContractPaymentApproveModel {
+  notes?: string | null;
+}
+
+// Interface cho PartnerContractPaymentRejectModel (Payload để reject)
+export interface PartnerContractPaymentRejectModel {
+  rejectionReason: string;
+}
+
+// Interface cho PartnerContractPaymentMarkAsPaidModel (Payload để ghi nhận đã chi trả)
+export interface PartnerContractPaymentMarkAsPaidModel {
+  paidAmount: number;
+  paymentDate: string; // DateTime dưới dạng string ISO
+  notes?: string | null;
+}
+
 export const partnerContractPaymentService = {
   // Lấy danh sách PartnerContractPayment với filter
   async getAll(filter?: PartnerContractPaymentFilter) {
@@ -105,6 +129,70 @@ export const partnerContractPaymentService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể cập nhật thanh toán hợp đồng đối tác" };
       throw { message: "Lỗi không xác định khi cập nhật thanh toán hợp đồng đối tác" };
+    }
+  },
+
+  // Tính toán và submit PartnerContractPayment
+  async calculateAndSubmit(id: number, payload: PartnerContractPaymentCalculateModel) {
+    try {
+      const requestPayload = {
+        ActualWorkHours: payload.actualWorkHours,
+        OTHours: payload.otHours ?? null,
+        Notes: payload.notes ?? null
+      };
+      const response = await axios.post(`/partnercontractpayment/${id}/calculate-and-submit`, requestPayload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể tính toán và submit thanh toán hợp đồng đối tác" };
+      throw { message: "Lỗi không xác định khi tính toán và submit thanh toán hợp đồng đối tác" };
+    }
+  },
+
+  // Approve PartnerContractPayment
+  async approve(id: number, payload: PartnerContractPaymentApproveModel) {
+    try {
+      const requestPayload = {
+        Notes: payload.notes ?? null
+      };
+      const response = await axios.post(`/partnercontractpayment/${id}/approve`, requestPayload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể duyệt thanh toán hợp đồng đối tác" };
+      throw { message: "Lỗi không xác định khi duyệt thanh toán hợp đồng đối tác" };
+    }
+  },
+
+  // Reject PartnerContractPayment
+  async reject(id: number, payload: PartnerContractPaymentRejectModel) {
+    try {
+      const requestPayload = {
+        RejectionReason: payload.rejectionReason
+      };
+      const response = await axios.post(`/partnercontractpayment/${id}/reject`, requestPayload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể từ chối thanh toán hợp đồng đối tác" };
+      throw { message: "Lỗi không xác định khi từ chối thanh toán hợp đồng đối tác" };
+    }
+  },
+
+  // Mark as paid - Ghi nhận đã chi trả
+  async markAsPaid(id: number, payload: PartnerContractPaymentMarkAsPaidModel) {
+    try {
+      const requestPayload = {
+        PaidAmount: payload.paidAmount,
+        PaymentDate: payload.paymentDate,
+        Notes: payload.notes ?? null
+      };
+      const response = await axios.post(`/partnercontractpayment/${id}/mark-as-paid`, requestPayload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể ghi nhận đã chi trả" };
+      throw { message: "Lỗi không xác định khi ghi nhận đã chi trả" };
     }
   },
 };

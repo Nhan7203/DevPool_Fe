@@ -10,9 +10,17 @@ import { clientDocumentService, type ClientDocument } from "../../../services/Cl
 import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, X, Check, FileText, Eye, Download } from "lucide-react";
+import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle, Upload, FileUp, CheckCircle } from "lucide-react";
+import { uploadFile } from "../../../utils/firebaseStorage";
+import { decodeJWT } from "../../../services/Auth";
+import { useAuth } from "../../../contexts/AuthContext";
+import type { ClientDocumentCreate } from "../../../services/ClientDocument";
+import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
+import { userService } from "../../../services/User";
+import { formatVND, getErrorMessage } from "../../../utils/helpers";
 
 const ManagerClientPeriods: React.FC = () => {
+  const { user } = useAuth();
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
@@ -27,6 +35,39 @@ const ManagerClientPeriods: React.FC = () => {
 
   // Trạng thái cập nhật
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+  
+  // Modal approve với record invoice
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [selectedPaymentForApprove, setSelectedPaymentForApprove] = useState<ClientContractPayment | null>(null);
+  const [invoiceFormData, setInvoiceFormData] = useState({
+    invoiceNumber: "",
+    invoiceDate: "",
+    invoicedAmount: 0,
+    notes: ""
+  });
+
+  // Modal tạo tài liệu trong approve
+  const [documentTypesList, setDocumentTypesList] = useState<DocumentType[]>([]);
+  const [loadingDocumentTypes, setLoadingDocumentTypes] = useState(false);
+  const [createDocumentError, setCreateDocumentError] = useState<string | null>(null);
+  const [createDocumentSuccess, setCreateDocumentSuccess] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [documentFormData, setDocumentFormData] = useState({
+    documentTypeId: 0,
+    fileName: "",
+    filePath: "",
+    description: "",
+    source: "Manager",
+    referencedPartnerDocumentId: 0
+  });
+
+  // Modal reject
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedPaymentForReject, setSelectedPaymentForReject] = useState<ClientContractPayment | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   
   // Map contract ID to contract number for display
   const [contractsMap, setContractsMap] = useState<Map<number, ClientContract>>(new Map());
@@ -93,6 +134,164 @@ const ManagerClientPeriods: React.FC = () => {
     loadPeriods();
   }, [selectedCompanyId]);
 
+  // Helper function để lấy danh sách user IDs theo role
+  const getUserIdByRole = async (role: string): Promise<string[]> => {
+    try {
+      const usersData = await userService.getAll({ 
+        role, 
+        isActive: true, 
+        excludeDeleted: true 
+      });
+      return usersData.items.map(user => user.id);
+    } catch (error) {
+      console.error(`Error getting users with role ${role}:`, error);
+      return [];
+    }
+  };
+
+  // Kiểm tra và cập nhật Cancelled cho các payment của contract terminated (chưa Paid/Invoiced)
+  const checkAndUpdateCancelled = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      // Lấy tất cả contracts để check status
+      const contractsData = await clientContractService.getAll({ excludeDeleted: true });
+      const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+      const terminatedContractIds = new Set(
+        contracts
+          .filter((c: ClientContract) => c.status === 'Terminated')
+          .map((c: ClientContract) => c.id)
+      );
+
+      if (terminatedContractIds.size === 0) return; // Không có contract nào bị terminated
+
+      const paymentsData = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.items || []);
+
+      // Lọc các payment cần cập nhật: thuộc contract terminated VÀ chưa Paid/Invoiced
+      const cancelledPayments = payments.filter((p: ClientContractPayment) => {
+        if (!terminatedContractIds.has(p.clientContractId)) return false;
+        // Chưa Paid và chưa Invoiced và chưa Overdue và chưa Cancelled
+        return p.status !== 'Paid' && p.status !== 'Invoiced' && p.status !== 'Overdue' && p.status !== 'Cancelled';
+      });
+
+      // Cập nhật các payment thành Cancelled
+      for (const payment of cancelledPayments) {
+        try {
+          await clientContractPaymentService.update(payment.id, {
+            clientPeriodId: payment.clientPeriodId,
+            clientContractId: payment.clientContractId,
+            billableHours: payment.billableHours,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            invoicedAmount: payment.invoicedAmount ?? null,
+            receivedAmount: payment.receivedAmount ?? null,
+            invoiceNumber: payment.invoiceNumber ?? null,
+            invoiceDate: payment.invoiceDate ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Cancelled',
+            notes: payment.notes ?? null
+          });
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Cancelled:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (cancelledPayments.length > 0) {
+        const updatedData = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+      }
+    } catch (err) {
+      console.error('Error checking cancelled payments:', err);
+    }
+  };
+
+  // Kiểm tra và tự động chuyển Invoiced → Overdue nếu quá 30 ngày (Background Job CheckAndNotifyOverdueInvoices)
+  const checkAndUpdateOverdue = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const paymentsData = data?.items ?? data ?? [];
+      
+      const now = new Date();
+
+      // Lọc các payment cần cập nhật: Status == Invoiced VÀ InvoiceDate + 30 ngày < Today VÀ PaymentDate == null
+      const overduePayments = paymentsData.filter((p: ClientContractPayment) => {
+        if (p.status !== 'Invoiced' || !p.invoiceDate || p.paymentDate !== null) return false;
+        const invoiceDate = new Date(p.invoiceDate);
+        const invoiceDatePlus30 = new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return invoiceDatePlus30 < now;
+      });
+
+      // Cập nhật các payment quá hạn và gửi thông báo
+      for (const payment of overduePayments) {
+        try {
+          await clientContractPaymentService.update(payment.id, {
+            clientPeriodId: payment.clientPeriodId,
+            clientContractId: payment.clientContractId,
+            billableHours: payment.billableHours,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            invoicedAmount: payment.invoicedAmount ?? null,
+            receivedAmount: payment.receivedAmount ?? null,
+            invoiceNumber: payment.invoiceNumber ?? null,
+            invoiceDate: payment.invoiceDate ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Overdue',
+            notes: payment.notes ?? null
+          });
+
+          // Gửi thông báo cho accountant và manager
+          try {
+            const [accountantUserIds, managerUserIds] = await Promise.all([
+              getUserIdByRole('AccountantStaff'),
+              getUserIdByRole('Manager')
+            ]);
+            const allUserIds = [...accountantUserIds, ...managerUserIds];
+            
+            if (allUserIds.length > 0) {
+              const contract = contractsMap.get(payment.clientContractId);
+              await notificationService.create({
+                title: "Hóa đơn quá hạn thanh toán",
+                message: `Hóa đơn ${payment.invoiceNumber || payment.id} của hợp đồng ${contract?.contractNumber || payment.clientContractId} đã quá hạn 30 ngày. Vui lòng xử lý.`,
+                type: NotificationType.PaymentOverdue,
+                priority: NotificationPriority.High,
+                userIds: allUserIds,
+                entityType: "ClientContractPayment",
+                entityId: payment.id,
+                actionUrl: `/manager/payment-periods/clients`
+              });
+            }
+          } catch (notifError) {
+            console.error("Error sending notification:", notifError);
+          }
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Overdue:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (overduePayments.length > 0) {
+        const updatedData = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+      }
+    } catch (err) {
+      console.error('Error checking overdue payments:', err);
+    }
+  };
+
   const onSelectPeriod = async (periodId: number) => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
@@ -114,6 +313,12 @@ const ManagerClientPeriods: React.FC = () => {
         contractMap.set(c.id, c);
       });
       setContractsMap(contractMap);
+
+      // Kiểm tra và cập nhật Cancelled và Overdue sau khi load
+      setTimeout(() => {
+        checkAndUpdateCancelled();
+        checkAndUpdateOverdue();
+      }, 500);
     } catch (e) {
       console.error(e);
     } finally {
@@ -165,24 +370,58 @@ const ManagerClientPeriods: React.FC = () => {
     setDocuments([]);
   };
 
-  // Hàm hủy (Cancelled) - Manager
-  const handleCancel = async (payment: ClientContractPayment) => {
+  // Hàm mở modal reject
+  const handleOpenRejectModal = (payment: ClientContractPayment) => {
+    setSelectedPaymentForReject(payment);
+    setShowRejectModal(true);
+    setRejectionReason("");
+    setUpdateError(null);
+  };
+
+  // Hàm đóng modal reject
+  const handleCloseRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedPaymentForReject(null);
+    setRejectionReason("");
+    setUpdateError(null);
+  };
+
+  // Hàm từ chối (Reject) - Manager
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForReject || !rejectionReason.trim()) return;
+
     setUpdatingStatus(true);
+    setUpdateError(null);
+    setUpdateSuccess(false);
 
     try {
-      await clientContractPaymentService.update(payment.id, {
-        clientPeriodId: payment.clientPeriodId,
-        clientContractId: payment.clientContractId,
-        billableHours: payment.billableHours,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        invoicedAmount: payment.invoicedAmount ?? null,
-        receivedAmount: payment.receivedAmount ?? null,
-        invoiceNumber: payment.invoiceNumber ?? null,
-        invoiceDate: payment.invoiceDate ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'Cancelled',
-        notes: payment.notes ?? null
+      await clientContractPaymentService.reject(selectedPaymentForReject.id, {
+        rejectionReason: rejectionReason.trim()
       });
+
+      // Gửi thông báo cho accountant
+      try {
+        const accountantUserIds = await getUserIdByRole('AccountantStaff');
+        if (accountantUserIds.length > 0) {
+          const contract = contractsMap.get(selectedPaymentForReject.clientContractId);
+          await notificationService.create({
+            title: "Thanh toán hợp đồng khách hàng bị từ chối",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForReject.clientContractId} đã bị từ chối. Lý do: ${rejectionReason.trim()}. Vui lòng chỉnh sửa và tính toán lại.`,
+            type: NotificationType.PaymentOverdue, // Sử dụng type có sẵn hoặc có thể thêm type mới
+            priority: NotificationPriority.High,
+            userIds: accountantUserIds,
+            entityType: "ClientContractPayment",
+            entityId: selectedPaymentForReject.id,
+            actionUrl: `/accountant/payment-periods/clients`
+          });
+        }
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Không throw error để không ảnh hưởng đến flow chính
+      }
+
+      setUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -192,31 +431,255 @@ const ManagerClientPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseRejectModal();
+        setUpdateSuccess(false);
+      }, 2000);
     } catch (err: unknown) {
-      console.error('Error cancelling payment:', err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setUpdateError(error.response?.data?.message || error.message || 'Không thể từ chối xuất hóa đơn');
     } finally {
       setUpdatingStatus(false);
     }
   };
 
-  // Hàm đồng ý (Invoiced) - Manager
-  const handleApprove = async (payment: ClientContractPayment) => {
+  // Hàm mở modal approve
+  const handleOpenApproveModal = async (payment: ClientContractPayment) => {
+    setSelectedPaymentForApprove(payment);
+    setShowApproveModal(true);
+    // Set thời gian hiện tại theo giờ Việt Nam (UTC+7) làm mặc định cho invoiceDate
+    const now = new Date();
+    // Lấy thời gian theo múi giờ Việt Nam
+    const vietnamTimeString = now.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    // Format: "MM/DD/YYYY, HH:mm" -> "YYYY-MM-DDTHH:mm"
+    const [datePart, timePart] = vietnamTimeString.split(', ');
+    const [month, day, year] = datePart.split('/');
+    const currentDateTime = `${year}-${month}-${day}T${timePart}`;
+    setInvoiceFormData({
+      invoiceNumber: payment.invoiceNumber || "",
+      invoiceDate: currentDateTime, // Thời gian thực theo giờ Việt Nam
+      invoicedAmount: payment.invoicedAmount || payment.calculatedAmount || 0,
+      notes: payment.notes || ""
+    });
+    setUpdateError(null);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
+    setFile(null);
+    setUploadProgress(0);
+    setDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Manager",
+      referencedPartnerDocumentId: 0
+    });
+
+    // Load document types và tìm Invoice
+    setLoadingDocumentTypes(true);
+    try {
+      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
+      setDocumentTypesList(types);
+      
+      // Tìm và set Invoice làm mặc định
+      const invoiceType = types.find((t: DocumentType) => {
+        const name = t.typeName.toLowerCase().trim();
+        return name === 'invoice' || name.includes('invoice');
+      });
+      
+      // Set documentFormData với Invoice đã được tìm thấy
+      setDocumentFormData({
+        documentTypeId: invoiceType ? invoiceType.id : 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Manager",
+        referencedPartnerDocumentId: 0
+      });
+      
+      if (!invoiceType) {
+        // Nếu không tìm thấy, log để debug
+        console.warn("Không tìm thấy document type 'Invoice'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
+      }
+    } catch (e) {
+      console.error("Error loading document types:", e);
+      // Nếu có lỗi, vẫn set form data với documentTypeId = 0
+      setDocumentFormData({
+        documentTypeId: 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Manager",
+        referencedPartnerDocumentId: 0
+      });
+    } finally {
+      setLoadingDocumentTypes(false);
+    }
+  };
+
+  // Hàm đóng modal approve
+  const handleCloseApproveModal = () => {
+    setShowApproveModal(false);
+    setSelectedPaymentForApprove(null);
+    setInvoiceFormData({
+      invoiceNumber: "",
+      invoiceDate: "",
+      invoicedAmount: 0,
+      notes: ""
+    });
+    setUpdateError(null);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
+    setFile(null);
+    setUploadProgress(0);
+    setDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Manager",
+      referencedPartnerDocumentId: 0
+    });
+  };
+
+  // Hàm xử lý file upload
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 10 * 1024 * 1024) {
+      setCreateDocumentError("File quá lớn (tối đa 10MB)");
+      return;
+    }
+    setCreateDocumentError(null);
+    setFile(f);
+    if (f) {
+      setDocumentFormData(prev => ({ ...prev, fileName: f.name }));
+    }
+  };
+
+  // Hàm xử lý thay đổi form document
+  const handleDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setDocumentFormData(prev => ({
+      ...prev,
+      [name]: name === 'documentTypeId' || name === 'referencedPartnerDocumentId'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+
+  // Hàm đồng ý (Approve) - Manager (kèm tạo tài liệu nếu có)
+  const handleApprove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForApprove) return;
+
     setUpdatingStatus(true);
+    setUpdateError(null);
+    setUpdateSuccess(false);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
 
     try {
-      await clientContractPaymentService.update(payment.id, {
-        clientPeriodId: payment.clientPeriodId,
-        clientContractId: payment.clientContractId,
-        billableHours: payment.billableHours,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        invoicedAmount: payment.invoicedAmount ?? null,
-        receivedAmount: payment.receivedAmount ?? null,
-        invoiceNumber: payment.invoiceNumber ?? null,
-        invoiceDate: payment.invoiceDate ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'Invoiced',
-        notes: payment.notes ?? null
+      // Bước 1: Tạo document nếu có file
+      if (file && documentFormData.documentTypeId) {
+        try {
+          // Lấy userId từ token hoặc user context
+          let uploadedByUserId: string | null = null;
+          
+          if (user?.id) {
+            uploadedByUserId = user.id;
+          } else {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+              try {
+                const decoded = decodeJWT(token);
+                if (decoded) {
+                  uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+                }
+              } catch (error) {
+                console.error('Error decoding JWT:', error);
+              }
+            }
+          }
+          
+          if (!uploadedByUserId) {
+            throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+          }
+
+          // Upload file lên Firebase
+          const path = `client-documents/${selectedPaymentForApprove.id}/${Date.now()}_${file.name}`;
+          const downloadURL = await uploadFile(file, path, setUploadProgress);
+
+          // Tạo payload
+          const payload: ClientDocumentCreate = {
+            clientContractPaymentId: selectedPaymentForApprove.id,
+            documentTypeId: documentFormData.documentTypeId,
+            referencedPartnerDocumentId: documentFormData.referencedPartnerDocumentId || null,
+            fileName: file.name,
+            filePath: downloadURL,
+            uploadedByUserId,
+            description: documentFormData.description || null,
+            source: documentFormData.source || null
+          };
+
+          await clientDocumentService.create(payload);
+          setCreateDocumentSuccess(true);
+        } catch (docErr: unknown) {
+          setCreateDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu');
+          throw docErr; // Dừng lại nếu không tạo được tài liệu
+        }
+      }
+
+      // Bước 2: Approve for invoicing
+      await clientContractPaymentService.approveForInvoicing({
+        paymentIds: [selectedPaymentForApprove.id],
+        notes: invoiceFormData.notes || null
       });
+
+      // Bước 3: Record invoice
+      if (invoiceFormData.invoiceNumber && invoiceFormData.invoiceDate && invoiceFormData.invoicedAmount > 0) {
+        const invoiceDateISO = new Date(invoiceFormData.invoiceDate).toISOString();
+        await clientContractPaymentService.recordInvoice(selectedPaymentForApprove.id, {
+          invoiceNumber: invoiceFormData.invoiceNumber,
+          invoiceDate: invoiceDateISO,
+          invoicedAmount: invoiceFormData.invoicedAmount,
+          notes: invoiceFormData.notes || null
+        });
+      }
+
+      // Gửi thông báo cho accountant
+      try {
+        const accountantUserIds = await getUserIdByRole('AccountantStaff');
+        if (accountantUserIds.length > 0) {
+          const contract = contractsMap.get(selectedPaymentForApprove.clientContractId);
+          await notificationService.create({
+            title: "Thanh toán hợp đồng khách hàng đã được duyệt",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForApprove.clientContractId} đã được duyệt và ghi nhận hóa đơn. Số hóa đơn: ${invoiceFormData.invoiceNumber || 'N/A'}.`,
+            type: NotificationType.PaymentReceived,
+            priority: NotificationPriority.Medium,
+            userIds: accountantUserIds,
+            entityType: "ClientContractPayment",
+            entityId: selectedPaymentForApprove.id,
+            actionUrl: `/accountant/payment-periods/clients`
+          });
+        }
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Không throw error để không ảnh hưởng đến flow chính
+      }
+
+      setUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -226,8 +689,15 @@ const ManagerClientPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseApproveModal();
+        setUpdateSuccess(false);
+      }, 2000);
     } catch (err: unknown) {
-      console.error('Error approving payment:', err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setUpdateError(error.response?.data?.message || error.message || 'Không thể duyệt xuất hóa đơn');
     } finally {
       setUpdatingStatus(false);
     }
@@ -477,9 +947,9 @@ const ManagerClientPeriods: React.FC = () => {
                             )}
                           </td>
                           <td className="p-3">{p.billableHours}</td>
-                          <td className="p-3">{p.calculatedAmount ?? "-"}</td>
-                          <td className="p-3">{p.invoicedAmount ?? "-"}</td>
-                          <td className="p-3">{p.receivedAmount ?? "-"}</td>
+                          <td className="p-3">{formatVND(p.calculatedAmount)}</td>
+                          <td className="p-3">{formatVND(p.invoicedAmount)}</td>
+                          <td className="p-3">{formatVND(p.receivedAmount)}</td>
                           <td className="p-3">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
                               {getStatusLabel(p.status)}
@@ -504,20 +974,20 @@ const ManagerClientPeriods: React.FC = () => {
                               {p.status === 'ReadyForInvoice' ? (
                                 <>
                                   <button
-                                    onClick={() => handleCancel(p)}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                  >
-                                    <X className="w-4 h-4" />
-                                    Hủy
-                                  </button>
-                                  <button
-                                    onClick={() => handleApprove(p)}
+                                    onClick={() => handleOpenApproveModal(p)}
                                     disabled={updatingStatus}
                                     className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                   >
                                     <Check className="w-4 h-4" />
-                                    Đồng ý
+                                    Duyệt
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRejectModal(p)}
+                                    disabled={updatingStatus}
+                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    Từ chối
                                   </button>
                                 </>
                               ) : (
@@ -539,6 +1009,306 @@ const ManagerClientPeriods: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal approve với record invoice */}
+        {showApproveModal && selectedPaymentForApprove && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Duyệt xuất hóa đơn</h2>
+                <button
+                  onClick={handleCloseApproveModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {updateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Duyệt và ghi nhận hóa đơn thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {updateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{updateError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleApprove} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số hóa đơn <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={invoiceFormData.invoiceNumber}
+                      onChange={(e) => setInvoiceFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      placeholder="VD: INV-2025-001"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ngày hóa đơn <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={invoiceFormData.invoiceDate}
+                      onChange={(e) => setInvoiceFormData(prev => ({ ...prev, invoiceDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền hóa đơn <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={invoiceFormData.invoicedAmount}
+                      onChange={(e) => setInvoiceFormData(prev => ({ ...prev, invoicedAmount: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ghi chú
+                  </label>
+                  <textarea
+                    value={invoiceFormData.notes}
+                    onChange={(e) => setInvoiceFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={3}
+                    placeholder="Ghi chú về việc duyệt và hóa đơn"
+                  />
+                </div>
+
+                {/* Form tạo tài liệu - Tùy chọn */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu (Invoice) - Tùy chọn</h3>
+                  
+                  {createDocumentSuccess && (
+                    <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <p className="text-green-700 font-medium">✅ Tạo tài liệu thành công!</p>
+                    </div>
+                  )}
+
+                  {createDocumentError && (
+                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                      <p className="text-red-700 font-medium">{createDocumentError}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Loại tài liệu <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="documentTypeId"
+                        value={documentFormData.documentTypeId}
+                        onChange={handleDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        disabled={loadingDocumentTypes}
+                      >
+                        <option value="0">-- Chọn loại tài liệu (tùy chọn) --</option>
+                        {documentTypesList.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.typeName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source
+                      </label>
+                      <input
+                        type="text"
+                        name="source"
+                        value={documentFormData.source}
+                        onChange={handleDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        placeholder="Manager"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      File
+                    </label>
+                    {file && !documentFormData.documentTypeId && (
+                      <p className="text-sm text-amber-600 mb-1">⚠️ Vui lòng chọn loại tài liệu nếu muốn tạo tài liệu</p>
+                    )}
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
+                      {file ? (
+                        <div className="flex flex-col items-center text-primary-700">
+                          <FileUp className="w-8 h-8 mb-2" />
+                          <p className="font-medium">{file.name}</p>
+                          <p className="text-sm text-gray-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                          {uploadProgress > 0 && uploadProgress < 100 && (
+                            <p className="text-sm text-gray-600 mt-1">Đang upload: {uploadProgress}%</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setFile(null)}
+                            className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                          >
+                            Xóa file
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center text-gray-500 cursor-pointer">
+                          <Upload className="w-12 h-12 mb-4" />
+                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây (tùy chọn)</span>
+                          <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={onFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả
+                    </label>
+                    <textarea
+                      name="description"
+                      value={documentFormData.description}
+                      onChange={handleDocumentFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      rows={3}
+                      placeholder="Mô tả tài liệu"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseApproveModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingStatus || (file !== null && !documentFormData.documentTypeId)}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        {file && documentFormData.documentTypeId ? 'Duyệt và ghi nhận hóa đơn và tạo tài liệu' : 'Duyệt và ghi nhận hóa đơn'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal reject */}
+        {showRejectModal && selectedPaymentForReject && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Từ chối xuất hóa đơn</h2>
+                <button
+                  onClick={handleCloseRejectModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {updateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Từ chối thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {updateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{updateError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleReject} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lý do từ chối <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={4}
+                    required
+                    placeholder="Nhập lý do từ chối xuất hóa đơn..."
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseRejectModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingStatus || !rejectionReason.trim()}
+                    className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-4 h-4" />
+                        Từ chối
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

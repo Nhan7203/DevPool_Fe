@@ -3,7 +3,6 @@ import {
   Layers,
   FileText,
   Building,
-  FileUp,
   Briefcase,
   ClipboardList,
 } from "lucide-react";
@@ -59,9 +58,9 @@ export const sidebarItems = [
     //   { label: 'Tạo Hợp Đồng', href: '/sales/contracts/create' },
     // ]
   },
-  {
-    label: 'Tạo tài liệu khách hàng',
-    href: '/sales/payment-periods/clients',
-    icon: FileUp
-  },
+  // {
+  //   label: 'Tạo tài liệu khách hàng',
+  //   href: '/sales/payment-periods/clients',
+  //   icon: FileUp
+  // },
 ];

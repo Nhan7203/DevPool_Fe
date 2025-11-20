@@ -77,5 +77,17 @@ export const clientPaymentPeriodService = {
       throw { message: "Lỗi không xác định khi tạo kỳ thanh toán khách hàng" };
     }
   },
+
+  // Cập nhật ClientPaymentPeriod
+  async update(id: number, payload: Partial<ClientPaymentPeriodCreate>) {
+    try {
+      const response = await axios.put(`/clientpaymentperiod/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật kỳ thanh toán khách hàng" };
+      throw { message: "Lỗi không xác định khi cập nhật kỳ thanh toán khách hàng" };
+    }
+  },
 };
 

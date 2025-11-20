@@ -77,5 +77,17 @@ export const partnerPaymentPeriodService = {
       throw { message: "Lỗi không xác định khi tạo kỳ thanh toán đối tác" };
     }
   },
+
+  // Cập nhật PartnerPaymentPeriod
+  async update(id: number, payload: Partial<PartnerPaymentPeriodCreate>) {
+    try {
+      const response = await axios.put(`/partnerpaymentperiod/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể cập nhật kỳ thanh toán đối tác" };
+      throw { message: "Lỗi không xác định khi cập nhật kỳ thanh toán đối tác" };
+    }
+  },
 };
 

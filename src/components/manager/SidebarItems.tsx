@@ -28,13 +28,13 @@ export const sidebarItems = [
     icon: CalendarClock,
     subItems: [
       {
-        label: "Nhân sự",
-        href: "/manager/payment-periods/partners",
+        label: "Khách hàng",
+        href: "/manager/payment-periods/clients",
         icon: Wallet,
       },
       {
-        label: "Khách hàng",
-        href: "/manager/payment-periods/clients",
+        label: "Nhân sự",
+        href: "/manager/payment-periods/partners",
         icon: Wallet,
       },
     ],

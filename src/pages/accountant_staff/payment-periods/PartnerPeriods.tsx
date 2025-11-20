@@ -9,11 +9,18 @@ import { partnerContractService, type PartnerContract } from "../../../services/
 import { talentService, type Talent } from "../../../services/Talent";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
-import { Building2, Plus, Calendar, X, Save, Send, Wallet, FileText, Download, Eye } from "lucide-react";
-import { partnerDocumentService, type PartnerDocument } from "../../../services/PartnerDocument";
+import { Building2, Plus, Calendar, X, Save, Wallet, FileText, Download, Eye, Upload, FileUp, AlertCircle, Calculator, CheckCircle } from "lucide-react";
+import { partnerDocumentService, type PartnerDocument, type PartnerDocumentCreate } from "../../../services/PartnerDocument";
 import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
+import { uploadFile } from "../../../utils/firebaseStorage";
+import { decodeJWT } from "../../../services/Auth";
+import { useAuth } from "../../../contexts/AuthContext";
+import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
+import { userService } from "../../../services/User";
+import { formatVND, getErrorMessage } from "../../../utils/helpers";
 
 const AccountantPartnerPeriods: React.FC = () => {
+  const { user } = useAuth();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null);
@@ -46,6 +53,71 @@ const AccountantPartnerPeriods: React.FC = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
   const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
+
+  // Modal ghi nhận đã chi trả
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
+  const [selectedPaymentForMarkAsPaid, setSelectedPaymentForMarkAsPaid] = useState<PartnerContractPayment | null>(null);
+  const [markAsPaidFormData, setMarkAsPaidFormData] = useState({
+    paidAmount: 0,
+    paymentDate: "",
+    notes: ""
+  });
+
+  // Modal tạo tài liệu trong ghi nhận đã chi trả (Invoice và Receipt)
+  const [markAsPaidDocumentTypesList, setMarkAsPaidDocumentTypesList] = useState<DocumentType[]>([]);
+  const [loadingMarkAsPaidDocumentTypes, setLoadingMarkAsPaidDocumentTypes] = useState(false);
+  const [createInvoiceDocumentError, setCreateInvoiceDocumentError] = useState<string | null>(null);
+  const [createReceiptDocumentError, setCreateReceiptDocumentError] = useState<string | null>(null);
+  const [createInvoiceDocumentSuccess, setCreateInvoiceDocumentSuccess] = useState(false);
+  const [createReceiptDocumentSuccess, setCreateReceiptDocumentSuccess] = useState(false);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [invoiceUploadProgress, setInvoiceUploadProgress] = useState<number>(0);
+  const [receiptUploadProgress, setReceiptUploadProgress] = useState<number>(0);
+  const [invoiceDocumentFormData, setInvoiceDocumentFormData] = useState({
+    documentTypeId: 0,
+    fileName: "",
+    filePath: "",
+    description: "",
+    source: "Accountant",
+    referencedClientDocumentId: 0
+  });
+  const [receiptDocumentFormData, setReceiptDocumentFormData] = useState({
+    documentTypeId: 0,
+    fileName: "",
+    filePath: "",
+    description: "",
+    source: "Accountant",
+    referencedClientDocumentId: 0
+  });
+
+  // Tính toán (Calculate) - Modal
+  const [showCalculateModal, setShowCalculateModal] = useState(false);
+  const [selectedPaymentForCalculate, setSelectedPaymentForCalculate] = useState<PartnerContractPayment | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const [calculateError, setCalculateError] = useState<string | null>(null);
+  const [calculateSuccess, setCalculateSuccess] = useState(false);
+  const [calculateFormData, setCalculateFormData] = useState({
+    actualWorkHours: 0,
+    otHours: 0,
+    notes: ""
+  });
+
+  // Modal tạo tài liệu trong tính toán
+  const [documentTypesList, setDocumentTypesList] = useState<DocumentType[]>([]);
+  const [loadingDocumentTypes, setLoadingDocumentTypes] = useState(false);
+  const [createDocumentError, setCreateDocumentError] = useState<string | null>(null);
+  const [createDocumentSuccess, setCreateDocumentSuccess] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [documentFormData, setDocumentFormData] = useState({
+    documentTypeId: 0,
+    fileName: "",
+    filePath: "",
+    description: "",
+    source: "Accountant",
+    referencedClientDocumentId: 0
+  });
   
   // Modal hiển thị tài liệu
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
@@ -53,6 +125,25 @@ const AccountantPartnerPeriods: React.FC = () => {
   const [documents, setDocuments] = useState<PartnerDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
+
+  // Modal tạo tài liệu độc lập
+  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
+  const [selectedPaymentForCreateDocument, setSelectedPaymentForCreateDocument] = useState<PartnerContractPayment | null>(null);
+  const [createDocumentModalDocumentTypesList, setCreateDocumentModalDocumentTypesList] = useState<DocumentType[]>([]);
+  const [loadingCreateDocumentModalDocumentTypes, setLoadingCreateDocumentModalDocumentTypes] = useState(false);
+  const [submittingCreateDocumentModal, setSubmittingCreateDocumentModal] = useState(false);
+  const [createDocumentModalError, setCreateDocumentModalError] = useState<string | null>(null);
+  const [createDocumentModalSuccess, setCreateDocumentModalSuccess] = useState(false);
+  const [createDocumentModalFile, setCreateDocumentModalFile] = useState<File | null>(null);
+  const [createDocumentModalUploadProgress, setCreateDocumentModalUploadProgress] = useState<number>(0);
+  const [createDocumentModalFormData, setCreateDocumentModalFormData] = useState({
+    documentTypeId: 0,
+    fileName: "",
+    filePath: "",
+    description: "",
+    source: "Accountant",
+    referencedClientDocumentId: 0
+  });
   
   // Form data
   const [formData, setFormData] = useState({
@@ -119,7 +210,6 @@ const AccountantPartnerPeriods: React.FC = () => {
     loadPartners();
   }, []);
 
-  // Load document types
   useEffect(() => {
     const loadDocumentTypes = async () => {
       try {
@@ -161,6 +251,156 @@ const AccountantPartnerPeriods: React.FC = () => {
     setShowDocumentsModal(false);
     setSelectedPaymentForDocuments(null);
     setDocuments([]);
+  };
+
+  // Hàm mở modal tạo tài liệu độc lập
+  const handleOpenCreateDocumentModal = async (payment: PartnerContractPayment) => {
+    setSelectedPaymentForCreateDocument(payment);
+    setShowCreateDocumentModal(true);
+    setCreateDocumentModalError(null);
+    setCreateDocumentModalSuccess(false);
+    setCreateDocumentModalFile(null);
+    setCreateDocumentModalUploadProgress(0);
+    setCreateDocumentModalFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+
+    // Load document types
+    setLoadingCreateDocumentModalDocumentTypes(true);
+    try {
+      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
+      setCreateDocumentModalDocumentTypesList(types);
+    } catch (e) {
+      console.error("Error loading document types:", e);
+      setCreateDocumentModalDocumentTypesList([]);
+    } finally {
+      setLoadingCreateDocumentModalDocumentTypes(false);
+    }
+  };
+
+  // Hàm đóng modal tạo tài liệu độc lập
+  const handleCloseCreateDocumentModal = () => {
+    setShowCreateDocumentModal(false);
+    setSelectedPaymentForCreateDocument(null);
+    setCreateDocumentModalFile(null);
+    setCreateDocumentModalUploadProgress(0);
+    setCreateDocumentModalFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+    setCreateDocumentModalError(null);
+    setCreateDocumentModalSuccess(false);
+  };
+
+  // Hàm xử lý file upload cho modal tạo tài liệu độc lập
+  const onCreateDocumentModalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 10 * 1024 * 1024) {
+      setCreateDocumentModalError("File quá lớn (tối đa 10MB)");
+      return;
+    }
+    setCreateDocumentModalError(null);
+    setCreateDocumentModalFile(f);
+    if (f) {
+      setCreateDocumentModalFormData(prev => ({ ...prev, fileName: f.name }));
+    }
+  };
+
+  // Hàm xử lý thay đổi form document cho modal tạo tài liệu độc lập
+  const handleCreateDocumentModalFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setCreateDocumentModalFormData(prev => ({
+      ...prev,
+      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+  // Hàm tạo tài liệu độc lập
+  const handleCreateDocumentModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForCreateDocument || !createDocumentModalFile || !createDocumentModalFormData.documentTypeId) return;
+
+    setSubmittingCreateDocumentModal(true);
+    setCreateDocumentModalError(null);
+    setCreateDocumentModalSuccess(false);
+
+    try {
+      // Lấy userId từ token hoặc user context
+      let uploadedByUserId: string | null = null;
+      
+      if (user?.id) {
+        uploadedByUserId = user.id;
+      } else {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          try {
+            const decoded = decodeJWT(token);
+            if (decoded) {
+              uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+            }
+          } catch (error) {
+            console.error('Error decoding JWT:', error);
+          }
+        }
+      }
+      
+      if (!uploadedByUserId) {
+        throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+      }
+
+      // Upload file lên Firebase
+      const path = `partner-documents/${selectedPaymentForCreateDocument.id}/${Date.now()}_${createDocumentModalFile.name}`;
+      const downloadURL = await uploadFile(createDocumentModalFile, path, setCreateDocumentModalUploadProgress);
+
+      // Tạo payload
+      const payload: PartnerDocumentCreate = {
+        partnerContractPaymentId: selectedPaymentForCreateDocument.id,
+        documentTypeId: createDocumentModalFormData.documentTypeId,
+        referencedClientDocumentId: createDocumentModalFormData.referencedClientDocumentId || null,
+        fileName: createDocumentModalFile.name,
+        filePath: downloadURL,
+        uploadedByUserId,
+        description: createDocumentModalFormData.description || null,
+        source: createDocumentModalFormData.source || null
+      };
+
+      await partnerDocumentService.create(payload);
+      setCreateDocumentModalSuccess(true);
+
+      // Reload documents nếu đang mở modal xem tài liệu
+      if (showDocumentsModal && selectedPaymentForDocuments?.id === selectedPaymentForCreateDocument.id) {
+        try {
+          const data = await partnerDocumentService.getAll({
+            partnerContractPaymentId: selectedPaymentForCreateDocument.id,
+            excludeDeleted: true
+          });
+          setDocuments(Array.isArray(data) ? data : (data?.items || []));
+        } catch (e) {
+          console.error("Error reloading documents:", e);
+        }
+      }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseCreateDocumentModal();
+      }, 2000);
+    } catch (err: unknown) {
+      setCreateDocumentModalError(getErrorMessage(err) || 'Không thể tạo tài liệu');
+    } finally {
+      setSubmittingCreateDocumentModal(false);
+    }
   };
 
   // Khi chọn đối tác, load các period của đối tác đó
@@ -262,7 +502,7 @@ const AccountantPartnerPeriods: React.FC = () => {
               partnerId: selectedPartnerId,
               periodMonth: month,
               periodYear: year,
-              status: 'Pending'
+              status: 'Open'
             });
           } catch (e) {
             console.error(`Error creating period ${year}-${month}:`, e);
@@ -295,6 +535,71 @@ const AccountantPartnerPeriods: React.FC = () => {
     }
   };
 
+  // Kiểm tra và cập nhật Cancelled cho các payment của contract terminated (chưa Paid)
+  const checkAndUpdateCancelled = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      // Lấy tất cả contracts để check status
+      const contractsData = await partnerContractService.getAll({ excludeDeleted: true });
+      const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+      const terminatedContractIds = new Set(
+        contracts
+          .filter((c: PartnerContract) => c.status === 'Terminated')
+          .map((c: PartnerContract) => c.id)
+      );
+
+      if (terminatedContractIds.size === 0) return; // Không có contract nào bị terminated
+
+      const data = await partnerContractPaymentService.getAll({ 
+        partnerPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const paymentsData = data?.items ?? data ?? [];
+
+      // Lọc các payment cần cập nhật: thuộc contract terminated VÀ chưa Paid
+      const cancelledPayments = paymentsData.filter((p: PartnerContractPayment) => {
+        if (!terminatedContractIds.has(p.partnerContractId)) return false;
+        // Chưa Paid và chưa Cancelled
+        return p.status !== 'Paid' && p.status !== 'Cancelled';
+      });
+
+      // Cập nhật các payment thành Cancelled
+      for (const payment of cancelledPayments) {
+        try {
+          await partnerContractPaymentService.update(payment.id, {
+            partnerPeriodId: payment.partnerPeriodId,
+            partnerContractId: payment.partnerContractId,
+            talentId: payment.talentId,
+            actualWorkHours: payment.actualWorkHours,
+            otHours: payment.otHours ?? null,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            paidAmount: payment.paidAmount ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Cancelled',
+            notes: payment.notes ?? null
+          });
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Cancelled:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (cancelledPayments.length > 0) {
+        const updatedData = await partnerContractPaymentService.getAll({ 
+          partnerPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+        
+        // Cập nhật trạng thái period
+        await updatePeriodStatus(activePeriodId);
+      }
+    } catch (err) {
+      console.error('Error checking cancelled payments:', err);
+    }
+  };
+
   const onSelectPeriod = async (periodId: number) => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
@@ -304,6 +609,12 @@ const AccountantPartnerPeriods: React.FC = () => {
         excludeDeleted: true 
       });
       setPayments(data?.items ?? data ?? []);
+      
+      // Kiểm tra và cập nhật Cancelled sau khi load
+      setTimeout(() => checkAndUpdateCancelled(), 500);
+      
+      // Cập nhật trạng thái period
+      await updatePeriodStatus(periodId);
     } catch (e) {
       console.error(e);
     } finally {
@@ -400,6 +711,11 @@ const AccountantPartnerPeriods: React.FC = () => {
         excludeDeleted: true 
       });
       setPayments(data?.items ?? data ?? []);
+      
+      // Cập nhật trạng thái period
+      if (activePeriodId) {
+        await updatePeriodStatus(activePeriodId);
+      }
 
       // Close modal after 1 second
       setTimeout(() => {
@@ -413,67 +729,639 @@ const AccountantPartnerPeriods: React.FC = () => {
     }
   };
 
-  // Hàm nộp (PendingApproval) - Accountant
-  const handleSubmit = async (payment: PartnerContractPayment) => {
-    if (payment.status !== 'PendingCalculation') return;
-
-    setUpdatingStatus(true);
-    setStatusUpdateError(null);
-    setStatusUpdateSuccess(false);
-
+  // Hàm cập nhật trạng thái period dựa trên payments
+  const updatePeriodStatus = async (periodId: number) => {
     try {
-      await partnerContractPaymentService.update(payment.id, {
-        partnerPeriodId: payment.partnerPeriodId,
-        partnerContractId: payment.partnerContractId,
-        talentId: payment.talentId,
-        actualWorkHours: payment.actualWorkHours,
-        otHours: payment.otHours ?? null,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        paidAmount: payment.paidAmount ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'PendingApproval',
-        notes: payment.notes ?? null
+      // Lấy tất cả payments của period
+      const data = await partnerContractPaymentService.getAll({ 
+        partnerPeriodId: periodId, 
+        excludeDeleted: true 
       });
+      const paymentsData = data?.items ?? data ?? [];
       
-      setStatusUpdateSuccess(true);
-
-      // Reload payments
-      if (activePeriodId) {
-        const data = await partnerContractPaymentService.getAll({ 
-          partnerPeriodId: activePeriodId, 
-          excludeDeleted: true 
-        });
-        setPayments(data?.items ?? data ?? []);
+      if (paymentsData.length === 0) {
+        // Nếu không có payment nào, giữ nguyên trạng thái hiện tại
+        return;
       }
 
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Không thể nộp thanh toán';
-      setStatusUpdateError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || errorMessage);
-      setTimeout(() => setStatusUpdateError(null), 5000);
-    } finally {
-      setUpdatingStatus(false);
+      // Lấy thông tin period hiện tại
+      const period = await partnerPaymentPeriodService.getById(periodId);
+      const currentStatus = period.status;
+
+      // Xác định trạng thái cuối cùng và tiến độ
+      const stageOrder: Record<string, number> = {
+        PendingCalculation: 1,
+        PendingApproval: 2,
+        Rejected: 0,
+        Approved: 3,
+        Paid: 4,
+      };
+      const maxStage = 4;
+      const finalStatus = 'Paid'; // Trạng thái cuối cùng
+
+      // Kiểm tra xem có payment nào đã thay đổi trạng thái (không phải PendingCalculation)
+      const hasChangedStatus = paymentsData.some((p: PartnerContractPayment) => 
+        p.status !== 'PendingCalculation'
+      );
+
+      // Kiểm tra xem tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
+      const allFinalStatus = paymentsData.every((p: PartnerContractPayment) => 
+        p.status === finalStatus
+      );
+      const all100Percent = paymentsData.every((p: PartnerContractPayment) => {
+        const current = stageOrder[p.status] ?? 0;
+        const percent = current > 0 ? Math.round((current / maxStage) * 100) : 0;
+        return percent === 100;
+      });
+
+      // Xác định trạng thái mới cho period
+      let newStatus = currentStatus;
+      
+      if (allFinalStatus && all100Percent) {
+        // Tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
+        newStatus = 'Closed';
+      } else if (hasChangedStatus && currentStatus === 'Open') {
+        // Có ít nhất một payment đã thay đổi trạng thái và period đang là Open
+        newStatus = 'Processing';
+      }
+
+      // Cập nhật period nếu trạng thái thay đổi
+      if (newStatus !== currentStatus) {
+        await partnerPaymentPeriodService.update(periodId, {
+          partnerId: period.partnerId,
+          periodMonth: period.periodMonth,
+          periodYear: period.periodYear,
+          status: newStatus
+        });
+
+        // Reload periods để cập nhật UI
+        if (selectedPartnerId) {
+          const updatedPeriods = await partnerPaymentPeriodService.getAll({ 
+            partnerId: selectedPartnerId, 
+            excludeDeleted: true 
+          });
+          setPeriods(updatedPeriods?.items ?? updatedPeriods ?? []);
+        }
+      }
+    } catch (err) {
+      console.error('Error updating period status:', err);
     }
   };
 
-  // Hàm đã chi trả (Paid) - Accountant
-  const handleMarkAsPaid = async (payment: PartnerContractPayment) => {
+  // Hàm mở modal tính toán
+  const handleOpenCalculateModal = async (payment: PartnerContractPayment) => {
+    if (payment.status !== 'PendingCalculation') return;
+
+    setSelectedPaymentForCalculate(payment);
+    setShowCalculateModal(true);
+    setCalculateError(null);
+    setCalculateSuccess(false);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
+    setFile(null);
+    setUploadProgress(0);
+    setCalculateFormData({
+      actualWorkHours: payment.actualWorkHours || 0,
+      otHours: payment.otHours || 0,
+      notes: payment.notes || ""
+    });
+    // Load document types và tìm Acceptant trước
+    setLoadingDocumentTypes(true);
+    try {
+      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
+      setDocumentTypesList(types);
+      
+      // Tìm và set Acceptant làm mặc định (tìm theo nhiều cách)
+      const acceptantType = types.find((t: DocumentType) => {
+        const name = t.typeName.toLowerCase().trim();
+        return name === 'acceptant' || 
+               name === 'acceptance' || 
+               name.includes('acceptant') ||
+               name.includes('acceptance');
+      });
+      
+      // Set documentFormData với Acceptant đã được tìm thấy
+      setDocumentFormData({
+        documentTypeId: acceptantType ? acceptantType.id : 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+      
+      if (!acceptantType) {
+        // Nếu không tìm thấy, log để debug
+        console.warn("Không tìm thấy document type 'Acceptant'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
+      }
+    } catch (e) {
+      console.error("Error loading document types:", e);
+      // Nếu có lỗi, vẫn set form data với documentTypeId = 0
+      setDocumentFormData({
+        documentTypeId: 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+    } finally {
+      setLoadingDocumentTypes(false);
+    }
+  };
+
+  // Hàm đóng modal tính toán
+  const handleCloseCalculateModal = () => {
+    setShowCalculateModal(false);
+    setSelectedPaymentForCalculate(null);
+    setCalculateError(null);
+    setCalculateSuccess(false);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
+    setFile(null);
+    setUploadProgress(0);
+    setCalculateFormData({
+      actualWorkHours: 0,
+      otHours: 0,
+      notes: ""
+    });
+    setDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+  };
+
+  // Hàm xử lý file upload
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 10 * 1024 * 1024) {
+      setCreateDocumentError("File quá lớn (tối đa 10MB)");
+      return;
+    }
+    setCreateDocumentError(null);
+    setFile(f);
+    if (f) {
+      setDocumentFormData(prev => ({ ...prev, fileName: f.name }));
+    }
+  };
+
+  // Hàm xử lý thay đổi form document
+  const handleDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setDocumentFormData(prev => ({
+      ...prev,
+      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+
+  // Helper function để lấy danh sách user IDs theo role
+  const getUserIdByRole = async (role: string): Promise<string[]> => {
+    try {
+      const usersData = await userService.getAll({ 
+        role, 
+        isActive: true, 
+        excludeDeleted: true 
+      });
+      return usersData.items.map(user => user.id);
+    } catch (error) {
+      console.error(`Error getting users with role ${role}:`, error);
+      return [];
+    }
+  };
+
+  // Hàm tính toán và submit (kèm tạo tài liệu nếu có)
+  const handleCalculateAndSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForCalculate) return;
+
+    setCalculating(true);
+    setCalculateError(null);
+    setCalculateSuccess(false);
+    setCreateDocumentError(null);
+    setCreateDocumentSuccess(false);
+
+    try {
+      // Bước 1: Tạo tài liệu nếu có file
+      if (file && documentFormData.documentTypeId) {
+        try {
+          // Lấy userId từ token hoặc user context
+          let uploadedByUserId: string | null = null;
+          
+          if (user?.id) {
+            uploadedByUserId = user.id;
+          } else {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+              try {
+                const decoded = decodeJWT(token);
+                if (decoded) {
+                  uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+                }
+              } catch (error) {
+                console.error('Error decoding JWT:', error);
+              }
+            }
+          }
+          
+          if (!uploadedByUserId) {
+            throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+          }
+
+          // Upload file lên Firebase
+          const path = `partner-documents/${selectedPaymentForCalculate.id}/${Date.now()}_${file.name}`;
+          const downloadURL = await uploadFile(file, path, setUploadProgress);
+
+          // Tạo payload
+          const payload: PartnerDocumentCreate = {
+            partnerContractPaymentId: selectedPaymentForCalculate.id,
+            documentTypeId: documentFormData.documentTypeId,
+            referencedClientDocumentId: documentFormData.referencedClientDocumentId || null,
+            fileName: file.name,
+            filePath: downloadURL,
+            uploadedByUserId,
+            description: documentFormData.description || null,
+            source: documentFormData.source || null
+          };
+
+          await partnerDocumentService.create(payload);
+          setCreateDocumentSuccess(true);
+        } catch (docErr: unknown) {
+          setCreateDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu');
+          throw docErr; // Dừng lại nếu không tạo được tài liệu
+        }
+      }
+
+      // Bước 2: Tính toán và submit
+      await partnerContractPaymentService.calculateAndSubmit(
+        selectedPaymentForCalculate.id,
+        {
+          actualWorkHours: calculateFormData.actualWorkHours,
+          otHours: calculateFormData.otHours || null,
+          notes: calculateFormData.notes || null
+        }
+      );
+      
+      // Gửi thông báo cho manager
+      try {
+        const managerUserIds = await getUserIdByRole('Manager');
+        if (managerUserIds.length > 0) {
+          const contract = contractsMap.get(selectedPaymentForCalculate.partnerContractId);
+          const talent = talentsMap.get(selectedPaymentForCalculate.talentId);
+          await notificationService.create({
+            title: "Thanh toán hợp đồng đối tác chờ duyệt",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForCalculate.partnerContractId} - ${talent?.fullName || selectedPaymentForCalculate.talentId} đã được tính toán và submit. Vui lòng duyệt.`,
+            type: NotificationType.PaymentDueSoon,
+            priority: NotificationPriority.Medium,
+            userIds: managerUserIds,
+            entityType: "PartnerContractPayment",
+            entityId: selectedPaymentForCalculate.id,
+            actionUrl: `/manager/payment-periods/partners`
+          });
+        }
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Không throw error để không ảnh hưởng đến flow chính
+      }
+      
+      setCalculateSuccess(true);
+
+      // Reload payments
+      if (activePeriodId) {
+        const data = await partnerContractPaymentService.getAll({ 
+          partnerPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(data?.items ?? data ?? []);
+        
+        // Cập nhật trạng thái period
+        await updatePeriodStatus(activePeriodId);
+      }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseCalculateModal();
+      }, 2000);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setCalculateError(error.response?.data?.message || error.message || 'Không thể tính toán và submit');
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  // Hàm mở modal ghi nhận đã chi trả
+  const handleOpenMarkAsPaidModal = async (payment: PartnerContractPayment) => {
+    setSelectedPaymentForMarkAsPaid(payment);
+    setShowMarkAsPaidModal(true);
+    // Set thời gian hiện tại theo giờ Việt Nam (UTC+7) làm mặc định cho paymentDate
+    const now = new Date();
+    const vietnamTimeString = now.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    // Format: "MM/DD/YYYY, HH:mm" -> "YYYY-MM-DDTHH:mm"
+    const [datePart, timePart] = vietnamTimeString.split(', ');
+    const [month, day, year] = datePart.split('/');
+    const currentDateTime = `${year}-${month}-${day}T${timePart}`;
+    setMarkAsPaidFormData({
+      paidAmount: payment.paidAmount || payment.calculatedAmount || 0,
+      paymentDate: currentDateTime, // Thời gian thực theo giờ Việt Nam
+      notes: payment.notes || ""
+    });
+    setStatusUpdateError(null);
+    setStatusUpdateSuccess(false);
+    setCreateInvoiceDocumentError(null);
+    setCreateReceiptDocumentError(null);
+    setCreateInvoiceDocumentSuccess(false);
+    setCreateReceiptDocumentSuccess(false);
+    setInvoiceFile(null);
+    setReceiptFile(null);
+    setInvoiceUploadProgress(0);
+    setReceiptUploadProgress(0);
+    setInvoiceDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+    setReceiptDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+
+    // Load document types và tìm Invoice và Receipt
+    setLoadingMarkAsPaidDocumentTypes(true);
+    try {
+      const typesData = await documentTypeService.getAll({ excludeDeleted: true });
+      const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
+      setMarkAsPaidDocumentTypesList(types);
+      
+      // Tìm và set Invoice và Receipt làm mặc định
+      const invoiceType = types.find((t: DocumentType) => {
+        const name = t.typeName.toLowerCase().trim();
+        return name === 'invoice' || name.includes('invoice');
+      });
+      
+      const receiptType = types.find((t: DocumentType) => {
+        const name = t.typeName.toLowerCase().trim();
+        return name === 'receipt' || name.includes('receipt');
+      });
+      
+      // Set documentFormData với Invoice và Receipt đã được tìm thấy
+      setInvoiceDocumentFormData({
+        documentTypeId: invoiceType ? invoiceType.id : 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+      
+      setReceiptDocumentFormData({
+        documentTypeId: receiptType ? receiptType.id : 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+      
+      if (!invoiceType || !receiptType) {
+        console.warn("Không tìm thấy document type 'Invoice' hoặc 'Receipt'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
+      }
+    } catch (e) {
+      console.error("Error loading document types:", e);
+      setInvoiceDocumentFormData({
+        documentTypeId: 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+      setReceiptDocumentFormData({
+        documentTypeId: 0,
+        fileName: "",
+        filePath: "",
+        description: "",
+        source: "Accountant",
+        referencedClientDocumentId: 0
+      });
+    } finally {
+      setLoadingMarkAsPaidDocumentTypes(false);
+    }
+  };
+
+  // Hàm đóng modal ghi nhận đã chi trả
+  const handleCloseMarkAsPaidModal = () => {
+    setShowMarkAsPaidModal(false);
+    setSelectedPaymentForMarkAsPaid(null);
+    setMarkAsPaidFormData({
+      paidAmount: 0,
+      paymentDate: "",
+      notes: ""
+    });
+    setStatusUpdateError(null);
+    setStatusUpdateSuccess(false);
+    setCreateInvoiceDocumentError(null);
+    setCreateReceiptDocumentError(null);
+    setCreateInvoiceDocumentSuccess(false);
+    setCreateReceiptDocumentSuccess(false);
+    setInvoiceFile(null);
+    setReceiptFile(null);
+    setInvoiceUploadProgress(0);
+    setReceiptUploadProgress(0);
+    setInvoiceDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+    setReceiptDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedClientDocumentId: 0
+    });
+  };
+
+  // Hàm xử lý file upload cho Invoice
+  const onInvoiceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 10 * 1024 * 1024) {
+      setCreateInvoiceDocumentError("File quá lớn (tối đa 10MB)");
+      return;
+    }
+    setCreateInvoiceDocumentError(null);
+    setInvoiceFile(f);
+    if (f) {
+      setInvoiceDocumentFormData(prev => ({ ...prev, fileName: f.name }));
+    }
+  };
+
+  // Hàm xử lý file upload cho Receipt
+  const onReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 10 * 1024 * 1024) {
+      setCreateReceiptDocumentError("File quá lớn (tối đa 10MB)");
+      return;
+    }
+    setCreateReceiptDocumentError(null);
+    setReceiptFile(f);
+    if (f) {
+      setReceiptDocumentFormData(prev => ({ ...prev, fileName: f.name }));
+    }
+  };
+
+  // Hàm xử lý thay đổi form document cho Invoice
+  const handleInvoiceDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setInvoiceDocumentFormData(prev => ({
+      ...prev,
+      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+  // Hàm xử lý thay đổi form document cho Receipt
+  const handleReceiptDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setReceiptDocumentFormData(prev => ({
+      ...prev,
+      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+        ? (value === '' ? 0 : Number(value))
+        : value
+    }));
+  };
+
+
+  // Hàm ghi nhận đã chi trả (Paid) - Accountant
+  const handleMarkAsPaid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForMarkAsPaid) return;
+
+    // Kiểm tra bắt buộc phải có cả Invoice và Receipt
+    if (!invoiceFile || !invoiceDocumentFormData.documentTypeId) {
+      setStatusUpdateError("Vui lòng upload file Invoice");
+      return;
+    }
+    if (!receiptFile || !receiptDocumentFormData.documentTypeId) {
+      setStatusUpdateError("Vui lòng upload file Receipt");
+      return;
+    }
+
     setUpdatingStatus(true);
     setStatusUpdateError(null);
     setStatusUpdateSuccess(false);
+    setCreateInvoiceDocumentError(null);
+    setCreateReceiptDocumentError(null);
+    setCreateInvoiceDocumentSuccess(false);
+    setCreateReceiptDocumentSuccess(false);
+    setCreateInvoiceDocumentError(null);
+    setCreateReceiptDocumentError(null);
+    setCreateInvoiceDocumentSuccess(false);
+    setCreateReceiptDocumentSuccess(false);
 
     try {
-      await partnerContractPaymentService.update(payment.id, {
-        partnerPeriodId: payment.partnerPeriodId,
-        partnerContractId: payment.partnerContractId,
-        talentId: payment.talentId,
-        actualWorkHours: payment.actualWorkHours,
-        otHours: payment.otHours ?? null,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        paidAmount: payment.paidAmount ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'Paid',
-        notes: payment.notes ?? null
+      // Lấy userId từ token hoặc user context (dùng chung cho cả 2 document)
+      let uploadedByUserId: string | null = null;
+      
+      if (user?.id) {
+        uploadedByUserId = user.id;
+      } else {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          try {
+            const decoded = decodeJWT(token);
+            if (decoded) {
+              uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+            }
+          } catch (error) {
+            console.error('Error decoding JWT:', error);
+          }
+        }
+      }
+      
+      if (!uploadedByUserId) {
+        throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+      }
+
+      // Bước 1: Tạo document Invoice
+      try {
+        const path = `partner-documents/${selectedPaymentForMarkAsPaid.id}/${Date.now()}_invoice_${invoiceFile.name}`;
+        const downloadURL = await uploadFile(invoiceFile, path, setInvoiceUploadProgress);
+
+        const payload: PartnerDocumentCreate = {
+          partnerContractPaymentId: selectedPaymentForMarkAsPaid.id,
+          documentTypeId: invoiceDocumentFormData.documentTypeId,
+          referencedClientDocumentId: invoiceDocumentFormData.referencedClientDocumentId || null,
+          fileName: invoiceFile.name,
+          filePath: downloadURL,
+          uploadedByUserId,
+          description: invoiceDocumentFormData.description || null,
+          source: invoiceDocumentFormData.source || null
+        };
+
+        await partnerDocumentService.create(payload);
+        setCreateInvoiceDocumentSuccess(true);
+      } catch (docErr: unknown) {
+        setCreateInvoiceDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu Invoice');
+        throw docErr;
+      }
+
+      // Bước 2: Tạo document Receipt
+      try {
+        const path = `partner-documents/${selectedPaymentForMarkAsPaid.id}/${Date.now()}_receipt_${receiptFile.name}`;
+        const downloadURL = await uploadFile(receiptFile, path, setReceiptUploadProgress);
+
+        const payload: PartnerDocumentCreate = {
+          partnerContractPaymentId: selectedPaymentForMarkAsPaid.id,
+          documentTypeId: receiptDocumentFormData.documentTypeId,
+          referencedClientDocumentId: receiptDocumentFormData.referencedClientDocumentId || null,
+          fileName: receiptFile.name,
+          filePath: downloadURL,
+          uploadedByUserId,
+          description: receiptDocumentFormData.description || null,
+          source: receiptDocumentFormData.source || null
+        };
+
+        await partnerDocumentService.create(payload);
+        setCreateReceiptDocumentSuccess(true);
+      } catch (docErr: unknown) {
+        setCreateReceiptDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu Receipt');
+        throw docErr;
+      }
+
+      // Bước 3: Mark as paid
+      const paymentDateISO = new Date(markAsPaidFormData.paymentDate).toISOString();
+      await partnerContractPaymentService.markAsPaid(selectedPaymentForMarkAsPaid.id, {
+        paidAmount: markAsPaidFormData.paidAmount,
+        paymentDate: paymentDateISO,
+        notes: markAsPaidFormData.notes || null
       });
       
       setStatusUpdateSuccess(true);
@@ -485,13 +1373,19 @@ const AccountantPartnerPeriods: React.FC = () => {
           excludeDeleted: true 
         });
         setPayments(data?.items ?? data ?? []);
+        
+        // Cập nhật trạng thái period
+        await updatePeriodStatus(activePeriodId);
       }
 
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseMarkAsPaidModal();
+        setStatusUpdateSuccess(false);
+      }, 2000);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Không thể đánh dấu đã chi trả';
-      setStatusUpdateError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || errorMessage);
-      setTimeout(() => setStatusUpdateError(null), 5000);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể ghi nhận đã chi trả');
     } finally {
       setUpdatingStatus(false);
     }
@@ -787,8 +1681,8 @@ const AccountantPartnerPeriods: React.FC = () => {
                           </td>
                           <td className="p-3 whitespace-nowrap">{p.actualWorkHours}</td>
                           <td className="p-3 whitespace-nowrap">{p.otHours ?? "-"}</td>
-                          <td className="p-3 whitespace-nowrap">{p.calculatedAmount ?? "-"}</td>
-                          <td className="p-3 whitespace-nowrap">{p.paidAmount ?? "-"}</td>
+                          <td className="p-3 whitespace-nowrap">{formatVND(p.calculatedAmount)}</td>
+                          <td className="p-3 whitespace-nowrap">{formatVND(p.paidAmount)}</td>
                           <td className="p-3 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
                               {getStatusLabel(p.status)}
@@ -812,22 +1706,20 @@ const AccountantPartnerPeriods: React.FC = () => {
                             <div className="flex items-center gap-2 flex-wrap">
                               {p.status === 'PendingCalculation' && (
                                 <button
-                                  onClick={() => handleSubmit(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  onClick={() => handleOpenCalculateModal(p)}
+                                  className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"
                                 >
-                                  <Send className="w-4 h-4" />
-                                  {updatingStatus ? 'Đang xử lý...' : 'Nộp'}
+                                  <Calculator className="w-4 h-4" />
+                                  Tính toán
                                 </button>
                               )}
                               {p.status === 'Approved' && (
                                 <button
-                                  onClick={() => handleMarkAsPaid(p)}
-                                  disabled={updatingStatus}
-                                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  onClick={() => handleOpenMarkAsPaidModal(p)}
+                                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
                                 >
                                   <Wallet className="w-4 h-4" />
-                                  {updatingStatus ? 'Đang xử lý...' : 'Đã chi trả'}
+                                  Đã chi trả
                                 </button>
                               )}
                               <button
@@ -836,6 +1728,13 @@ const AccountantPartnerPeriods: React.FC = () => {
                               >
                                 <FileText className="w-4 h-4" />
                                 Tài liệu
+                              </button>
+                              <button
+                                onClick={() => handleOpenCreateDocumentModal(p)}
+                                className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <Upload className="w-4 h-4" />
+                                Tạo tài liệu
                               </button>
                               {p.status !== 'PendingCalculation' && p.status !== 'Approved' && (
                                 <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
@@ -849,6 +1748,604 @@ const AccountantPartnerPeriods: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal tính toán và tạo tài liệu */}
+        {showCalculateModal && selectedPaymentForCalculate && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Tính toán và tạo tài liệu</h2>
+                <button
+                  onClick={handleCloseCalculateModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {calculateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Tính toán thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {calculateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{calculateError}</p>
+                </div>
+              )}
+
+              {createDocumentSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Tạo tài liệu thành công!</p>
+                </div>
+              )}
+
+              {createDocumentError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{createDocumentError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleCalculateAndSubmit} className="space-y-6">
+                {/* Thông tin tính toán */}
+                <div className="space-y-4 border-b pb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin tính toán</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Giờ làm việc thực tế <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={calculateFormData.actualWorkHours}
+                        onChange={(e) => setCalculateFormData(prev => ({ ...prev, actualWorkHours: Number(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        required
+                        min="0"
+                        step="0.1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Giờ OT
+                      </label>
+                      <input
+                        type="number"
+                        value={calculateFormData.otHours}
+                        onChange={(e) => setCalculateFormData(prev => ({ ...prev, otHours: Number(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        min="0"
+                        step="0.1"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Hợp đồng
+                      </label>
+                      <input
+                        type="text"
+                        value={contractsMap.get(selectedPaymentForCalculate.partnerContractId)?.contractNumber || selectedPaymentForCalculate.partnerContractId}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nhân sự
+                      </label>
+                      <input
+                        type="text"
+                        value={talentsMap.get(selectedPaymentForCalculate.talentId)?.fullName || selectedPaymentForCalculate.talentId}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ghi chú
+                    </label>
+                    <textarea
+                      value={calculateFormData.notes}
+                      onChange={(e) => setCalculateFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      rows={3}
+                      placeholder="Ghi chú tính toán"
+                    />
+                  </div>
+                </div>
+
+                {/* Tạo tài liệu (Acceptant) - Tùy chọn */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu (Acceptant) - Tùy chọn</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Loại tài liệu
+                      </label>
+                      <select
+                        name="documentTypeId"
+                        value={documentFormData.documentTypeId}
+                        onChange={handleDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        disabled={loadingDocumentTypes}
+                      >
+                        <option value="0">-- Chọn loại tài liệu (tùy chọn) --</option>
+                        {documentTypesList.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.typeName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source
+                      </label>
+                      <input
+                        type="text"
+                        name="source"
+                        value={documentFormData.source}
+                        onChange={handleDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        placeholder="Accountant"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      File
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
+                      {file ? (
+                        <div className="flex flex-col items-center text-primary-700">
+                          <FileUp className="w-8 h-8 mb-2" />
+                          <p className="font-medium">{file.name}</p>
+                          <p className="text-sm text-gray-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                          {uploadProgress > 0 && uploadProgress < 100 && (
+                            <p className="text-sm text-gray-600 mt-1">Đang upload: {uploadProgress}%</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setFile(null)}
+                            className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                          >
+                            Xóa file
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center text-gray-500 cursor-pointer">
+                          <Upload className="w-12 h-12 mb-4" />
+                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây (tùy chọn)</span>
+                          <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={onFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    {file && !documentFormData.documentTypeId && (
+                      <p className="text-sm text-amber-600 mt-1">⚠️ Vui lòng chọn loại tài liệu nếu muốn tạo tài liệu</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả
+                    </label>
+                    <textarea
+                      name="description"
+                      value={documentFormData.description}
+                      onChange={handleDocumentFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      rows={3}
+                      placeholder="Mô tả tài liệu"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseCalculateModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={calculating || (file !== null && !documentFormData.documentTypeId)}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {calculating ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <Calculator className="w-4 h-4" />
+                        {file && documentFormData.documentTypeId ? 'Tính toán và tạo tài liệu' : 'Tính toán và Submit'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal ghi nhận đã chi trả */}
+        {showMarkAsPaidModal && selectedPaymentForMarkAsPaid && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Ghi nhận đã chi trả</h2>
+                <button
+                  onClick={handleCloseMarkAsPaidModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {statusUpdateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Ghi nhận đã chi trả thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {statusUpdateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{statusUpdateError}</p>
+                </div>
+              )}
+
+              {createInvoiceDocumentSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Tạo tài liệu Invoice thành công!</p>
+                </div>
+              )}
+
+              {createInvoiceDocumentError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{createInvoiceDocumentError}</p>
+                </div>
+              )}
+
+              {createReceiptDocumentSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Tạo tài liệu Receipt thành công!</p>
+                </div>
+              )}
+
+              {createReceiptDocumentError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{createReceiptDocumentError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleMarkAsPaid} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng
+                    </label>
+                    <input
+                      type="text"
+                      value={contractsMap.get(selectedPaymentForMarkAsPaid.partnerContractId)?.contractNumber || selectedPaymentForMarkAsPaid.partnerContractId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nhân sự
+                    </label>
+                    <input
+                      type="text"
+                      value={talentsMap.get(selectedPaymentForMarkAsPaid.talentId)?.fullName || selectedPaymentForMarkAsPaid.talentId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền đã tính toán
+                    </label>
+                    <input
+                      type="text"
+                      value={formatVND(selectedPaymentForMarkAsPaid.calculatedAmount)}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền đã chi trả <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={markAsPaidFormData.paidAmount}
+                      onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ngày chi trả <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={markAsPaidFormData.paymentDate}
+                      onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, paymentDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ghi chú
+                  </label>
+                  <textarea
+                    value={markAsPaidFormData.notes}
+                    onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={3}
+                    placeholder="Ghi chú về việc chi trả"
+                  />
+                </div>
+
+                {/* Form tạo tài liệu Invoice */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu Invoice <span className="text-red-500">*</span></h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Loại tài liệu <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="documentTypeId"
+                        value={invoiceDocumentFormData.documentTypeId}
+                        onChange={handleInvoiceDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        required={!!invoiceFile}
+                        disabled={loadingMarkAsPaidDocumentTypes}
+                      >
+                        <option value="0">-- Chọn loại tài liệu --</option>
+                        {markAsPaidDocumentTypesList.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.typeName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source
+                      </label>
+                      <input
+                        type="text"
+                        name="source"
+                        value={invoiceDocumentFormData.source}
+                        onChange={handleInvoiceDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        placeholder="Accountant"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      File Invoice <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
+                      {invoiceFile ? (
+                        <div className="flex flex-col items-center text-primary-700">
+                          <FileUp className="w-8 h-8 mb-2" />
+                          <p className="font-medium">{invoiceFile.name}</p>
+                          <p className="text-sm text-gray-600">{(invoiceFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          {invoiceUploadProgress > 0 && invoiceUploadProgress < 100 && (
+                            <p className="text-sm text-gray-600 mt-1">Đang upload: {invoiceUploadProgress}%</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setInvoiceFile(null)}
+                            className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                          >
+                            Xóa file
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center text-gray-500 cursor-pointer">
+                          <Upload className="w-12 h-12 mb-4" />
+                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file Invoice vào đây</span>
+                          <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={onInvoiceFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả
+                    </label>
+                    <textarea
+                      name="description"
+                      value={invoiceDocumentFormData.description}
+                      onChange={handleInvoiceDocumentFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      rows={2}
+                      placeholder="Mô tả tài liệu Invoice"
+                    />
+                  </div>
+                </div>
+
+                {/* Form tạo tài liệu Receipt */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu Receipt <span className="text-red-500">*</span></h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Loại tài liệu <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="documentTypeId"
+                        value={receiptDocumentFormData.documentTypeId}
+                        onChange={handleReceiptDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        required={!!receiptFile}
+                        disabled={loadingMarkAsPaidDocumentTypes}
+                      >
+                        <option value="0">-- Chọn loại tài liệu --</option>
+                        {markAsPaidDocumentTypesList.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.typeName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Source
+                      </label>
+                      <input
+                        type="text"
+                        name="source"
+                        value={receiptDocumentFormData.source}
+                        onChange={handleReceiptDocumentFormChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                        placeholder="Accountant"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      File Receipt <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
+                      {receiptFile ? (
+                        <div className="flex flex-col items-center text-primary-700">
+                          <FileUp className="w-8 h-8 mb-2" />
+                          <p className="font-medium">{receiptFile.name}</p>
+                          <p className="text-sm text-gray-600">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          {receiptUploadProgress > 0 && receiptUploadProgress < 100 && (
+                            <p className="text-sm text-gray-600 mt-1">Đang upload: {receiptUploadProgress}%</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setReceiptFile(null)}
+                            className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                          >
+                            Xóa file
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center text-gray-500 cursor-pointer">
+                          <Upload className="w-12 h-12 mb-4" />
+                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file Receipt vào đây</span>
+                          <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={onReceiptFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả
+                    </label>
+                    <textarea
+                      name="description"
+                      value={receiptDocumentFormData.description}
+                      onChange={handleReceiptDocumentFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      rows={2}
+                      placeholder="Mô tả tài liệu Receipt"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseMarkAsPaidModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingStatus || !invoiceFile || !receiptFile || !invoiceDocumentFormData.documentTypeId || !receiptDocumentFormData.documentTypeId}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4" />
+                        Ghi nhận đã chi trả và tạo tài liệu
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
@@ -1160,6 +2657,180 @@ const AccountantPartnerPeriods: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal tạo tài liệu độc lập */}
+        {showCreateDocumentModal && selectedPaymentForCreateDocument && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Tạo tài liệu</h2>
+                <button
+                  onClick={handleCloseCreateDocumentModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {createDocumentModalSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Tạo tài liệu thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {createDocumentModalError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{createDocumentModalError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateDocumentModal} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng
+                    </label>
+                    <input
+                      type="text"
+                      value={contractsMap.get(selectedPaymentForCreateDocument.partnerContractId)?.contractNumber || selectedPaymentForCreateDocument.partnerContractId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nhân sự
+                    </label>
+                    <input
+                      type="text"
+                      value={talentsMap.get(selectedPaymentForCreateDocument.talentId)?.fullName || selectedPaymentForCreateDocument.talentId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Loại tài liệu <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="documentTypeId"
+                      value={createDocumentModalFormData.documentTypeId}
+                      onChange={handleCreateDocumentModalFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      required
+                      disabled={loadingCreateDocumentModalDocumentTypes}
+                    >
+                      <option value="0">-- Chọn loại tài liệu --</option>
+                      {createDocumentModalDocumentTypesList.map(type => (
+                        <option key={type.id} value={type.id}>
+                          {type.typeName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Source
+                    </label>
+                    <input
+                      type="text"
+                      name="source"
+                      value={createDocumentModalFormData.source}
+                      onChange={handleCreateDocumentModalFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      placeholder="Accountant"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    File <span className="text-red-500">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
+                    {createDocumentModalFile ? (
+                      <div className="flex flex-col items-center text-primary-700">
+                        <FileUp className="w-8 h-8 mb-2" />
+                        <p className="font-medium">{createDocumentModalFile.name}</p>
+                        <p className="text-sm text-gray-600">{(createDocumentModalFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                        {createDocumentModalUploadProgress > 0 && createDocumentModalUploadProgress < 100 && (
+                          <p className="text-sm text-gray-600 mt-1">Đang upload: {createDocumentModalUploadProgress}%</p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setCreateDocumentModalFile(null)}
+                          className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                        >
+                          Xóa file
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center text-gray-500 cursor-pointer">
+                        <Upload className="w-12 h-12 mb-4" />
+                        <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây</span>
+                        <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={onCreateDocumentModalFileChange}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Mô tả
+                  </label>
+                  <textarea
+                    name="description"
+                    value={createDocumentModalFormData.description}
+                    onChange={handleCreateDocumentModalFormChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={3}
+                    placeholder="Mô tả tài liệu"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseCreateDocumentModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingCreateDocumentModal || !createDocumentModalFile || !createDocumentModalFormData.documentTypeId}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingCreateDocumentModal ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang tạo...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Tạo tài liệu
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase, FileUp } from "lucide-react";
+import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase} from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -57,11 +57,11 @@ export const sidebarItems = [
     //   { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
     // ]
   },
-  {
-    label: 'Tạo tài liệu nhân sự',
-    href: '/hr/payment-periods/partners',
-    icon: FileUp
-  },
+  // {
+  //   label: 'Tạo tài liệu nhân sự',
+  //   href: '/hr/payment-periods/partners',
+  //   icon: FileUp
+  // },
 
   // {
   //   label: 'Quản lý Template CV',

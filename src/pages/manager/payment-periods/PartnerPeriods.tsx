@@ -11,7 +11,11 @@ import { documentTypeService, type DocumentType } from "../../../services/Docume
 import { talentService, type Talent } from "../../../services/Talent";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, X, Check, FileText, Eye, Download } from "lucide-react";
+import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle } from "lucide-react";
+import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
+import { userService } from "../../../services/User";
+
+import { formatVND } from "../../../utils/helpers";
 
 const ManagerPartnerPeriods: React.FC = () => {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -28,6 +32,18 @@ const ManagerPartnerPeriods: React.FC = () => {
 
   // Trạng thái cập nhật
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+
+  // Modal approve
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [selectedPaymentForApprove, setSelectedPaymentForApprove] = useState<PartnerContractPayment | null>(null);
+  const [approveNotes, setApproveNotes] = useState("");
+
+  // Modal reject
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedPaymentForReject, setSelectedPaymentForReject] = useState<PartnerContractPayment | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   
   // Maps để lưu contracts và talents
   const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
@@ -89,6 +105,68 @@ const ManagerPartnerPeriods: React.FC = () => {
     loadPeriods();
   }, [selectedPartnerId]);
 
+  // Kiểm tra và cập nhật Cancelled cho các payment của contract terminated (chưa Paid)
+  const checkAndUpdateCancelled = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      // Lấy tất cả contracts để check status
+      const contractsData = await partnerContractService.getAll({ excludeDeleted: true });
+      const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
+      const terminatedContractIds = new Set(
+        contracts
+          .filter((c: PartnerContract) => c.status === 'Terminated')
+          .map((c: PartnerContract) => c.id)
+      );
+
+      if (terminatedContractIds.size === 0) return; // Không có contract nào bị terminated
+
+      const paymentsData = await partnerContractPaymentService.getAll({ 
+        partnerPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.items || []);
+
+      // Lọc các payment cần cập nhật: thuộc contract terminated VÀ chưa Paid
+      const cancelledPayments = payments.filter((p: PartnerContractPayment) => {
+        if (!terminatedContractIds.has(p.partnerContractId)) return false;
+        // Chưa Paid và chưa Cancelled
+        return p.status !== 'Paid' && p.status !== 'Cancelled';
+      });
+
+      // Cập nhật các payment thành Cancelled
+      for (const payment of cancelledPayments) {
+        try {
+          await partnerContractPaymentService.update(payment.id, {
+            partnerPeriodId: payment.partnerPeriodId,
+            partnerContractId: payment.partnerContractId,
+            talentId: payment.talentId,
+            actualWorkHours: payment.actualWorkHours,
+            otHours: payment.otHours ?? null,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            paidAmount: payment.paidAmount ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Cancelled',
+            notes: payment.notes ?? null
+          });
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Cancelled:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (cancelledPayments.length > 0) {
+        const updatedData = await partnerContractPaymentService.getAll({ 
+          partnerPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+      }
+    } catch (err) {
+      console.error('Error checking cancelled payments:', err);
+    }
+  };
+
   const onSelectPeriod = async (periodId: number) => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
@@ -119,6 +197,9 @@ const ManagerPartnerPeriods: React.FC = () => {
         talentMap.set(t.id, t);
       });
       setTalentsMap(talentMap);
+
+      // Kiểm tra và cập nhật Cancelled sau khi load
+      setTimeout(() => checkAndUpdateCancelled(), 500);
     } catch (e) {
       console.error(e);
     } finally {
@@ -170,23 +251,74 @@ const ManagerPartnerPeriods: React.FC = () => {
     setDocuments([]);
   };
 
-  // Hàm từ chối (Rejected) - Manager
-  const handleReject = async (payment: PartnerContractPayment) => {
+  // Hàm mở modal reject
+  const handleOpenRejectModal = (payment: PartnerContractPayment) => {
+    setSelectedPaymentForReject(payment);
+    setShowRejectModal(true);
+    setRejectionReason("");
+    setUpdateError(null);
+  };
+
+  // Hàm đóng modal reject
+  const handleCloseRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedPaymentForReject(null);
+    setRejectionReason("");
+    setUpdateError(null);
+  };
+
+  // Helper function để lấy danh sách user IDs theo role
+  const getUserIdByRole = async (role: string): Promise<string[]> => {
+    try {
+      const usersData = await userService.getAll({ 
+        role, 
+        isActive: true, 
+        excludeDeleted: true 
+      });
+      return usersData.items.map(user => user.id);
+    } catch (error) {
+      console.error(`Error getting users with role ${role}:`, error);
+      return [];
+    }
+  };
+
+  // Hàm từ chối (Reject) - Manager
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForReject || !rejectionReason.trim()) return;
+
     setUpdatingStatus(true);
+    setUpdateError(null);
+    setUpdateSuccess(false);
 
     try {
-      await partnerContractPaymentService.update(payment.id, {
-        partnerPeriodId: payment.partnerPeriodId,
-        partnerContractId: payment.partnerContractId,
-        talentId: payment.talentId,
-        actualWorkHours: payment.actualWorkHours,
-        otHours: payment.otHours ?? null,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        paidAmount: payment.paidAmount ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'Rejected',
-        notes: payment.notes ?? null
+      await partnerContractPaymentService.reject(selectedPaymentForReject.id, {
+        rejectionReason: rejectionReason.trim()
       });
+
+      // Gửi thông báo cho accountant
+      try {
+        const accountantUserIds = await getUserIdByRole('AccountantStaff');
+        if (accountantUserIds.length > 0) {
+          const contract = contractsMap.get(selectedPaymentForReject.partnerContractId);
+          const talent = talentsMap.get(selectedPaymentForReject.talentId);
+          await notificationService.create({
+            title: "Thanh toán hợp đồng đối tác bị từ chối",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForReject.partnerContractId} - ${talent?.fullName || selectedPaymentForReject.talentId} đã bị từ chối. Lý do: ${rejectionReason.trim()}. Vui lòng chỉnh sửa và tính toán lại.`,
+            type: NotificationType.PaymentOverdue,
+            priority: NotificationPriority.High,
+            userIds: accountantUserIds,
+            entityType: "PartnerContractPayment",
+            entityId: selectedPaymentForReject.id,
+            actionUrl: `/accountant/payment-periods/partners`
+          });
+        }
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Không throw error để không ảnh hưởng đến flow chính
+      }
+
+      setUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -196,30 +328,73 @@ const ManagerPartnerPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseRejectModal();
+        setUpdateSuccess(false);
+      }, 2000);
     } catch (err: unknown) {
-      console.error('Error rejecting payment:', err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setUpdateError(error.response?.data?.message || error.message || 'Không thể từ chối thanh toán');
     } finally {
       setUpdatingStatus(false);
     }
   };
 
-  // Hàm chấp nhận (Approved) - Manager
-  const handleApprove = async (payment: PartnerContractPayment) => {
+  // Hàm mở modal approve
+  const handleOpenApproveModal = (payment: PartnerContractPayment) => {
+    setSelectedPaymentForApprove(payment);
+    setShowApproveModal(true);
+    setApproveNotes(payment.notes || "");
+    setUpdateError(null);
+  };
+
+  // Hàm đóng modal approve
+  const handleCloseApproveModal = () => {
+    setShowApproveModal(false);
+    setSelectedPaymentForApprove(null);
+    setApproveNotes("");
+    setUpdateError(null);
+  };
+
+  // Hàm chấp nhận (Approve) - Manager
+  const handleApprove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForApprove) return;
+
     setUpdatingStatus(true);
+    setUpdateError(null);
+    setUpdateSuccess(false);
 
     try {
-      await partnerContractPaymentService.update(payment.id, {
-        partnerPeriodId: payment.partnerPeriodId,
-        partnerContractId: payment.partnerContractId,
-        talentId: payment.talentId,
-        actualWorkHours: payment.actualWorkHours,
-        otHours: payment.otHours ?? null,
-        calculatedAmount: payment.calculatedAmount ?? null,
-        paidAmount: payment.paidAmount ?? null,
-        paymentDate: payment.paymentDate ?? null,
-        status: 'Approved',
-        notes: payment.notes ?? null
+      await partnerContractPaymentService.approve(selectedPaymentForApprove.id, {
+        notes: approveNotes || null
       });
+
+      // Gửi thông báo cho accountant
+      try {
+        const accountantUserIds = await getUserIdByRole('AccountantStaff');
+        if (accountantUserIds.length > 0) {
+          const contract = contractsMap.get(selectedPaymentForApprove.partnerContractId);
+          const talent = talentsMap.get(selectedPaymentForApprove.talentId);
+          await notificationService.create({
+            title: "Thanh toán hợp đồng đối tác đã được duyệt",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForApprove.partnerContractId} - ${talent?.fullName || selectedPaymentForApprove.talentId} đã được duyệt.`,
+            type: NotificationType.PaymentReceived,
+            priority: NotificationPriority.Medium,
+            userIds: accountantUserIds,
+            entityType: "PartnerContractPayment",
+            entityId: selectedPaymentForApprove.id,
+            actionUrl: `/accountant/payment-periods/partners`
+          });
+        }
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+        // Không throw error để không ảnh hưởng đến flow chính
+      }
+
+      setUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -229,8 +404,15 @@ const ManagerPartnerPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
+
+      // Đóng modal sau 2 giây
+      setTimeout(() => {
+        handleCloseApproveModal();
+        setUpdateSuccess(false);
+      }, 2000);
     } catch (err: unknown) {
-      console.error('Error approving payment:', err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setUpdateError(error.response?.data?.message || error.message || 'Không thể duyệt thanh toán');
     } finally {
       setUpdatingStatus(false);
     }
@@ -478,8 +660,8 @@ const ManagerPartnerPeriods: React.FC = () => {
                           <td className="p-3">{talent?.fullName || p.talentId}</td>
                           <td className="p-3">{p.actualWorkHours}</td>
                           <td className="p-3">{p.otHours ?? "-"}</td>
-                          <td className="p-3">{p.calculatedAmount ?? "-"}</td>
-                          <td className="p-3">{p.paidAmount ?? "-"}</td>
+                          <td className="p-3">{formatVND(p.calculatedAmount)}</td>
+                          <td className="p-3">{formatVND(p.paidAmount)}</td>
                           <td className="p-3">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
                               {getStatusLabel(p.status)}
@@ -504,20 +686,18 @@ const ManagerPartnerPeriods: React.FC = () => {
                               {p.status === 'PendingApproval' ? (
                                 <>
                                   <button
-                                    onClick={() => handleReject(p)}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    onClick={() => handleOpenApproveModal(p)}
+                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    Duyệt
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRejectModal(p)}
+                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all whitespace-nowrap"
                                   >
                                     <X className="w-4 h-4" />
                                     Từ chối
-                                  </button>
-                                  <button
-                                    onClick={() => handleApprove(p)}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                    Chấp nhận
                                   </button>
                                 </>
                               ) : (
@@ -539,6 +719,181 @@ const ManagerPartnerPeriods: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal approve */}
+        {showApproveModal && selectedPaymentForApprove && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Duyệt thanh toán</h2>
+                <button
+                  onClick={handleCloseApproveModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {updateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Duyệt thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {updateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{updateError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleApprove} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hợp đồng
+                    </label>
+                    <input
+                      type="text"
+                      value={contractsMap.get(selectedPaymentForApprove.partnerContractId)?.contractNumber || selectedPaymentForApprove.partnerContractId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nhân sự
+                    </label>
+                    <input
+                      type="text"
+                      value={talentsMap.get(selectedPaymentForApprove.talentId)?.fullName || selectedPaymentForApprove.talentId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
+                      readOnly
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ghi chú
+                  </label>
+                  <textarea
+                    value={approveNotes}
+                    onChange={(e) => setApproveNotes(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={3}
+                    placeholder="Ghi chú về việc duyệt"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseApproveModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingStatus}
+                    className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Duyệt
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal reject */}
+        {showRejectModal && selectedPaymentForReject && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Từ chối thanh toán</h2>
+                <button
+                  onClick={handleCloseRejectModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {updateSuccess && (
+                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <p className="text-green-700 font-medium">✅ Từ chối thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                </div>
+              )}
+
+              {updateError && (
+                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <p className="text-red-700 font-medium">{updateError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleReject} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lý do từ chối <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    rows={4}
+                    required
+                    placeholder="Nhập lý do từ chối thanh toán..."
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={handleCloseRejectModal}
+                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingStatus || !rejectionReason.trim()}
+                    className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-4 h-4" />
+                        Từ chối
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
