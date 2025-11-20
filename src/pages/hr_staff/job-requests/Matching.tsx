@@ -82,8 +82,7 @@ const calculateMatchScore = async (
     cv: TalentCV,
     talent: Talent,
     jobReq: JobRequest,
-    jobRoleLevel: JobRoleLevel | null,
-    jobLocation: Location | null
+    jobRoleLevel: JobRoleLevel | null
 ): Promise<EnrichedMatchResult> => {
     // Lấy skills của talent
     const talentSkills = await talentSkillService.getAll({
@@ -305,8 +304,7 @@ export default function CVMatchingPage() {
                                         cv,
                                         talent,
                                         jobReq,
-                                        level,
-                                        jobLocation
+                                        level
                                     );
                                     return {
                                         ...calculatedMatch,
