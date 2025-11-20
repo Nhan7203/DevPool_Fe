@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, Filter, Plus, Shield, ShieldCheck, MoreVertical, UserRound, Trash2, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
 import { sidebarItems } from "../../../components/admin/SidebarItems";
 import Sidebar from "../../../components/common/Sidebar";
-import { userService, type User, type UserFilterModel, type PagedResult } from "../../../services/User";
+import { userService, type User, type UserFilter, type PagedResult } from "../../../services/User";
 
 // ------ Types ------
 export type SystemRole =
@@ -75,7 +75,7 @@ export default function UserManagementPage() {
       setLoading(true);
       setError(null);
       
-      const filter: UserFilterModel = {
+      const filter: UserFilter = {
         name: query || undefined,
         role: roleFilter === "All" ? undefined : roleFilter,
         isActive: statusFilter === "All" ? undefined : statusFilter === "Active",

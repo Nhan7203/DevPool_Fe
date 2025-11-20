@@ -12,7 +12,6 @@ import {
   Tag,
   Briefcase,
   MapPin,
-  Target,
   UserCog,
   UserCheck,
   DollarSign,

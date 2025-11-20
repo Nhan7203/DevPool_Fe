@@ -176,7 +176,6 @@ export default function CVMatchingPage() {
     const [filteredCVs, setFilteredCVs] = useState<(EnrichedMatchResult | EnrichedCVWithoutScore)[]>([]);
     const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
     const [jobRoleLevel, setJobRoleLevel] = useState<JobRoleLevel | null>(null);
-    const [jobLocation, setJobLocation] = useState<Location | null>(null);
     const [loading, setLoading] = useState(true);
     const [showFilters, setShowFilters] = useState(false);
     
@@ -217,11 +216,10 @@ export default function CVMatchingPage() {
                     throw new Error("Không thể tải thông tin JobRoleLevel");
                 }
 
-                // Fetch job location if exists
+                // Fetch job location if exists (not stored in state as it's not used)
                 if (jobReq.locationId) {
                     try {
                         await locationService.getById(jobReq.locationId);
-                        // Location is fetched but not stored in state as it's not used
                     } catch (err) {
                         console.warn("⚠️ Không thể tải thông tin Location:", err);
                     }

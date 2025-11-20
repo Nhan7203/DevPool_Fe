@@ -15,8 +15,7 @@ import {
   AlertCircle,
   CheckCircle,
   Briefcase,
-  Tag,
-  XCircle
+  Tag
 } from "lucide-react";
 
 interface ApplyActivityDetail extends ApplyActivity {
