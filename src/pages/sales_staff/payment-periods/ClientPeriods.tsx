@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { clientPaymentPeriodService } from "../../../services/ClientPaymentPeriod";
 import type { ClientPaymentPeriod } from "../../../services/ClientPaymentPeriod";
@@ -63,9 +63,9 @@ const SalesClientPeriods: React.FC = () => {
         const companyIds = [...new Set(contractsData.map((c: ClientContract) => c.clientCompanyId))];
         
         const companiesData = await Promise.all(
-          companyIds.map(async (id: number) => {
+          companyIds.map(async (id: unknown) => {
             try {
-              return await clientCompanyService.getById(id);
+              return await clientCompanyService.getById(id as number);
             } catch (e) {
               console.error(`Error loading company ${id}:`, e);
               return null;

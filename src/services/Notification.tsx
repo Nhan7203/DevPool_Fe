@@ -198,7 +198,7 @@ export const notificationService = {
     }
   },
 
-  async markAllAsRead(userId: string): Promise<void> {
+  async markAllAsRead(): Promise<void> {
     try {
       // Không gửi userId; BE lấy từ claims
       await axios.put(`/notification/mark-all-read`, {});

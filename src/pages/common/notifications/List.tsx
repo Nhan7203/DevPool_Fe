@@ -185,9 +185,9 @@ const NotificationCenterPage = () => {
   };
 
   const handleMarkAllAsRead = async () => {
-    if (!resolvedUserId || unreadCount === 0) return;
+    if (unreadCount === 0) return;
     try {
-      await notificationService.markAllAsRead(resolvedUserId);
+      await notificationService.markAllAsRead();
       fetchNotifications();
     } catch (error) {
       console.error('Không thể đánh dấu tất cả thông báo đã đọc:', error);

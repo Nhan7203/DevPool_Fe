@@ -141,10 +141,10 @@ import DeveloperDashboard from '../pages/developer/Dashboard';
 // MANAGER PAGES
 // ========================================
 import ManagerDashboard from '../pages/manager/dashboard/Dashboard';
-import ClientContracts from '../pages/manager/contract/clients/List';
-import ClientDetailPage from '../pages/manager/contract/clients/Detail';
-import DevContracts from '../pages/manager/contract/devs/List';
-import DevDetailPage from '../pages/manager/contract/devs/Detail';
+import ClientContracts from '../pages/manager/contract/Clients/List';
+import ClientDetailPage from '../pages/manager/contract/Clients/Detail';
+import DevContracts from '../pages/manager/contract/Devs/List';
+import DevDetailPage from '../pages/manager/contract/Devs/Detail';
 import BusinessOverview from '../pages/manager/business/Overview';
 import Revenue from '../pages/manager/business/Revenue';
 import ManagerClientPeriods from '../pages/manager/payment-periods/ClientPeriods';

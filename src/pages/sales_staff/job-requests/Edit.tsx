@@ -74,12 +74,7 @@ export default function JobRequestEditPage() {
   const [projectSearch, setProjectSearch] = useState<string>("");
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [locationSearch, setLocationSearch] = useState<string>("");
-  const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
-  const [applyTemplateSearch, setApplyTemplateSearch] = useState<string>("");
-  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
-  const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
-  const [isApplyTemplateDropdownOpen, setIsApplyTemplateDropdownOpen] = useState(false);
+  const [locationSearch] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const filteredSkills = allSkills.filter(skill => {
@@ -264,15 +259,6 @@ export default function JobRequestEditPage() {
     : projects;
   const projectsFilteredBySearch = projectsFiltered.filter(p =>
     !projectSearch || p.name.toLowerCase().includes(projectSearch.toLowerCase())
-  );
-  const locationsFiltered = locations.filter(l =>
-    !locationSearch || l.name.toLowerCase().includes(locationSearch.toLowerCase())
-  );
-  const jobRoleLevelsFiltered = jobRoleLevels.filter(j =>
-    !jobRoleLevelSearch || j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase())
-  );
-  const applyTemplatesFiltered = applyTemplates.filter(t =>
-    !applyTemplateSearch || t.name.toLowerCase().includes(applyTemplateSearch.toLowerCase())
   );
 
   // 💾 Gửi form
