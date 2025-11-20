@@ -120,7 +120,6 @@ export default function TalentSkillCreatePage() {
     }
     setError("");
     setSuccess(false);
-    setSkillSearchQuery(suggestion.skillName);
     setForm((prev) => ({
       ...prev,
       skillId: matchingSkill.id,

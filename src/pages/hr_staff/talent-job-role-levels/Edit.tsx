@@ -78,8 +78,8 @@ export default function TalentJobRoleLevelEditPage() {
         const existingJobRoleLevels = await talentJobRoleLevelService.getAll({ talentId: talentId, excludeDeleted: true });
         // Exclude current job role level ID from disabled list
         const jobRoleLevelIds = existingJobRoleLevels
-          .map(jrl => jrl.jobRoleLevelId)
-          .filter(id => id > 0 && id !== currentJobRoleLevelId);
+          .map((jrl: { jobRoleLevelId: number }) => jrl.jobRoleLevelId)
+          .filter((id: number) => id > 0 && id !== currentJobRoleLevelId);
         setExistingJobRoleLevelIds(jobRoleLevelIds);
       } catch (error) {
         console.error("❌ Error loading existing job role levels", error);

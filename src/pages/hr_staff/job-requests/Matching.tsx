@@ -172,8 +172,6 @@ export default function CVMatchingPage() {
     const location = useLocation();
     const jobRequestId = searchParams.get("jobRequestId");
 
-    const [matchResults, setMatchResults] = useState<EnrichedMatchResult[]>([]);
-    const [allMatchResults, setAllMatchResults] = useState<EnrichedMatchResult[]>([]);
     const [allCVs, setAllCVs] = useState<(EnrichedMatchResult | EnrichedCVWithoutScore)[]>([]);
     const [filteredCVs, setFilteredCVs] = useState<(EnrichedMatchResult | EnrichedCVWithoutScore)[]>([]);
     const [jobRequest, setJobRequest] = useState<JobRequest | null>(null);
@@ -222,8 +220,8 @@ export default function CVMatchingPage() {
                 // Fetch job location if exists
                 if (jobReq.locationId) {
                     try {
-                        const location = await locationService.getById(jobReq.locationId);
-                        setJobLocation(location);
+                        await locationService.getById(jobReq.locationId);
+                        // Location is fetched but not stored in state as it's not used
                     } catch (err) {
                         console.warn("⚠️ Không thể tải thông tin Location:", err);
                     }
@@ -361,7 +359,6 @@ export default function CVMatchingPage() {
                 console.log("📊 CVs with score > 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) > 0).length);
                 console.log("📊 CVs with score = 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) === 0).length);
                 
-                setAllMatchResults(sortedCVs.filter(cv => (cv.matchScore ?? 0) > 0) as EnrichedMatchResult[]);
                 setAllCVs(sortedCVs);
                 setFilteredCVs(sortedCVs);
             } catch (err) {
@@ -899,7 +896,6 @@ export default function CVMatchingPage() {
                             
                             // Availability bonus: +5 points nếu status === "Available"
                             const availabilityBonus = match.talentInfo?.status === "Available" ? 5 : 0;
-                            const baseScore = levelPoints + workingModePoints + locationPoints + skillPoints;
                             
                             // Xác định tiêu chí phù hợp - rút gọn
                             const jobLevelDisplay = jobRoleLevel 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentCertificateService, type TalentCertificateCreate, type TalentCertificate } from "../../../services/TalentCertificate";
+import { talentCertificateService, type TalentCertificateCreate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { type ExtractedCertificate } from "../../../services/TalentCV";
 import { 
@@ -355,8 +355,7 @@ function TalentCertificateCreatePage() {
                         {(() => {
                           const filtered = certificateTypeSearch
                             ? allCertificateTypes.filter(ct =>
-                              ct.name.toLowerCase().includes(certificateTypeSearch.toLowerCase()) ||
-                              (ct.description && ct.description.toLowerCase().includes(certificateTypeSearch.toLowerCase()))
+                              ct.name.toLowerCase().includes(certificateTypeSearch.toLowerCase())
                             )
                             : allCertificateTypes;
 

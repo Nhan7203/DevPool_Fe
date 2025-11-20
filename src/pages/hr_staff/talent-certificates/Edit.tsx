@@ -25,7 +25,6 @@ function TalentCertificateEditPage() {
   const navigate = useNavigate();
   const [allCertificateTypes, setAllCertificateTypes] = useState<CertificateType[]>([]);
   const [talentId, setTalentId] = useState<number>(0);
-  const [currentCertificateTypeId, setCurrentCertificateTypeId] = useState<number>(0);
   const [formData, setFormData] = useState<TalentCertificateCreate>({
     talentId: 0,
     certificateTypeId: 0,
@@ -59,7 +58,6 @@ function TalentCertificateEditPage() {
           imageUrl: data.imageUrl,
         });
         setTalentId(data.talentId);
-        setCurrentCertificateTypeId(data.certificateTypeId);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin chứng chỉ!");
@@ -276,8 +274,7 @@ function TalentCertificateEditPage() {
                         {(() => {
                           const filtered = certificateTypeSearch
                             ? allCertificateTypes.filter(ct =>
-                              ct.name.toLowerCase().includes(certificateTypeSearch.toLowerCase()) ||
-                              (ct.description && ct.description.toLowerCase().includes(certificateTypeSearch.toLowerCase()))
+                              ct.name.toLowerCase().includes(certificateTypeSearch.toLowerCase())
                             )
                             : allCertificateTypes;
 

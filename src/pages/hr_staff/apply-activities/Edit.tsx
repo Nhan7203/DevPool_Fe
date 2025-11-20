@@ -167,7 +167,7 @@ export default function ApplyActivityEditPage() {
 
     try {
       // Convert local datetime to UTC
-      let scheduledDateUTC: string | null = null;
+      let scheduledDateUTC: string | undefined = undefined;
       if (form.scheduledDate) {
         const localDate = new Date(form.scheduledDate);
 

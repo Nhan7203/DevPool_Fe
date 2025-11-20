@@ -40,7 +40,6 @@ export default function TalentEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [locations, setLocations] = useState<Location[]>([]);
-  const [users, setUsers] = useState<UserType[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [formData, setFormData] = useState<TalentCreate>({
     currentPartnerId: 1, // Default partner ID
@@ -142,18 +141,6 @@ export default function TalentEditPage() {
     fetchLocations();
   }, []);
 
-  // 🧭 Load danh sách Users
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const usersData = await userService.getAll({ excludeDeleted: true });
-        setUsers(usersData.items);
-      } catch (err) {
-        console.error("❌ Lỗi tải danh sách người dùng:", err);
-      }
-    };
-    fetchUsers();
-  }, []);
 
   // 🧭 Load danh sách Partners
   useEffect(() => {

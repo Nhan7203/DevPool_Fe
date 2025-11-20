@@ -233,16 +233,6 @@ const ManagerClientPeriods: React.FC = () => {
     }
   };
 
-  // Lấy danh sách trạng thái có thể chuyển đổi từ trạng thái hiện tại
-  // Manager chỉ được phép: ReadyForInvoice → Cancelled/Invoiced
-  const getAvailableStatuses = (currentStatus: string): string[] => {
-    const status = currentStatus || '';
-    if (status === 'ReadyForInvoice') {
-      return ['Cancelled', 'Invoiced'];
-    }
-    return [];
-  };
-
   // Mapping tiến trình theo status
   const stageOrder: Record<string, number> = {
     PendingCalculation: 1,

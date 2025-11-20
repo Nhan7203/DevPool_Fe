@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, X } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContract, type PartnerContractUpdatePayload } from '../../../services/PartnerContract';
@@ -24,7 +24,6 @@ export default function EditPartnerContractPage() {
     const [contractFile, setContractFile] = useState<File | null>(null);
     const [existingFileUrl, setExistingFileUrl] = useState<string | null>(null);
     const [eligibleTalentIds, setEligibleTalentIds] = useState<number[]>([]);
-    const [talentHireDates, setTalentHireDates] = useState<Record<number, string>>({});
     const [existingContracts, setExistingContracts] = useState<{ contractNumber: string; id: number }[]>([]);
 
     const [form, setForm] = useState<PartnerContractUpdatePayload>({
@@ -121,7 +120,6 @@ export default function EditPartnerContractPage() {
                 setPartners(partnersData);
                 setTalents(talentsData);
                 setEligibleTalentIds(Array.from(hiredTalentSet));
-                setTalentHireDates(talentHireDateMap);
 
                 // Lưu danh sách mã hợp đồng hiện có (loại trừ contract hiện tại)
                 const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
