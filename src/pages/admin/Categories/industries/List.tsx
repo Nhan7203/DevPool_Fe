@@ -8,7 +8,6 @@ import {
   Filter, 
   Plus, 
   Eye, 
-  Edit, 
   Briefcase, 
   FileText, 
   TrendingUp,

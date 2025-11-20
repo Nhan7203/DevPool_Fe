@@ -189,7 +189,7 @@ export default function DocumentTypeEditPage() {
                 </label>
                 <textarea
                   name="description"
-                  value={formData.description}
+                  value={formData.description || ""}
                   onChange={handleChange}
                   rows={4}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"

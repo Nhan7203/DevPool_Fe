@@ -4,7 +4,7 @@ import { sidebarItems } from "../../../components/accountant_staff/SidebarItems"
 import { clientDocumentService, type ClientDocument } from "../../../services/ClientDocument";
 import { partnerDocumentService, type PartnerDocument } from "../../../services/PartnerDocument";
 import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
-import { FileText, Download, Building2, Users, Calendar, Filter, Search, Eye, ExternalLink } from "lucide-react";
+import { FileText, Download, Building2, Users, Calendar, Search, Eye } from "lucide-react";
 
 type TabType = 'client' | 'partner';
 
@@ -14,7 +14,6 @@ const AccountantDocumentsList: React.FC = () => {
   const [partnerDocuments, setPartnerDocuments] = useState<PartnerDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingTypes, setLoadingTypes] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -23,14 +22,11 @@ const AccountantDocumentsList: React.FC = () => {
 
   useEffect(() => {
     const loadDocumentTypes = async () => {
-      setLoadingTypes(true);
       try {
         const data = await documentTypeService.getAll({ excludeDeleted: true });
         setDocumentTypes(data?.items ?? data ?? []);
       } catch (e) {
         console.error(e);
-      } finally {
-        setLoadingTypes(false);
       }
     };
     loadDocumentTypes();
@@ -108,7 +104,7 @@ const AccountantDocumentsList: React.FC = () => {
     }
   };
 
-  const handleDownload = (filePath: string, fileName: string) => {
+  const handleDownload = (filePath: string) => {
     window.open(filePath, '_blank');
   };
 
@@ -267,7 +263,7 @@ const AccountantDocumentsList: React.FC = () => {
                             Xem
                           </button>
                           <button
-                            onClick={() => handleDownload(doc.filePath, doc.fileName)}
+                            onClick={() => handleDownload(doc.filePath)}
                             className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 flex items-center gap-2 transition-all"
                             title="Tải xuống"
                           >

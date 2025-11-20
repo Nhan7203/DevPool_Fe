@@ -7,7 +7,6 @@ import {
   Shield,
   CheckCircle,
   Layers,
-  Award,
   FileText,
   Building2,
   Tag,
