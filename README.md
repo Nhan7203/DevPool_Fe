@@ -47,3 +47,38 @@ Khác với những nền tảng tuyển dụng thông thường, DevPool tập 
 - **Authentication:** JWT-based (tích hợp với backend)  
 
 ---
+
+## 🚀 CI/CD Pipeline
+
+Dự án đã được cấu hình CI/CD tự động với GitHub Actions và Vercel.
+
+### Cách hoạt động:
+
+1. **Khi tạo Pull Request:**
+   - Tự động chạy lint check (ESLint)
+   - Tự động kiểm tra build có thành công không
+   - PR chỉ được merge nếu tất cả checks pass
+
+2. **Khi push code lên branch `main`:**
+   - Chạy tất cả checks như trên
+   - Tự động deploy lên Vercel production
+
+### Cấu hình Vercel Secrets (nếu chưa có):
+
+Để workflow deploy hoạt động, cần thêm secrets vào GitHub:
+
+1. Vào **GitHub Repository** > **Settings** > **Secrets and variables** > **Actions**
+2. Thêm các secrets sau:
+   - `VERCEL_TOKEN`: Lấy từ https://vercel.com/account/tokens
+   - `VERCEL_ORG_ID`: Team/Organization ID từ Vercel project settings
+   - `VERCEL_PROJECT_ID`: Project ID từ Vercel project settings
+
+**Cách lấy VERCEL_ORG_ID và VERCEL_PROJECT_ID:**
+- Vào project trên Vercel > **Settings** > **General**
+- Hoặc chạy `vercel link` và xem file `.vercel/project.json`
+
+### Lưu ý:
+- Nếu Vercel đã được kết nối với GitHub, Vercel sẽ tự động deploy. Workflow này đảm bảo code quality trước khi deploy.
+- Xem chi tiết tại `.github/workflows/README.md`
+
+---
