@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import {
   Users, Target, Handshake, FileText,
-  TrendingUp, Clock, PlusCircle, Briefcase, AlertCircle, XCircle
+  TrendingUp, Clock, Briefcase, AlertCircle, XCircle
 } from "lucide-react";
 import Sidebar from "../../components/common/Sidebar";
 import { sidebarItems } from "../../components/sales_staff/SidebarItems";
@@ -53,13 +53,6 @@ export default function SalesDashboard() {
 
     fetchData();
   }, []);
-
-  const formatVND = (v: number) =>
-    new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-      maximumFractionDigits: 0,
-    }).format(v);
 
   const getIconClasses = (color: string) => {
     switch (color) {

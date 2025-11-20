@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  X,
   ArrowLeft,
   AlertCircle,
   CheckCircle,

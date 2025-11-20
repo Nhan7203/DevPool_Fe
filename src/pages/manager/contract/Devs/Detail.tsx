@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
-  Save,
-  X,
   ArrowLeft,
   FileText,
   Calendar,

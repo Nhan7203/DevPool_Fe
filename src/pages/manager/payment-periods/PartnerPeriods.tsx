@@ -11,7 +11,7 @@ import { documentTypeService, type DocumentType } from "../../../services/Docume
 import { talentService, type Talent } from "../../../services/Talent";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check, FileText, Eye, Download } from "lucide-react";
+import { Building2, Calendar, X, Check, FileText, Eye, Download } from "lucide-react";
 
 const ManagerPartnerPeriods: React.FC = () => {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -28,8 +28,6 @@ const ManagerPartnerPeriods: React.FC = () => {
 
   // Trạng thái cập nhật
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
-  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
   
   // Maps để lưu contracts và talents
   const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
@@ -175,8 +173,6 @@ const ManagerPartnerPeriods: React.FC = () => {
   // Hàm từ chối (Rejected) - Manager
   const handleReject = async (payment: PartnerContractPayment) => {
     setUpdatingStatus(true);
-    setStatusUpdateError(null);
-    setStatusUpdateSuccess(false);
 
     try {
       await partnerContractPaymentService.update(payment.id, {
@@ -191,8 +187,6 @@ const ManagerPartnerPeriods: React.FC = () => {
         status: 'Rejected',
         notes: payment.notes ?? null
       });
-      
-      setStatusUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -202,12 +196,8 @@ const ManagerPartnerPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
-
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể từ chối thanh toán');
-      setTimeout(() => setStatusUpdateError(null), 5000);
+      console.error('Error rejecting payment:', err);
     } finally {
       setUpdatingStatus(false);
     }
@@ -216,8 +206,6 @@ const ManagerPartnerPeriods: React.FC = () => {
   // Hàm chấp nhận (Approved) - Manager
   const handleApprove = async (payment: PartnerContractPayment) => {
     setUpdatingStatus(true);
-    setStatusUpdateError(null);
-    setStatusUpdateSuccess(false);
 
     try {
       await partnerContractPaymentService.update(payment.id, {
@@ -232,8 +220,6 @@ const ManagerPartnerPeriods: React.FC = () => {
         status: 'Approved',
         notes: payment.notes ?? null
       });
-      
-      setStatusUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -243,12 +229,8 @@ const ManagerPartnerPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
-
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể chấp nhận thanh toán');
-      setTimeout(() => setStatusUpdateError(null), 5000);
+      console.error('Error approving payment:', err);
     } finally {
       setUpdatingStatus(false);
     }

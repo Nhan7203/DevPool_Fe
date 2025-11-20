@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   Save,
   X,
-  Briefcase,
   Users,
   DollarSign,
   Target,
@@ -74,7 +73,6 @@ export default function JobRequestEditPage() {
   const [projectSearch, setProjectSearch] = useState<string>("");
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [locationSearch] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const filteredSkills = allSkills.filter(skill => {

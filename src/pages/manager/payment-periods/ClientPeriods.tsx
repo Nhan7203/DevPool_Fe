@@ -10,7 +10,7 @@ import { clientDocumentService, type ClientDocument } from "../../../services/Cl
 import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, Edit, CheckCircle, XCircle, X, Check, FileText, Eye, Download } from "lucide-react";
+import { Building2, Calendar, X, Check, FileText, Eye, Download } from "lucide-react";
 
 const ManagerClientPeriods: React.FC = () => {
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
@@ -27,8 +27,6 @@ const ManagerClientPeriods: React.FC = () => {
 
   // Trạng thái cập nhật
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
-  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
   
   // Map contract ID to contract number for display
   const [contractsMap, setContractsMap] = useState<Map<number, ClientContract>>(new Map());
@@ -51,9 +49,9 @@ const ManagerClientPeriods: React.FC = () => {
         const companyIds = [...new Set(contractsData.map((c: ClientContract) => c.clientCompanyId))];
         
         const companiesData = await Promise.all(
-          companyIds.map(async (id: number) => {
+          companyIds.map(async (id: unknown) => {
             try {
-              return await clientCompanyService.getById(id);
+              return await clientCompanyService.getById(id as number);
             } catch (e) {
               console.error(`Error loading company ${id}:`, e);
               return null;
@@ -170,8 +168,6 @@ const ManagerClientPeriods: React.FC = () => {
   // Hàm hủy (Cancelled) - Manager
   const handleCancel = async (payment: ClientContractPayment) => {
     setUpdatingStatus(true);
-    setStatusUpdateError(null);
-    setStatusUpdateSuccess(false);
 
     try {
       await clientContractPaymentService.update(payment.id, {
@@ -187,8 +183,6 @@ const ManagerClientPeriods: React.FC = () => {
         status: 'Cancelled',
         notes: payment.notes ?? null
       });
-      
-      setStatusUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -198,12 +192,8 @@ const ManagerClientPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
-
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể hủy thanh toán');
-      setTimeout(() => setStatusUpdateError(null), 5000);
+      console.error('Error cancelling payment:', err);
     } finally {
       setUpdatingStatus(false);
     }
@@ -212,8 +202,6 @@ const ManagerClientPeriods: React.FC = () => {
   // Hàm đồng ý (Invoiced) - Manager
   const handleApprove = async (payment: ClientContractPayment) => {
     setUpdatingStatus(true);
-    setStatusUpdateError(null);
-    setStatusUpdateSuccess(false);
 
     try {
       await clientContractPaymentService.update(payment.id, {
@@ -229,8 +217,6 @@ const ManagerClientPeriods: React.FC = () => {
         status: 'Invoiced',
         notes: payment.notes ?? null
       });
-      
-      setStatusUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
@@ -240,12 +226,8 @@ const ManagerClientPeriods: React.FC = () => {
         });
         setPayments(data?.items ?? data ?? []);
       }
-
-      setTimeout(() => setStatusUpdateSuccess(false), 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể duyệt thanh toán');
-      setTimeout(() => setStatusUpdateError(null), 5000);
+      console.error('Error approving payment:', err);
     } finally {
       setUpdatingStatus(false);
     }
@@ -487,8 +469,6 @@ const ManagerClientPeriods: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredPayments.map(p => {
-                      const availableStatuses = getAvailableStatuses(p.status);
-                      const canChangeStatus = availableStatuses.length > 0;
                       const contract = contractsMap.get(p.clientContractId);
                       
                       return (
