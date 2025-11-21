@@ -10,7 +10,8 @@ function RealtimeBootstrap() {
   const handlersRef = useRef<{ onMsg?: (n:any)=>void; onCount?: (c:number)=>void }>({});
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    // Kiểm tra token từ cả localStorage và sessionStorage
+    const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
     if (!token) return;
 
     (async () => {
@@ -29,6 +30,7 @@ function RealtimeBootstrap() {
         }
         // Đăng ký handler mới và lưu reference để có thể off đúng
         const onMsg = (n: any) => {
+          // pushItem sẽ tự động tăng unread nếu notification chưa đọc
           pushItem(n);
           try {
             // Cập nhật localStorage và phát sự kiện cho Navbar legacy (nếu có)

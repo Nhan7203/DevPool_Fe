@@ -97,6 +97,14 @@ export default function JobRequestEditPage() {
     }));
   };
 
+  // Helper function để format số tiền
+  const formatCurrency = (value: string | number | undefined): string => {
+    if (!value && value !== 0) return "";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+    if (isNaN(numValue)) return "";
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
   // 🧭 Load dữ liệu Job Request
   useEffect(() => {
     const fetchData = async () => {
@@ -233,8 +241,25 @@ export default function JobRequestEditPage() {
   ) => {
     const { name, value } = e.target;
 
-    const numericFields = ["quantity", "budgetPerMonth", "projectId", "jobRoleLevelId", "clientCompanyCVTemplateId", "locationId", "applyProcessTemplateId"];
-    const optionalNumeric = ["clientCompanyCVTemplateId", "locationId", "applyProcessTemplateId", "budgetPerMonth"];
+    // Xử lý đặc biệt cho budgetPerMonth - lưu số, format chỉ để hiển thị
+    if (name === "budgetPerMonth") {
+      // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+      const cleaned = value.replace(/\D/g, "");
+      // Nếu rỗng, set về undefined
+      if (cleaned === "") {
+        setFormData((prev) => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Lưu số vào state (không format)
+      const numValue = parseInt(cleaned, 10);
+      if (!isNaN(numValue)) {
+        setFormData((prev) => ({ ...prev, [name]: numValue }));
+      }
+      return;
+    }
+
+    const numericFields = ["quantity", "projectId", "jobRoleLevelId", "clientCompanyCVTemplateId", "locationId", "applyProcessTemplateId"];
+    const optionalNumeric = ["clientCompanyCVTemplateId", "locationId", "applyProcessTemplateId"];
 
     setFormData((prev) => {
       if (name === "status" || name === "workingMode") {
@@ -270,6 +295,12 @@ export default function JobRequestEditPage() {
       return;
     }
 
+    // Validate các trường bắt buộc
+    if (!formData.title || formData.title.trim() === "") {
+      alert("⚠️ Vui lòng nhập tiêu đề yêu cầu!");
+      return;
+    }
+
     if (!Number(formData.projectId)) {
       alert("⚠️ Vui lòng chọn Dự án trước khi lưu!");
       return;
@@ -277,6 +308,16 @@ export default function JobRequestEditPage() {
 
     if (!Number(formData.jobRoleLevelId)) {
       alert("⚠️ Vui lòng chọn Vị trí tuyển dụng trước khi lưu!");
+      return;
+    }
+
+    if (!formData.quantity || Number(formData.quantity) <= 0) {
+      alert("⚠️ Vui lòng nhập số lượng (phải lớn hơn 0)!");
+      return;
+    }
+
+    if (!formData.workingMode || Number(formData.workingMode) === 0) {
+      alert("⚠️ Vui lòng chọn chế độ làm việc!");
       return;
     }
 
@@ -295,6 +336,7 @@ export default function JobRequestEditPage() {
       const payload: JobRequestPayload = {
         ...formData,
         clientCompanyCVTemplateId: formData.clientCompanyCVTemplateId ?? undefined,
+        budgetPerMonth: formData.budgetPerMonth ?? undefined,
         skillIds: selectedSkills, // Include selected skills in payload
       };
       console.log("Payload gửi đi:", payload);
@@ -737,17 +779,26 @@ export default function JobRequestEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <DollarSign className="w-4 h-4" />
-                    Ngân sách/tháng (VND)
+                    Ngân sách/tháng
                   </label>
-                  <Input
-                    type="number"
-                    name="budgetPerMonth"
-                    value={formData.budgetPerMonth ?? ""}
-                    onChange={handleChange}
-                    min={0}
-                    placeholder="Nhập ngân sách..."
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
-                  />
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      name="budgetPerMonth"
+                      value={formData.budgetPerMonth ? formatCurrency(formData.budgetPerMonth) : ""}
+                      onChange={handleChange}
+                      placeholder="VD: 5.000.000"
+                      className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl pr-12"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium pointer-events-none">
+                      VNĐ
+                    </span>
+                  </div>
+                  {formData.budgetPerMonth && (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Số tiền: {formatCurrency(formData.budgetPerMonth)} VNĐ
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,15 +1,22 @@
 export interface Professional {
   id: string;
-  name: string;
-  title: string;
+  name: string; // Full name
+  title: string; // Position
   avatar: string;
-  location: string;
+  location: string; // LocationName
+  workingMode?: string; // WorkingMode: Onsite, Remote, Hybrid, Flexible
+  status?: string; // Status
+  bio?: string; // Giới thiệu ngắn
   hourlyRate: number;
   rating: number;
   reviewCount: number;
-  skills: Array<{ name: string; level: 'Cơ bản' | 'Khá' | 'Giỏi' | 'Chuyên gia' }>;
+  skills: Array<{ 
+    name: string; 
+    level: 'Cơ bản' | 'Khá' | 'Giỏi' | 'Chuyên gia';
+    yearsExp?: number; // Years of experience for this skill
+  }>;
   availability: 'available' | 'busy' | 'unavailable';
-  completedProjects: number;
+  completedProjects: number; // Tổng số dự án
   description: string;
   isOnline: boolean;
   experience: number;
@@ -18,4 +25,5 @@ export interface Professional {
   certifications: string[];
   responseTime: string;
   successRate: number;
+  workExperiences?: number; // Tổng số dự án từ work experiences
 }

@@ -54,29 +54,6 @@ export default function SalesDashboard() {
     fetchData();
   }, []);
 
-  const getIconClasses = (color: string) => {
-    switch (color) {
-      case "primary":
-        return "bg-primary-100 text-primary-600";
-      case "secondary":
-        return "bg-secondary-100 text-secondary-600";
-      case "accent":
-        return "bg-accent-100 text-accent-600";
-      case "warning":
-        return "bg-warning-100 text-warning-600";
-      case "orange":
-        return "bg-orange-100 text-orange-600";
-      case "green":
-        return "bg-green-100 text-green-600";
-      case "purple":
-        return "bg-purple-100 text-purple-600";
-      case "red":
-        return "bg-red-100 text-red-600";
-      default:
-        return "bg-neutral-100 text-neutral-600";
-    }
-  };
-
   const totalJobRequests = jobRequests.length;
   const approvedJobRequests = jobRequests.filter(jr => jr.status === JobRequestStatus.Approved).length;
   const pendingJobRequests = jobRequests.filter(jr => jr.status === JobRequestStatus.Pending).length;
@@ -226,18 +203,25 @@ export default function SalesDashboard() {
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
               {primaryStats.map((stat, index) => (
-                <div key={index} className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-3 rounded-xl ${getIconClasses(stat.color)}`}>
-                      <stat.icon className="w-6 h-6" />
+                <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    </div>
+                    <div className={`p-3 rounded-full ${stat.color === 'primary' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                      stat.color === 'secondary' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                        stat.color === 'accent' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                          stat.color === 'purple' ? 'bg-purple-100 text-purple-600 group-hover:bg-purple-200' :
+                            'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                      } transition-all duration-300`}>
+                      {stat.icon && <stat.icon className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-neutral-500 mt-2 flex items-center">
-                    <TrendingUp className="w-4 h-4 mr-1 text-green-500" />
+                  <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                    <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
                     {stat.description}
                   </p>
                 </div>
@@ -245,18 +229,25 @@ export default function SalesDashboard() {
             </div>
 
             {/* Secondary Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
               {secondaryStats.map((stat, index) => (
-                <div key={index} className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-3 rounded-xl ${getIconClasses(stat.color)}`}>
-                      <stat.icon className="w-6 h-6" />
+                <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    </div>
+                    <div className={`p-3 rounded-full ${stat.color === 'green' ? 'bg-green-100 text-green-600 group-hover:bg-green-200' :
+                      stat.color === 'orange' ? 'bg-orange-100 text-orange-600 group-hover:bg-orange-200' :
+                        stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
+                          stat.color === 'warning' ? 'bg-warning-100 text-warning-600 group-hover:bg-warning-200' :
+                            'bg-neutral-100 text-neutral-600 group-hover:bg-neutral-200'
+                      } transition-all duration-300`}>
+                      {stat.icon && <stat.icon className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-neutral-500 mt-2 flex items-center">
-                    <TrendingUp className="w-4 h-4 mr-1 text-green-500" />
+                  <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                    <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
                     {stat.description}
                   </p>
                 </div>

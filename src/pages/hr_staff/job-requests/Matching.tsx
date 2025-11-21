@@ -144,8 +144,8 @@ const calculateMatchScore = async (
             : 15; // Nếu không yêu cầu thì cho đủ điểm
     
     // Tính điểm level (20 điểm tối đa)
-    // Kiểm tra xem CV có cùng jobRoleId với job request không
-    const levelMatch = cv.jobRoleId === jobRoleLevel?.jobRoleId;
+    // Kiểm tra xem CV có cùng jobRoleLevelId với job request không
+    const levelMatch = cv.jobRoleLevelId === jobRoleLevel?.id;
     const levelPoints = levelMatch ? 20 : 0;
     
     // Tính điểm availability bonus (+5 điểm nếu status === "Available")

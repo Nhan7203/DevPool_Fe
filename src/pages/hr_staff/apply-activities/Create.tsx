@@ -380,12 +380,6 @@ export default function ApplyActivityCreatePage() {
                     value={form.scheduledDate}
                     onChange={handleChange}
                     className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    min={(() => {
-                      const baseDate = previousConstraint
-                        ? new Date(previousConstraint.date)
-                        : new Date();
-                      return formatDateTimeInput(baseDate);
-                    })()}
                   />
                   {form.scheduledDate && (
                     <button

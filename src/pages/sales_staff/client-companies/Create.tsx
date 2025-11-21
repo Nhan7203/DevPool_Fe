@@ -23,6 +23,8 @@ export default function ClientCompanyCreatePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState<{
+    name?: string;
+    contactPerson?: string;
     email?: string;
     phone?: string;
   }>({});
@@ -67,6 +69,12 @@ export default function ClientCompanyCreatePage() {
     setForm((prev) => ({ ...prev, [name]: value }));
     
     // Clear error khi user đang nhập
+    if (name === "name" && formErrors.name) {
+      setFormErrors((prev) => ({ ...prev, name: undefined }));
+    }
+    if (name === "contactPerson" && formErrors.contactPerson) {
+      setFormErrors((prev) => ({ ...prev, contactPerson: undefined }));
+    }
     if (name === "email" && formErrors.email) {
       setFormErrors((prev) => ({ ...prev, email: undefined }));
     }
@@ -76,16 +84,26 @@ export default function ClientCompanyCreatePage() {
     e.preventDefault();
     
     // Validate form
-    const errors: { email?: string; phone?: string } = {};
+    const errors: { name?: string; contactPerson?: string; email?: string; phone?: string } = {};
     
-    // Validate email
+    // Validate tên công ty (bắt buộc)
+    if (!form.name || form.name.trim() === "") {
+      errors.name = "Tên công ty là bắt buộc";
+    }
+    
+    // Validate người liên hệ (bắt buộc)
+    if (!form.contactPerson || form.contactPerson.trim() === "") {
+      errors.contactPerson = "Người liên hệ là bắt buộc";
+    }
+    
+    // Validate email (bắt buộc)
     if (!form.email.trim()) {
       errors.email = "Email là bắt buộc";
     } else if (!validateEmail(form.email)) {
       errors.email = "Email không hợp lệ";
     }
     
-    // Validate phone
+    // Validate phone (không bắt buộc nhưng nếu có thì phải đúng format)
     if (form.phone && !validatePhone(form.phone)) {
       errors.phone = "Số điện thoại phải có đúng 10 chữ số";
     }
@@ -179,8 +197,18 @@ export default function ClientCompanyCreatePage() {
                   onChange={handleChange}
                   placeholder="Nhập tên công ty..."
                   required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    formErrors.name
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-neutral-200 focus:border-primary-500"
+                  }`}
                 />
+                {formErrors.name && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {formErrors.name}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -211,8 +239,18 @@ export default function ClientCompanyCreatePage() {
                     onChange={handleChange}
                     placeholder="Nhập người liên hệ..."
                     required
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      formErrors.contactPerson
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {formErrors.contactPerson && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {formErrors.contactPerson}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

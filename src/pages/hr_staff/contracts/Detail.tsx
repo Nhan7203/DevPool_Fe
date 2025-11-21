@@ -121,10 +121,7 @@ export default function ContractDetailPage() {
 
     const formatCurrency = (value: number | null | undefined) => {
         if (!value) return '—';
-        return new Intl.NumberFormat('vi-VN', {
-            style: 'currency',
-            currency: 'VND'
-        }).format(value);
+        return new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ';
     };
 
     const getRateTypeText = (rateType: string) => {
@@ -144,6 +141,11 @@ export default function ContractDetailPage() {
 
     const handleSendForApproval = async () => {
         if (!id || !contract) return;
+
+        const confirmSend = window.confirm(
+            `Bạn có chắc muốn gửi yêu cầu duyệt hợp đồng "${contract.contractNumber}"?\n\nHợp đồng sẽ chuyển sang trạng thái "Chờ duyệt" và Manager sẽ nhận được thông báo.`
+        );
+        if (!confirmSend) return;
 
         try {
             setIsUpdating(true);
@@ -250,6 +252,11 @@ export default function ContractDetailPage() {
 
     const handleRestoreToDraft = async () => {
         if (!id || !contract) return;
+
+        const confirmRestore = window.confirm(
+            `Bạn có chắc muốn chuyển hợp đồng "${contract.contractNumber}" về trạng thái Bản nháp?`
+        );
+        if (!confirmRestore) return;
 
         try {
             setIsRestoring(true);

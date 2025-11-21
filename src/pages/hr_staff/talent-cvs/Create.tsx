@@ -3,7 +3,7 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentCVService, type TalentCVCreate } from "../../../services/TalentCV";
-import { jobRoleService, type JobRole } from "../../../services/JobRole";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { uploadTalentCV } from "../../../utils/firebaseStorage";
 import { 
   ArrowLeft, 
@@ -30,16 +30,17 @@ export default function TalentCVCreatePage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState<TalentCVCreate>({
     talentId: talentId ? Number(talentId) : 0,
-    jobRoleId: 0,
+    jobRoleLevelId: 0,
     version: 1,
     cvFileUrl: "",
     isActive: true,
     summary: "",
     isGeneratedFromTemplate: false,
     sourceTemplateId: undefined,
+    generatedForJobRequestId: undefined,
   });
 
-  const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
+  const [allJobRoleLevels, setAllJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [existingCVs, setExistingCVs] = useState<any[]>([]);
   const [versionError, setVersionError] = useState<string>("");
   
@@ -74,28 +75,28 @@ export default function TalentCVCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const jobRoles = await jobRoleService.getAll({ excludeDeleted: true });
-        setAllJobRoles(jobRoles);
+        const jobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        setAllJobRoleLevels(Array.isArray(jobRoleLevels) ? jobRoleLevels : []);
       } catch (error) {
-        console.error("❌ Error loading job roles", error);
+        console.error("❌ Error loading job role levels", error);
       }
     };
     fetchData();
   }, []);
 
-  // Fetch CV cùng jobRoleId khi jobRoleId thay đổi
+  // Fetch CV cùng jobRoleLevelId khi jobRoleLevelId thay đổi
   useEffect(() => {
-    const fetchCVsByJobRole = async () => {
-      if (talentId && form.jobRoleId && form.jobRoleId > 0) {
+    const fetchCVsByJobRoleLevel = async () => {
+      if (talentId && form.jobRoleLevelId && form.jobRoleLevelId > 0) {
         try {
           const cvs = await talentCVService.getAll({ 
             talentId: Number(talentId), 
-            jobRoleId: form.jobRoleId,
+            jobRoleLevelId: form.jobRoleLevelId,
             excludeDeleted: true 
           });
           setExistingCVs(cvs || []);
         } catch (error) {
-          console.error("❌ Error loading CVs by job role", error);
+          console.error("❌ Error loading CVs by job role level", error);
           setExistingCVs([]);
         }
       } else {
@@ -103,18 +104,18 @@ export default function TalentCVCreatePage() {
         setVersionError("");
       }
     };
-    fetchCVsByJobRole();
-  }, [talentId, form.jobRoleId]);
+    fetchCVsByJobRoleLevel();
+  }, [talentId, form.jobRoleLevelId]);
 
   // Validate lại version khi existingCVs thay đổi
   useEffect(() => {
-    if (form.version > 0 && form.jobRoleId > 0 && existingCVs.length > 0) {
-      const error = validateVersion(form.version, form.jobRoleId, existingCVs);
+    if (form.version > 0 && form.jobRoleLevelId > 0 && existingCVs.length > 0) {
+      const error = validateVersion(form.version, form.jobRoleLevelId, existingCVs);
       setVersionError(error);
     } else if (existingCVs.length === 0) {
       setVersionError("");
     }
-  }, [existingCVs, form.version, form.jobRoleId]);
+  }, [existingCVs, form.version, form.jobRoleLevelId]);
 
   // Cảnh báo khi user cố gắng rời khỏi trang sau khi đã upload CV lên Firebase nhưng chưa lưu
   useEffect(() => {
@@ -133,17 +134,17 @@ export default function TalentCVCreatePage() {
     };
   }, [isUploadedFromFirebase, success]);
 
-  // Validate version không trùng với CV cùng jobRoleId
-  const validateVersion = (version: number, jobRoleId: number, existingCVsList: any[]): string => {
+  // Validate version không trùng với CV cùng jobRoleLevelId
+  const validateVersion = (version: number, jobRoleLevelId: number, existingCVsList: any[]): string => {
     if (version <= 0) {
       return "Version phải lớn hơn 0";
     }
     
-    if (jobRoleId === 0 || existingCVsList.length === 0) {
+    if (jobRoleLevelId === 0 || existingCVsList.length === 0) {
       return "";
     }
     
-    // Kiểm tra trùng với các CV cùng jobRoleId
+    // Kiểm tra trùng với các CV cùng jobRoleLevelId
     const duplicateCV = existingCVsList.find((cv: any) => cv.version === version);
     
     if (duplicateCV) {
@@ -163,12 +164,12 @@ export default function TalentCVCreatePage() {
     // Validate version khi user nhập
     if (name === "version") {
       const versionNum = Number(value);
-      const error = validateVersion(versionNum, form.jobRoleId, existingCVs);
+      const error = validateVersion(versionNum, form.jobRoleLevelId, existingCVs);
       setVersionError(error);
     }
     
-    // Clear error khi jobRoleId thay đổi (sẽ validate lại khi user nhập version)
-    if (name === "jobRoleId") {
+    // Clear error khi jobRoleLevelId thay đổi (sẽ validate lại khi user nhập version)
+    if (name === "jobRoleLevelId") {
       setVersionError("");
     }
     
@@ -180,7 +181,7 @@ export default function TalentCVCreatePage() {
     setForm(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
-              type === 'number' || name === "jobRoleId" || name === "sourceTemplateId" || name === "version" ? Number(value) : value
+              type === 'number' || name === "jobRoleLevelId" || name === "sourceTemplateId" || name === "version" || name === "generatedForJobRequestId" ? Number(value) : value
     }));
   };
 
@@ -411,7 +412,7 @@ export default function TalentCVCreatePage() {
     setError("");
     setSuccess(false);
 
-    if (!form.jobRoleId || form.jobRoleId === 0) {
+    if (!form.jobRoleLevelId || form.jobRoleLevelId === 0) {
       setError("⚠️ Vui lòng chọn vị trí công việc trước khi tạo.");
       setLoading(false);
       return;
@@ -424,7 +425,7 @@ export default function TalentCVCreatePage() {
     }
 
     // Validate version không trùng
-    const versionErrorMsg = validateVersion(form.version, form.jobRoleId, existingCVs);
+    const versionErrorMsg = validateVersion(form.version, form.jobRoleLevelId, existingCVs);
     if (versionErrorMsg) {
       setVersionError(versionErrorMsg);
       setError("⚠️ " + versionErrorMsg);
@@ -460,14 +461,14 @@ export default function TalentCVCreatePage() {
           talentId: Number(talentId), 
           excludeDeleted: true 
         });
-        const activeCVWithSameJobRole = existingCVs.find(
-          (cv: any) => cv.isActive && cv.jobRoleId === form.jobRoleId
+        const activeCVWithSameJobRoleLevel = existingCVs.find(
+          (cv: any) => cv.isActive && cv.jobRoleLevelId === form.jobRoleLevelId
         );
 
-        if (activeCVWithSameJobRole) {
-          const jobRoleName = allJobRoles.find(jr => jr.id === form.jobRoleId)?.name || "vị trí này";
+        if (activeCVWithSameJobRoleLevel) {
+          const jobRoleLevelName = allJobRoleLevels.find(jrl => jrl.id === form.jobRoleLevelId)?.name || "vị trí này";
           const confirmed = window.confirm(
-            `⚠️ Bạn đang có CV active với vị trí công việc "${jobRoleName}".\n\n` +
+            `⚠️ Bạn đang có CV active với vị trí công việc "${jobRoleLevelName}".\n\n` +
             `CV mới sẽ được set active và CV cũ sẽ bị set inactive.\n\n` +
             `Bạn có chắc chắn muốn upload CV này không?`
           );
@@ -477,7 +478,7 @@ export default function TalentCVCreatePage() {
           }
           // Set CV cũ inactive trước khi tạo CV mới
           // console.log("finalForm", finalForm);
-          await talentCVService.deactivate(activeCVWithSameJobRole.id);
+          await talentCVService.deactivate(activeCVWithSameJobRoleLevel.id);
         } else {
           // Nếu không trùng, CV mới active (đã set ở trên)
           const confirmed = window.confirm("Bạn có chắc chắn muốn tạo CV mới cho nhân sự không?");
@@ -555,8 +556,8 @@ export default function TalentCVCreatePage() {
                   Vị trí công việc <span className="text-red-500">*</span>
                 </label>
                 <select
-                  name="jobRoleId"
-                  value={form.jobRoleId}
+                  name="jobRoleLevelId"
+                  value={form.jobRoleLevelId}
                   onChange={handleChange}
                   disabled={isUploadedFromFirebase}
                   className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
@@ -567,8 +568,8 @@ export default function TalentCVCreatePage() {
                   required
                 >
                   <option value="0">-- Chọn vị trí công việc --</option>
-                  {allJobRoles.map(jobRole => (
-                    <option key={jobRole.id} value={jobRole.id}>{jobRole.name}</option>
+                  {allJobRoleLevels.map(jobRoleLevel => (
+                    <option key={jobRoleLevel.id} value={jobRoleLevel.id}>{jobRoleLevel.name}</option>
                   ))}
                 </select>
                 {isUploadedFromFirebase && (
@@ -576,10 +577,10 @@ export default function TalentCVCreatePage() {
                     File đã được upload lên Firebase, không thể thay đổi vị trí công việc
                   </p>
                 )}
-                {form.jobRoleId > 0 && !isUploadedFromFirebase && (
+                {form.jobRoleLevelId > 0 && !isUploadedFromFirebase && (
                   <p className="text-xs text-neutral-500 mt-2">
                     Đã chọn: <span className="font-medium text-neutral-700">
-                      {allJobRoles.find(jr => jr.id === form.jobRoleId)?.name || "Không xác định"}
+                      {allJobRoleLevels.find(jrl => jrl.id === form.jobRoleLevelId)?.name || "Không xác định"}
                     </span>
                   </p>
                 )}

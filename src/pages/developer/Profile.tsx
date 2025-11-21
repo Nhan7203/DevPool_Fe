@@ -1,0 +1,828 @@
+import { useState, useEffect } from 'react';
+import { 
+  User, Mail, Phone, Save, AlertCircle, CheckCircle, Calendar, MapPin, 
+  Briefcase, Award, FileText, Clock, Building2, ExternalLink, Eye, Download,
+  Code, Target, Star, Globe, Linkedin, Github, Edit
+} from 'lucide-react';
+import Sidebar from '../../components/common/Sidebar';
+import { sidebarItems } from '../../components/developer/SidebarItems';
+import { useAuth } from '../../contexts/AuthContext';
+import { userService, type User as UserType } from '../../services/User';
+import { decodeJWT } from '../../services/Auth';
+import { talentService, type TalentDetailedModel } from '../../services/Talent';
+import { locationService } from '../../services/location';
+import { partnerService } from '../../services/Partner';
+import { skillService } from '../../services/Skill';
+import { jobRoleLevelService } from '../../services/JobRoleLevel';
+import { jobRoleService } from '../../services/JobRole';
+import { certificateTypeService } from '../../services/CertificateType';
+import { WorkingMode } from '../../types/WorkingMode';
+
+// Mapping WorkingMode values to Vietnamese names
+const workingModeLabels: Record<number, string> = {
+  [WorkingMode.None]: "Không xác định",
+  [WorkingMode.Onsite]: "Tại văn phòng",
+  [WorkingMode.Remote]: "Từ xa",
+  [WorkingMode.Hybrid]: "Kết hợp",
+  [WorkingMode.Flexible]: "Linh hoạt",
+};
+
+export default function DeveloperProfilePage() {
+  const { user: authUser } = useAuth();
+  const [user, setUser] = useState<UserType | null>(null);
+  const [talent, setTalent] = useState<TalentDetailedModel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  
+  // Lookup data
+  const [locationName, setLocationName] = useState<string>('—');
+  const [partnerName, setPartnerName] = useState<string>('—');
+  const [skillsMap, setSkillsMap] = useState<Map<number, string>>(new Map());
+  const [jobRoleLevelsMap, setJobRoleLevelsMap] = useState<Map<number, { name: string; jobRoleName: string }>>(new Map());
+  const [certificateTypesMap, setCertificateTypesMap] = useState<Map<number, string>>(new Map());
+  
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phoneNumber: '',
+    dateOfBirth: '',
+    bio: '',
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!authUser) return;
+      
+      try {
+        setLoading(true);
+        setError('');
+        
+        // Get userId from token
+        const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+        let userId: string | null = null;
+        
+        if (token) {
+          const decoded = decodeJWT(token);
+          userId = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid || authUser.id;
+        } else {
+          userId = authUser.id;
+        }
+        
+        if (!userId) {
+          setError('Không thể xác định người dùng');
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch user data
+        const userData = await userService.getById(userId);
+        setUser(userData);
+        
+        // Fetch talent detailed data
+        const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
+        const currentTalent = allTalents.find(t => t.userId === userId);
+        
+        if (currentTalent) {
+          setTalent(currentTalent);
+          
+          // Set form data
+          setFormData({
+            fullName: currentTalent.fullName || userData.fullName || '',
+            phoneNumber: currentTalent.phoneNumber || userData.phoneNumber || '',
+            dateOfBirth: currentTalent.dateOfBirth ? currentTalent.dateOfBirth.split('T')[0] : '',
+            bio: currentTalent.bio || '',
+          });
+          
+          // Fetch location name
+          if (currentTalent.locationId) {
+            try {
+              const location = await locationService.getById(currentTalent.locationId);
+              setLocationName(location?.name || '—');
+            } catch {
+              setLocationName('—');
+            }
+          }
+          
+          // Fetch partner name
+          if (currentTalent.currentPartnerId) {
+            try {
+              const partners = await partnerService.getAll();
+              const partner = partners.find((p: any) => p.id === currentTalent.currentPartnerId);
+              setPartnerName(partner?.companyName || '—');
+            } catch {
+              setPartnerName('—');
+            }
+          }
+          
+          // Fetch lookup data for skills, job role levels, certificate types
+          try {
+            const [skills, jobRoleLevels, jobRoles, certificateTypes] = await Promise.all([
+              skillService.getAll({ excludeDeleted: true }),
+              jobRoleLevelService.getAll({ excludeDeleted: true }),
+              jobRoleService.getAll({ excludeDeleted: true }),
+              certificateTypeService.getAll({ excludeDeleted: true }),
+            ]);
+            
+            // Build skills map
+            const skillsMapData = new Map<number, string>();
+            (skills || []).forEach((skill: any) => {
+              skillsMapData.set(skill.id, skill.name);
+            });
+            setSkillsMap(skillsMapData);
+            
+            // Build job role levels map
+            const jobRoleLevelsMapData = new Map<number, { name: string; jobRoleName: string }>();
+            (jobRoleLevels || []).forEach((jrl: any) => {
+              const jobRole = (jobRoles || []).find((jr: any) => jr.id === jrl.jobRoleId);
+              jobRoleLevelsMapData.set(jrl.id, {
+                name: jrl.name,
+                jobRoleName: jobRole?.name || '—',
+              });
+            });
+            setJobRoleLevelsMap(jobRoleLevelsMapData);
+            
+            // Build certificate types map
+            const certificateTypesMapData = new Map<number, string>();
+            (certificateTypes || []).forEach((ct: any) => {
+              certificateTypesMapData.set(ct.id, ct.typeName);
+            });
+            setCertificateTypesMap(certificateTypesMapData);
+          } catch (err) {
+            console.error('❌ Lỗi tải lookup data:', err);
+          }
+        } else {
+          // No talent found, just use user data
+          setFormData({
+            fullName: userData.fullName || '',
+            phoneNumber: userData.phoneNumber || '',
+            dateOfBirth: '',
+            bio: '',
+          });
+        }
+      } catch (err: any) {
+        console.error('❌ Lỗi tải thông tin:', err);
+        setError(err.message || 'Không thể tải thông tin');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [authUser]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !authUser) return;
+    
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess(false);
+      
+      // Get userId from token
+      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+      let userId: string | null = null;
+      
+      if (token) {
+        const decoded = decodeJWT(token);
+        userId = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid || authUser.id;
+      } else {
+        userId = authUser.id;
+      }
+      
+      if (!userId) {
+        setError('Không thể xác định người dùng');
+        return;
+      }
+      
+      // Update user data
+      await userService.update(userId, {
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber || undefined,
+      });
+      
+      // Update talent data if exists
+      if (talent) {
+        await talentService.update(talent.id, {
+          fullName: formData.fullName,
+          phone: formData.phoneNumber || undefined,
+          dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth).toISOString() : undefined,
+        });
+      }
+      
+      // Reload data
+      const updatedUser = await userService.getById(userId);
+      setUser(updatedUser);
+      
+      if (talent) {
+        const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
+        const updatedTalent = allTalents.find(t => t.userId === userId);
+        if (updatedTalent) {
+          setTalent(updatedTalent);
+        }
+      }
+      
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('❌ Lỗi cập nhật thông tin:', err);
+      setError(err.message || 'Không thể cập nhật thông tin');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '—';
+    try {
+      return new Date(dateString).toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatWorkingMode = (workingMode: string | null | undefined) => {
+    if (!workingMode) return '—';
+    const modeNum = parseInt(workingMode);
+    if (isNaN(modeNum)) return workingMode;
+    return workingModeLabels[modeNum] || workingMode;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar items={sidebarItems} title="Developer" />
+        <div className="flex-1 flex justify-center items-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Đang tải thông tin...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex bg-gray-50 min-h-screen">
+      <Sidebar items={sidebarItems} title="Developer" />
+      
+      <div className="flex-1 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-8 animate-slide-up">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ Sơ Cá Nhân</h1>
+            <p className="text-neutral-600">Xem và quản lý thông tin hồ sơ của bạn</p>
+          </div>
+
+          {/* Success/Error Messages */}
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <p className="text-green-800 font-medium">Cập nhật thông tin thành công!</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <p className="text-red-800 font-medium">{error}</p>
+            </div>
+          )}
+
+          {/* 1. Thông tin cá nhân */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+            <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary-100 rounded-lg">
+                    <User className="w-6 h-6 text-primary-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Thông Tin Cá Nhân</h2>
+                    <p className="text-sm text-neutral-600">Thông tin cơ bản của bạn</p>
+                  </div>
+                </div>
+                <Edit className="w-5 h-5 text-neutral-400" />
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Họ tên */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <User className="w-4 h-4 inline mr-2" />
+                    Họ tên
+                  </label>
+                  <input
+                    type="text"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    placeholder="Nhập họ và tên"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Mail className="w-4 h-4 inline mr-2" />
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={talent?.email || user?.email || ''}
+                    disabled
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-neutral-500">Email không thể thay đổi</p>
+                </div>
+
+                {/* Số điện thoại */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Phone className="w-4 h-4 inline mr-2" />
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    placeholder="Nhập số điện thoại"
+                  />
+                </div>
+
+                {/* Ngày sinh */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Ngày sinh
+                  </label>
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    value={formData.dateOfBirth}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2" />
+                    Địa điểm
+                  </label>
+                  <input
+                    type="text"
+                    value={locationName}
+                    disabled
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Working Mode */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Briefcase className="w-4 h-4 inline mr-2" />
+                    Chế độ làm việc
+                  </label>
+                  <input
+                    type="text"
+                    value={formatWorkingMode(talent?.workingMode || undefined)}
+                    disabled
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Bio */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Giới thiệu ngắn (Bio)
+                  </label>
+                  <textarea
+                    name="bio"
+                    value={formData.bio}
+                    onChange={handleChange}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    placeholder="Nhập giới thiệu ngắn về bản thân"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end pt-6 mt-6 border-t border-neutral-200">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Lưu Thay Đổi
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* 2. Thông tin chuyên môn */}
+          {talent && (
+            <>
+              {/* (a) Skills */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Code className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Kỹ Năng (Skills)</h2>
+                      <p className="text-sm text-neutral-600">Danh sách kỹ năng của bạn</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.skills && talent.skills.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {talent.skills.map((skill) => (
+                        <div key={skill.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold text-gray-900">
+                              {skillsMap.get(skill.skillId) || `Skill #${skill.skillId}`}
+                            </h3>
+                            <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-xs font-medium">
+                              {skill.level}
+                            </span>
+                          </div>
+                          <p className="text-sm text-neutral-600">
+                            Kinh nghiệm: {skill.yearsExp} năm
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có kỹ năng nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* (b) Job Role Level */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Target className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Vai Trò & Cấp Độ (Job Role Level)</h2>
+                      <p className="text-sm text-neutral-600">Vai trò và cấp độ của bạn</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.jobRoleLevels && talent.jobRoleLevels.length > 0 ? (
+                    <div className="space-y-4">
+                      {talent.jobRoleLevels.map((jrl) => {
+                        const jrlInfo = jobRoleLevelsMap.get(jrl.jobRoleLevelId);
+                        return (
+                          <div key={jrl.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-gray-900">
+                                {jrlInfo?.jobRoleName || '—'} - {jrlInfo?.name || '—'}
+                              </h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                              <p className="text-sm text-neutral-600">
+                                <span className="font-medium">Kinh nghiệm:</span> {jrl.yearsOfExp} năm
+                              </p>
+                              {jrl.ratePerMonth && (
+                                <p className="text-sm text-neutral-600">
+                                  <span className="font-medium">Mức lương/tháng:</span> {new Intl.NumberFormat('vi-VN').format(jrl.ratePerMonth)} VNĐ
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có vai trò nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* (c) Work Experiences */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Briefcase className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Kinh Nghiệm Làm Việc</h2>
+                      <p className="text-sm text-neutral-600">Lịch sử công việc của bạn</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.workExperiences && talent.workExperiences.length > 0 ? (
+                    <div className="space-y-4">
+                      {talent.workExperiences.map((exp) => (
+                        <div key={exp.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h3 className="font-semibold text-gray-900">{exp.company}</h3>
+                              <p className="text-sm text-neutral-600 mt-1">{exp.position}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-neutral-600">
+                                {formatDate(exp.startDate)} - {exp.endDate ? formatDate(exp.endDate) : 'Hiện tại'}
+                              </p>
+                            </div>
+                          </div>
+                          {exp.description && (
+                            <p className="text-sm text-neutral-700 mt-2">{exp.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có kinh nghiệm làm việc nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* (d) Projects */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Star className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Dự Án (Projects)</h2>
+                      <p className="text-sm text-neutral-600">Các dự án bạn đã tham gia</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.projects && talent.projects.length > 0 ? (
+                    <div className="space-y-4">
+                      {talent.projects.map((project) => (
+                        <div key={project.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <h3 className="font-semibold text-gray-900 mb-2">{project.projectName}</h3>
+                          <p className="text-sm text-neutral-600 mb-2">
+                            <span className="font-medium">Vị trí:</span> {project.position}
+                          </p>
+                          <p className="text-sm text-neutral-600 mb-2">
+                            <span className="font-medium">Công nghệ:</span> {project.technologies}
+                          </p>
+                          {project.description && (
+                            <p className="text-sm text-neutral-700 mt-2">{project.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có dự án nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* (e) Certificates */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Award className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Chứng Chỉ (Certificates)</h2>
+                      <p className="text-sm text-neutral-600">Các chứng chỉ của bạn</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.certificates && talent.certificates.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {talent.certificates.map((cert) => (
+                        <div key={cert.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-semibold text-gray-900">{cert.certificateName}</h3>
+                            {cert.isVerified && (
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                Đã xác thực
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-neutral-600 mb-2">
+                            <span className="font-medium">Loại:</span> {certificateTypesMap.get(cert.certificateTypeId) || '—'}
+                          </p>
+                          {cert.certificateDescription && (
+                            <p className="text-sm text-neutral-700 mb-2">{cert.certificateDescription}</p>
+                          )}
+                          {cert.issuedDate && (
+                            <p className="text-sm text-neutral-600 mb-2">
+                              <span className="font-medium">Ngày cấp:</span> {formatDate(cert.issuedDate)}
+                            </p>
+                          )}
+                          {cert.imageUrl && (
+                            <div className="mt-2">
+                              <a
+                                href={cert.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 text-sm"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Xem hình ảnh
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có chứng chỉ nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* (f) CVs */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <FileText className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Hồ Sơ (CVs)</h2>
+                      <p className="text-sm text-neutral-600">Danh sách CV của bạn</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.cvs && talent.cvs.length > 0 ? (
+                    <div className="space-y-4">
+                      {talent.cvs.map((cv) => {
+                        const jrlInfo = jobRoleLevelsMap.get(cv.jobRoleLevelId);
+                        return (
+                          <div key={cv.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h3 className="font-semibold text-gray-900">
+                                    Phiên bản {cv.version}
+                                  </h3>
+                                  {cv.isActive && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                      Đang hoạt động
+                                    </span>
+                                  )}
+                                  {cv.isGeneratedFromTemplate && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                      Tự động tạo
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-neutral-600 mb-2">
+                                  <span className="font-medium">Vai trò:</span> {jrlInfo?.name || '—'}
+                                </p>
+                                {cv.summary && (
+                                  <p className="text-sm text-neutral-700 mb-2">{cv.summary}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={cv.cvFileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Xem
+                                </a>
+                                <a
+                                  href={cv.cvFileUrl}
+                                  download
+                                  className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Tải
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có CV nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Lịch rảnh (Available Time) */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary-100 rounded-lg">
+                      <Clock className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Lịch Rảnh (Available Time)</h2>
+                      <p className="text-sm text-neutral-600">Thời gian bạn có thể làm việc</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.availableTimes && talent.availableTimes.length > 0 ? (
+                    <div className="space-y-4">
+                      {talent.availableTimes.map((at) => (
+                        <div key={at.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-semibold text-gray-900">
+                              {formatDate(at.startTime)} - {at.endTime ? formatDate(at.endTime) : 'Không giới hạn'}
+                            </p>
+                          </div>
+                          {at.notes && (
+                            <p className="text-sm text-neutral-700 mt-2">{at.notes}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có lịch rảnh nào</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Thông tin đối tác hiện tại */}
+              {talent.currentPartnerId && (
+                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                  <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Building2 className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Đối Tác Hiện Tại</h2>
+                        <p className="text-sm text-neutral-600">Công ty đối tác bạn đang làm việc</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                      <p className="text-lg font-semibold text-gray-900">{partnerName}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {!talent && (
+            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6 p-8 text-center">
+              <p className="text-neutral-500">Chưa có thông tin talent. Vui lòng liên hệ HR để được tạo hồ sơ.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/Auth';
 import { auth, onAuthStateChanged } from '../configs/firebase';
+import { getUser, getAccessToken, clearAuthData } from '../utils/storage';
 
 type Role =
   | 'Staff HR'
@@ -55,14 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Restore user từ localStorage
-    const storedUser = localStorage.getItem(STORAGE_KEY);
+    // Restore user từ storage (kiểm tra cả localStorage và sessionStorage)
+    const storedUser = getUser();
     if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Error parsing stored user:', error);
-      }
+      setUser(storedUser);
     }
 
     // Kiểm tra Firebase auth state
@@ -84,22 +81,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login: AuthContextType['login'] = async (email, _password, role) => {
     setIsLoading(true);
     
-    // Lấy thông tin user từ localStorage (đã được lưu trong LoginForm)
-    const accessToken = localStorage.getItem('accessToken');
-    const storedUser = localStorage.getItem(STORAGE_KEY);
+    // Lấy thông tin user từ storage (đã được lưu trong LoginForm)
+    const storedUser = getUser();
     
     if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setIsLoading(false);
-        return;
-      } catch (error) {
-        console.error('Error parsing stored user:', error);
-      }
+      setUser(storedUser);
+      setIsLoading(false);
+      return;
     }
 
     // Nếu không có stored user, tạo user từ thông tin login
+    const accessToken = getAccessToken();
     const user: User = {
       id: accessToken || '1', // Có thể lấy từ token hoặc API
       email,
@@ -110,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     setUser(user);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    // User đã được lưu trong LoginForm, không cần lưu lại ở đây
     setIsLoading(false);
   };
 
@@ -134,11 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Logout Firebase
     await authService.logoutFirebase();
     
-    // Clear user state và localStorage
+    // Clear user state và storage (cả localStorage và sessionStorage)
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearAuthData();
   };
 
   return (

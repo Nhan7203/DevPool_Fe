@@ -1,6 +1,14 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 import { WorkingMode } from "../types/WorkingMode";
+import type { TalentSkill } from './TalentSkill';
+import type { TalentWorkExperience } from './TalentWorkExperience';
+import type { TalentProject } from './TalentProject';
+import type { TalentCertificate } from './TalentCertificate';
+import type { TalentJobRoleLevel } from './TalentJobRoleLevel';
+import type { TalentCV } from './TalentCV';
+import type { TalentAvailableTime } from './TalentAvailableTime';
+import type { TalentStaffAssignment } from './TalentStaffAssignment';
 
 export interface Talent {
   id: number;
@@ -81,13 +89,14 @@ export interface TalentJobRoleLevelCreateModel {
 }
 
 export interface TalentCVCreateModel {
-  jobRoleId: number;
+  jobRoleLevelId: number;
   version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;
   isGeneratedFromTemplate: boolean;
   sourceTemplateId?: number;
+  generatedForJobRequestId?: number | null;
 }
 
 export interface TalentWithRelatedDataCreateModel {
@@ -124,6 +133,54 @@ export interface TalentStatusTransitionResult {
   previousStatus?: string;
   newStatus?: string;
   validationErrors?: string[];
+}
+
+export interface CreateDeveloperAccountModel {
+  email: string;
+}
+
+export interface CreateDeveloperAccountResult {
+  success: boolean;
+  message: string;
+  data?: {
+    generatedPassword: string;
+    email: string;
+  };
+}
+
+// Interface cho TalentDetailedModel (từ API /talent/detailed)
+export interface TalentDetailedModel {
+  id: number;
+  userId?: string | null;
+  currentPartnerId?: number | null;
+  fullName: string;
+  email: string;
+  phoneNumber?: string | null;
+  dateOfBirth?: string | null; // DateTime as ISO string
+  locationId?: number | null;
+  address?: string | null;
+  workingMode?: string | null;
+  status?: string | null;
+  linkedInProfile?: string | null;
+  gitHubProfile?: string | null;
+  profilePictureUrl?: string | null;
+  bio?: string | null;
+  createdAt: string; // DateTime as ISO string
+  updatedAt: string; // DateTime as ISO string
+  
+  // Related Collections
+  skills: TalentSkill[];
+  workExperiences: TalentWorkExperience[];
+  projects: TalentProject[];
+  certificates: TalentCertificate[];
+  jobRoleLevels: TalentJobRoleLevel[];
+  cvs: TalentCV[];
+  availableTimes: TalentAvailableTime[];
+  staffAssignments: TalentStaffAssignment[];
+  
+  // Navigation Properties (optional - for display purposes)
+  locationName?: string | null;
+  currentPartnerName?: string | null;
 }
 
 export const talentService = {
@@ -242,6 +299,64 @@ export const talentService = {
         throw { message: "Failed to fetch talents by client or project" };
       }
       throw error || { message: "Unexpected error occurred" };
+    }
+  },
+
+  /**
+   * Create developer account for talent (Workflow 4.3)
+   * Validates: Talent.Status == Working AND Talent.UserId == null
+   * Creates user account with role=Dev, links to talent, and sends credentials email
+   */
+  async createDeveloperAccount(id: number, payload: CreateDeveloperAccountModel): Promise<CreateDeveloperAccountResult> {
+    try {
+      const response = await axios.post(`/talent/${id}/create-account`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to create developer account" };
+      }
+      throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  /**
+   * Lấy danh sách Talent với tất cả dữ liệu liên quan (detailed)
+   * Endpoint: GET /talent/detailed
+   */
+  async getAllDetailed(filter?: TalentFilter): Promise<TalentDetailedModel[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filter?.currentPartnerId) params.append("CurrentPartnerId", filter.currentPartnerId.toString());
+      if (filter?.fullName) params.append("FullName", filter.fullName);
+      if (filter?.email) params.append("Email", filter.email);
+      if (filter?.locationId) params.append("LocationId", filter.locationId.toString());
+      if (filter?.workingMode !== undefined) params.append("WorkingMode", filter.workingMode.toString());
+      if (filter?.status) params.append("Status", filter.status);
+      if (filter?.excludeDeleted !== undefined) params.append("ExcludeDeleted", filter.excludeDeleted.toString());
+      
+      const url = `/talent/detailed${params.toString() ? `?${params}` : ""}`;
+      const response = await axios.get(url);
+      
+      // Backend trả về format { success, message, data }
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
+      }
+      
+      // Fallback nếu format khác
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to fetch detailed talents" };
+      }
+      throw { message: "Unexpected error occurred" };
     }
   },
 };

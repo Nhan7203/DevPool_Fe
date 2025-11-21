@@ -29,6 +29,7 @@ export const ROUTES = {
   // =======================================
   HR_STAFF: {
     DASHBOARD: '/hr/dashboard',
+    PROFILE: '/hr/profile',
 
     // Talent & nguồn cung
     DEVELOPERS: {
@@ -147,6 +148,7 @@ export const ROUTES = {
   // =======================================
   SALES_STAFF: {
     DASHBOARD: '/sales/dashboard',
+    PROFILE: '/sales/profile',
 
     // Quản lý Hợp đồng 
     CONTRACTS: {
@@ -221,6 +223,7 @@ export const ROUTES = {
   // ====================================
   ACCOUNTANT_STAFF: {
     DASHBOARD: '/accountant/dashboard',
+    PROFILE: '/accountant/profile',
 
     // WorkReports đã manager-approve → khóa sổ
     WORKREPORTS: {
@@ -276,13 +279,19 @@ export const ROUTES = {
     CONTRACTS: {
       LIST: '/developer/contracts',             // Danh sách hợp đồng của mình
       CURRENT: '/developer/contracts/current',  // Hợp đồng đang thực hiện
-      DETAIL: '/developer/contracts/:id',       // Chi tiết hợp đồng
+      DETAIL: '/developer/contracts/:type/:id',       // Chi tiết hợp đồng (type: partner hoặc client)
     },
 
     // Timesheet/WorkReport: chỉ xem
     WORKREPORTS: {
       LIST: '/developer/workreports',
       DETAIL: '/developer/workreports/:id',
+    },
+
+    // Payment Status
+    PAYMENTS: {
+      LIST: '/developer/payments',
+      DETAIL: '/developer/payments/:id',
     },
   },
 
@@ -291,6 +300,7 @@ export const ROUTES = {
   // ==============================================================
   MANAGER: {
     DASHBOARD: '/manager/dashboard',
+    PROFILE: '/manager/profile',
 
     APPROVALS: '/manager/approvals',               // hàng chờ: shortlist, rate, contract, WR
     WORKREPORT_REVIEW: '/manager/workreports',     // duyệt/Reject trước khi kế toán khóa sổ
@@ -333,11 +343,13 @@ export const ROUTES = {
   // =====================================
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
+    PROFILE: '/admin/profile',
 
     // Quản lý Users
     USERS: {
-      LIST: '/admin/users',                          // Danh sách users
-      CREATE_ACCOUNT: '/admin/users/create-account', // Tạo tài khoản cho dev đã ký HĐ
+      LIST: '/admin/users',                          // Danh sách users (staff)
+      CREATE_ACCOUNT: '/admin/users/create-account', // Tạo tài khoản cho staff
+      TALENT_LIST: '/admin/users/talents',           // Danh sách talent (dev)
     },
 
     // Danh mục

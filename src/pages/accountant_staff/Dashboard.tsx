@@ -96,7 +96,7 @@ export default function AccountantDashboard() {
   }, []);
 
   const formatVND = (v: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v);
+    new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(v) + ' VNĐ';
 
   return (
     <div className="flex bg-gray-50 min-h-screen">

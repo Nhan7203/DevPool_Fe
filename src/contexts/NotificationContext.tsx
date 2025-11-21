@@ -25,6 +25,7 @@ interface NotificationContextValue {
 	pushItem: (n: RealtimeNotification) => void;
 	setItems: (items: RealtimeNotification[]) => void;
 	updateItemById: (id: number, patch: Partial<RealtimeNotification>) => void;
+	removeItemById: (id: number) => void;
 	clearItems: () => void;
 }
 
@@ -35,6 +36,7 @@ const NotificationContext = createContext<NotificationContextValue>({
 	pushItem: () => {},
 	setItems: () => {},
 	updateItemById: () => {},
+	removeItemById: () => {},
 	clearItems: () => {},
 });
 
@@ -48,11 +50,55 @@ export const NotificationProvider: React.FC<React.PropsWithChildren> = ({ childr
 		unread,
 		items,
 		setUnread,
-		pushItem: (n: RealtimeNotification) => setItems(prev => [n, ...prev]),
+		pushItem: (n: RealtimeNotification) => {
+			setItems(prev => {
+				// Kiểm tra xem notification đã tồn tại chưa (theo id)
+				const existingIndex = prev.findIndex(item => item.id === n.id);
+				if (existingIndex !== -1) {
+					// Nếu đã tồn tại, cập nhật notification đó và di chuyển lên đầu
+					const updated = [...prev];
+					updated.splice(existingIndex, 1);
+					// Cập nhật unread: nếu notification cũ chưa đọc nhưng mới đã đọc thì giảm, ngược lại tăng
+					const oldItem = prev[existingIndex];
+					if (!oldItem.isRead && n.isRead) {
+						setUnread(prevUnread => Math.max(0, prevUnread - 1));
+					} else if (oldItem.isRead && !n.isRead) {
+						setUnread(prevUnread => prevUnread + 1);
+					}
+					return [n, ...updated];
+				} else {
+					// Nếu chưa tồn tại, thêm mới vào đầu
+					// Tự động tăng unread nếu notification chưa đọc
+					if (!n.isRead) {
+						setUnread(prevUnread => prevUnread + 1);
+					}
+					return [n, ...prev];
+				}
+			});
+		},
 		setItems: (next: RealtimeNotification[]) => setItems(next),
-		updateItemById: (id: number, patch: Partial<RealtimeNotification>) =>
-			setItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it)),
-		clearItems: () => setItems([]),
+		updateItemById: (id: number, patch: Partial<RealtimeNotification>) => {
+			setItems(prev => {
+				const updated = prev.map(it => it.id === id ? { ...it, ...patch } : it);
+				// Tính lại unread sau khi cập nhật
+				const newUnreadCount = updated.filter(n => !n.isRead).length;
+				setUnread(newUnreadCount);
+				return updated;
+			});
+		},
+		removeItemById: (id: number) => {
+			setItems(prev => {
+				const updated = prev.filter(it => it.id !== id);
+				// Tính lại unread từ danh sách còn lại
+				const newUnreadCount = updated.filter(n => !n.isRead).length;
+				setUnread(newUnreadCount);
+				return updated;
+			});
+		},
+		clearItems: () => {
+			setItems([]);
+			setUnread(0);
+		},
 	}), [unread, items]);
 
 	return (

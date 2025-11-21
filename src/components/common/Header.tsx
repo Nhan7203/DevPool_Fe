@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Menu,
@@ -6,7 +6,6 @@ import {
   User,
   Bell,
   LogOut,
-  Settings,
   Loader2,
   Shield,
   UserCog,
@@ -15,6 +14,7 @@ import {
   DollarSign,
   Code,
   Users,
+  UserPen,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardRoute, ROUTES, NOTIFICATION_CENTER_ROUTE } from '../../router/routes';
@@ -76,46 +76,148 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const resolvedUserId = useMemo(() => {
     if (!user) return null;
-    const token = localStorage.getItem('accessToken');
+    // Kiểm tra cả localStorage và sessionStorage (do "Remember Me" có thể lưu ở sessionStorage)
+    const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
     if (!token) return user.id;
     const decoded = decodeJWT(token);
     const idFromToken = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid;
     return idFromToken || user.id;
   }, [user]);
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!resolvedUserId) {
-        setItems([]);
-        setUnread(0);
-        return;
-      }
-      try {
-        setIsLoadingNotifications(true);
-        const result = await notificationService.getAll({
-          pageNumber: 1,
-          pageSize: 20,
-        });
-        const notifications = (result.notifications || []) as ExtendedNotification[];
-        setItems(notifications);
-        // unread sẽ được tự động tính bởi useEffect dựa trên items
-      } catch (error) {
-        console.error('Không thể tải thông báo:', error);
-        setItems([]);
-        setUnread(0);
-      } finally {
-        setIsLoadingNotifications(false);
-      }
-    };
+  // Track previous user để detect khi user thay đổi
+  const prevUserKeyRef = useRef<string | null>(null);
 
-    fetchNotifications();
+  // Tạo userKey từ user hiện tại
+  const currentUserKey = useMemo(() => {
+    if (!user) return null;
+    return `${user.id}-${user.role}-${resolvedUserId}`;
+  }, [user, resolvedUserId]);
+
+  useEffect(() => {
+    // Nếu không có user hoặc resolvedUserId (logout)
+    if (!user || !resolvedUserId) {
+      // Clear notifications ngay lập tức khi logout
+      setItems([]);
+      setUnread(0);
+      prevUserKeyRef.current = null;
+      setIsLoadingNotifications(false);
+      return;
+    }
+
+    // Nếu userKey thay đổi (user mới đăng nhập hoặc chuyển role)
+    if (currentUserKey !== prevUserKeyRef.current) {
+      // Clear notifications cũ ngay lập tức TRƯỚC KHI fetch
+      // Đảm bảo unread được set về 0 ngay lập tức để không hiển thị unread của user cũ
+      setItems([]);
+      setUnread(0);
+      
+      // Update ref ngay lập tức để tránh fetch nhiều lần
+      const userKeyToFetch = currentUserKey;
+      prevUserKeyRef.current = userKeyToFetch;
+
+      // Fetch notifications mới cho user mới
+      const fetchNotifications = async () => {
+        // Check lại user và resolvedUserId trước khi fetch
+        // Kiểm tra cả localStorage và sessionStorage (do "Remember Me" có thể lưu ở sessionStorage)
+        const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+        if (!token || !user || !resolvedUserId) {
+          return;
+        }
+
+        // Check lại userKey để đảm bảo không bị thay đổi trong lúc fetch
+        const currentKey = `${user.id}-${user.role}-${resolvedUserId}`;
+        if (currentKey !== userKeyToFetch) {
+          return;
+        }
+
+        try {
+          setIsLoadingNotifications(true);
+          
+          const result = await notificationService.getAll({
+            pageNumber: 1,
+            pageSize: 20,
+          });
+          
+          // Kiểm tra nhiều format response có thể có
+          const notifications = (
+            result?.notifications || 
+            (Array.isArray(result) ? result : [])
+          ) as ExtendedNotification[];
+          
+          // Check lại userKey một lần nữa trước khi set items
+          // Đảm bảo không set notifications của user cũ
+          // Kiểm tra cả localStorage và sessionStorage
+          const tokenCheck = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+          const finalKey = `${user.id}-${user.role}-${resolvedUserId}`;
+          if (tokenCheck && user && resolvedUserId && finalKey === userKeyToFetch && prevUserKeyRef.current === userKeyToFetch) {
+            // Merge với items hiện tại để không mất real-time notifications
+            // Loại bỏ duplicate trong items hiện tại trước (theo id, giữ lại item đầu tiên)
+            const uniqueItems = items.reduce((acc, item) => {
+              if (!acc.find(existing => existing.id === item.id)) {
+                acc.push(item);
+              }
+              return acc;
+            }, [] as ExtendedNotification[]);
+            
+            // Tạo map để tránh duplicate khi merge với notifications từ API
+            const existingIds = new Set(uniqueItems.map((n: ExtendedNotification) => n.id));
+            const newNotifications = notifications.filter((n: ExtendedNotification) => !existingIds.has(n.id));
+            
+            // Merge: real-time notifications (uniqueItems) + new notifications from API
+            // Sắp xếp theo createdAt mới nhất trước
+            const merged = [...uniqueItems, ...newNotifications].sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            const finalItems = merged.slice(0, 50) as ExtendedNotification[]; // Giới hạn 50 items
+            // Tính unread từ items đã merge
+            const unreadCount = finalItems.filter((n: ExtendedNotification) => !n.isRead).length;
+            setItems(finalItems);
+            setUnread(unreadCount);
+          } else {
+            // Nếu user đã thay đổi, không set items
+            setItems([]);
+            setUnread(0);
+          }
+        } catch (error: any) {
+          // Không log error khi logout (401 Unauthorized)
+          const isUnauthorized = error?.response?.status === 401 || error?.status === 401;
+          // Kiểm tra cả localStorage và sessionStorage
+          const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+          
+          // Chỉ xử lý error nếu:
+          // 1. Có token (không phải logout)
+          // 2. Không phải 401 (Unauthorized)
+          // 3. User vẫn còn và userKey vẫn khớp
+          if (token && !isUnauthorized && user && resolvedUserId) {
+            const finalKey = `${user.id}-${user.role}-${resolvedUserId}`;
+            if (finalKey === userKeyToFetch && prevUserKeyRef.current === userKeyToFetch) {
+              console.error('Không thể tải thông báo:', error);
+              setItems([]);
+              setUnread(0);
+            }
+          }
+          // Nếu là 401 hoặc không có token, không log (có thể do logout)
+        } finally {
+          setIsLoadingNotifications(false);
+        }
+      };
+
+      // Chỉ fetch nếu có user và resolvedUserId
+      fetchNotifications();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedUserId]); // Chỉ fetch khi resolvedUserId thay đổi
+  }, [currentUserKey, user, resolvedUserId]); // Chạy khi userKey, user hoặc resolvedUserId thay đổi
 
   // Đồng bộ unread với items mỗi khi items thay đổi (ví dụ từ realtime updates)
   // React sẽ tự động optimize nếu giá trị không thay đổi
   // Tính unread: !n.isRead (bao gồm false, null, undefined)
   useEffect(() => {
+    // Nếu không có user, đảm bảo unread = 0
+    if (!user) {
+      setUnread(0);
+      return;
+    }
+
     if (!items || items.length === 0) {
       setUnread(0);
       return;
@@ -123,10 +225,12 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
     const actualUnreadCount = items.filter(n => !n.isRead).length;
     setUnread(actualUnreadCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]); // Chỉ phụ thuộc vào items
+  }, [items, user]); // Phụ thuộc vào items và user
 
   const groupedNotifications: GroupedNotifications[] = useMemo(() => {
-    if (!items.length) return [];
+    if (!items.length) {
+      return [];
+    }
 
     const unreadList = items.filter((n) => !n.isRead);
     const read = items
@@ -160,21 +264,24 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const markNotificationAsRead = async (notification: ExtendedNotification) => {
     if (notification.isRead) return notification;
+    // Cập nhật UI ngay lập tức (optimistic update) trước khi gọi API
+    const optimisticUpdate = {
+      ...notification,
+      isRead: true,
+      readAt: new Date().toISOString(),
+    } as ExtendedNotification;
+    updateItemById(notification.id, { isRead: true, readAt: optimisticUpdate.readAt });
+    
     try {
       const updated = (await notificationService.markAsRead(notification.id)) as ExtendedNotification;
+      // Cập nhật lại với dữ liệu từ server (để đảm bảo readAt chính xác)
       updateItemById(updated.id, { isRead: true, readAt: updated.readAt });
       // unread sẽ được tự động tính lại bởi useEffect dựa trên items
       return updated;
     } catch (error) {
       console.error('Không thể đánh dấu thông báo đã đọc:', error);
-      const fallback = {
-        ...notification,
-        isRead: true,
-        readAt: new Date().toISOString(),
-      } as ExtendedNotification;
-      updateItemById(fallback.id, { isRead: true, readAt: fallback.readAt });
-      // unread sẽ được tự động tính lại bởi useEffect dựa trên items
-      return fallback;
+      // Giữ optimistic update nếu API fail
+      return optimisticUpdate;
     }
   };
 
@@ -229,7 +336,10 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   const roleDisplay = useMemo(getRoleDisplay, [user?.role]);
   const handleNotificationNavigate = async (notification: ExtendedNotification) => {
     try {
+      // Đánh dấu đã đọc trước, để UI cập nhật ngay
       const resolved = await markNotificationAsRead(notification);
+      // Đợi một chút để người dùng thấy thay đổi (notification chuyển sang màu xám)
+      await new Promise(resolve => setTimeout(resolve, 200));
       setIsNotificationOpen(false);
       navigate(resolved.actionUrl || notification.actionUrl || '/');
     } catch (error) {
@@ -243,7 +353,10 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const handleNotificationDetail = async (notification: ExtendedNotification) => {
     try {
+      // Đánh dấu đã đọc trước, để UI cập nhật ngay
       const resolved = await markNotificationAsRead(notification);
+      // Đợi một chút để người dùng thấy thay đổi (notification chuyển sang màu xám)
+      await new Promise(resolve => setTimeout(resolve, 200));
       setIsNotificationOpen(false);
       setViewNotification(resolved);
     } catch (error) {
@@ -257,7 +370,8 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const handleLogout = () => {
     logout();
-    navigate(ROUTES.LOGIN);
+    // Reload trang để reset tất cả state và đảm bảo Header được remount
+    window.location.href = ROUTES.LOGIN;
   };
 
   const desktopLinks = showPublicBranding
@@ -549,12 +663,17 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                         Dashboard
                       </Link>
                       <Link
-                        to="/settings"
+                        to={user ? (user.role === 'Staff HR' ? ROUTES.HR_STAFF.PROFILE :
+                                   user.role === 'Staff Sales' ? ROUTES.SALES_STAFF.PROFILE :
+                                   user.role === 'Staff Accountant' ? ROUTES.ACCOUNTANT_STAFF.PROFILE :
+                                   user.role === 'Developer' ? ROUTES.DEVELOPER.PROFILE :
+                                   user.role === 'Manager' ? ROUTES.MANAGER.PROFILE :
+                                   user.role === 'Admin' ? ROUTES.ADMIN.PROFILE : '/') : '/'}
                         className="group flex items-center px-4 py-2 text-neutral-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-300"
                         onClick={() => setIsUserMenuOpen(false)}
                       >
-                        <Settings className="w-4 h-4 mr-3 group-hover:scale-110 transition-transform duration-300" />
-                        Cài Đặt
+                        <UserPen className="w-4 h-4 mr-3 group-hover:scale-110 transition-transform duration-300" />
+                        Profile
                       </Link>
                       <button
                         onClick={handleLogout}

@@ -1,4 +1,5 @@
 import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+import { getAccessToken as getTokenFromStorage } from '../utils/storage';
 
 // Suy ra HUB_URL từ biến môi trường hoặc fallback localhost
 // Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
@@ -10,7 +11,7 @@ let connection: HubConnection | null = null;
 let isStarting = false;
 
 const getAccessToken = (): string => {
-	const token = localStorage.getItem('accessToken') ?? '';
+	const token = getTokenFromStorage() ?? '';
 	return token;
 };
 
@@ -40,17 +41,28 @@ export const createNotificationConnection = (): HubConnection => {
 	return connection;
 };
 
-export const startNotificationConnection = async (): Promise<void> => {
+export const startNotificationConnection = async (forceRestart: boolean = false): Promise<void> => {
 	const conn = createNotificationConnection();
-	if (conn.state === 'Connected' || isStarting) return;
+	// Nếu force restart, dừng connection cũ trước
+	if (forceRestart && connection && connection.state !== 'Disconnected') {
+		try {
+			await connection.stop();
+			connection = null; // Reset connection để tạo mới
+		} catch {
+			// ignore
+		}
+	}
+	
+	const newConn = createNotificationConnection();
+	if (newConn.state === 'Connected' || isStarting) return;
 	isStarting = true;
 	try {
-		await conn.start();
+		await newConn.start();
 	} catch (err) {
 		// Retry đơn giản sau 2s
 		setTimeout(() => {
 			isStarting = false;
-			startNotificationConnection().catch(() => {});
+			startNotificationConnection(forceRestart).catch(() => {});
 		}, 2000);
 		return;
 	} finally {
