@@ -12,7 +12,7 @@ export const sidebarItems = [
     icon: Users,
     subItems: [
       { label: 'Danh sách người dùng', href: '/admin/users' },
-      { label: 'Danh sách nhân sự', href: '/admin/users/talents' },
+      // { label: 'Danh sách nhân sự', href: '/admin/users/talents' },
       { label: 'Tạo tài khoản nhân viên', href: '/admin/users/create-account' },
     ]
   },

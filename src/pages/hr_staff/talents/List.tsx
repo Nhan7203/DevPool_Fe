@@ -13,12 +13,15 @@ import {
   ChevronRight,
   XCircle,
   Mail,
+  UserPlus,
+  CheckCircle,
+  X,
 } from "lucide-react";
 
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { Button } from "../../../components/ui/button";
-import { talentService, type Talent } from "../../../services/Talent";
+import { talentService, type Talent, type CreateDeveloperAccountModel } from "../../../services/Talent";
 import { WorkingMode } from "../../../types/WorkingMode";
 
 // Mapping WorkingMode values to Vietnamese names
@@ -59,6 +62,7 @@ export default function ListDev() {
   const [talents, setTalents] = useState<Talent[]>([]);
   const [filteredTalents, setFilteredTalents] = useState<Talent[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [isCreatingAccount, setIsCreatingAccount] = useState<number | null>(null);
 
   // Bộ lọc
   const [showFilters, setShowFilters] = useState(false);
@@ -198,6 +202,70 @@ export default function ListDev() {
     setFilterLocation("");
     setFilterStatus("");
     setFilterWorkingMode("");
+  };
+
+  const handleCreateAccount = async (talent: Talent) => {
+    if (!talent.email) {
+      alert("Talent không có email, không thể cấp tài khoản");
+      return;
+    }
+
+    if (talent.status !== "Working") {
+      alert("Chỉ có thể cấp tài khoản cho talent có trạng thái 'Đang làm việc'");
+      return;
+    }
+
+    if (talent.userId) {
+      alert("Talent này đã có tài khoản");
+      return;
+    }
+
+    const confirmCreate = window.confirm(
+      `Bạn có chắc muốn cấp tài khoản cho ${talent.fullName}?\n\nEmail: ${talent.email}\nMật khẩu sẽ được gửi qua email.`
+    );
+
+    if (!confirmCreate) return;
+
+    setIsCreatingAccount(talent.id);
+    try {
+      const payload: CreateDeveloperAccountModel = {
+        email: talent.email,
+      };
+
+      const result = await talentService.createDeveloperAccount(talent.id, payload);
+      
+      if (result.success) {
+        alert(`Đã cấp tài khoản thành công cho ${talent.fullName}.\nEmail: ${talent.email}\nMật khẩu đã được gửi qua email.`);
+        // Refresh danh sách
+        const [talentData] = await Promise.all([
+          talentService.getAll(),
+        ]);
+        const sortedTalents = [...talentData].sort((a, b) => {
+          const createdAtA = (a as { createdAt?: string }).createdAt;
+          const createdAtB = (b as { createdAt?: string }).createdAt;
+          const timeA = createdAtA ? new Date(createdAtA).getTime() : 0;
+          const timeB = createdAtB ? new Date(createdAtB).getTime() : 0;
+          if (timeA !== timeB) {
+            return timeB - timeA;
+          }
+          return b.id - a.id;
+        });
+        setTalents(sortedTalents);
+        setFilteredTalents(sortedTalents);
+      } else {
+        alert(result.message || "Không thể cấp tài khoản. Vui lòng thử lại.");
+      }
+    } catch (err: any) {
+      console.error("❌ Lỗi khi cấp tài khoản:", err);
+      let errorMessage = "Không thể cấp tài khoản. Vui lòng thử lại.";
+      if (err && typeof err === 'object') {
+        const error = err as { response?: { data?: { message?: string } }; message?: string };
+        errorMessage = error.response?.data?.message || error.message || errorMessage;
+      }
+      alert(errorMessage);
+    } finally {
+      setIsCreatingAccount(null);
+    }
   };
 
   const handlePrevStats = () => {
@@ -494,6 +562,9 @@ export default function ListDev() {
                     Trạng thái
                   </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
+                    Tài khoản
+                  </th>
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
                     Thao tác
                   </th>
                 </tr>
@@ -501,7 +572,7 @@ export default function ListDev() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredTalents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Users className="w-8 h-8 text-neutral-400" />
@@ -561,13 +632,48 @@ export default function ListDev() {
                           })()}
                         </td>
                         <td className="py-4 px-6 text-center">
-                          <Link
-                            to={`/hr/developers/${t.id}`}
-                            className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
-                          >
-                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="text-sm font-medium">Xem</span>
-                          </Link>
+                          {t.userId ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              <span className="text-sm text-green-700 font-medium">Đã có</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <X className="w-4 h-4 text-neutral-400" />
+                              <span className="text-sm text-neutral-500">Chưa có</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Link
+                              to={`/hr/developers/${t.id}`}
+                              className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                            >
+                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                              <span className="text-xs font-medium hidden sm:inline">Xem</span>
+                            </Link>
+                            {t.status === "Working" && !t.userId && (
+                              <button
+                                onClick={() => handleCreateAccount(t)}
+                                disabled={isCreatingAccount === t.id}
+                                className="group inline-flex items-center gap-1 px-2 py-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all duration-300 hover:scale-105 transform disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Cấp tài khoản"
+                              >
+                                {isCreatingAccount === t.id ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-xs font-medium hidden sm:inline">Đang tạo...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserPlus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                    <span className="text-xs font-medium hidden sm:inline">Cấp account</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
