@@ -7,6 +7,7 @@ export interface Professional {
   workingMode?: string; // WorkingMode: Onsite, Remote, Hybrid, Flexible
   status?: string; // Status
   bio?: string; // Giới thiệu ngắn
+  phoneNumber?: string; // Số điện thoại để liên hệ
   hourlyRate: number;
   rating: number;
   reviewCount: number;

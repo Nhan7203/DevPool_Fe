@@ -14,7 +14,6 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  XCircle,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
@@ -95,6 +94,13 @@ export default function DevContracts() {
 
   useEffect(() => {
     let filtered = [...contracts];
+    
+    // Loại bỏ các hợp đồng ở trạng thái draft và rejected
+    filtered = filtered.filter((c) => {
+      const normalizedStatus = normalizeStatus(c.status);
+      return normalizedStatus !== "draft" && normalizedStatus !== "rejected";
+    });
+    
     if (searchTerm) {
       filtered = filtered.filter((c) => {
         const contractNumber = c.contractNumber?.toLowerCase() || "";
@@ -191,15 +197,20 @@ export default function DevContracts() {
     return normalized === target;
   };
 
+  const visibleContracts = contracts.filter((c) => {
+    const normalizedStatus = normalizeStatus(c.status);
+    return normalizedStatus !== "draft" && normalizedStatus !== "rejected";
+  });
+
   const countStatus = (...statuses: string[]) =>
-    contracts.filter((c) =>
+    visibleContracts.filter((c) =>
       statuses.some((status) => matchesStatus(c.status, status))
     ).length;
 
   const stats = [
     {
       title: "Tổng Hợp Đồng",
-      value: contracts.length.toString(),
+      value: visibleContracts.length.toString(),
       color: "blue",
       icon: <FileText className="w-6 h-6" />,
     },
@@ -216,12 +227,6 @@ export default function DevContracts() {
       icon: <Clock className="w-6 h-6" />,
     },
     {
-      title: "Bản nháp",
-      value: countStatus("draft").toString(),
-      color: "gray",
-      icon: <FileText className="w-6 h-6" />,
-    },
-    {
       title: "Đã hết hạn",
       value: countStatus("expired").toString(),
       color: "blue",
@@ -234,14 +239,8 @@ export default function DevContracts() {
       icon: <AlertCircle className="w-6 h-6" />,
     },
     {
-      title: "Đã từ chối",
-      value: countStatus("rejected").toString(),
-      color: "rose",
-      icon: <XCircle className="w-6 h-6" />,
-    },
-    {
       title: "Tổng giá trị",
-      value: `${(contracts.reduce((sum, c) => sum + (c.devRate || 0), 0) / 1_000_000).toFixed(0)}M`,
+      value: `${(visibleContracts.reduce((sum, c) => sum + (c.devRate || 0), 0) / 1_000_000).toFixed(0)}M`,
       color: "purple",
       icon: <DollarSign className="w-6 h-6" />,
     },
@@ -458,11 +457,9 @@ export default function DevContracts() {
                   >
                     <option value="">Tất cả trạng thái</option>
                     <option value="pending">Chờ duyệt</option>
-                    <option value="draft">Bản nháp</option>
                     <option value="active">Đang hiệu lực</option>
                     <option value="expired">Đã hết hạn</option>
                     <option value="terminated">Đã chấm dứt</option>
-                    <option value="rejected">Đã từ chối</option>
                   </select>
                   <button
                     onClick={() => {

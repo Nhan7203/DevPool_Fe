@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { 
-  User, Mail, Phone, Save, AlertCircle, CheckCircle, Calendar, MapPin, 
+import {
+  User, Mail, Phone, Save, AlertCircle, CheckCircle, Calendar, MapPin,
   Briefcase, Award, FileText, Clock, Building2, Eye, Download,
   Code, Target, Star, Edit
 } from 'lucide-react';
@@ -35,65 +35,89 @@ export default function DeveloperProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  
+
   // Lookup data
   const [locationName, setLocationName] = useState<string>('—');
   const [partnerName, setPartnerName] = useState<string>('—');
   const [skillsMap, setSkillsMap] = useState<Map<number, string>>(new Map());
   const [jobRoleLevelsMap, setJobRoleLevelsMap] = useState<Map<number, { name: string; jobRoleName: string }>>(new Map());
   const [certificateTypesMap, setCertificateTypesMap] = useState<Map<number, string>>(new Map());
-  
+
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
     dateOfBirth: '',
     bio: '',
+    githubUrl: '',
+    portfolioUrl: '',
   });
 
   useEffect(() => {
     const fetchData = async () => {
       if (!authUser) return;
-      
+
       try {
         setLoading(true);
         setError('');
-        
+
         // Get userId from token
         const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
         let userId: string | null = null;
-        
+
         if (token) {
           const decoded = decodeJWT(token);
           userId = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid || authUser.id;
         } else {
           userId = authUser.id;
         }
-        
+
         if (!userId) {
           setError('Không thể xác định người dùng');
           setLoading(false);
           return;
         }
-        
+
         // Fetch user data
         const userData = await userService.getById(userId);
         setUser(userData);
-        
+
         // Fetch talent detailed data
         const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
         const currentTalent = allTalents.find(t => t.userId === userId);
-        
+
         if (currentTalent) {
           setTalent(currentTalent);
-          
+
+          // Fetch basic talent info to get githubUrl and portfolioUrl
+          // (TalentDetailedModel may not have these fields populated)
+          let githubUrl = currentTalent.gitHubProfile || '';
+          let portfolioUrl = currentTalent.linkedInProfile || '';
+
+          try {
+            const basicTalent = await talentService.getById(currentTalent.id);
+            console.log('Basic Talent data:', basicTalent);
+            console.log('Detailed Talent data:', currentTalent);
+            // Use basic talent data if available, otherwise use detailed model data
+            githubUrl = basicTalent?.githubUrl || currentTalent.gitHubProfile || '';
+            portfolioUrl = basicTalent?.portfolioUrl || currentTalent.linkedInProfile || '';
+            console.log('Final githubUrl:', githubUrl, 'portfolioUrl:', portfolioUrl);
+          } catch (err) {
+            console.warn('Không thể lấy thông tin từ Talent service:', err);
+            // Fallback to detailed model data
+            githubUrl = currentTalent.gitHubProfile || '';
+            portfolioUrl = currentTalent.linkedInProfile || '';
+          }
+
           // Set form data
           setFormData({
             fullName: currentTalent.fullName || userData.fullName || '',
             phoneNumber: currentTalent.phoneNumber || userData.phoneNumber || '',
             dateOfBirth: currentTalent.dateOfBirth ? currentTalent.dateOfBirth.split('T')[0] : '',
             bio: currentTalent.bio || '',
+            githubUrl: githubUrl,
+            portfolioUrl: portfolioUrl,
           });
-          
+
           // Fetch location name
           if (currentTalent.locationId) {
             try {
@@ -103,7 +127,7 @@ export default function DeveloperProfilePage() {
               setLocationName('—');
             }
           }
-          
+
           // Fetch partner name
           if (currentTalent.currentPartnerId) {
             try {
@@ -114,7 +138,7 @@ export default function DeveloperProfilePage() {
               setPartnerName('—');
             }
           }
-          
+
           // Fetch lookup data for skills, job role levels, certificate types
           try {
             const [skills, jobRoleLevels, jobRoles, certificateTypes] = await Promise.all([
@@ -123,14 +147,14 @@ export default function DeveloperProfilePage() {
               jobRoleService.getAll({ excludeDeleted: true }),
               certificateTypeService.getAll({ excludeDeleted: true }),
             ]);
-            
+
             // Build skills map
             const skillsMapData = new Map<number, string>();
             (skills || []).forEach((skill: any) => {
               skillsMapData.set(skill.id, skill.name);
             });
             setSkillsMap(skillsMapData);
-            
+
             // Build job role levels map
             const jobRoleLevelsMapData = new Map<number, { name: string; jobRoleName: string }>();
             (jobRoleLevels || []).forEach((jrl: any) => {
@@ -141,7 +165,7 @@ export default function DeveloperProfilePage() {
               });
             });
             setJobRoleLevelsMap(jobRoleLevelsMapData);
-            
+
             // Build certificate types map
             const certificateTypesMapData = new Map<number, string>();
             (certificateTypes || []).forEach((ct: any) => {
@@ -158,6 +182,8 @@ export default function DeveloperProfilePage() {
             phoneNumber: userData.phoneNumber || '',
             dateOfBirth: '',
             bio: '',
+            githubUrl: '',
+            portfolioUrl: '',
           });
         }
       } catch (err: any) {
@@ -167,7 +193,7 @@ export default function DeveloperProfilePage() {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, [authUser]);
 
@@ -181,56 +207,77 @@ export default function DeveloperProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !authUser) return;
-    
+    if (!user || !authUser || !talent) {
+      setError('Không tìm thấy thông tin talent. Vui lòng liên hệ HR.');
+      return;
+    }
+
     try {
       setSaving(true);
       setError('');
       setSuccess(false);
-      
+
       // Get userId from token
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
       let userId: string | null = null;
-      
+
       if (token) {
         const decoded = decodeJWT(token);
         userId = decoded?.nameid || decoded?.sub || decoded?.userId || decoded?.uid || authUser.id;
       } else {
         userId = authUser.id;
       }
-      
+
       if (!userId) {
         setError('Không thể xác định người dùng');
         return;
       }
-      
-      // Update user data
-      await userService.update(userId, {
-        fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber || undefined,
+
+      // Update talent profile using talentService.updateProfile
+      await talentService.updateProfile(talent.id, {
+        phone: formData.phoneNumber || undefined,
+        dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth).toISOString() : undefined,
+        bio: formData.bio || undefined,
+        githubUrl: formData.githubUrl || undefined,
+        portfolioUrl: formData.portfolioUrl || undefined,
       });
-      
-      // Update talent data if exists
-      if (talent) {
-        await talentService.update(talent.id, {
-          fullName: formData.fullName,
-          phone: formData.phoneNumber || undefined,
-          dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth).toISOString() : undefined,
-        });
-      }
-      
+
       // Reload data
       const updatedUser = await userService.getById(userId);
       setUser(updatedUser);
-      
-      if (talent) {
-        const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
-        const updatedTalent = allTalents.find(t => t.userId === userId);
-        if (updatedTalent) {
-          setTalent(updatedTalent);
+
+      const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
+      const updatedTalent = allTalents.find(t => t.userId === userId);
+      if (updatedTalent) {
+        setTalent(updatedTalent);
+
+        // Fetch basic talent info to get githubUrl and portfolioUrl
+        let githubUrl = updatedTalent.gitHubProfile || '';
+        let portfolioUrl = updatedTalent.linkedInProfile || '';
+
+        try {
+          const basicTalent = await talentService.getById(updatedTalent.id);
+          // Use basic talent data if available, otherwise use detailed model data
+          githubUrl = basicTalent?.githubUrl || updatedTalent.gitHubProfile || '';
+          portfolioUrl = basicTalent?.portfolioUrl || updatedTalent.linkedInProfile || '';
+        } catch (err) {
+          console.warn('Không thể lấy thông tin từ Talent service:', err);
+          // Fallback to detailed model data
+          githubUrl = updatedTalent.gitHubProfile || '';
+          portfolioUrl = updatedTalent.linkedInProfile || '';
         }
+
+        // Update form data with new values
+        setFormData({
+          fullName: updatedTalent.fullName || '',
+          phoneNumber: updatedTalent.phoneNumber || '',
+          dateOfBirth: updatedTalent.dateOfBirth ? updatedTalent.dateOfBirth.split('T')[0] : '',
+          bio: updatedTalent.bio || '',
+          githubUrl: githubUrl,
+          portfolioUrl: portfolioUrl,
+        });
       }
-      
+
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -278,7 +325,7 @@ export default function DeveloperProfilePage() {
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Developer" />
-      
+
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
@@ -286,21 +333,6 @@ export default function DeveloperProfilePage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ Sơ Cá Nhân</h1>
             <p className="text-neutral-600">Xem và quản lý thông tin hồ sơ của bạn</p>
           </div>
-
-          {/* Success/Error Messages */}
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <p className="text-green-800 font-medium">Cập nhật thông tin thành công!</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <p className="text-red-800 font-medium">{error}</p>
-            </div>
-          )}
 
           {/* 1. Thông tin cá nhân */}
           <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
@@ -331,11 +363,11 @@ export default function DeveloperProfilePage() {
                     type="text"
                     name="fullName"
                     value={formData.fullName}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                    placeholder="Nhập họ và tên"
+                    disabled
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
+                    placeholder="Họ và tên"
                   />
+                  <p className="mt-1 text-xs text-neutral-500">Họ tên không thể thay đổi</p>
                 </div>
 
                 {/* Email */}
@@ -416,7 +448,7 @@ export default function DeveloperProfilePage() {
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     <FileText className="w-4 h-4 inline mr-2" />
-                    Giới thiệu ngắn (Bio)
+                    Giới thiệu ngắn
                   </label>
                   <textarea
                     name="bio"
@@ -427,10 +459,57 @@ export default function DeveloperProfilePage() {
                     placeholder="Nhập giới thiệu ngắn về bản thân"
                   />
                 </div>
+
+                {/* GitHub URL */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Code className="w-4 h-4 inline mr-2" />
+                    GitHub URL
+                  </label>
+                  <input
+                    type="url"
+                    name="githubUrl"
+                    value={formData.githubUrl}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    placeholder="https://github.com/username"
+                  />
+                </div>
+
+                {/* Portfolio URL */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    <Briefcase className="w-4 h-4 inline mr-2" />
+                    Portfolio URL
+                  </label>
+                  <input
+                    type="url"
+                    name="portfolioUrl"
+                    value={formData.portfolioUrl}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    placeholder="https://yourportfolio.com"
+                  />
+                </div>
+
+                {/* Success/Error Messages */}
+                {success && (
+                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-green-800 font-medium">Cập nhật thông tin thành công!</p>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-red-800 font-medium">{error}</p>
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}
-              <div className="flex justify-end pt-6 mt-6 border-t border-neutral-200">
+              <div className="flex justify-end pt-6 mt-6 border-neutral-200">
                 <button
                   type="submit"
                   disabled={saving}

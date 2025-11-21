@@ -49,7 +49,6 @@ export default function ProfessionalClientPage() {
     const [showFilters, setShowFilters] = useState(false);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
     const [sortBy, setSortBy] = useState("projects");
-    const [selectedAvailability, setSelectedAvailability] = useState("Tất cả");
 
     // Fetch data from API
     useEffect(() => {
@@ -165,6 +164,7 @@ export default function ProfessionalClientPage() {
                         workingMode: talent.workingMode || undefined,
                         status: talent.status || undefined,
                         bio: talent.bio || undefined,
+                        phoneNumber: talent.phoneNumber || undefined,
                         hourlyRate: 0, // Not available in talent data
                         rating: 4.5, // Default rating
                         reviewCount: 0, // Not available
@@ -218,10 +218,6 @@ export default function ProfessionalClientPage() {
                 !professional.status ||
                 formatStatusForFilter(professional.status) === selectedStatus;
 
-            const matchesAvailability =
-                selectedAvailability === "Tất cả" ||
-                professional.availability === selectedAvailability;
-
             const matchesExperience =
                 selectedExperience === "Tất cả" ||
                 (selectedExperience === "1-3 năm" &&
@@ -240,7 +236,6 @@ export default function ProfessionalClientPage() {
                 matchesLocation &&
                 matchesWorkingMode &&
                 matchesStatus &&
-                matchesAvailability &&
                 matchesExperience
             );
         });
@@ -267,7 +262,6 @@ export default function ProfessionalClientPage() {
         selectedLocation,
         selectedWorkingMode,
         selectedStatus,
-        selectedAvailability,
         selectedExperience,
         sortBy,
         professionals,
@@ -288,7 +282,6 @@ export default function ProfessionalClientPage() {
         setSelectedLocation("Tất cả");
         setSelectedWorkingMode("Tất cả");
         setSelectedStatus("Tất cả");
-        setSelectedAvailability("Tất cả");
         setSelectedExperience("Tất cả");
         setSearchTerm("");
     };
@@ -348,8 +341,6 @@ export default function ProfessionalClientPage() {
                     setSelectedStatus={setSelectedStatus}
                     selectedExperience={selectedExperience}
                     setSelectedExperience={setSelectedExperience}
-                    selectedAvailability={selectedAvailability}
-                    setSelectedAvailability={setSelectedAvailability}
                     locations={locations}
                     clearFilters={clearFilters}
                 />

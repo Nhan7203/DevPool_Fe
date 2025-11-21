@@ -14,7 +14,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  XCircle,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
@@ -173,6 +172,12 @@ export default function ClientContracts() {
   useEffect(() => {
     let filtered = [...contracts];
 
+    // Loại bỏ các hợp đồng ở trạng thái draft và rejected
+    filtered = filtered.filter((contract) => {
+      const normalizedStatus = normalizeStatus(contract.status);
+      return normalizedStatus !== "draft" && normalizedStatus !== "rejected";
+    });
+
     if (searchTerm) {
       const keyword = searchTerm.toLowerCase();
       filtered = filtered.filter((contract) => {
@@ -208,38 +213,46 @@ export default function ClientContracts() {
   const startItem = filteredContracts.length > 0 ? startIndex + 1 : 0;
   const endItemDisplay = Math.min(endIndex, filteredContracts.length);
 
+  const visibleContracts = contracts.filter((contract) => {
+    const normalizedStatus = normalizeStatus(contract.status);
+    return normalizedStatus !== "draft" && normalizedStatus !== "rejected";
+  });
+
+  const countStatus = (...statuses: string[]) =>
+    visibleContracts.filter((contract) =>
+      statuses.some((status) => matchesStatus(contract.status, status))
+    ).length;
+
   const stats = [
     {
       title: "Tổng Hợp Đồng",
-      value: contracts.length.toString(),
+      value: visibleContracts.length.toString(),
       color: "blue",
       icon: <FileText className="w-6 h-6" />,
     },
     {
       title: "Đang hiệu lực",
-      value: contracts
-        .filter((contract) => contract.status.toLowerCase() === "active")
-        .length.toString(),
+      value: countStatus("active").toString(),
       color: "green",
       icon: <CheckCircle className="w-6 h-6" />,
     },
     {
       title: "Chờ duyệt",
-      value: contracts
-        .filter((contract) =>
-          ["draft", "pending"].includes(contract.status.toLowerCase())
-        )
-        .length.toString(),
+      value: countStatus("pending").toString(),
       color: "orange",
       icon: <Clock className="w-6 h-6" />,
     },
     {
-      title: "Bị từ chối",
-      value: contracts
-        .filter((contract) => contract.status.toLowerCase() === "rejected")
-        .length.toString(),
-      color: "rose",
-      icon: <XCircle className="w-6 h-6" />,
+      title: "Đã hết hạn",
+      value: countStatus("expired").toString(),
+      color: "blue",
+      icon: <CheckCircle className="w-6 h-6" />,
+    },
+    {
+      title: "Đã chấm dứt",
+      value: countStatus("terminated").toString(),
+      color: "red",
+      icon: <AlertCircle className="w-6 h-6" />,
     },
   ];
 
@@ -458,11 +471,9 @@ export default function ClientContracts() {
                   >
                     <option value="">Tất cả trạng thái</option>
                     <option value="pending">Chờ duyệt</option>
-                    <option value="draft">Bản nháp</option>
                     <option value="active">Đang hiệu lực</option>
                     <option value="expired">Đã hết hạn</option>
                     <option value="terminated">Đã chấm dứt</option>
-                    <option value="rejected">Bị từ chối</option>
                   </select>
 
                   <button
