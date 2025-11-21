@@ -45,8 +45,6 @@ export default function CreateTalent() {
   const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
   const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
-  const [jobRoleSearch, setJobRoleSearch] = useState<string>("");
-  const [isJobRoleDropdownOpen, setIsJobRoleDropdownOpen] = useState<Record<number, boolean>>({});
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificateTypeSearch, setCertificateTypeSearch] = useState<Record<number, string>>({});
   const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState<Record<number, boolean>>({});

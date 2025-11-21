@@ -42,7 +42,6 @@ export const createNotificationConnection = (): HubConnection => {
 };
 
 export const startNotificationConnection = async (forceRestart: boolean = false): Promise<void> => {
-	const conn = createNotificationConnection();
 	// Nếu force restart, dừng connection cũ trước
 	if (forceRestart && connection && connection.state !== 'Disconnected') {
 		try {

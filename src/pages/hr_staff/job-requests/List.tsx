@@ -11,10 +11,8 @@ import {
     Eye,
     ChevronLeft,
     ChevronRight,
-    FileText,
     XCircle,
     Layers,
-    FileUser,
     ClipboardList
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";

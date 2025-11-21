@@ -136,13 +136,6 @@ export default function ApplyActivityEditPage() {
     return null;
   }, [form.processStepId, sortedSteps, activitySchedules]);
 
-  const todayMinValue = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tzOffset = today.getTimezoneOffset() * 60000;
-    return new Date(today.getTime() - tzOffset).toISOString().slice(0, 16);
-  }, []);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({ 

@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, Building2, DollarSign, CheckCircle, AlertCircle, Clock as ClockIcon, Briefcase, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
@@ -14,7 +14,6 @@ import { decodeJWT } from '../../../services/Auth';
 
 export default function DeveloperContractDetailPage() {
     const { type, id } = useParams<{ type: 'partner' | 'client'; id: string }>();
-    const navigate = useNavigate();
     const { user } = useAuth();
     const [contract, setContract] = useState<PartnerContract | ClientContract | null>(null);
     const [loading, setLoading] = useState(true);
@@ -320,7 +319,7 @@ export default function DeveloperContractDetailPage() {
                                 <>
                                     <InfoItem 
                                         label="Khách hàng" 
-                                        value={client?.companyName || '—'} 
+                                        value={client?.name || '—'} 
                                         icon={<Building2 className="w-4 h-4" />}
                                     />
                                     <InfoItem 

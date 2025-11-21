@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, FileText, Calendar, Building2, DollarSign, CheckCircle, Clock, Eye, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, FileText, Calendar, Building2, CheckCircle, Clock, Eye, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
@@ -156,7 +156,7 @@ export default function DeveloperContractsList() {
                     const partnerName = partnersMap.get((c as PartnerContract).partnerId)?.companyName?.toLowerCase() || '';
                     return contractNumber.includes(searchLower) || partnerName.includes(searchLower);
                 } else {
-                    const clientName = clientsMap.get((c as ClientContract).clientCompanyId)?.companyName?.toLowerCase() || '';
+                    const clientName = clientsMap.get((c as ClientContract).clientCompanyId)?.name?.toLowerCase() || '';
                     const projectName = projectsMap.get((c as ClientContract).projectId)?.name?.toLowerCase() || '';
                     return contractNumber.includes(searchLower) || clientName.includes(searchLower) || projectName.includes(searchLower);
                 }
@@ -242,25 +242,13 @@ export default function DeveloperContractsList() {
         if (contract.type === 'partner') {
             return partnersMap.get((contract as PartnerContract).partnerId)?.companyName || '—';
         } else {
-            return clientsMap.get((contract as ClientContract).clientCompanyId)?.companyName || '—';
+            return clientsMap.get((contract as ClientContract).clientCompanyId)?.name || '—';
         }
     };
 
     const getProjectName = (contract: ContractUnion) => {
         if (contract.type === 'client') {
             return projectsMap.get((contract as ClientContract).projectId)?.name || '—';
-        }
-        return '—';
-    };
-
-    const getRateInfo = (contract: ContractUnion) => {
-        if (contract.type === 'partner') {
-            const pc = contract as PartnerContract;
-            const rateType = pc.rateType === 'Hourly' ? 'giờ' : 
-                           pc.rateType === 'Daily' ? 'ngày' : 
-                           pc.rateType === 'Monthly' ? 'tháng' : 
-                           pc.rateType === 'Fixed' ? 'cố định' : pc.rateType;
-            return pc.devRate ? `${new Intl.NumberFormat('vi-VN').format(pc.devRate)} VNĐ/${rateType}` : '—';
         }
         return '—';
     };

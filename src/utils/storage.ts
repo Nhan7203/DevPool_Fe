@@ -11,14 +11,6 @@ const TOKEN_KEYS = {
 } as const;
 
 /**
- * Lấy storage dựa trên remember me setting
- */
-const getStorage = (): Storage => {
-  const rememberMe = localStorage.getItem(TOKEN_KEYS.REMEMBER_ME) === 'true';
-  return rememberMe ? localStorage : sessionStorage;
-};
-
-/**
  * Lấy token từ storage (kiểm tra cả localStorage và sessionStorage)
  */
 export const getAccessToken = (): string | null => {

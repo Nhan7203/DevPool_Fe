@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, Save, AlertCircle, CheckCircle, Calendar, MapPin, 
-  Briefcase, Award, FileText, Clock, Building2, ExternalLink, Eye, Download,
-  Code, Target, Star, Globe, Linkedin, Github, Edit
+  Briefcase, Award, FileText, Clock, Building2, Eye, Download,
+  Code, Target, Star, Edit
 } from 'lucide-react';
 import Sidebar from '../../components/common/Sidebar';
 import { sidebarItems } from '../../components/developer/SidebarItems';
