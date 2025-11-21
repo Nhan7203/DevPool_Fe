@@ -26,13 +26,6 @@ const statuses = [
   "Không rảnh",
 ];
 
-const availabilities = [
-  "Tất cả",
-  "Sẵn sàng",
-  "Bận",
-  "Không rảnh",
-];
-
 // Định nghĩa interface cho props của component này
 interface ProfessionalFilterBarProps {
   searchTerm: string;
@@ -49,8 +42,6 @@ interface ProfessionalFilterBarProps {
   setSelectedStatus: (value: string) => void;
   selectedExperience: string;
   setSelectedExperience: (value: string) => void;
-  selectedAvailability: string;
-  setSelectedAvailability: (value: string) => void;
   locations: string[];
   clearFilters: () => void;
 }
@@ -73,8 +64,6 @@ export default function ProfessionalFilterBar(
     setSelectedStatus,
     selectedExperience,
     setSelectedExperience,
-    selectedAvailability,
-    setSelectedAvailability,
     locations,
     clearFilters,
   } = props;
@@ -123,7 +112,7 @@ export default function ProfessionalFilterBar(
 
       {/* Advanced Filters */}
       {showFilters && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 animate-slide-down">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 animate-slide-down">
           {/* Location Filter */}
           <div>
             <label className="block text-sm font-semibold text-neutral-700 mb-2">
@@ -196,26 +185,8 @@ export default function ProfessionalFilterBar(
             </select>
           </div>
 
-          {/* Availability Filter */}
-          <div>
-            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-              Tình trạng
-            </label>
-            <select
-              value={selectedAvailability}
-              onChange={(e) => setSelectedAvailability(e.target.value)}
-              className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
-            >
-              {availabilities.map((availability) => (
-                <option key={availability} value={availability}>
-                  {availability}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Clear Filters */}
-          <div className="md:col-span-2 lg:col-span-3 xl:col-span-5 flex items-end">
+          <div className="md:col-span-2 lg:col-span-3 xl:col-span-4 flex items-end">
             <button
               onClick={clearFilters}
               className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-error-500 to-error-600 text-white px-4 py-2 rounded-xl hover:from-error-600 hover:to-error-700 transition-all duration-300 shadow-soft hover:shadow-medium transform hover:scale-105"

@@ -42,6 +42,7 @@ export interface TalentCreate {
   email: string;
   phone: string;
   dateOfBirth?: string; // DateTime as ISO string
+  bio?: string;
   locationId?: number;
   workingMode: WorkingMode;
   githubUrl: string;
@@ -107,6 +108,7 @@ export interface TalentWithRelatedDataCreateModel {
   email: string;
   phone?: string;
   dateOfBirth?: string; // DateTime as ISO string
+  bio?: string;
   locationId?: number;
   workingMode: WorkingMode;
   githubUrl?: string;
@@ -125,6 +127,14 @@ export interface TalentWithRelatedDataCreateModel {
 export interface TalentStatusUpdateModel {
   newStatus: string;
   notes?: string;
+}
+
+export interface TalentUpdateModel {
+  phone?: string;
+  dateOfBirth?: string; // DateTime as ISO string
+  portfolioUrl?: string;
+  githubUrl?: string;
+  bio?: string;
 }
 
 export interface TalentStatusTransitionResult {
@@ -244,6 +254,17 @@ export const talentService = {
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to update talent" };
+      throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  async updateProfile(id: number, payload: TalentUpdateModel) {
+    try {
+      const response = await axios.patch(`/talent/${id}/profile`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Failed to update talent profile" };
       throw { message: "Unexpected error occurred" };
     }
   },
