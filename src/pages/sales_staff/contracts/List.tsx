@@ -336,10 +336,10 @@ export default function ListClientContracts() {
   };
 
   return (
-    <div className="flex bg-gray-50 min-h-screen overflow-x-hidden">
+    <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
 
-      <div className="flex-1 p-4 sm:p-8 overflow-x-hidden max-w-full">
+      <div className="flex-1 p-4 sm:p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">

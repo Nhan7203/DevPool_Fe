@@ -66,43 +66,43 @@ export default function ContractDetailPage() {
     }, [id]);
 
     const getStatusConfig = (status: string) => {
-        switch (status) {
-            case 'Active':
+        switch (status?.toLowerCase()) {
+            case 'active':
                 return {
-                    label: 'Đang hiệu lực',
+                    label: 'Đang hoạt động',
                     color: 'bg-green-100 text-green-800',
                     icon: <CheckCircle className="w-4 h-4" />,
                     bgColor: 'bg-green-50'
                 };
-            case 'Pending':
+            case 'pending':
                 return {
                     label: 'Chờ duyệt',
                     color: 'bg-yellow-100 text-yellow-800',
                     icon: <ClockIcon className="w-4 h-4" />,
                     bgColor: 'bg-yellow-50'
                 };
-            case 'Draft':
+            case 'draft':
                 return {
-                    label: 'Bàn nháp',
+                    label: 'Bản nháp',
                     color: 'bg-gray-100 text-gray-800',
                     icon: <FileText className="w-4 h-4" />,
                     bgColor: 'bg-gray-50'
                 };
-            case 'Expired':
+            case 'expired':
                 return {
                     label: 'Đã hết hạn',
                     color: 'bg-blue-100 text-blue-800',
                     icon: <CheckCircle className="w-4 h-4" />,
                     bgColor: 'bg-blue-50'
                 };
-            case 'Terminated':
+            case 'terminated':
                 return {
                     label: 'Đã chấm dứt',
                     color: 'bg-red-100 text-red-800',
                     icon: <AlertCircle className="w-4 h-4" />,
                     bgColor: 'bg-red-50'
                 };
-            case 'Rejected':
+            case 'rejected':
                 return {
                     label: 'Đã từ chối',
                     color: 'bg-rose-100 text-rose-800',
@@ -351,9 +351,11 @@ export default function ContractDetailPage() {
 
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{contract.contractNumber}</h1>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                                Hợp đồng #{contract.contractNumber}
+                            </h1>
                             <p className="text-neutral-600 mb-4">
-                                Thông tin chi tiết hợp đồng nhân sự
+                                Thông tin chi tiết của hợp đồng giữa DevPool và nhân sự
                             </p>
                             
                             {/* Status Badge */}
@@ -365,8 +367,7 @@ export default function ContractDetailPage() {
                             </div>
                         </div>
 
-                        {/* Action Buttons - Chỉ hiển thị khi status là Draft */}
-                        {contract.status === 'Draft' && (
+                        {contract.status?.toLowerCase() === 'draft' && (
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => navigate(`/hr/contracts/edit/${id}`)}
@@ -381,26 +382,38 @@ export default function ContractDetailPage() {
                                     className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    {isDeleting ? "Đang xóa..." : "Xóa"}
+                                    {isDeleting ? 'Đang xóa...' : 'Xóa'}
                                 </button>
                             </div>
                         )}
-
-                        {contract.status === 'Rejected' && (
+                        {contract.status?.toLowerCase() === 'rejected' && (
                             <button
                                 onClick={handleRestoreToDraft}
                                 disabled={isRestoring}
-                                className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neutral-600 to-neutral-700 hover:from-neutral-700 hover:to-neutral-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <RotateCcw className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                {isRestoring ? "Đang chuyển..." : "Chuyển về Bản nháp"}
+                                {isRestoring ? 'Đang khôi phục...' : 'Chuyển về Bản nháp'}
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Gửi yêu cầu duyệt - Chỉ hiển thị khi status là Draft */}
-                {contract.status === 'Draft' && (
+                {updateSuccess && (
+                    <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <p className="text-green-700 font-medium">✅ Đã gửi yêu cầu duyệt thành công! Manager đã nhận được thông báo.</p>
+                    </div>
+                )}
+
+                {updateError && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                        <p className="text-red-700 font-medium">{updateError}</p>
+                    </div>
+                )}
+
+                {contract.status?.toLowerCase() === 'draft' && (
                     <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
                         <div className="p-6 border-b border-neutral-200">
                             <div className="flex items-center gap-3">
@@ -410,101 +423,83 @@ export default function ContractDetailPage() {
                                 <h2 className="text-xl font-semibold text-gray-900">Gửi yêu cầu duyệt</h2>
                             </div>
                         </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                <p className="text-neutral-600 mb-4">
-                                    Gửi hợp đồng này đến Manager để được phê duyệt. Sau khi gửi, hợp đồng sẽ chuyển sang trạng thái "Chờ duyệt" và Manager sẽ nhận được thông báo.
-                                </p>
-                                <button
-                                    onClick={handleSendForApproval}
-                                    disabled={isUpdating}
-                                    className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Send className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    {isUpdating ? "Đang gửi..." : "Gửi yêu cầu duyệt"}
-                                </button>
-
-                                {updateSuccess && (
-                                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
-                                        <CheckCircle className="w-5 h-5 text-green-600" />
-                                        <p className="text-green-700 font-medium">✅ Đã gửi yêu cầu duyệt thành công! Manager đã nhận được thông báo.</p>
-                                    </div>
-                                )}
-
-                                {updateError && (
-                                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
-                                        <AlertCircle className="w-5 h-5 text-red-600" />
-                                        <p className="text-red-700 font-medium">{updateError}</p>
-                                    </div>
-                                )}
-                            </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-neutral-600">
+                                Gửi hợp đồng này đến Manager để được phê duyệt. Sau khi gửi, hợp đồng sẽ chuyển sang trạng thái "Chờ duyệt" và Manager sẽ nhận được thông báo.
+                            </p>
+                            <button
+                                onClick={handleSendForApproval}
+                                disabled={isUpdating}
+                                className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Send className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                {isUpdating ? 'Đang gửi...' : 'Gửi yêu cầu duyệt'}
+                            </button>
                         </div>
                     </div>
                 )}
 
-                {/* Thông tin chung */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-                    <div className="p-6 border-b border-neutral-200">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary-100 rounded-lg">
-                                <FileText className="w-5 h-5 text-primary-600" />
+                {/* Content */}
+                <div className="space-y-8 animate-fade-in">
+                    {/* Contract Information */}
+                    <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
+                        <div className="p-6 border-b border-neutral-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary-100 rounded-lg">
+                                    <FileText className="w-5 h-5 text-primary-600" />
+                                </div>
+                                <h2 className="text-xl font-semibold text-gray-900">Thông tin hợp đồng</h2>
                             </div>
-                            <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
                         </div>
-                    </div>
-                    <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <InfoItem 
-                                label="Mã hợp đồng" 
-                                value={contract.contractNumber} 
-                                icon={<FileText className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Hình thức tính lương" 
-                                value={contract.rateType ? getRateTypeText(contract.rateType) : '—'} 
-                                icon={<FileText className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Nhân sự" 
-                                value={talent?.fullName || '—'} 
-                                icon={<UserCheck className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Đối tác" 
-                                value={partner?.companyName || '—'} 
-                                icon={<Building2 className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Ngày bắt đầu" 
-                                value={new Date(contract.startDate).toLocaleDateString('vi-VN')} 
-                                icon={<Calendar className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Ngày kết thúc" 
-                                value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'} 
-                                icon={<Calendar className="w-4 h-4" />}
-                            />
-                            <InfoItem 
-                                label="Mức lương nhân sự" 
-                                value={formatCurrency(contract.devRate)} 
-                                icon={<DollarSign className="w-4 h-4" />}
-                            />
-                            {contract.contractFileUrl && (
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <InfoItem 
-                                    label="File hợp đồng" 
-                                    value={
-                                        <a 
-                                            href={contract.contractFileUrl} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-primary-600 hover:text-primary-800 underline"
-                                        >
-                                            Xem file
-                                        </a>
-                                    } 
-                                    icon={<FileText className="w-4 h-4" />}
+                                    label="Đối tác" 
+                                    value={partner?.companyName || '—'}
+                                    icon={<Building2 className="w-4 h-4" />}
                                 />
-                            )}
+                                <InfoItem 
+                                    label="Nhân sự" 
+                                    value={talent?.fullName || '—'}
+                                    icon={<UserCheck className="w-4 h-4" />}
+                                />
+                                <InfoItem 
+                                    label="Hình thức tính lương" 
+                                    value={contract.rateType ? getRateTypeText(contract.rateType) : '—'} 
+                                    icon={<DollarSign className="w-4 h-4" />}
+                                />
+                                <InfoItem 
+                                    label="Mức lương nhân sự" 
+                                    value={formatCurrency(contract.devRate)} 
+                                    icon={<DollarSign className="w-4 h-4" />}
+                                />
+                                <InfoItem 
+                                    label="Ngày bắt đầu" 
+                                    value={new Date(contract.startDate).toLocaleDateString('vi-VN')}
+                                    icon={<Calendar className="w-4 h-4" />}
+                                />
+                                <InfoItem 
+                                    label="Ngày kết thúc" 
+                                    value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
+                                    icon={<Calendar className="w-4 h-4" />}
+                                />
+                                {contract.contractFileUrl && (
+                                    <InfoItem 
+                                        label="File hợp đồng" 
+                                        value={
+                                            <a 
+                                                href={contract.contractFileUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-primary-600 hover:text-primary-800 underline"
+                                            >
+                                                Xem file
+                                            </a>
+                                        }
+                                        icon={<FileText className="w-4 h-4" />}
+                                    />
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -514,22 +509,21 @@ export default function ContractDetailPage() {
     );
 }
 
-function InfoItem({ label, value, icon }: { label: string; value: ReactNode; icon?: ReactNode }) {
-    const displayValue: ReactNode =
-        value === null || value === undefined
-            ? '—'
-            : typeof value === 'string' && value.trim() === ''
-                ? '—'
-                : value;
-
+function InfoItem({ label, value, icon }: { label: string; value: string | ReactNode; icon?: ReactNode }) {
     return (
         <div className="group">
             <div className="flex items-center gap-2 mb-2">
-                {icon && <div className="text-neutral-400">{icon}</div>}
-                <p className="text-neutral-500 text-sm font-medium">{label}</p>
+                {icon && (
+                    <div className="text-neutral-400 group-hover:text-primary-600 transition-colors duration-300">
+                        {icon}
+                    </div>
+                )}
+                <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                    {label}
+                </p>
             </div>
-            <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
-                {displayValue}
+            <p className="text-gray-900 font-semibold text-lg group-hover:text-primary-700 transition-colors duration-300">
+                {value}
             </p>
         </div>
     );
