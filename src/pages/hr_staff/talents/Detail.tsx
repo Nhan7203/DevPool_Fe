@@ -12,7 +12,6 @@ import { skillService, type Skill } from "../../../services/Skill";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
 import { talentJobRoleLevelService, type TalentJobRoleLevel } from "../../../services/TalentJobRoleLevel";
 import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum } from "../../../services/JobRoleLevel";
-import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { talentCertificateService, type TalentCertificate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { talentAvailableTimeService, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
@@ -69,7 +68,7 @@ export default function TalentDetailPage() {
   const [talent, setTalent] = useState<Talent | null>(null);
   const [locationName, setLocationName] = useState<string>("—");
   const [partnerName, setPartnerName] = useState<string>("—");
-  const [talentCVs, setTalentCVs] = useState<(TalentCV & { jobRoleName?: string })[]>([]);
+  const [talentCVs, setTalentCVs] = useState<(TalentCV & { jobRoleLevelName?: string })[]>([]);
   const [talentProjects, setTalentProjects] = useState<TalentProject[]>([]);
   const [talentSkills, setTalentSkills] = useState<(TalentSkill & { skillName: string })[]>([]);
   const [workExperiences, setWorkExperiences] = useState<TalentWorkExperience[]>([]);
@@ -205,13 +204,17 @@ export default function TalentDetailPage() {
         setWorkExperiences(experiences);
         setAvailableTimes(availableTimesData);
 
-        // Fetch job roles and map with CVs
-        const allJobRoles = await jobRoleService.getAll({ excludeDeleted: true });
-        const cvsWithJobRoleNames = cvs.map((cv: TalentCV) => {
-          const jobRoleInfo = allJobRoles.find((jr: JobRole) => jr.id === cv.jobRoleId);
-          return { ...cv, jobRoleName: jobRoleInfo?.name ?? "Chưa xác định" };
+        // Fetch job role levels once and reuse for both CVs and job role levels mapping
+        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+        setLookupJobRoleLevels(jobRoleLevelsArray);
+        
+        // Map CVs with job role level names
+        const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
+          const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
+          return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
         });
-        setTalentCVs(cvsWithJobRoleNames);
+        setTalentCVs(cvsWithJobRoleLevelNames);
 
         // Fetch skill names
         const allSkills = await skillService.getAll();
@@ -222,11 +225,9 @@ export default function TalentDetailPage() {
         });
         setTalentSkills(skillsWithNames);
 
-        // Fetch job role level names
-        const allJobRoleLevels = await jobRoleLevelService.getAll();
-        setLookupJobRoleLevels(allJobRoleLevels);
+        // Map job role levels with names (reuse allJobRoleLevels)
         const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
-          const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
+          const jobRoleLevelInfo = jobRoleLevelsArray.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
           return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
         });
         setJobRoleLevels(jobRoleLevelsWithNames);
@@ -384,12 +385,13 @@ export default function TalentDetailPage() {
       setSelectedCVs((prev) => prev.filter((id) => !deletableCVIds.includes(id)));
       // Refresh data
       const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoles = await jobRoleService.getAll({ excludeDeleted: true });
-      const cvsWithJobRoleNames = cvs.map((cv: TalentCV) => {
-        const jobRoleInfo = allJobRoles.find((jr: JobRole) => jr.id === cv.jobRoleId);
-        return { ...cv, jobRoleName: jobRoleInfo?.name ?? "Chưa xác định" };
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+      const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+      const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
+        const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
+        return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
       });
-      setTalentCVs(cvsWithJobRoleNames);
+      setTalentCVs(cvsWithJobRoleLevelNames);
     } catch (err) {
       console.error("❌ Lỗi khi xóa CV:", err);
       alert("Không thể xóa CV!");
@@ -408,7 +410,7 @@ export default function TalentDetailPage() {
     }
   };
 
-  const handleAnalyzeCVFromUrl = async (cv: TalentCV & { jobRoleName?: string }) => {
+  const handleAnalyzeCVFromUrl = async (cv: TalentCV & { jobRoleLevelName?: string }) => {
     if (!id) return;
     if (!cv.cvFileUrl) {
       alert("⚠️ Không tìm thấy đường dẫn CV để phân tích.");
@@ -1544,7 +1546,7 @@ export default function TalentDetailPage() {
                               <FileText className="w-5 h-5 text-primary-600" />
                               <div>
                                 <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
-                                  {cv.jobRoleName ? `${cv.jobRoleName} v${cv.version}` : `v${cv.version}`}
+                                  {cv.jobRoleLevelName ? `${cv.jobRoleLevelName} v${cv.version}` : `v${cv.version}`}
                                 </p>
                               </div>
                             </div>

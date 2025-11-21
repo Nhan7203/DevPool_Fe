@@ -29,10 +29,7 @@ interface EnrichedContract extends PartnerContract {
 
 const formatCurrency = (value: number | null | undefined) => {
   if (!value) return "—";
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(value);
+  return new Intl.NumberFormat("vi-VN").format(value) + " VNĐ";
 };
 
 const formatDate = (value?: string | null): string => {

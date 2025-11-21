@@ -5,25 +5,21 @@ import Sidebar from "../../../components/common/Sidebar";
 import { userService, type User, type UserFilter, type PagedResult } from "../../../services/User";
 
 // ------ Types ------
-export type SystemRole =
-  | "Admin"
+export type StaffRole =
   | "Manager"
   | "HR"
   | "Sale"
-  | "Accountant"
-  | "Dev";
+  | "Accountant";
 
 type StatusFilter = "All" | "Active" | "Inactive";
 
-// Options
+// Options - Chỉ bao gồm các role staff, không có Admin và Dev (Talent)
 const ROLE_OPTIONS = [
-  "Admin",
   "Manager",
   "HR",
   "Sale",
   "Accountant",
-  "Dev",
-] as const satisfies readonly SystemRole[];
+] as const satisfies readonly StaffRole[];
 
 
 // Use the User type from service instead of UserRow
@@ -33,13 +29,11 @@ type UserRow = User;
 const convertToUserRow = (user: User): UserRow => user;
 
 // Helper
-const roleColors: Record<SystemRole, string> = {
-  Admin: "bg-purple-100 text-purple-700",
+const roleColors: Record<StaffRole, string> = {
   Manager: "bg-amber-100 text-amber-700",
   "HR": "bg-blue-100 text-blue-700",
   "Sale": "bg-sky-100 text-sky-700",
   "Accountant": "bg-teal-100 text-teal-700",
-  Dev: "bg-green-100 text-green-700",
 };
 
 function formatDate(iso: string) {
@@ -53,15 +47,14 @@ function formatDate(iso: string) {
 }
 
 // ------ Page Component ------
-export default function UserManagementPage() {
+export default function StaffManagementPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"All" | SystemRole>("All");
+  const [roleFilter, setRoleFilter] = useState<"All" | StaffRole>("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [showFilters, setShowFilters] = useState(false);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<null | UserRow>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -85,8 +78,16 @@ export default function UserManagementPage() {
       };
 
       const result = await userService.getAll(filter);
-      setPagination(result);
-      setUsers(result.items.map(convertToUserRow));
+      // Lọc bỏ Admin khỏi danh sách
+      const filteredItems = result.items.filter((user: User) => 
+        !user.roles.includes("Admin")
+      );
+      setPagination({
+        ...result,
+        items: filteredItems,
+        totalCount: filteredItems.length,
+      });
+      setUsers(filteredItems.map(convertToUserRow));
     } catch (err: any) {
       console.error("❌ Lỗi khi tải danh sách người dùng:", err);
       setError(err.message || "Không thể tải danh sách người dùng");
@@ -116,16 +117,6 @@ export default function UserManagementPage() {
   // Since filtering is now done on the server, we just use the users directly
   const filtered = users;
 
-  function toggleAll(v: boolean) {
-    const map: Record<string, boolean> = {};
-    filtered.forEach((u) => (map[u.id] = v));
-    setSelected(map);
-  }
-
-  function toggleOne(id: string) {
-    setSelected((s) => ({ ...s, [id]: !s[id] }));
-  }
-
 
 
   async function removeUsers(ids: string[]) {
@@ -141,14 +132,13 @@ export default function UserManagementPage() {
       
       // Refresh the user list
       await fetchUsers(currentPage);
-      setSelected({});
     } catch (err: any) {
       console.error("❌ Lỗi khi xóa người dùng:", err);
       alert("Không thể xóa người dùng. Vui lòng thử lại.");
     }
   }
   // Guards
-  function isSystemRole(v: string): v is SystemRole {
+  function isStaffRole(v: string): v is StaffRole {
     return (ROLE_OPTIONS as readonly string[]).includes(v);
   }
 
@@ -156,7 +146,7 @@ export default function UserManagementPage() {
   function handleRoleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const v = e.target.value;
     if (v === "All") setRoleFilter("All");
-    else if (isSystemRole(v)) setRoleFilter(v);
+    else if (isStaffRole(v)) setRoleFilter(v);
   }
 
   function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -171,9 +161,9 @@ export default function UserManagementPage() {
       <div className="flex-1 p-8">
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Quản lý Người dùng</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Quản lý Nhân viên</h1>
             <p className="text-neutral-600 mt-1">
-              Tạo/sửa tài khoản, phân quyền vai trò, reset MFA/SSO và vô hiệu hóa khi cần.
+              Tạo/sửa tài khoản nhân viên (Manager, HR, Sales, Accountant), phân quyền vai trò và vô hiệu hóa khi cần.
             </p>
           </div>
           <button
@@ -207,7 +197,7 @@ export default function UserManagementPage() {
         </div>
 
         {showFilters && (
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-sm text-gray-600">Vai trò</label>
               <select
@@ -238,17 +228,6 @@ export default function UserManagementPage() {
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm text-gray-600">Tác vụ hàng loạt</label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => removeUsers(Object.keys(selected).filter((k) => selected[k]))}
-                  className="px-3 py-2 text-sm rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4 inline mr-1" /> Xóa
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -272,13 +251,6 @@ export default function UserManagementPage() {
             <table className="min-w-full text-left">
               <thead className="bg-gray-50 text-gray-600 text-sm">
                 <tr>
-                  <th className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      onChange={(e) => toggleAll(e.currentTarget.checked)}
-                      className="rounded border-gray-300"
-                    />
-                  </th>
                   <th className="px-4 py-3">Người dùng</th>
                   <th className="px-4 py-3">Số điện thoại</th>
                   <th className="px-4 py-3">Vai trò</th>
@@ -290,7 +262,7 @@ export default function UserManagementPage() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-10 text-center text-gray-500">
+                    <td colSpan={6} className="py-10 text-center text-gray-500">
                       <div className="flex items-center justify-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                         Đang tải người dùng...
@@ -299,21 +271,13 @@ export default function UserManagementPage() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-10 text-center text-gray-500">
+                    <td colSpan={6} className="py-10 text-center text-gray-500">
                       Không có người dùng phù hợp.
                     </td>
                   </tr>
                 ) : (
                   filtered.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50/70">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={!!selected[u.id]}
-                          onChange={() => toggleOne(u.id)}
-                          className="rounded border-gray-300"
-                        />
-                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center">
@@ -342,7 +306,7 @@ export default function UserManagementPage() {
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {u.roles.map((r) => (
-                            <span key={r} className={`px-2 py-1 rounded-lg text-xs font-medium ${roleColors[r as SystemRole] || 'bg-gray-100 text-gray-700'}`}>
+                            <span key={r} className={`px-2 py-1 rounded-lg text-xs font-medium ${roleColors[r as StaffRole] || 'bg-gray-100 text-gray-700'}`}>
                               {r}
                             </span>
                           ))}
@@ -453,7 +417,7 @@ export default function UserManagementPage() {
                   fullName: payload.fullName,
                   phoneNumber: payload.phone,
                   password: "TempPassword123!", // This should be generated or set by admin
-                  role: payload.roles[0] || "Dev", // Take first role for now
+                  role: payload.roles[0] || "HR", // Take first role for now
                 });
                 await fetchUsers(currentPage);
                 setShowCreate(false);
@@ -481,7 +445,7 @@ export default function UserManagementPage() {
                 // Update role if changed
                 if (payload.roles[0] !== showEdit.roles[0]) {
                   await userService.updateRole(showEdit.id, {
-                    role: payload.roles[0] || "Dev",
+                    role: payload.roles[0] || "HR",
                   });
                 }
                 
@@ -512,18 +476,18 @@ function UserModal({
     fullName: string;
     email: string;
     phone?: string;
-    roles: SystemRole[];
+    roles: StaffRole[];
   }) => void;
   onClose: () => void;
 }) {
   const [fullName, setFullName] = useState(initial?.fullName ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
   const [phone, setPhone] = useState(initial?.phoneNumber ?? "");
-  const [roles, setRoles] = useState<SystemRole[]>(
-    (initial?.roles as SystemRole[]) ?? []
+  const [roles, setRoles] = useState<StaffRole[]>(
+    (initial?.roles as StaffRole[]) ?? []
   );
 
-  function toggleRole(r: SystemRole) {
+  function toggleRole(r: StaffRole) {
     setRoles((cur) =>
       cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]
     );
@@ -575,13 +539,11 @@ function UserModal({
             <div className="mt-2 flex flex-wrap gap-2">
               {(
                 [
-                  "Admin",
                   "Manager",
                   "HR",
                   "Sale",
                   "Accountant",
-                  "Dev",
-                ] as SystemRole[]
+                ] as StaffRole[]
               ).map((r) => (
                 <button
                   type="button"

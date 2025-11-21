@@ -31,6 +31,13 @@ import {
   Mail,
   Phone,
   Target,
+  MapPin,
+  GraduationCap,
+  UserPlus,
+  Users,
+  User,
+  Building2,
+  FileCheck,
 } from "lucide-react";
 
 const talentStatusLabels: Record<string, string> = {
@@ -804,15 +811,15 @@ export default function TalentCVApplicationDetailPage() {
                   </button>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InfoRow label="Công ty khách hàng" value={clientCompanyName} icon={<FileText className="w-4 h-4" />} />
-                  <InfoRow label="Loại vị trí tuyển dụng" value={jobRoleName} icon={<Briefcase className="w-4 h-4" />} />
-                  <InfoRow label="Vị trí tuyển dụng" value={jobRoleLevelName} icon={<Briefcase className="w-4 h-4" />} />
+                  <InfoRow label="Công ty khách hàng" value={clientCompanyName} icon={<Building2 className="w-4 h-4" />} />
+                  <InfoRow label="Loại vị trí tuyển dụng" value={jobRoleName} icon={<User className="w-4 h-4" />} />
+                  <InfoRow label="Vị trí tuyển dụng" value={jobRoleLevelName} icon={<Users className="w-4 h-4" />} />
                   <InfoRow
                     label="Chế độ làm việc"
                     value={getWorkingModeDisplay(jobRequest.workingMode)}
-                    icon={<Briefcase className="w-4 h-4" />}
+                    icon={<GraduationCap className="w-4 h-4" />}
                   />
-                  <InfoRow label="Quy trình ứng tuyển" value={applyProcessTemplateName} icon={<FileText className="w-4 h-4" />} />
+                  <InfoRow label="Quy trình ứng tuyển" value={applyProcessTemplateName} icon={<FileCheck className="w-4 h-4" />} />
                   <InfoRow
                     label="Số lượng tuyển dụng"
                     value={(() => {
@@ -823,7 +830,7 @@ export default function TalentCVApplicationDetailPage() {
                           : `${remainingSlots}/${qty} còn lại`;
                       return `${qty} (${remain})`;
                     })()}
-                    icon={<Briefcase className="w-4 h-4" />}
+                    icon={<UserPlus className="w-4 h-4" />}
                   />
 
                   {showJobDetails && (
@@ -968,8 +975,8 @@ export default function TalentCVApplicationDetailPage() {
                   <InfoRow label="Tên ứng viên" value={detailedApplication.talent.fullName} icon={<UserIcon className="w-4 h-4" />} />
                   <InfoRow label="Email" value={detailedApplication.talent.email} icon={<Mail className="w-4 h-4" />} />
                   <InfoRow label="Số điện thoại" value={detailedApplication.talent.phone || "—"} icon={<Phone className="w-4 h-4" />} />
-                  <InfoRow label="Chế độ làm việc" value={getWorkingModeDisplay(detailedApplication.talent.workingMode)} icon={<Briefcase className="w-4 h-4" />} />
-                  <InfoRow label="Địa điểm mong muốn" value={talentLocationName} icon={<Briefcase className="w-4 h-4" />} />
+                  <InfoRow label="Chế độ làm việc" value={getWorkingModeDisplay(detailedApplication.talent.workingMode)} icon={<GraduationCap className="w-4 h-4" />} />
+                  <InfoRow label="Địa điểm mong muốn" value={talentLocationName} icon={<MapPin className="w-4 h-4" />} />
                   <div className="group">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="text-neutral-400">

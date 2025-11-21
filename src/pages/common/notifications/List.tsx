@@ -10,6 +10,7 @@ import {
 } from '../../../services/Notification';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 
@@ -97,6 +98,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const NotificationCenterPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { setUnread, updateItemById, removeItemById } = useNotification();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -169,14 +171,30 @@ const NotificationCenterPage = () => {
   const handleMarkAsRead = async (notification: Notification) => {
     if (notification.isRead) return;
     try {
-      await notificationService.markAsRead(notification.id);
-      fetchNotifications();
-    } catch (error) {
-      console.error('Không thể đánh dấu thông báo đã đọc:', error);
+      const updated = await notificationService.markAsRead(notification.id);
+      // Cập nhật ngay lập tức trong NotificationContext để navbar cập nhật unread
+      updateItemById(notification.id, { isRead: true, readAt: updated?.readAt || new Date().toISOString() });
+      // Cập nhật local state
       setNotifications((prev) =>
         prev.map((item) =>
           item.id === notification.id
-            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            ? { ...item, isRead: true, readAt: updated?.readAt || new Date().toISOString() }
+            : item
+        )
+      );
+      // Giảm unread count ngay lập tức
+      setUnreadCount((prev) => Math.max(prev - 1, 0));
+      // Fetch lại để đồng bộ với server
+      fetchNotifications();
+    } catch (error) {
+      console.error('Không thể đánh dấu thông báo đã đọc:', error);
+      // Fallback: cập nhật local state và context
+      const fallbackReadAt = new Date().toISOString();
+      updateItemById(notification.id, { isRead: true, readAt: fallbackReadAt });
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notification.id
+            ? { ...item, isRead: true, readAt: fallbackReadAt }
             : item
         )
       );
@@ -188,6 +206,16 @@ const NotificationCenterPage = () => {
     if (unreadCount === 0) return;
     try {
       await notificationService.markAllAsRead();
+      // Cập nhật tất cả notifications trong context
+      notifications.forEach(notif => {
+        if (!notif.isRead) {
+          updateItemById(notif.id, { isRead: true, readAt: new Date().toISOString() });
+        }
+      });
+      // Set unread về 0 ngay lập tức
+      setUnread(0);
+      setUnreadCount(0);
+      // Fetch lại để đồng bộ với server
       fetchNotifications();
     } catch (error) {
       console.error('Không thể đánh dấu tất cả thông báo đã đọc:', error);
@@ -199,10 +227,22 @@ const NotificationCenterPage = () => {
     if (!confirmed) return;
     try {
       await notificationService.delete(notification.id);
+      // Xóa ngay lập tức khỏi NotificationContext để navbar cập nhật unread
+      removeItemById(notification.id);
+      // Cập nhật local state
+      setNotifications((prev) => prev.filter(item => item.id !== notification.id));
+      // Giảm unread count nếu notification chưa đọc
+      if (!notification.isRead) {
+        setUnreadCount((prev) => Math.max(prev - 1, 0));
+      }
+      // Giảm total count
+      setTotalCount((prev) => Math.max(prev - 1, 0));
+      // Xử lý pagination nếu cần
       const isLastItemOnPage = notifications.length === 1 && pageNumber > 1;
       if (isLastItemOnPage) {
         setPageNumber((prev) => Math.max(1, prev - 1));
       } else {
+        // Fetch lại để đồng bộ với server
         fetchNotifications();
       }
     } catch (error) {

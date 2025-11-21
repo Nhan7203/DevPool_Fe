@@ -12,7 +12,10 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    XCircle
+    XCircle,
+    Layers,
+    FileUser,
+    ClipboardList
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
@@ -430,7 +433,7 @@ const stats = [
                                         />
                                     </div>
                                     <div className="relative">
-                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                        <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                                         <input
                                             type="text"
                                             placeholder="Dự án"
@@ -440,7 +443,7 @@ const stats = [
                                         />
                                     </div>
                                     <div className="relative">
-                                        <Target className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                                         <input
                                             type="text"
                                             placeholder="Vị trí"
@@ -522,7 +525,7 @@ const stats = [
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Vị trí</th>
-                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ ứng tuyển</th>
+                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Chế độ</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
@@ -561,13 +564,13 @@ const stats = [
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
-                                                    <Briefcase className="w-4 h-4 text-neutral-400" />
+                                                    <Layers className="w-4 h-4 text-neutral-400" />
                                                     <span className="text-sm text-neutral-700">{req.projectName}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
-                                                    <Target className="w-4 h-4 text-neutral-400" />
+                                                    <Users className="w-4 h-4 text-neutral-400" />
                                                     <span className="text-sm text-neutral-700">{req.positionName}</span>
                                                 </div>
                                             </td>
@@ -579,7 +582,7 @@ const stats = [
                                                             : 'bg-neutral-100 text-neutral-500'
                                                         }`}
                                                 >
-                                                    <FileText className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                    <ClipboardList className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                                                     <span>{req.applicationCount}</span>
                                                 </Link>
                                             </td>

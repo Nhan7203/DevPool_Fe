@@ -188,6 +188,11 @@ export default function ClientDetailPage() {
   const handleQuickApprove = async () => {
     if (!contract || !id || contract.status !== "Pending") return;
 
+    const confirmApprove = window.confirm(
+      `Bạn có chắc muốn duyệt hợp đồng "${contract.contractNumber}"?\n\nHợp đồng sẽ chuyển sang trạng thái "Đang hiệu lực".`
+    );
+    if (!confirmApprove) return;
+
     try {
       setIsUpdating(true);
       setUpdateError(null);
@@ -227,6 +232,11 @@ export default function ClientDetailPage() {
 
   const handleTerminate = async () => {
     if (!contract || !id || contract.status !== "Active") return;
+
+    const confirmTerminate = window.confirm(
+      `⚠️ Bạn có chắc muốn chấm dứt hợp đồng "${contract.contractNumber}"?\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã chấm dứt" và không thể hoàn tác.`
+    );
+    if (!confirmTerminate) return;
 
     try {
       setIsTerminating(true);
@@ -283,6 +293,11 @@ export default function ClientDetailPage() {
       setRejectError("Vui lòng nhập lý do từ chối");
       return;
     }
+
+    const confirmReject = window.confirm(
+      `⚠️ Bạn có chắc muốn từ chối hợp đồng "${contract.contractNumber}"?\n\nLý do: ${trimmedReason}\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã từ chối" và Sales sẽ nhận được thông báo.`
+    );
+    if (!confirmReject) return;
 
     try {
       setIsRejecting(true);

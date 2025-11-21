@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, DollarSign, Briefcase, ChevronUp, ChevronDown } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Briefcase } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/manager/SidebarItems';
 
@@ -51,88 +51,82 @@ export default function ManagerDashboard() {
   }, []);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(value);
+    return new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ';
   };
+
+  const statsCards = [
+    {
+      title: 'Doanh thu',
+      value: formatCurrency(stats.totalRevenue),
+      change: 'Tăng 12% so với tháng trước',
+      color: 'blue',
+      icon: DollarSign
+    },
+    {
+      title: 'Developers',
+      value: stats.totalDevelopers.toString(),
+      change: 'Tăng 8% so với tháng trước',
+      color: 'green',
+      icon: Users
+    },
+    {
+      title: 'Dự án đang thực hiện',
+      value: stats.activeProjects.toString(),
+      change: 'Giảm 3% so với tháng trước',
+      color: 'purple',
+      icon: Briefcase
+    },
+    {
+      title: 'Độ hài lòng',
+      value: `${stats.clientSatisfaction}%`,
+      change: 'Tăng 5% so với tháng trước',
+      color: 'orange',
+      icon: TrendingUp
+    }
+  ];
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Manager" />
       
       <div className="flex-1 p-8">
-        <div className="mb-8">
+        <div className="mb-8 animate-slide-up">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-neutral-600 mt-1">Tổng quan hoạt động kinh doanh</p>
         </div>
 
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Đang tải dữ liệu...</p>
+          <div className="flex justify-center items-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Đang tải dữ liệu...</p>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-2xl shadow-soft p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-primary-100 rounded-xl">
-                    <DollarSign className="w-6 h-6 text-primary-600" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
+              {statsCards.map((stat, index) => (
+                <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                      <p className="text-2xl lg:text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300 break-words leading-tight">{stat.value}</p>
+                    </div>
+                    <div className={`p-3 rounded-full flex-shrink-0 ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                      } transition-all duration-300`}>
+                      {stat.icon && <stat.icon className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />}
+                    </div>
                   </div>
-                  <span className="text-green-600 flex items-center">
-                    <ChevronUp className="w-4 h-4" />
-                    12%
-                  </span>
+                  <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                    <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                    {stat.change}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-600 mb-1">Doanh thu</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(stats.totalRevenue)}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-soft p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-blue-100 rounded-xl">
-                    <Users className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <span className="text-green-600 flex items-center">
-                    <ChevronUp className="w-4 h-4" />
-                    8%
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Developers</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalDevelopers}</p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-soft p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-yellow-100 rounded-xl">
-                    <Briefcase className="w-6 h-6 text-yellow-600" />
-                  </div>
-                  <span className="text-red-600 flex items-center">
-                    <ChevronDown className="w-4 h-4" />
-                    3%
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Dự án đang thực hiện</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.activeProjects}</p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-soft p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-green-100 rounded-xl">
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  </div>
-                  <span className="text-green-600 flex items-center">
-                    <ChevronUp className="w-4 h-4" />
-                    5%
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Độ hài lòng</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.clientSatisfaction}%</p>
-              </div>
+              ))}
             </div>
 
             {/* Charts */}

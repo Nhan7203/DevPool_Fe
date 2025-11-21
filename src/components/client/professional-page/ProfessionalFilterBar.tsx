@@ -1,7 +1,37 @@
 "use client";
 
 import { Search, Filter, ChevronDown, X } from "lucide-react";
-import { categories, locations, experienceLevels } from "./data";
+
+const experienceLevels = [
+  "Tất cả",
+  "1-3 năm",
+  "3-5 năm",
+  "5-8 năm",
+  "8+ năm",
+];
+
+const workingModes = [
+  "Tất cả",
+  "Tại văn phòng",
+  "Từ xa",
+  "Kết hợp",
+  "Linh hoạt",
+];
+
+const statuses = [
+  "Tất cả",
+  "Đang làm việc",
+  "Sẵn sàng",
+  "Bận",
+  "Không rảnh",
+];
+
+const availabilities = [
+  "Tất cả",
+  "Sẵn sàng",
+  "Bận",
+  "Không rảnh",
+];
 
 // Định nghĩa interface cho props của component này
 interface ProfessionalFilterBarProps {
@@ -11,16 +41,17 @@ interface ProfessionalFilterBarProps {
   setShowFilters: (value: boolean) => void;
   sortBy: string;
   setSortBy: (value: string) => void;
-  selectedCategory: string;
-  setSelectedCategory: (value: string) => void;
   selectedLocation: string;
   setSelectedLocation: (value: string) => void;
+  selectedWorkingMode: string;
+  setSelectedWorkingMode: (value: string) => void;
+  selectedStatus: string;
+  setSelectedStatus: (value: string) => void;
   selectedExperience: string;
   setSelectedExperience: (value: string) => void;
-  minRate: string;
-  setMinRate: (value: string) => void;
-  maxRate: string;
-  setMaxRate: (value: string) => void;
+  selectedAvailability: string;
+  setSelectedAvailability: (value: string) => void;
+  locations: string[];
   clearFilters: () => void;
 }
 
@@ -34,16 +65,17 @@ export default function ProfessionalFilterBar(
     setShowFilters,
     sortBy,
     setSortBy,
-    selectedCategory,
-    setSelectedCategory,
     selectedLocation,
     setSelectedLocation,
+    selectedWorkingMode,
+    setSelectedWorkingMode,
+    selectedStatus,
+    setSelectedStatus,
     selectedExperience,
     setSelectedExperience,
-    minRate,
-    setMinRate,
-    maxRate,
-    setMaxRate,
+    selectedAvailability,
+    setSelectedAvailability,
+    locations,
     clearFilters,
   } = props;
 
@@ -81,10 +113,10 @@ export default function ProfessionalFilterBar(
             onChange={(e) => setSortBy(e.target.value)}
             className="border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
           >
-            <option value="rating">Đánh giá cao nhất</option>
-            <option value="rate">Giá thấp nhất</option>
+            <option value="name">Tên A-Z</option>
             <option value="experience">Kinh nghiệm nhiều nhất</option>
-            <option value="projects">Dự án hoàn thành nhiều nhất</option>
+            <option value="projects">Dự án nhiều nhất</option>
+            <option value="skills">Kỹ năng nhiều nhất</option>
           </select>
         </div>
       </div>
@@ -92,24 +124,6 @@ export default function ProfessionalFilterBar(
       {/* Advanced Filters */}
       {showFilters && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 animate-slide-down">
-          {/* Category Filter */}
-          <div>
-            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-              Lĩnh vực
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Location Filter */}
           <div>
             <label className="block text-sm font-semibold text-neutral-700 mb-2">
@@ -123,6 +137,42 @@ export default function ProfessionalFilterBar(
               {locations.map((location) => (
                 <option key={location} value={location}>
                   {location}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Working Mode Filter */}
+          <div>
+            <label className="block text-sm font-semibold text-neutral-700 mb-2">
+              Chế độ làm việc
+            </label>
+            <select
+              value={selectedWorkingMode}
+              onChange={(e) => setSelectedWorkingMode(e.target.value)}
+              className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
+            >
+              {workingModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-sm font-semibold text-neutral-700 mb-2">
+              Trạng thái
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
+            >
+              {statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
                 </option>
               ))}
             </select>
@@ -146,31 +196,26 @@ export default function ProfessionalFilterBar(
             </select>
           </div>
 
-          {/* Rate Range */}
+          {/* Availability Filter */}
           <div>
             <label className="block text-sm font-semibold text-neutral-700 mb-2">
-              Mức lương (k VNĐ/giờ)
+              Tình trạng
             </label>
-            <div className="flex space-x-2">
-              <input
-                type="number"
-                placeholder="Từ"
-                value={minRate}
-                onChange={(e) => setMinRate(e.target.value)}
-                className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
-              />
-              <input
-                type="number"
-                placeholder="Đến"
-                value={maxRate}
-                onChange={(e) => setMaxRate(e.target.value)}
-                className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
-              />
-            </div>
+            <select
+              value={selectedAvailability}
+              onChange={(e) => setSelectedAvailability(e.target.value)}
+              className="w-full border border-neutral-300 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
+            >
+              {availabilities.map((availability) => (
+                <option key={availability} value={availability}>
+                  {availability}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Clear Filters */}
-          <div className="flex items-end">
+          <div className="md:col-span-2 lg:col-span-3 xl:col-span-5 flex items-end">
             <button
               onClick={clearFilters}
               className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-error-500 to-error-600 text-white px-4 py-2 rounded-xl hover:from-error-600 hover:to-error-700 transition-all duration-300 shadow-soft hover:shadow-medium transform hover:scale-105"

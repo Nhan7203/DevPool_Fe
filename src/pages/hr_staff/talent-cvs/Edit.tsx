@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentCVService, type TalentCVCreate, type TalentCVFieldsUpdateModel } from "../../../services/TalentCV";
-import { jobRoleService, type JobRole } from "../../../services/JobRole";
+import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -21,17 +21,18 @@ import {
 export default function TalentCVEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
+  const [allJobRoleLevels, setAllJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [talentId, setTalentId] = useState<number>(0);
   const [formData, setFormData] = useState<TalentCVCreate>({
     talentId: 0,
-    jobRoleId: 0,
+    jobRoleLevelId: 0,
     version: 1,
     cvFileUrl: "",
     isActive: true,
     summary: "",
     isGeneratedFromTemplate: false,
     sourceTemplateId: undefined,
+    generatedForJobRequestId: undefined,
   });
 
   const [editableFields, setEditableFields] = useState<TalentCVFieldsUpdateModel>({
@@ -52,13 +53,14 @@ export default function TalentCVEditPage() {
 
         setFormData({
           talentId: data.talentId,
-          jobRoleId: data.jobRoleId,
+          jobRoleLevelId: data.jobRoleLevelId,
           version: data.version,
           cvFileUrl: data.cvFileUrl,
           isActive: data.isActive,
           summary: data.summary,
           isGeneratedFromTemplate: data.isGeneratedFromTemplate,
           sourceTemplateId: data.sourceTemplateId,
+          generatedForJobRequestId: data.generatedForJobRequestId,
         });
         setEditableFields({
           talentId: data.talentId,
@@ -77,17 +79,17 @@ export default function TalentCVEditPage() {
     fetchData();
   }, [id]);
 
-  // 🧭 Load danh sách Job Roles
+  // 🧭 Load danh sách Job Role Levels
   useEffect(() => {
-    const fetchJobRoles = async () => {
+    const fetchJobRoleLevels = async () => {
       try {
-        const jobRoles = await jobRoleService.getAll({ excludeDeleted: true });
-        setAllJobRoles(jobRoles);
+        const jobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        setAllJobRoleLevels(Array.isArray(jobRoleLevels) ? jobRoleLevels : []);
       } catch (err) {
         console.error("❌ Lỗi tải danh sách vị trí công việc:", err);
       }
     };
-    fetchJobRoles();
+    fetchJobRoleLevels();
   }, []);
 
   // ✍️ Cập nhật dữ liệu form
@@ -98,7 +100,7 @@ export default function TalentCVEditPage() {
 
     const newValue = type === 'checkbox'
       ? (e.target as HTMLInputElement).checked
-      : type === 'number' || name === "jobRoleId" || name === "sourceTemplateId" || name === "version"
+      : type === 'number' || name === "jobRoleLevelId" || name === "sourceTemplateId" || name === "version" || name === "generatedForJobRequestId"
       ? Number(value)
       : value;
 
@@ -133,7 +135,7 @@ export default function TalentCVEditPage() {
         try {
           const existingActiveCVs = await talentCVService.getAll({
             talentId,
-            jobRoleId: formData.jobRoleId,
+            jobRoleLevelId: formData.jobRoleLevelId,
             isActive: true,
             excludeDeleted: true,
           });
@@ -233,23 +235,23 @@ export default function TalentCVEditPage() {
                 </label>
                 <div className="relative">
                   <select
-                    name="jobRoleId"
-                    value={formData.jobRoleId}
+                    name="jobRoleLevelId"
+                    value={formData.jobRoleLevelId}
                     onChange={handleChange}
                     disabled
                     className="w-full border border-neutral-300 bg-neutral-50 rounded-xl px-4 py-3 cursor-not-allowed opacity-75"
                     required
                   >
                     <option value="0">-- Chọn vị trí công việc --</option>
-                    {allJobRoles.map(jobRole => (
-                      <option key={jobRole.id} value={jobRole.id}>{jobRole.name}</option>
+                    {allJobRoleLevels.map(jobRoleLevel => (
+                      <option key={jobRoleLevel.id} value={jobRoleLevel.id}>{jobRoleLevel.name}</option>
                     ))}
                   </select>
                 </div>
-                {formData.jobRoleId > 0 && (
+                {formData.jobRoleLevelId > 0 && (
                   <p className="text-xs text-neutral-500 mt-2">
                     Đã chọn: <span className="font-medium text-neutral-700">
-                      {allJobRoles.find(jr => jr.id === formData.jobRoleId)?.name || "Không xác định"}
+                      {allJobRoleLevels.find(jrl => jrl.id === formData.jobRoleLevelId)?.name || "Không xác định"}
                     </span>
                     <span className="block mt-1 text-amber-600">
                       ⚠️ Không thể thay đổi vị trí công việc khi chỉnh sửa CV

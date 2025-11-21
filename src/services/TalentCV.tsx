@@ -4,18 +4,19 @@ import { AxiosError } from "axios";
 export interface TalentCV {
   id: number;
   talentId: number;
-  jobRoleId: number;
+  jobRoleLevelId: number;
   version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;
   isGeneratedFromTemplate: boolean;
   sourceTemplateId?: number;
+  generatedForJobRequestId?: number | null;
 }
 
 export interface TalentCVFilter {
   talentId?: number;
-  jobRoleId?: number; 
+  jobRoleLevelId?: number; 
   isActive?: boolean;
   isGeneratedFromTemplate?: boolean;
   excludeDeleted?: boolean;
@@ -23,13 +24,14 @@ export interface TalentCVFilter {
 
 export interface TalentCVCreate {
   talentId: number;
-  jobRoleId: number;
+  jobRoleLevelId: number;
   version: number;
   cvFileUrl: string;
   isActive: boolean;
   summary: string;
   isGeneratedFromTemplate: boolean;
   sourceTemplateId?: number;
+  generatedForJobRequestId?: number | null;
 }
 
 export interface TalentCVMatchResult {
@@ -324,7 +326,7 @@ export const talentCVService = {
     try {
       const params = new URLSearchParams();
       if (filter?.talentId) params.append("TalentId", filter.talentId.toString());
-      if (filter?.jobRoleId) params.append("JobRoleId", filter.jobRoleId.toString());
+      if (filter?.jobRoleLevelId) params.append("JobRoleLevelId", filter.jobRoleLevelId.toString());
       if (filter?.isActive !== undefined) params.append("IsActive", filter.isActive.toString());
       if (filter?.isGeneratedFromTemplate !== undefined) params.append("IsGeneratedFromTemplate", filter.isGeneratedFromTemplate.toString());
       if (filter?.excludeDeleted !== undefined) params.append("ExcludeDeleted", filter.excludeDeleted.toString());

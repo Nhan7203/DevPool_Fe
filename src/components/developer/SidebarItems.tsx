@@ -1,6 +1,7 @@
 import { 
   BarChart3,
-  Settings, 
+  FileText,
+  CreditCard,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -10,8 +11,13 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
-    label: 'Cài Đặt',
-    href: '/hr/settings',
-    icon: Settings
-  }
+    label: 'Hợp Đồng',
+    href: '/developer/contracts',
+    icon: FileText
+  },
+  {
+    label: 'Thanh Toán',
+    href: '/developer/payments',
+    icon: CreditCard
+  },
 ];

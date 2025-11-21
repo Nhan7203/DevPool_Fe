@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { authService, getRoleFromToken, authenticateWithFirebase } from '../../services/Auth';
 import { startNotificationConnection, onReceiveNotification, onUnreadCountUpdated, getUnreadCount } from '../../services/notificationHub';
 import { useNotification } from '../../contexts/NotificationContext';
+import { setTokens, setUser } from '../../utils/storage';
 
 
 export default function LoginForm() {
@@ -49,10 +50,6 @@ export default function LoginForm() {
       // Gọi API login
       const response = await authService.login({ email, password });
       
-      // Lưu tokens vào localStorage
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      
       // Lấy role từ JWT token
       const frontendRole = getRoleFromToken(response.accessToken);
       
@@ -62,11 +59,14 @@ export default function LoginForm() {
         return;
       }
       
+      // Lưu tokens vào storage dựa trên rememberMe
+      setTokens(response.accessToken, response.refreshToken, rememberMe);
+      
       // Authenticate với Firebase để có quyền truy cập Firestore/Storage
       // Cần role để sync vào Firestore
       await authenticateWithFirebase(response, email, password, frontendRole);
       
-      // Lưu thông tin user vào localStorage
+      // Lưu thông tin user vào storage dựa trên rememberMe
       const userData = {
         id: response.userID,
         email: response.email,
@@ -74,7 +74,7 @@ export default function LoginForm() {
         role: frontendRole,
         avatar: undefined
       };
-      localStorage.setItem('devpool_user', JSON.stringify(userData));
+      setUser(userData, rememberMe);
       
       // Khởi tạo kết nối SignalR sau khi đã có token
       try {

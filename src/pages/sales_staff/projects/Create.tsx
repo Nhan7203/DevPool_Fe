@@ -50,6 +50,7 @@ export default function ProjectCreatePage() {
   const [marketSearch, setMarketSearch] = useState("");
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isMarketDropdownOpen, setIsMarketDropdownOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -92,15 +93,6 @@ export default function ProjectCreatePage() {
     !marketSearch || m.name.toLowerCase().includes(marketSearch.toLowerCase())
   );
 
-  const toggleIndustry = (id: number, checked: boolean) => {
-    setForm((prev) => ({
-      ...prev,
-      industryIds: checked
-        ? [...prev.industryIds, id]
-        : prev.industryIds.filter((selectedId) => selectedId !== id),
-    }));
-  };
-
   const toUTCDateString = (dateStr?: string | null) => {
     if (!dateStr) return null;
     const d = new Date(dateStr + "T00:00:00");
@@ -119,20 +111,59 @@ export default function ProjectCreatePage() {
     setFormLoading(true);
     setError("");
     setSuccess(false);
+    setFieldErrors({});
 
+    const errors: Record<string, string> = {};
+
+    // Validation: Tên dự án (bắt buộc)
     if (!form.name?.trim()) {
-      setError("Tên dự án không được để trống!");
+      errors.name = "Tên dự án không được để trống!";
+    }
+
+    // Validation: Ngày bắt đầu (bắt buộc)
+    if (!form.startDate?.trim()) {
+      errors.startDate = "Ngày bắt đầu không được để trống!";
+    }
+
+    // Validation: Công ty khách hàng (bắt buộc)
+    if (!form.clientCompanyId) {
+      errors.clientCompanyId = "Vui lòng chọn công ty khách hàng!";
+    }
+
+    // Validation: Thị trường (bắt buộc)
+    if (!form.marketId) {
+      errors.marketId = "Vui lòng chọn thị trường!";
+    }
+
+    // Validation: Ngành (bắt buộc - ít nhất 1 ngành)
+    if (!form.industryIds || form.industryIds.length === 0) {
+      errors.industryIds = "Vui lòng chọn ít nhất một ngành!";
+    }
+
+    // Validation: Trạng thái (bắt buộc)
+    if (!form.status?.trim()) {
+      errors.status = "Vui lòng chọn trạng thái dự án!";
+    }
+
+    // Validation: Ngày kết thúc phải sau ngày bắt đầu (nếu có)
+    if (form.endDate && form.startDate) {
+      const startDate = new Date(form.startDate);
+      const endDate = new Date(form.endDate);
+      if (endDate < startDate) {
+        errors.endDate = "Ngày kết thúc phải sau ngày bắt đầu!";
+      }
+    }
+
+    // Nếu có lỗi validation, hiển thị lỗi đầu tiên và dừng
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstError = Object.values(errors)[0];
+      setError(firstError);
       setFormLoading(false);
       return;
     }
 
     try {
-      if (!form.industryIds || form.industryIds.length === 0) {
-        setError("Vui lòng chọn ít nhất một ngành");
-        setFormLoading(false);
-        return;
-      }
-
       const payload: ProjectPayload = {
         name: form.name!,
         description: form.description ?? "",
@@ -227,11 +258,30 @@ export default function ProjectCreatePage() {
                   type="text"
                 name="name"
                 value={form.name}
-                onChange={handleChange}
+                onChange={(e) => {
+                  handleChange(e);
+                  if (fieldErrors.name) {
+                    setFieldErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.name;
+                      return newErrors;
+                    });
+                  }
+                }}
                   required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    fieldErrors.name
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-neutral-200 focus:border-primary-500"
+                  }`}
                 placeholder="VD: Hệ thống quản lý nhân sự"
               />
+                {fieldErrors.name && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
 
               {/* Mô tả */}
@@ -261,11 +311,30 @@ export default function ProjectCreatePage() {
                     type="date"
                     name="startDate"
                     value={form.startDate}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      handleChange(e);
+                      if (fieldErrors.startDate) {
+                        setFieldErrors((prev) => {
+                          const newErrors = { ...prev };
+                          delete newErrors.startDate;
+                          return newErrors;
+                        });
+                      }
+                    }}
                     required
                     max={form.endDate || undefined}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      fieldErrors.startDate
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {fieldErrors.startDate && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {fieldErrors.startDate}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
@@ -276,10 +345,29 @@ export default function ProjectCreatePage() {
                     type="date"
                     name="endDate"
                     value={form.endDate ?? ""}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      handleChange(e);
+                      if (fieldErrors.endDate) {
+                        setFieldErrors((prev) => {
+                          const newErrors = { ...prev };
+                          delete newErrors.endDate;
+                          return newErrors;
+                        });
+                      }
+                    }}
                     min={form.startDate || undefined}
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                      fieldErrors.endDate
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   />
+                  {fieldErrors.endDate && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {fieldErrors.endDate}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -306,7 +394,11 @@ export default function ProjectCreatePage() {
                   <button
                     type="button"
                     onClick={() => setIsCompanyDropdownOpen((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl bg-white text-left focus:ring-primary-500 ${
+                      fieldErrors.clientCompanyId
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   >
                     <div className="flex items-center gap-2 text-sm text-neutral-700">
                       <Building2 className="w-4 h-4 text-neutral-400" />
@@ -358,6 +450,13 @@ export default function ProjectCreatePage() {
                               onClick={() => {
                                 setForm((prev) => ({ ...prev, clientCompanyId: c.id }));
                                 setIsCompanyDropdownOpen(false);
+                                if (fieldErrors.clientCompanyId) {
+                                  setFieldErrors((prev) => {
+                                    const newErrors = { ...prev };
+                                    delete newErrors.clientCompanyId;
+                                    return newErrors;
+                                  });
+                                }
                               }}
                               className={`w-full text-left px-4 py-2.5 text-sm ${
                                 form.clientCompanyId === c.id
@@ -373,6 +472,12 @@ export default function ProjectCreatePage() {
                     </div>
                   )}
                 </div>
+                {fieldErrors.clientCompanyId && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {fieldErrors.clientCompanyId}
+                  </p>
+                )}
               </div>
 
               {/* Thị trường - popover có ô tìm kiếm */}
@@ -385,7 +490,11 @@ export default function ProjectCreatePage() {
                   <button
                     type="button"
                     onClick={() => setIsMarketDropdownOpen((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-4 py-3 border border-neutral-200 rounded-xl bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl bg-white text-left focus:ring-primary-500 ${
+                      fieldErrors.marketId
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-neutral-200 focus:border-primary-500"
+                    }`}
                   >
                     <div className="flex items-center gap-2 text-sm text-neutral-700">
                       <Globe2 className="w-4 h-4 text-neutral-400" />
@@ -437,6 +546,13 @@ export default function ProjectCreatePage() {
                               onClick={() => {
                                 setForm((prev) => ({ ...prev, marketId: m.id }));
                                 setIsMarketDropdownOpen(false);
+                                if (fieldErrors.marketId) {
+                                  setFieldErrors((prev) => {
+                                    const newErrors = { ...prev };
+                                    delete newErrors.marketId;
+                                    return newErrors;
+                                  });
+                                }
                               }}
                               className={`w-full text-left px-4 py-2.5 text-sm ${
                                 form.marketId === m.id
@@ -452,6 +568,12 @@ export default function ProjectCreatePage() {
                     </div>
                   )}
                 </div>
+                {fieldErrors.marketId && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {fieldErrors.marketId}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -459,7 +581,11 @@ export default function ProjectCreatePage() {
                   <Factory className="w-4 h-4" />
                   Ngành <span className="text-red-500">*</span>
                 </label>
-                <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 space-y-4">
+                <div className={`bg-neutral-50 border rounded-2xl p-4 space-y-4 ${
+                  fieldErrors.industryIds
+                    ? "border-red-500"
+                    : "border-neutral-200"
+                }`}>
                   <div className="relative">
                     <input
                       type="text"
@@ -505,7 +631,19 @@ export default function ProjectCreatePage() {
                           type="checkbox"
                           className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                           checked={form.industryIds.includes(industry.id)}
-                          onChange={(e) => toggleIndustry(industry.id, e.target.checked)}
+                          onChange={(e) => {
+                            const newIndustryIds = e.target.checked
+                              ? [...form.industryIds, industry.id]
+                              : form.industryIds.filter((id) => id !== industry.id);
+                            setForm((prev) => ({ ...prev, industryIds: newIndustryIds }));
+                            if (fieldErrors.industryIds && newIndustryIds.length > 0) {
+                              setFieldErrors((prev) => {
+                                const newErrors = { ...prev };
+                                delete newErrors.industryIds;
+                                return newErrors;
+                              });
+                            }
+                          }}
                         />
                         <span className="text-sm font-medium text-neutral-700">
                           {industry.name}
@@ -519,6 +657,12 @@ export default function ProjectCreatePage() {
                     )}
                   </div>
                 </div>
+                {fieldErrors.industryIds && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {fieldErrors.industryIds}
+                  </p>
+                )}
               </div>
 
               {/* Trạng thái */}
@@ -530,15 +674,34 @@ export default function ProjectCreatePage() {
                 <select
                 name="status"
                 value={form.status || ""}
-                onChange={handleChange}
+                onChange={(e) => {
+                  handleChange(e);
+                  if (fieldErrors.status) {
+                    setFieldErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors.status;
+                      return newErrors;
+                    });
+                  }
+                }}
                 required
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                    fieldErrors.status
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-neutral-200 focus:border-primary-500"
+                  }`}
                 >
                   <option value="">-- Chọn trạng thái --</option>
                   <option value="Planned">Đã lên kế hoạch</option>
                   <option value="Ongoing">Đang thực hiện</option>
                   <option value="Completed">Đã hoàn thành</option>
                 </select>
+                {fieldErrors.status && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {fieldErrors.status}
+                  </p>
+                )}
               </div>
             </div>
           </div>

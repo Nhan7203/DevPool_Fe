@@ -58,27 +58,35 @@ const notifyRefreshSubscribers = (token: string | null) => {
 };
 
 const handleRefreshToken = async (): Promise<string | null> => {
-    const refreshToken = localStorage.getItem('refreshToken');
+    // Lấy refresh token từ cả localStorage và sessionStorage
+    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
     if (!refreshToken) return null;
+
+    const rememberMe = localStorage.getItem('remember_me') === 'true';
+    const storage = rememberMe ? localStorage : sessionStorage;
 
     try {
         const response = await refreshClient.post('/auth/refresh-token', { refreshToken });
         const { accessToken, refreshToken: newRefreshToken } = response.data ?? {};
 
         if (accessToken) {
-            localStorage.setItem('accessToken', accessToken);
+            storage.setItem('accessToken', accessToken);
         }
 
         if (newRefreshToken) {
-            localStorage.setItem('refreshToken', newRefreshToken);
+            storage.setItem('refreshToken', newRefreshToken);
         }
 
         return accessToken ?? null;
     } catch (refreshError) {
         console.error('❌ Unable to refresh token:', refreshError);
+        // Xóa từ cả 2 storage
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('devpool_user');
+        sessionStorage.removeItem('accessToken');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('devpool_user');
         return null;
     }
 };
@@ -86,7 +94,8 @@ const handleRefreshToken = async (): Promise<string | null> => {
 // 🧩 Request interceptor: tự động thêm token vào header
 axiosInstance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = localStorage.getItem('accessToken');
+        // Lấy token từ cả localStorage và sessionStorage
+        const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -144,9 +153,13 @@ axiosInstance.interceptors.response.use(
 
         if (status === 401) {
             console.warn('🔒 Token expired or unauthorized.');
+            // Xóa từ cả 2 storage
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             localStorage.removeItem('devpool_user');
+            sessionStorage.removeItem('accessToken');
+            sessionStorage.removeItem('refreshToken');
+            sessionStorage.removeItem('devpool_user');
             window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
         } else if (status && status >= 400 && status < 500) {
 			console.error('⚠️ Client Error:', error.response?.data || error.message);

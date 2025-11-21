@@ -192,6 +192,11 @@ export default function ContractDetailPage() {
   const handleSendForApproval = async () => {
     if (!id || !contract) return;
 
+    const confirmSend = window.confirm(
+      `Bạn có chắc muốn gửi yêu cầu duyệt hợp đồng "${contract.contractNumber}"?\n\nHợp đồng sẽ chuyển sang trạng thái "Chờ duyệt" và Manager sẽ nhận được thông báo.`
+    );
+    if (!confirmSend) return;
+
     try {
       setIsUpdating(true);
       setUpdateError(null);

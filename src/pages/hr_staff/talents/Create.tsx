@@ -94,13 +94,14 @@ export default function CreateTalent() {
   }]); // Tự động tạo 1 job role level mặc định vì bắt buộc
   // State for initial CV (bắt buộc, chỉ 1 CV)
   const [initialCVs, setInitialCVs] = useState<Partial<TalentCVCreateModel>[]>([{
-    jobRoleId: undefined,
+    jobRoleLevelId: undefined,
     version: 1,
     cvFileUrl: "",
     isActive: true, // Mặc định active là "có"
     summary: "",
     isGeneratedFromTemplate: false,
-    sourceTemplateId: undefined
+    sourceTemplateId: undefined,
+    generatedForJobRequestId: undefined
   }]); // Tự động tạo CV mặc định vì bắt buộc
   const [uploadingCVIndex, setUploadingCVIndex] = useState<number | null>(null);
 
@@ -490,11 +491,18 @@ export default function CreateTalent() {
           if (entry.readMap[notificationId]) continue;
           try {
             const notification = await notificationService.getById(notificationId);
+            // Nếu notification đã được đọc, đánh dấu là đã xử lý
             if (notification?.isRead) {
               updates.push({ key, notificationId });
             }
-          } catch (error) {
-            console.error("Không thể kiểm tra trạng thái thông báo đề xuất:", error);
+          } catch (error: any) {
+            // Nếu notification bị xóa (404) hoặc không tồn tại, cũng đánh dấu là đã xử lý
+            const isNotFound = error?.response?.status === 404 || error?.status === 404;
+            if (isNotFound) {
+              updates.push({ key, notificationId });
+            } else {
+              console.error("Không thể kiểm tra trạng thái thông báo đề xuất:", error);
+            }
           }
         }
       }
@@ -511,6 +519,7 @@ export default function CreateTalent() {
           if (entry.readMap[notificationId]) return;
           changed = true;
           const newReadMap = { ...entry.readMap, [notificationId]: true };
+          // Nếu tất cả notifications đã được xử lý (đọc hoặc xóa), xóa entry để cho phép gửi lại
           if (Object.values(newReadMap).every(Boolean)) {
             delete next[key];
           } else {
@@ -731,7 +740,7 @@ export default function CreateTalent() {
       return;
     }
 
-    if (!currentCV?.jobRoleId || currentCV.jobRoleId <= 0) {
+    if (!currentCV?.jobRoleLevelId || currentCV.jobRoleLevelId <= 0) {
       alert("⚠️ Vui lòng chọn vị trí công việc cho CV trước khi upload lên Firebase!");
       return;
     }
@@ -1638,27 +1647,21 @@ export default function CreateTalent() {
                 };
                 const normalizedLevel = jrl.level ? levelMap[jrl.level.toLowerCase()] || jrl.level : null;
 
-                // Tìm job role level matching
-                return jrLevel.jobRoleId === matchedJobRole.id &&
-                  (normalizedLevel ? jrLevel.level === normalizedLevel : true);
+                // Tìm job role level matching (không cần match jobRoleId nữa, chỉ cần match level)
+                return normalizedLevel ? jrLevel.level === normalizedLevel : true;
               });
 
-              // Nếu không tìm thấy exact match, tìm job role level đầu tiên match với job role
+              // Nếu không tìm thấy exact match, tìm job role level đầu tiên match với position name
               if (!matchedJobRoleLevel) {
-                let matchedJobRole = jobRoles.find(jr =>
-                  jr.name.toLowerCase().includes(jrl.position.toLowerCase()) ||
-                  jrl.position.toLowerCase().includes(jr.name.toLowerCase())
+                matchedJobRoleLevel = jobRoleLevels.find(jrLevel =>
+                  jrLevel.name.toLowerCase().includes(jrl.position.toLowerCase()) ||
+                  jrl.position.toLowerCase().includes(jrLevel.name.toLowerCase())
                 );
-
-                // Nếu không tìm thấy, thử fuzzy matching
-                if (!matchedJobRole) {
-                  matchedJobRole = jobRoles.find(jr => fuzzyMatch(jrl.position, jr.name));
-                }
-                if (matchedJobRole) {
-                  matchedJobRoleLevel = jobRoleLevels.find(jrLevel =>
-                    jrLevel.jobRoleId === matchedJobRole.id
-                  );
-                }
+              }
+              
+              // Nếu vẫn không tìm thấy, thử fuzzy matching
+              if (!matchedJobRoleLevel) {
+                matchedJobRoleLevel = jobRoleLevels.find(jrLevel => fuzzyMatch(jrl.position, jrLevel.name));
               }
 
               return {
@@ -1771,7 +1774,7 @@ export default function CreateTalent() {
     }
 
     const cv = initialCVs[0];
-    if (!cv.jobRoleId) {
+    if (!cv.jobRoleLevelId) {
       alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
       return;
     }
@@ -1917,10 +1920,11 @@ export default function CreateTalent() {
           // CV là bắt buộc, đã được validate ở trên
           const cv = initialCVs[0];
           return {
-            jobRoleId: cv.jobRoleId!,
+            jobRoleLevelId: cv.jobRoleLevelId!,
             version: cv.version!,
             cvFileUrl: cv.cvFileUrl!,
             isActive: true, // CV mới khi tạo talent luôn mặc định active
+            generatedForJobRequestId: cv.generatedForJobRequestId,
             summary: cv.summary || "",
             isGeneratedFromTemplate: cv.isGeneratedFromTemplate !== undefined ? cv.isGeneratedFromTemplate : false,
             sourceTemplateId: cv.sourceTemplateId
@@ -1977,7 +1981,7 @@ export default function CreateTalent() {
 
   // Helper functions for managing arrays
   const addSkill = () => {
-    setTalentSkills([...talentSkills, { skillId: 0, level: "Beginner", yearsExp: 0 }]);
+    setTalentSkills([{ skillId: 0, level: "Beginner", yearsExp: 0 }, ...talentSkills]);
   };
 
   const removeSkill = (index: number) => {
@@ -1991,13 +1995,13 @@ export default function CreateTalent() {
   };
 
   const addWorkExperience = () => {
-    setTalentWorkExperiences([...talentWorkExperiences, {
+    setTalentWorkExperiences([{
       company: "",
       position: "",
       startDate: "",
       endDate: undefined,
       description: ""
-    }]);
+    }, ...talentWorkExperiences]);
   };
 
   const removeWorkExperience = (index: number) => {
@@ -2011,12 +2015,12 @@ export default function CreateTalent() {
   };
 
   const addProject = () => {
-    setTalentProjects([...talentProjects, {
+    setTalentProjects([{
       projectName: "",
       position: "",
       technologies: "",
       description: ""
-    }]);
+    }, ...talentProjects]);
   };
 
   const removeProject = (index: number) => {
@@ -2030,14 +2034,14 @@ export default function CreateTalent() {
   };
 
   const addCertificate = () => {
-    setTalentCertificates([...talentCertificates, {
+    setTalentCertificates([{
       certificateTypeId: 0,
       certificateName: "",
       certificateDescription: "",
       issuedDate: undefined,
       isVerified: false,
       imageUrl: ""
-    }]);
+    }, ...talentCertificates]);
   };
 
   const removeCertificate = (index: number) => {
@@ -2051,11 +2055,11 @@ export default function CreateTalent() {
   };
 
   const addJobRoleLevel = () => {
-    setTalentJobRoleLevels([...talentJobRoleLevels, {
+    setTalentJobRoleLevels([{
       jobRoleLevelId: 0,
       yearsOfExp: 0,
       ratePerMonth: undefined
-    }]);
+    }, ...talentJobRoleLevels]);
   };
 
   const removeJobRoleLevel = (index: number) => {
@@ -2067,10 +2071,33 @@ export default function CreateTalent() {
     setTalentJobRoleLevels(talentJobRoleLevels.filter((_, i) => i !== index));
   };
 
+  // Helper function để format số tiền
+  const formatCurrency = (value: string | number | undefined): string => {
+    if (!value && value !== 0) return "";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+    if (isNaN(numValue)) return "";
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
   const updateJobRoleLevel = (index: number, field: keyof TalentJobRoleLevelCreateModel, value: string | number | undefined) => {
     const updated = [...talentJobRoleLevels];
     updated[index] = { ...updated[index], [field]: value };
     setTalentJobRoleLevels(updated);
+  };
+
+  const handleRatePerMonthChange = (index: number, value: string) => {
+    // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+    const cleaned = value.replace(/\D/g, "");
+    // Nếu rỗng, set về undefined
+    if (cleaned === "") {
+      updateJobRoleLevel(index, 'ratePerMonth', undefined);
+      return;
+    }
+    // Parse và lưu số vào state
+    const numValue = parseInt(cleaned, 10);
+    if (!isNaN(numValue)) {
+      updateJobRoleLevel(index, 'ratePerMonth', numValue);
+    }
   };
 
   return (
@@ -2520,7 +2547,7 @@ export default function CreateTalent() {
                               <button
                                 type="button"
                                 onClick={() => handleUploadCV(index)}
-                                disabled={!cvFile || uploadingCV || !cv.version || cv.version <= 0 || !cv.jobRoleId || isUploadedFromFirebase}
+                                disabled={!cvFile || uploadingCV || !cv.version || cv.version <= 0 || !cv.jobRoleLevelId || isUploadedFromFirebase}
                                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {uploadingCV && uploadingCVIndex === index ? (
@@ -2562,7 +2589,7 @@ export default function CreateTalent() {
                             <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => setIsJobRoleDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                onClick={() => setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
                                 disabled={isUploadedFromFirebase}
                                 className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white/50 text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : 'border-neutral-300 focus:border-primary-500'
                                   }`}
@@ -2570,21 +2597,21 @@ export default function CreateTalent() {
                                 <div className="flex items-center gap-2 text-sm text-neutral-700">
                                   <Target className="w-4 h-4 text-neutral-400" />
                                   <span>
-                                    {cv.jobRoleId
-                                      ? jobRoles.find(r => r.id === cv.jobRoleId)?.name || "Chọn vị trí"
+                                    {cv.jobRoleLevelId
+                                      ? jobRoleLevels.find(jrl => jrl.id === cv.jobRoleLevelId)?.name || "Chọn vị trí"
                                       : "Chọn vị trí"}
                                   </span>
                                 </div>
                               </button>
-                              {isJobRoleDropdownOpen[index] && !isUploadedFromFirebase && (
+                              {isJobRoleLevelDropdownOpen[index] && !isUploadedFromFirebase && (
                                 <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                                       <input
                                         type="text"
-                                        value={jobRoleSearch}
-                                        onChange={(e) => setJobRoleSearch(e.target.value)}
+                                        value={jobRoleLevelSearch[index] || ""}
+                                        onChange={(e) => setJobRoleLevelSearch(prev => ({ ...prev, [index]: e.target.value }))}
                                         placeholder="Tìm vị trí..."
                                         className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
                                       />
@@ -2592,28 +2619,29 @@ export default function CreateTalent() {
                                   </div>
                                   <div className="max-h-56 overflow-y-auto">
                                     {(() => {
-                                      const filtered = jobRoleSearch
-                                        ? jobRoles.filter(r => r.name.toLowerCase().includes(jobRoleSearch.toLowerCase()))
-                                        : jobRoles;
+                                      const searchTerm = jobRoleLevelSearch[index] || "";
+                                      const filtered = searchTerm
+                                        ? jobRoleLevels.filter(jrl => jrl.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                        : jobRoleLevels;
                                       if (filtered.length === 0) {
                                         return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
                                       }
-                                      return filtered.map((role) => (
+                                      return filtered.map((jobRoleLevel) => (
                                         <button
                                           type="button"
-                                          key={role.id}
+                                          key={jobRoleLevel.id}
                                           onClick={() => {
-                                            updateInitialCV(index, 'jobRoleId', role.id);
-                                            setIsJobRoleDropdownOpen(prev => ({ ...prev, [index]: false }));
-                                            setJobRoleSearch("");
+                                            updateInitialCV(index, 'jobRoleLevelId', jobRoleLevel.id);
+                                            setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                            setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
                                           }}
                                           className={`w-full text-left px-4 py-2.5 text-sm ${
-                                            cv.jobRoleId === role.id
+                                            cv.jobRoleLevelId === jobRoleLevel.id
                                               ? "bg-primary-50 text-primary-700"
                                               : "hover:bg-neutral-50 text-neutral-700"
                                           }`}
                                         >
-                                          {role.name}
+                                          {jobRoleLevel.name}
                                         </button>
                                       ));
                                     })()}
@@ -2621,7 +2649,7 @@ export default function CreateTalent() {
                                 </div>
                               )}
                             </div>
-                            {!cv.jobRoleId && !isUploadedFromFirebase && (
+                            {!cv.jobRoleLevelId && !isUploadedFromFirebase && (
                               <p className="text-xs text-orange-600 mt-1">
                                 ⚠️ Phải chọn vị trí công việc trước khi upload CV lên Firebase
                               </p>
@@ -2857,13 +2885,19 @@ export default function CreateTalent() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn (VND)</label>
-                          <input
-                            type="number"
-                            value={jrl.ratePerMonth || ""}
-                            onChange={(e) => updateJobRoleLevel(index, 'ratePerMonth', e.target.value ? Number(e.target.value) : undefined)}
-                            className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
-                          />
+                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formatCurrency(jrl.ratePerMonth)}
+                              onChange={(e) => handleRatePerMonthChange(index, e.target.value)}
+                              placeholder="VD: 5.000.000"
+                              className="w-full py-2 px-3 pr-12 border rounded-lg bg-white border-neutral-300"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
+                              VNĐ
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

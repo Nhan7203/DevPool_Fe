@@ -22,13 +22,19 @@ import {
   Briefcase, 
   Users, 
   DollarSign, 
-  Calendar, 
   FileText, 
   Target,
   Clock,
   AlertCircle,
   Sparkles,
-  Star
+  Star,
+  Layers,
+  MapPin,
+  UserPlus,
+  User,
+  FileCheck,
+  FileType,
+  GraduationCap
 } from "lucide-react";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
@@ -475,12 +481,12 @@ export default function JobRequestDetailHRPage() {
                             <InfoItem 
                                 label="Dự án" 
                                 value={jobRequest.projectName ?? "—"} 
-                                icon={<Briefcase className="w-4 h-4" />}
+                                icon={<Layers className="w-4 h-4" />}
                             />                          
                             <InfoItem 
                                 label="Loại vị trí tuyển dụng" 
                                 value={jobRoleName} 
-                                icon={<Users className="w-4 h-4" />}
+                                icon={<User className="w-4 h-4" />}
                             />
                             <InfoItem 
                                 label="Vị trí tuyển dụng" 
@@ -490,7 +496,7 @@ export default function JobRequestDetailHRPage() {
                             <InfoItem 
                                 label="Số lượng tuyển dụng" 
                                 value={jobRequest.quantity?.toString() || "—"} 
-                                icon={<Users className="w-4 h-4" />}
+                                icon={<UserPlus className="w-4 h-4" />}
                             />
                             <InfoItem 
                                 label="Ngân sách/tháng" 
@@ -500,12 +506,12 @@ export default function JobRequestDetailHRPage() {
                             <InfoItem 
                                 label="Khu vực làm việc" 
                                 value={locationName} 
-                                icon={<Building2 className="w-4 h-4" />}
+                                icon={<MapPin className="w-4 h-4" />}
                             />
                             <InfoItem 
                                 label="Chế độ làm việc" 
                                 value={workingModeLabels[Number(jobRequest.workingMode ?? 0)] ?? "—"} 
-                                icon={<Calendar className="w-4 h-4" />}
+                                icon={<GraduationCap className="w-4 h-4" />}
                             />
                             <InfoItem 
                                 label="Mẫu CV khách hàng" 
@@ -515,7 +521,7 @@ export default function JobRequestDetailHRPage() {
                             <InfoItem 
                                 label="Quy trình ứng tuyển" 
                                 value={applyProcessTemplateName} 
-                                icon={<FileText className="w-4 h-4" />}
+                                icon={<FileCheck className="w-4 h-4" />}
                             />
                         </div>
                     </div>
@@ -528,16 +534,21 @@ export default function JobRequestDetailHRPage() {
                         <div className="p-6 border-b border-neutral-200">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-secondary-100 rounded-lg">
-                                    <FileText className="w-5 h-5 text-secondary-600" />
+                                    <FileType className="w-5 h-5 text-secondary-600" />
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900">Mô tả công việc</h3>
                             </div>
                         </div>
                         <div className="p-6">
                             <div className="prose prose-sm max-w-none">
-                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                                    {jobRequest.description || "Chưa có mô tả công việc cụ thể"}
-                                </p>
+                                {jobRequest.description ? (
+                                    <div 
+                                        className="text-gray-700 leading-relaxed"
+                                        dangerouslySetInnerHTML={{ __html: jobRequest.description }}
+                                    />
+                                ) : (
+                                    <p className="text-gray-500 italic">Chưa có mô tả công việc cụ thể</p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -547,16 +558,21 @@ export default function JobRequestDetailHRPage() {
                         <div className="p-6 border-b border-neutral-200">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-accent-100 rounded-lg">
-                                    <Target className="w-5 h-5 text-accent-600" />
+                                    <Briefcase className="w-5 h-5 text-accent-600" />
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
                             </div>
                         </div>
                         <div className="p-6">
                             <div className="prose prose-sm max-w-none">
-                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                                    {jobRequest.requirements || "Chưa có yêu cầu cụ thể cho ứng viên"}
-                                </p>
+                                {jobRequest.requirements ? (
+                                    <div 
+                                        className="text-gray-700 leading-relaxed"
+                                        dangerouslySetInnerHTML={{ __html: jobRequest.requirements }}
+                                    />
+                                ) : (
+                                    <p className="text-gray-500 italic">Chưa có yêu cầu cụ thể cho ứng viên</p>
+                                )}
                             </div>
                         </div>
                     </div>

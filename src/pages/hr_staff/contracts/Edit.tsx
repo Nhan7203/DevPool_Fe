@@ -140,15 +140,41 @@ export default function EditPartnerContractPage() {
         fetchData();
     }, [id, navigate]);
 
+    // Helper function để format số tiền
+    const formatCurrency = (value: string | number | undefined): string => {
+        if (!value && value !== 0) return "";
+        const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+        if (isNaN(numValue)) return "";
+        return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
+        
+        // Xử lý đặc biệt cho devRate - format số tiền
+        if (name === 'devRate') {
+            // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+            const cleaned = value.replace(/\D/g, "");
+            // Nếu rỗng, set về undefined
+            if (cleaned === "") {
+                setForm(prev => ({ ...prev, [name]: undefined }));
+                return;
+            }
+            // Parse và lưu số vào state
+            const numValue = parseInt(cleaned, 10);
+            if (!isNaN(numValue)) {
+                setForm(prev => ({ ...prev, [name]: numValue }));
+            }
+            return;
+        }
+        
         setForm(prev => ({
             ...prev,
-            [name]: name === 'partnerId' || name === 'talentId' || name === 'devRate'
+            [name]: name === 'partnerId' || name === 'talentId'
                 ? (value ? Number(value) : undefined)
                 : name === 'contractNumber'
                 ? value.toUpperCase() // Tự động chuyển thành chữ hoa khi nhập
-                : value === '' && (name === 'endDate' || name === 'devRate' || name === 'contractFileUrl')
+                : value === '' && (name === 'endDate' || name === 'contractFileUrl')
                 ? undefined
                 : value
         }));
@@ -448,18 +474,26 @@ export default function EditPartnerContractPage() {
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <DollarSign className="w-4 h-4" />
-                                        Mức Lương nhân sự (VND) <span className="text-red-500">*</span>
+                                        Mức Lương nhân sự <span className="text-red-500">*</span>
                                     </label>
-                                    <input
-                                        type="number"
-                                        name="devRate"
-                                        value={form.devRate || ''}
-                                        onChange={handleChange}
-                                        min="0"
-                                        step="1000"
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                        placeholder="VD: 50000000"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="devRate"
+                                            value={form.devRate ? formatCurrency(form.devRate) : ''}
+                                            onChange={handleChange}
+                                            placeholder="VD: 5.000.000"
+                                            className="w-full border border-neutral-200 rounded-xl px-4 py-3 pr-12 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
+                                            VNĐ
+                                        </span>
+                                    </div>
+                                    {form.devRate && (
+                                        <p className="mt-1 text-xs text-neutral-500">
+                                            Số tiền: {formatCurrency(form.devRate)} VNĐ
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 

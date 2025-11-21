@@ -39,10 +39,7 @@ interface EnrichedContract extends PartnerContract {
 // ===== PAGE =====
 const formatCurrency = (value: number | null | undefined) => {
   if (!value) return "—";
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(value);
+  return new Intl.NumberFormat("vi-VN").format(value) + " VNĐ";
 };
 
 export default function DevDetailPage() {
@@ -113,6 +110,11 @@ export default function DevDetailPage() {
   const handleTerminate = async () => {
     if (!contract || !id || contract.status !== "Active") return;
 
+    const confirmTerminate = window.confirm(
+      `⚠️ Bạn có chắc muốn chấm dứt hợp đồng "${contract.contractNumber}"?\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã chấm dứt" và không thể hoàn tác.`
+    );
+    if (!confirmTerminate) return;
+
     try {
       setIsTerminating(true);
       setUpdateError(null);
@@ -152,6 +154,11 @@ export default function DevDetailPage() {
 
   const handleQuickApprove = async () => {
     if (!contract || !id || contract.status !== "Pending") return;
+
+    const confirmApprove = window.confirm(
+      `Bạn có chắc muốn duyệt hợp đồng "${contract.contractNumber}"?\n\nHợp đồng sẽ chuyển sang trạng thái "Đang hiệu lực".`
+    );
+    if (!confirmApprove) return;
 
     try {
       setIsUpdating(true);
@@ -212,6 +219,11 @@ export default function DevDetailPage() {
       setRejectError("Vui lòng nhập lý do từ chối");
       return;
     }
+
+    const confirmReject = window.confirm(
+      `⚠️ Bạn có chắc muốn từ chối hợp đồng "${contract.contractNumber}"?\n\nLý do: ${trimmedReason}\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã từ chối" và HR sẽ nhận được thông báo.`
+    );
+    if (!confirmReject) return;
 
     try {
       setIsRejecting(true);

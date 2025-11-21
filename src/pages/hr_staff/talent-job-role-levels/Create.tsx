@@ -79,11 +79,37 @@ export default function TalentJobRoleLevelCreatePage() {
     }
   }, [analysisStorageKey]);
 
+  // Helper function để format số tiền
+  const formatCurrency = (value: string | number | undefined): string => {
+    if (!value && value !== 0) return "";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+    if (isNaN(numValue)) return "";
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    // Xử lý đặc biệt cho ratePerMonth - format số tiền
+    if (name === "ratePerMonth") {
+      // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+      const cleaned = value.replace(/\D/g, "");
+      // Nếu rỗng, set về undefined
+      if (cleaned === "") {
+        setForm(prev => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Parse và lưu số vào state
+      const numValue = parseInt(cleaned, 10);
+      if (!isNaN(numValue)) {
+        setForm(prev => ({ ...prev, [name]: numValue }));
+      }
+      return;
+    }
+    
     setForm(prev => ({ 
       ...prev, 
-      [name]: name === "jobRoleLevelId" || name === "yearsOfExp" || name === "ratePerMonth" ? 
+      [name]: name === "jobRoleLevelId" || name === "yearsOfExp" ? 
               (value === "" ? undefined : Number(value)) : value 
     }));
   };
@@ -331,17 +357,26 @@ export default function TalentJobRoleLevelCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <DollarSign className="w-4 h-4" />
-                    Mức lương/tháng (VNĐ)
+                    Mức lương/tháng
                   </label>
-                  <input
-                    type="number"
-                    name="ratePerMonth"
-                    value={form.ratePerMonth || ""}
-                    onChange={handleChange}
-                    min={0}
-                    placeholder="Nhập mức lương..."
-                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="ratePerMonth"
+                      value={form.ratePerMonth ? formatCurrency(form.ratePerMonth) : ""}
+                      onChange={handleChange}
+                      placeholder="VD: 5.000.000"
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 pr-12 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
+                      VNĐ
+                    </span>
+                  </div>
+                  {form.ratePerMonth && (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Số tiền: {formatCurrency(form.ratePerMonth)} VNĐ
+                    </p>
+                  )}
                   <p className="text-xs text-neutral-500 mt-1">
                     Để trống nếu chưa xác định mức lương
                   </p>

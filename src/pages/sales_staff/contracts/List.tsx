@@ -153,9 +153,15 @@ export default function ListClientContracts() {
           talentService.getAll({ excludeDeleted: true })
         ]);
 
+        // Sort by ID descending (ID lớn hơn = mới hơn) hoặc startDate nếu có
         const sortedContracts = [...contractsData].sort((a, b) => {
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          // Ưu tiên sort theo ID (mới nhất lên đầu)
+          if (b.id !== a.id) {
+            return b.id - a.id;
+          }
+          // Nếu ID bằng nhau, sort theo startDate
+          const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+          const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
           return dateB - dateA;
         });
 
@@ -217,6 +223,19 @@ export default function ListClientContracts() {
     if (filterProjectId !== null) {
       filtered = filtered.filter(c => c.projectId === filterProjectId);
     }
+    
+    // Sort lại để đảm bảo hợp đồng mới nhất lên đầu (theo ID hoặc startDate)
+    filtered.sort((a, b) => {
+      // Ưu tiên sort theo ID (mới nhất lên đầu)
+      if (b.id !== a.id) {
+        return b.id - a.id;
+      }
+      // Nếu ID bằng nhau, sort theo startDate
+      const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+      const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+      return dateB - dateA; // Mới nhất lên đầu
+    });
+    
     setFilteredContracts(filtered);
     setCurrentPage(1);
   }, [searchTerm, filterStatus, filterClientId, filterProjectId, contracts, clientsMap, projectsMap, talentsMap]);
@@ -317,21 +336,21 @@ export default function ListClientContracts() {
   };
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
+    <div className="flex bg-gray-50 min-h-screen overflow-x-hidden">
       <Sidebar items={sidebarItems} title="Sales Staff" />
 
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 sm:p-8 overflow-x-hidden max-w-full">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Hợp đồng</h1>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">Hợp đồng</h1>
               <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng với khách hàng</p>
             </div>
-            <Link to="/sales/contracts/create">
-              <button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
-                <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                Tạo hợp đồng mới
+            <Link to="/sales/contracts/create" className="flex-shrink-0">
+              <button className="group flex items-center gap-2 px-4 sm:px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 w-full sm:w-auto">
+                <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                <span className="whitespace-nowrap">Tạo hợp đồng mới</span>
               </button>
             </Link>
           </div>
@@ -436,9 +455,9 @@ export default function ListClientContracts() {
 
         {/* Search & Filters */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-6 animate-fade-in relative z-30">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <div className="flex flex-wrap items-center gap-4">
-              <div className="relative flex-1 min-w-[300px]">
+              <div className="relative flex-1 w-full sm:min-w-0 sm:max-w-full">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
@@ -729,77 +748,77 @@ export default function ListClientContracts() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="w-full">
+              <table className="w-full table-auto">
                 <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                   <tr>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Khách hàng</th>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Nhân sự</th>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
-                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
-                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
-                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider hidden md:table-cell">Khách hàng</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider hidden lg:table-cell">Nhân sự</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider hidden lg:table-cell">Dự án</th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider hidden xl:table-cell">Thời hạn</th>
+                    <th className="py-3 px-3 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
+                    <th className="py-3 px-3 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200">
                   {paginatedContracts.map((contract, index) => (
                     <tr key={contract.id} className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300">
-                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + index + 1}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary-500" />
-                          <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
+                      <td className="py-3 px-3 text-sm font-medium text-neutral-900">{startIndex + index + 1}</td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <FileText className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                          <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300 truncate" title={contract.contractNumber}>
                             {contract.contractNumber}
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3 px-3 hidden md:table-cell">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <Building2 className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-                          <span className="text-sm text-neutral-700 truncate max-w-[200px]" title={getClientName(contract.clientCompanyId)}>
+                          <span className="text-sm text-neutral-700 truncate" title={getClientName(contract.clientCompanyId)}>
                             {getClientName(contract.clientCompanyId)}
                           </span>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3 px-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <User className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-                          <span className="text-sm text-neutral-700 truncate max-w-[180px]" title={getTalentName(contract.talentId)}>
+                          <span className="text-sm text-neutral-700 truncate" title={getTalentName(contract.talentId)}>
                             {getTalentName(contract.talentId)}
                           </span>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3 px-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <Briefcase className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-                          <span className="text-sm text-neutral-700 truncate max-w-[200px]" title={getProjectName(contract.projectId)}>
+                          <span className="text-sm text-neutral-700 truncate" title={getProjectName(contract.projectId)}>
                             {getProjectName(contract.projectId)}
                           </span>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm text-neutral-700">
-                            {new Date(contract.startDate).toLocaleDateString('vi-VN')}
-                            {contract.endDate ? ` - ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
+                      <td className="py-3 px-3 hidden xl:table-cell">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Calendar className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                          <span className="text-sm text-neutral-700 break-words">
+                            {new Date(contract.startDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {contract.endDate ? ` - ${new Date(contract.endDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}
                           </span>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
                           {getStatusText(contract.status)}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-center">
+                      <td className="py-3 px-3 text-center">
                         <Link
                           to={`/sales/contracts/${contract.id}`}
-                          className="group inline-flex items-center gap-1 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                          className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                         >
                           <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                          <span className="text-sm font-medium">Xem</span>
+                          <span className="text-xs font-medium hidden sm:inline">Xem</span>
                         </Link>
                       </td>
                     </tr>
