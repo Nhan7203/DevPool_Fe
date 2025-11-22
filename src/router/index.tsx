@@ -89,6 +89,10 @@ const MarketDetailPage = React.lazy(() => import('../pages/admin/Categories/mark
 const MarketEditPage = React.lazy(() => import('../pages/admin/Categories/markets/Edit'));
 const MarketListPage = React.lazy(() => import('../pages/admin/Categories/markets/List'));
 
+// Audit Log
+const AuditLogListPage = React.lazy(() => import('../pages/admin/AuditLog/List'));
+const AuditLogDetailPage = React.lazy(() => import('../pages/admin/AuditLog/Detail'));
+
 // Categories - Skills
 const SkillCreatePage = React.lazy(() => import('../pages/admin/Categories/skill/Create'));
 const SkillDetailPage = React.lazy(() => import('../pages/admin/Categories/skill/Detail'));
@@ -575,6 +579,10 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.DETAIL} element={<SkillGroupDetailPage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.CREATE} element={<SkillGroupCreatePage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.EDIT} element={<SkillGroupEditPage />} />
+              
+              {/* Audit Log */}
+              <Route path={ROUTES.ADMIN.AUDIT.LIST} element={<AuditLogListPage />} />
+              <Route path={ROUTES.ADMIN.AUDIT.DETAIL} element={<AuditLogDetailPage />} />
             </Route>
           </Route>
 

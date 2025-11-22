@@ -92,6 +92,33 @@ export default function JobRoleLevelEditPage() {
     }
 
     try {
+      // Kiểm tra trùng tên và cấp độ (loại trừ bản ghi hiện tại)
+      const existingJobRoleLevels = await jobRoleLevelService.getAll({ 
+        excludeDeleted: true,
+        name: formData.name.trim(),
+        level: formData.level
+      }) as any[];
+      
+      const levelNames: Record<number, string> = {
+        0: "Junior",
+        1: "Middle",
+        2: "Senior",
+        3: "Lead"
+      };
+      
+      if (existingJobRoleLevels && existingJobRoleLevels.length > 0) {
+        const duplicate = existingJobRoleLevels.find(
+          (jrl: any) => jrl.id !== Number(id) // Loại trừ bản ghi hiện tại
+            && jrl.name.trim().toLowerCase() === formData.name.trim().toLowerCase() 
+            && jrl.level === formData.level
+        );
+        
+        if (duplicate) {
+          alert(`⚠️ Vị trí với tên "${formData.name}" và cấp độ "${levelNames[formData.level]}" đã tồn tại. Vui lòng chọn tên hoặc cấp độ khác.`);
+          return;
+        }
+      }
+
       await jobRoleLevelService.update(Number(id), formData);
       alert("✅ Cập nhật vị trí tuyển dụng thành công!");
       // Quay về trang chi tiết job role level, hoặc về job role nếu có
@@ -100,9 +127,9 @@ export default function JobRoleLevelEditPage() {
       } else {
         navigate(`/admin/categories/job-role-levels/${id}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Lỗi cập nhật:", err);
-      alert("Không thể cập nhật vị trí tuyển dụng!");
+      alert(err.message || "Không thể cập nhật vị trí tuyển dụng!");
     }
   };
 

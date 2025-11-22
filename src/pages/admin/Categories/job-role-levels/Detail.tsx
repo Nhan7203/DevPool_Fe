@@ -5,7 +5,7 @@ import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../../services/JobRoleLevel";
 import { Button } from "../../../../components/ui/button";
 import { jobRoleService } from "../../../../services/JobRole";
-import { Layers3, Building2, ArrowLeft } from "lucide-react";
+import { Layers3, ArrowLeft } from "lucide-react";
 
 export default function JobRoleLevelDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -143,25 +143,10 @@ export default function JobRoleLevelDetailPage() {
             </div>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
+            <InfoItem label="ID" value={jobRoleLevel.id.toString()} />
             <InfoItem label="Loại vị trí (Job Role)" value={jobRoleName} />
             <InfoItem label="Cấp độ" value={levelLabels[jobRoleLevel.level] || "—"} />
             <InfoItem label="Mô tả" value={jobRoleLevel.description || "Chưa có mô tả"} />
-          </div>
-        </div>
-
-        {/* Thông tin bổ sung */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-secondary-100 rounded-lg">
-                <Building2 className="w-5 h-5 text-secondary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin bổ sung</h2>
-            </div>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
-            <InfoItem label="ID" value={jobRoleLevel.id.toString()} />
-            <InfoItem label="Job Role" value={jobRoleName} />
           </div>
         </div>
       </div>
