@@ -427,6 +427,96 @@ const AccountantPartnerPeriods: React.FC = () => {
     loadPeriods();
   }, [selectedPartnerId]);
 
+  // Hàm helper để tạo contract payment cho các period đã tồn tại khi hợp đồng được duyệt sau
+  const createContractPaymentsForExistingPeriods = async () => {
+    if (!selectedPartnerId) return 0;
+
+    try {
+      // Lấy tất cả các period hiện có
+      const allPeriods = await partnerPaymentPeriodService.getAll({ 
+        partnerId: selectedPartnerId, 
+        excludeDeleted: true 
+      });
+      const allPeriodsData = allPeriods?.items ?? allPeriods ?? [];
+
+      // Lấy tất cả hợp đồng của đối tác đang ở trạng thái Active hoặc Ongoing
+      const contracts = await partnerContractService.getAll({ 
+        partnerId: selectedPartnerId,
+        excludeDeleted: true 
+      });
+      const contractsData = contracts?.items ?? contracts ?? [];
+      
+      // Lọc các hợp đồng đang hiệu lực (Active hoặc Ongoing)
+      const activeContracts = contractsData.filter((contract: PartnerContract) => 
+        contract.status === 'Active' || contract.status === 'Ongoing'
+      );
+
+      if (activeContracts.length === 0) return 0;
+
+      let createdPaymentsCount = 0;
+
+      // Duyệt qua từng period
+      for (const period of allPeriodsData) {
+        const periodYear = period.periodYear;
+        const periodMonth = period.periodMonth;
+
+        // Lấy tất cả contract payment hiện có của period này
+        const existingPayments = await partnerContractPaymentService.getAll({ 
+          partnerPeriodId: period.id, 
+          excludeDeleted: true 
+        });
+        const existingPaymentsData = existingPayments?.items ?? existingPayments ?? [];
+        const existingContractIds = new Set(
+          existingPaymentsData.map((p: PartnerContractPayment) => p.partnerContractId)
+        );
+
+        // Duyệt qua từng hợp đồng đang hiệu lực
+        for (const contract of activeContracts) {
+          // Bỏ qua nếu đã có contract payment cho hợp đồng này trong period này
+          if (existingContractIds.has(contract.id)) continue;
+
+          // Kiểm tra xem hợp đồng có hiệu lực trong tháng của period này không
+          if (!contract.startDate) continue;
+
+          const startDate = new Date(contract.startDate);
+          const endDate = contract.endDate ? new Date(contract.endDate) : new Date('2099-12-31');
+          
+          // Tính ngày đầu và ngày cuối của period (tháng)
+          const periodStartDate = new Date(periodYear, periodMonth - 1, 1);
+          const periodEndDate = new Date(periodYear, periodMonth, 0); // Ngày cuối cùng của tháng
+
+          // Kiểm tra xem period có giao với khoảng thời gian hiệu lực của hợp đồng không
+          // Period giao với hợp đồng nếu: periodStartDate <= endDate && periodEndDate >= startDate
+          if (periodStartDate <= endDate && periodEndDate >= startDate) {
+            try {
+              // Tạo contract payment
+              await partnerContractPaymentService.create({
+                partnerPeriodId: period.id,
+                partnerContractId: contract.id,
+                talentId: contract.talentId,
+                actualWorkHours: 0,
+                otHours: null,
+                calculatedAmount: null,
+                paidAmount: null,
+                paymentDate: null,
+                status: 'PendingCalculation',
+                notes: null
+              });
+              createdPaymentsCount++;
+            } catch (err) {
+              console.error(`Error creating contract payment for contract ${contract.id} in period ${period.id}:`, err);
+            }
+          }
+        }
+      }
+
+      return createdPaymentsCount;
+    } catch (err) {
+      console.error('Error creating contract payments for existing periods:', err);
+      return 0;
+    }
+  };
+
   // Hàm tạo period từ hợp đồng
   const handleCreatePeriods = async () => {
     if (!selectedPartnerId) return;
@@ -486,32 +576,30 @@ const AccountantPartnerPeriods: React.FC = () => {
         }
       });
 
-      // Hiển thị thông báo nếu không có period mới nào cần tạo
-      if (periodsToCreate.length === 0) {
-        setCreateMessage('Tất cả các kỳ thanh toán đã được tạo. Không có kỳ thanh toán mới nào cần tạo.');
-        setTimeout(() => setCreateMessage(null), 5000);
-        setCreatingPeriods(false);
-        return;
+      // Tạo các period mới (nếu có)
+      let successCount = 0;
+      if (periodsToCreate.length > 0) {
+        const createdPeriods = await Promise.all(
+          periodsToCreate.map(async ({ year, month }) => {
+            try {
+              return await partnerPaymentPeriodService.create({
+                partnerId: selectedPartnerId,
+                periodMonth: month,
+                periodYear: year,
+                status: 'Open'
+              });
+            } catch (e) {
+              console.error(`Error creating period ${year}-${month}:`, e);
+              return null;
+            }
+          })
+        );
+
+        successCount = createdPeriods.filter(p => p !== null).length;
       }
 
-      // Tạo các period
-      const createdPeriods = await Promise.all(
-        periodsToCreate.map(async ({ year, month }) => {
-          try {
-            return await partnerPaymentPeriodService.create({
-              partnerId: selectedPartnerId,
-              periodMonth: month,
-              periodYear: year,
-              status: 'Open'
-            });
-          } catch (e) {
-            console.error(`Error creating period ${year}-${month}:`, e);
-            return null;
-          }
-        })
-      );
-
-      const successCount = createdPeriods.filter(p => p !== null).length;
+      // Tạo contract payment cho các period đã tồn tại (bao gồm cả period mới tạo) khi hợp đồng được duyệt sau
+      const createdPaymentsCount = await createContractPaymentsForExistingPeriods();
       
       // Reload periods
       const updatedPeriods = await partnerPaymentPeriodService.getAll({ 
@@ -521,15 +609,23 @@ const AccountantPartnerPeriods: React.FC = () => {
       setPeriods(updatedPeriods?.items ?? updatedPeriods ?? []);
       
       // Hiển thị thông báo thành công
-      if (successCount > 0) {
-        setCreateMessage(`Đã tạo thành công ${successCount} kỳ thanh toán mới.`);
-        setTimeout(() => setCreateMessage(null), 5000);
+      let message = '';
+      if (successCount > 0 && createdPaymentsCount > 0) {
+        message = `Đã tạo thành công ${successCount} kỳ thanh toán mới và ${createdPaymentsCount} thanh toán hợp đồng cho các kỳ đã tồn tại.`;
+      } else if (successCount > 0) {
+        message = `Đã tạo thành công ${successCount} kỳ thanh toán mới.`;
+      } else if (createdPaymentsCount > 0) {
+        message = `Đã tạo thành công ${createdPaymentsCount} thanh toán hợp đồng cho các kỳ đã tồn tại.`;
       } else {
-        setCreateMessage('Không thể tạo kỳ thanh toán. Vui lòng thử lại.');
-        setTimeout(() => setCreateMessage(null), 5000);
+        message = 'Tất cả các kỳ thanh toán đã được tạo. Không có kỳ thanh toán mới nào cần tạo.';
       }
+      
+      setCreateMessage(message);
+      setTimeout(() => setCreateMessage(null), 5000);
     } catch (e) {
       console.error(e);
+      setCreateMessage('Có lỗi xảy ra khi tạo kỳ thanh toán. Vui lòng thử lại.');
+      setTimeout(() => setCreateMessage(null), 5000);
     } finally {
       setCreatingPeriods(false);
     }
