@@ -228,8 +228,9 @@ const AccountantDashboard = React.lazy(() => import('../pages/accountant_staff/D
 const AccountantStaffProfile = React.lazy(() => import('../pages/accountant_staff/Profile'));
 const AccountantClientContractDetail = React.lazy(() => import('../pages/accountant_staff/contracts/Detail'));
 const AccountantPartnerContractDetail = React.lazy(() => import('../pages/accountant_staff/contracts/PartnerDetail'));
-const AccountantClientPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/ClientPeriods'));
-const AccountantPartnerPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/PartnerPeriods'));
+const AccountantClientPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/client/ClientPeriods'));
+const AccountantPartnerPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/partner/PartnerPeriods'));
+const AccountantClientContractPaymentDetail = React.lazy(() => import('../pages/accountant_staff/payment-periods/client/ClientContractDetail'));
 const AccountantDocumentsList = React.lazy(() => import('../pages/accountant_staff/documents/List'));
 
 // ========================================
@@ -444,6 +445,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
               <Route path={ROUTES.ACCOUNTANT_STAFF.PROFILE} element={<AccountantStaffProfile />} />
               <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
+              <Route path="/accountant/payment-periods/clients/:id/detail" element={<AccountantClientContractPaymentDetail />} />
               <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
               <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
               <Route path="/accountant/contracts/clients/:id" element={<AccountantClientContractDetail />} />
