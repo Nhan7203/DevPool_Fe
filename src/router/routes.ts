@@ -440,7 +440,10 @@ export const ROUTES = {
       LOGS: '/admin/settings/logs',                  // System logs  
     },
 
-    AUDIT: '/admin/audit',                        // Audit logs
+    AUDIT: {
+      LIST: '/admin/audit-log',                   // Audit logs list
+      DETAIL: '/admin/audit-log/:entityName/:entityId', // Audit log detail for entity
+    },
   },
 
 

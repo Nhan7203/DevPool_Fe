@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Mail,
   Phone,
@@ -12,14 +13,64 @@ import {
 } from "lucide-react";
 
 export default function ContactPage() {
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    company: "",
     subject: "",
     message: "",
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Tự động điền form khi có query params từ professional page
+  useEffect(() => {
+    const talentId = searchParams.get('talentId');
+    const talentCode = searchParams.get('talentCode');
+    const talentIds = searchParams.get('talentIds');
+    const talentCodes = searchParams.get('talentCodes');
+    
+    // Xử lý trường hợp liên hệ nhiều nhân sự (từ favorites)
+    if (talentIds && talentCodes) {
+      const codes = decodeURIComponent(talentCodes).split(',');
+      const codesText = codes.join(', ');
+      // Tự động điền tiêu đề với danh sách mã TAL
+      const subjectText = `Liên hệ về nhân sự: ${codesText}`;
+      // Tự động điền nội dung với danh sách mã TAL
+      const messageText = `Xin chào,\n\nTôi quan tâm đến các nhân sự có mã: ${codesText}.\n\nVui lòng liên hệ với tôi để trao đổi thêm.\n\nTrân trọng!`;
+      
+      setFormData(prev => ({
+        ...prev,
+        subject: subjectText,
+        message: messageText
+      }));
+    }
+    // Xử lý trường hợp liên hệ 1 nhân sự (từ card)
+    else if (talentId && talentCode) {
+      // Tự động điền tiêu đề với mã TAL
+      const subjectText = `Liên hệ về nhân sự ${talentCode}`;
+      // Tự động điền nội dung với mã TAL
+      const messageText = `Xin chào,\n\nTôi quan tâm đến nhân sự có mã ${talentCode}.\n\nVui lòng liên hệ với tôi để trao đổi thêm.\n\nTrân trọng!`;
+      
+      setFormData(prev => ({
+        ...prev,
+        subject: subjectText,
+        message: messageText
+      }));
+    }
+  }, [searchParams]);
+
+  // Tính toán số dòng dựa trên nội dung
+  const calculateRows = (text: string): number => {
+    if (!text) return 4;
+    // Mỗi dòng text có thể wrap, nên tính thêm dựa trên độ dài
+    const estimatedRows = text.split('\n').reduce((total, line) => {
+      // Giả sử mỗi dòng khoảng 50 ký tự thì wrap thành 2 dòng
+      return total + Math.max(1, Math.ceil(line.length / 50));
+    }, 0);
+    return Math.max(6, Math.min(estimatedRows, 15)); // Tối thiểu 6 dòng, tối đa 15 dòng
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +79,7 @@ export default function ContactPage() {
     setTimeout(() => {
       setLoading(false);
       setSuccess(true);
-      setFormData({ name: "", email: "", subject: "", message: "" });
+      setFormData({ name: "", email: "", company: "", subject: "", message: "" });
       setTimeout(() => setSuccess(false), 5000);
     }, 1500);
   };
@@ -121,7 +172,7 @@ export default function ContactPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Họ và tên
+                  Họ và tên <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -136,7 +187,7 @@ export default function ContactPage() {
 
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Email
+                  Email <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -151,7 +202,21 @@ export default function ContactPage() {
 
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Tiêu đề
+                  Công ty
+                </label>
+                <input
+                  type="text"
+                  name="company"
+                  value={formData.company}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
+                  placeholder="Nhập tên công ty (tùy chọn)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  Tiêu đề <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -166,14 +231,15 @@ export default function ContactPage() {
 
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Nội dung
+                  Nội dung <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="message"
                   required
                   value={formData.message}
                   onChange={handleChange}
-                  rows={4}
+                  rows={calculateRows(formData.message)}
+                  style={{ minHeight: '150px', resize: 'vertical' }}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
                   placeholder="Nhập nội dung tin nhắn"
                 ></textarea>

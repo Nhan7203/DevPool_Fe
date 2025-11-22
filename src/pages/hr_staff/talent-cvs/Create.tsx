@@ -75,7 +75,10 @@ export default function TalentCVCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const jobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const jobRoleLevels = await jobRoleLevelService.getAll({ 
+          excludeDeleted: true,
+          distinctByName: true 
+        });
         setAllJobRoleLevels(Array.isArray(jobRoleLevels) ? jobRoleLevels : []);
       } catch (error) {
         console.error("❌ Error loading job role levels", error);

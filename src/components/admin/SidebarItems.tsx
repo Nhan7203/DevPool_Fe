@@ -1,4 +1,4 @@
-import { BarChart3, Grid, Users } from "lucide-react";
+import { BarChart3, Grid, Users, History } from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -59,6 +59,11 @@ export const sidebarItems = [
       },
       // { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },
     ]
+  },
+  {
+    label: 'Audit Log',
+    href: '/admin/audit-log',
+    icon: History
   },
   // {
   //   label: 'Cài Đặt',

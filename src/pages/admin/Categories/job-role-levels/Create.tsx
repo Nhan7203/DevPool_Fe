@@ -79,6 +79,33 @@ export default function JobRoleLevelCreatePage() {
     }
 
     try {
+      // Kiểm tra trùng tên và cấp độ
+      const existingJobRoleLevels = await jobRoleLevelService.getAll({ 
+        excludeDeleted: true,
+        name: formData.name.trim(),
+        level: formData.level
+      }) as any[];
+      
+      const levelNames: Record<number, string> = {
+        0: "Junior",
+        1: "Middle",
+        2: "Senior",
+        3: "Lead"
+      };
+      
+      if (existingJobRoleLevels && existingJobRoleLevels.length > 0) {
+        const duplicate = existingJobRoleLevels.find(
+          (jrl: any) => jrl.name.trim().toLowerCase() === formData.name.trim().toLowerCase() 
+            && jrl.level === formData.level
+        );
+        
+        if (duplicate) {
+          setError(`⚠️ Vị trí với tên "${formData.name}" và cấp độ "${levelNames[formData.level]}" đã tồn tại. Vui lòng chọn tên hoặc cấp độ khác.`);
+          setLoading(false);
+          return;
+        }
+      }
+
       await jobRoleLevelService.create(formData);
       setSuccess(true);
       // Nếu có jobRoleId từ query, quay lại trang detail của job role
@@ -87,9 +114,9 @@ export default function JobRoleLevelCreatePage() {
       } else {
         setTimeout(() => navigate("/admin/categories/job-roles"), 1500);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Lỗi tạo vị trí:", err);
-      setError("Không thể tạo vị trí. Vui lòng thử lại.");
+      setError(err.message || "Không thể tạo vị trí. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }

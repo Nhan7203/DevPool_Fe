@@ -48,7 +48,22 @@ export default function ProfessionalClientPage() {
     const [selectedExperience, setSelectedExperience] = useState("Tất cả");
     const [showFilters, setShowFilters] = useState(false);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
+    const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+    const [selectedForContact, setSelectedForContact] = useState<Set<string>>(new Set());
     const [sortBy, setSortBy] = useState("projects");
+
+    // Load favorites từ localStorage khi component mount
+    useEffect(() => {
+        try {
+            const savedFavorites = localStorage.getItem('professional_favorites');
+            if (savedFavorites) {
+                const favoritesArray = JSON.parse(savedFavorites);
+                setFavorites(new Set(favoritesArray));
+            }
+        } catch (error) {
+            console.error("❌ Lỗi khi tải favorites từ localStorage:", error);
+        }
+    }, []);
 
     // Fetch data from API
     useEffect(() => {
@@ -197,6 +212,11 @@ export default function ProfessionalClientPage() {
 
     const filteredProfessionals = useMemo(() => {
         const filtered = professionals.filter((professional) => {
+            // Filter: Chỉ hiển thị favorites nếu showOnlyFavorites = true
+            if (showOnlyFavorites && !favorites.has(professional.id)) {
+                return false;
+            }
+
             const matchesSearch =
                 professional.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 professional.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -240,8 +260,16 @@ export default function ProfessionalClientPage() {
             );
         });
 
-        // Sort professionals
+        // Sort professionals - Favorites luôn lên đầu, sau đó sort theo sortBy
         filtered.sort((a, b) => {
+            const aIsFavorite = favorites.has(a.id);
+            const bIsFavorite = favorites.has(b.id);
+            
+            // Favorites luôn lên đầu
+            if (aIsFavorite && !bIsFavorite) return -1;
+            if (!aIsFavorite && bIsFavorite) return 1;
+            
+            // Nếu cả hai cùng favorite hoặc cùng không favorite, sort theo sortBy
             switch (sortBy) {
                 case "name":
                     return a.name.localeCompare(b.name, 'vi');
@@ -265,17 +293,41 @@ export default function ProfessionalClientPage() {
         selectedExperience,
         sortBy,
         professionals,
+        favorites,
+        showOnlyFavorites,
     ]);
 
     // Các hàm xử lý sự kiện
     const toggleFavorite = (professionalId: string) => {
         const newFavorites = new Set(favorites);
+        const professional = professionals.find(p => p.id === professionalId);
+        const talentCode = professionalId ? `TAL-${String(professionalId).padStart(3, '0')}` : '';
+        
         if (newFavorites.has(professionalId)) {
+            // Xóa khỏi favorites
             newFavorites.delete(professionalId);
+            // Hiển thị thông báo
+            if (professional) {
+                console.log(`Đã xóa ${professional.name} (${talentCode}) khỏi danh sách yêu thích`);
+            }
         } else {
+            // Thêm vào favorites
             newFavorites.add(professionalId);
+            // Hiển thị thông báo
+            if (professional) {
+                console.log(`Đã thêm ${professional.name} (${talentCode}) vào danh sách yêu thích`);
+            }
         }
+        
         setFavorites(newFavorites);
+        
+        // Lưu vào localStorage
+        try {
+            const favoritesArray = Array.from(newFavorites);
+            localStorage.setItem('professional_favorites', JSON.stringify(favoritesArray));
+        } catch (error) {
+            console.error("❌ Lỗi khi lưu favorites vào localStorage:", error);
+        }
     };
 
     const clearFilters = () => {
@@ -284,6 +336,56 @@ export default function ProfessionalClientPage() {
         setSelectedStatus("Tất cả");
         setSelectedExperience("Tất cả");
         setSearchTerm("");
+        setShowOnlyFavorites(false);
+        setSelectedForContact(new Set());
+    };
+
+    // Toggle chọn nhân sự để liên hệ
+    const toggleSelectForContact = (id: string) => {
+        setSelectedForContact(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
+
+    // Chọn tất cả / Bỏ chọn tất cả
+    const toggleSelectAll = () => {
+        if (showOnlyFavorites) {
+            // Khi showOnlyFavorites = true, filteredProfessionals đã chỉ chứa favorites
+            const favoriteIds = filteredProfessionals.map(p => p.id);
+            
+            if (selectedForContact.size === favoriteIds.length && favoriteIds.length > 0) {
+                setSelectedForContact(new Set());
+            } else {
+                setSelectedForContact(new Set(favoriteIds));
+            }
+        }
+    };
+
+    // Điều hướng đến trang contact với danh sách nhân sự đã chọn
+    const handleBulkContact = () => {
+        if (selectedForContact.size === 0) {
+            alert("Vui lòng chọn ít nhất một nhân sự để liên hệ!");
+            return;
+        }
+
+        const selectedProfessionals = professionals.filter(p => selectedForContact.has(p.id));
+        const formatTalentCode = (id: string): string => {
+            const numId = parseInt(id);
+            if (isNaN(numId)) return `TAL-${id}`;
+            return `TAL-${String(numId).padStart(3, '0')}`;
+        };
+
+        const talentIds = selectedProfessionals.map(p => p.id).join(',');
+        const talentCodes = selectedProfessionals.map(p => formatTalentCode(p.id)).join(',');
+        
+        // Điều hướng đến trang contact với query params
+        window.location.href = `/contact?talentIds=${talentIds}&talentCodes=${encodeURIComponent(talentCodes)}`;
     };
 
     if (loading) {
@@ -345,22 +447,83 @@ export default function ProfessionalClientPage() {
                     clearFilters={clearFilters}
                 />
 
-                {/* Results Count */}
-                <div className="flex items-center justify-between mb-6">
-                    <p className="text-neutral-600 font-medium">
-                        Tìm thấy{" "}
-                        <span className="font-bold text-primary-600">
-                            {filteredProfessionals.length}
-                        </span>{" "}
-                        chuyên gia IT
-                    </p>
+                {/* Results Count & Favorites Info */}
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                    <div className="flex items-center gap-6 flex-wrap">
+                        <p className="text-neutral-600 font-medium">
+                            Tìm thấy{" "}
+                            <span className="font-bold text-primary-600">
+                                {filteredProfessionals.length}
+                            </span>{" "}
+                            chuyên gia IT
+                        </p>
+                        {favorites.size > 0 && (
+                            <p className="text-neutral-600 font-medium">
+                                Đã lưu{" "}
+                                <span className="font-bold text-red-500">
+                                    {favorites.size}
+                                </span>{" "}
+                                yêu thích
+                            </p>
+                        )}
+                    </div>
+                    {favorites.size > 0 && (
+                        <button
+                            onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-medium transform hover:scale-105 ${
+                                showOnlyFavorites
+                                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                                    : 'bg-white border-2 border-red-300 text-red-600 hover:bg-red-50'
+                            }`}
+                        >
+                            <svg className="w-5 h-5" fill={showOnlyFavorites ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            {showOnlyFavorites ? 'Hiển thị tất cả' : `Chỉ hiển thị yêu thích (${favorites.size})`}
+                        </button>
+                    )}
                 </div>
+
+                {/* Bulk Contact Actions - Chỉ hiển thị khi đang xem favorites */}
+                {showOnlyFavorites && favorites.size > 0 && (
+                    <div className="mb-6 p-4 bg-gradient-to-r from-primary-50 to-secondary-50 rounded-2xl border-2 border-primary-200 flex items-center justify-between flex-wrap gap-4">
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <button
+                                onClick={toggleSelectAll}
+                                className="px-4 py-2 bg-white border-2 border-primary-300 text-primary-700 rounded-xl font-medium hover:bg-primary-50 transition-all duration-300 shadow-soft hover:shadow-medium"
+                            >
+                                {selectedForContact.size === filteredProfessionals.length && filteredProfessionals.length > 0
+                                    ? 'Bỏ chọn tất cả' 
+                                    : 'Chọn tất cả'}
+                            </button>
+                            {selectedForContact.size > 0 && (
+                                <p className="text-neutral-700 font-medium">
+                                    Đã chọn <span className="font-bold text-primary-600">{selectedForContact.size}</span> nhân sự
+                                </p>
+                            )}
+                        </div>
+                        {selectedForContact.size > 0 && (
+                            <button
+                                onClick={handleBulkContact}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl font-semibold hover:from-primary-700 hover:to-primary-800 transition-all duration-300 shadow-glow hover:shadow-glow-lg transform hover:scale-105"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                Liên hệ ({selectedForContact.size})
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {filteredProfessionals.length > 0 ? (
                     <ProfessionalList
                         professionals={filteredProfessionals}
                         favorites={favorites}
                         onToggleFavorite={toggleFavorite}
+                        showOnlyFavorites={showOnlyFavorites}
+                        selectedForContact={selectedForContact}
+                        onToggleSelectForContact={toggleSelectForContact}
                     />
                 ) : (
                     <EmptyState onClearFilters={clearFilters} />

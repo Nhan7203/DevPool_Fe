@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, CheckCircle, Heart, Briefcase as BriefcaseIcon, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 import type { Professional } from './types';
 
@@ -8,6 +9,9 @@ interface ProfessionalCardProps {
     professional: Professional;
     isFavorite: boolean;
     onToggleFavorite: (id: string) => void;
+    showOnlyFavorites?: boolean;
+    isSelectedForContact?: boolean;
+    onToggleSelectForContact?: (id: string) => void;
 }
 
 // Lấy tên rút gọn (tên cuối cùng trong họ tên)
@@ -67,7 +71,15 @@ const getSkillLevelColor = (level: string) => {
 // Default avatar
 const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff&size=150';
 
-export default function ProfessionalCard({ professional, isFavorite, onToggleFavorite }: ProfessionalCardProps) {
+export default function ProfessionalCard({ 
+    professional, 
+    isFavorite, 
+    onToggleFavorite,
+    showOnlyFavorites = false,
+    isSelectedForContact = false,
+    onToggleSelectForContact
+}: ProfessionalCardProps) {
+    const navigate = useNavigate();
     const [isBioExpanded, setIsBioExpanded] = useState(false);
     const shortName = getShortName(professional.name);
     const avatarUrl = professional.avatar || DEFAULT_AVATAR;
@@ -77,10 +89,32 @@ export default function ProfessionalCard({ professional, isFavorite, onToggleFav
     const bioText = professional.bio || professional.description || '';
     const shouldShowExpandButton = bioText.length > 100; // Hiển thị nút nếu bio dài hơn 100 ký tự
 
+    const handleContact = () => {
+        // Điều hướng đến trang contact với query params chứa talentId và talentCode
+        navigate(`/contact?talentId=${professional.id}&talentCode=${encodeURIComponent(talentCode)}`);
+    };
+
     return (
         <div
-            className="group relative bg-white/90 backdrop-blur-sm rounded-3xl shadow-soft hover:shadow-strong border border-neutral-200 hover:border-primary-300 p-6 transition-all duration-500 transform hover:scale-102 hover:-translate-y-2 flex flex-col h-full"
+            className={`group relative bg-white/90 backdrop-blur-sm rounded-3xl shadow-soft hover:shadow-strong border transition-all duration-500 transform hover:scale-102 hover:-translate-y-2 flex flex-col h-full p-6 ${
+                isSelectedForContact 
+                    ? 'border-primary-500 ring-2 ring-primary-300' 
+                    : 'border-neutral-200 hover:border-primary-300'
+            }`}
         >
+            {/* Checkbox để chọn liên hệ - Chỉ hiển thị khi showOnlyFavorites = true */}
+            {showOnlyFavorites && onToggleSelectForContact && (
+                <div className="absolute top-4 left-4 z-10">
+                    <input
+                        type="checkbox"
+                        checked={isSelectedForContact}
+                        onChange={() => onToggleSelectForContact(professional.id)}
+                        className="w-6 h-6 text-primary-600 border-2 border-neutral-300 rounded-lg focus:ring-primary-500 focus:ring-2 cursor-pointer shadow-md hover:border-primary-400 transition-all duration-200"
+                        style={{ accentColor: '#6366f1' }}
+                    />
+                </div>
+            )}
+
             {/* Header: Avatar, Name, Position, Favorite */}
             <div className="flex items-start justify-between mb-5">
                 <div className="flex items-center space-x-4 flex-1 min-w-0">
@@ -216,6 +250,7 @@ export default function ProfessionalCard({ professional, isFavorite, onToggleFav
             <div className="mt-4 pt-4 border-t border-neutral-200">
                 <div className="flex items-center gap-3">
                     <button
+                        onClick={handleContact}
                         className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-2.5 rounded-xl hover:from-primary-700 hover:to-primary-800 font-semibold text-sm transition-all duration-300 shadow-glow hover:shadow-glow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
                     >
                         <Phone className="w-4 h-4" />

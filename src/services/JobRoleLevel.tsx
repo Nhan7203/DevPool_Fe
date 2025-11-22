@@ -30,6 +30,7 @@ export interface JobRoleLevelFilter {
   name?: string;
   level?: TalentLevel;
   excludeDeleted?: boolean;
+  distinctByName?: boolean;
 }
 
 export const jobRoleLevelService = {
@@ -43,6 +44,8 @@ export const jobRoleLevelService = {
       if (filter?.level !== undefined) params.append("Level", filter.level.toString());
       if (filter?.excludeDeleted !== undefined)
         params.append("ExcludeDeleted", filter.excludeDeleted ? "true" : "false");
+      if (filter?.distinctByName !== undefined)
+        params.append("DistinctByName", filter.distinctByName ? "true" : "false");
 
       const url = `/jobrolelevel${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
