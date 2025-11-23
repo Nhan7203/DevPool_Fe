@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { jobRequestService, JobRequestStatus } from "../../../services/JobRequest";
@@ -39,6 +39,7 @@ import { clientCompanyService, type ClientCompany } from "../../../services/Clie
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -159,6 +160,37 @@ export default function JobRequestCreatePage() {
       console.error("Không thể gửi thông báo tới HR:", notifyError);
     }
   }, [user]);
+
+  // Pre-fill form from query params (from Contact Inquiry)
+  useEffect(() => {
+    const contactInquiryId = searchParams.get('contactInquiryId');
+    const title = searchParams.get('title');
+    const description = searchParams.get('description');
+    const requirements = searchParams.get('requirements');
+    const company = searchParams.get('company');
+
+    if (contactInquiryId) {
+      // Pre-fill form with data from contact inquiry
+      setForm(prev => ({
+        ...prev,
+        title: title ? decodeURIComponent(title) : prev.title,
+        description: description ? decodeURIComponent(description) : prev.description,
+        requirements: requirements ? decodeURIComponent(requirements) : prev.requirements,
+      }));
+
+      // If company name is provided, try to find and select it
+      if (company && companies.length > 0) {
+        const companyName = decodeURIComponent(company);
+        const foundCompany = companies.find(c => 
+          c.name.toLowerCase() === companyName.toLowerCase()
+        );
+        if (foundCompany) {
+          setSelectedClientId(foundCompany.id);
+          setCompanySearch(foundCompany.name);
+        }
+      }
+    }
+  }, [searchParams, companies]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -363,6 +395,8 @@ export default function JobRequestCreatePage() {
     !applyTemplateSearch || t.name.toLowerCase().includes(applyTemplateSearch.toLowerCase())
   );
 
+  const contactInquiryId = searchParams.get('contactInquiryId');
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
@@ -397,6 +431,20 @@ export default function JobRequestCreatePage() {
             </div>
           </div>
         </div>
+
+        {/* Info banner when pre-filled from Contact Inquiry */}
+        {contactInquiryId && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-blue-900 font-medium mb-1">Thông tin đã được điền sẵn từ Yêu Cầu Liên Hệ</p>
+              <p className="text-blue-700 text-sm">
+                Mô tả công việc và Yêu cầu ứng viên đã được tự động điền từ nội dung yêu cầu liên hệ. 
+                Bạn có thể chỉnh sửa các trường này nếu cần.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in">

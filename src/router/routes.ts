@@ -191,6 +191,10 @@ export const ROUTES = {
       EDIT: '/sales/projects/edit/:id',
       CREATE: '/sales/projects/create',
     },
+    CONTACT_INQUIRIES: {
+      LIST: '/sales/contact-inquiries',
+      DETAIL: '/sales/contact-inquiries/:id',
+    },
     MARKETS: {
       LIST: '/sales/markets',
       DETAIL: '/sales/markets/:id',
