@@ -177,11 +177,6 @@ export default function ClientContractDetailPage() {
         return new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ';
     };
 
-    const getTotalAmount = (): number => {
-        if (!payment) return 0;
-        return payment.calculatedAmount || 0;
-    };
-
     const groupDocumentsByType = (): Array<[string, ClientDocument[]]> => {
         const groups: Record<string, ClientDocument[]> = {
             'Sao kê / Ủy nhiệm chi': [],
