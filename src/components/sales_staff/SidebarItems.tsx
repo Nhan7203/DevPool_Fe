@@ -5,6 +5,7 @@ import {
   Building,
   Briefcase,
   ClipboardList,
+  Mail,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -57,6 +58,11 @@ export const sidebarItems = [
     //   { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
     //   { label: 'Tạo Hợp Đồng', href: '/sales/contracts/create' },
     // ]
+  },
+  {
+    label: 'Yêu Cầu Liên Hệ',
+    href: '/sales/contact-inquiries',
+    icon: Mail, // email/liên hệ
   },
   // {
   //   label: 'Tạo tài liệu khách hàng',

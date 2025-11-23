@@ -10,7 +10,9 @@ import {
   MessageSquare,
   Clock,
   CheckCircle,
+  AlertCircle,
 } from "lucide-react";
+import { contactInquiryService } from "../../../services/ContactInquiry";
 
 export default function ContactPage() {
   const [searchParams] = useSearchParams();
@@ -23,6 +25,8 @@ export default function ContactPage() {
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Tự động điền form khi có query params từ professional page
   useEffect(() => {
@@ -74,14 +78,51 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate email before submit
+    if (!validateEmail(formData.email.trim())) {
+      setEmailError('Email không hợp lệ. Vui lòng nhập đúng định dạng email.');
+      return;
+    }
+    
     setLoading(true);
-    // TODO: Implement form submission
-    setTimeout(() => {
-      setLoading(false);
+    setError(null);
+    setEmailError(null);
+    setSuccess(false);
+
+    try {
+      // Map form data to API payload
+      const payload = {
+        fullName: formData.name.trim(),
+        email: formData.email.trim(),
+        company: formData.company?.trim() || null,
+        subject: formData.subject.trim(),
+        content: formData.message.trim(),
+      };
+
+      // Call API
+      await contactInquiryService.submitInquiry(payload);
+
+      // Success
       setSuccess(true);
       setFormData({ name: "", email: "", company: "", subject: "", message: "" });
+      
+      // Hide success message after 5 seconds
       setTimeout(() => setSuccess(false), 5000);
-    }, 1500);
+    } catch (err: any) {
+      console.error("❌ Lỗi gửi yêu cầu liên hệ:", err);
+      setError(
+        err?.message || "Không thể gửi yêu cầu liên hệ. Vui lòng thử lại sau."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Email validation regex
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   const handleChange = (
@@ -89,6 +130,17 @@ export default function ContactPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Validate email in real-time
+    if (name === 'email') {
+      if (value.trim() === '') {
+        setEmailError(null);
+      } else if (!validateEmail(value.trim())) {
+        setEmailError('Email không hợp lệ. Vui lòng nhập đúng định dạng email.');
+      } else {
+        setEmailError(null);
+      }
+    }
   };
 
   return (
@@ -195,9 +247,19 @@ export default function ContactPage() {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-300"
+                  className={`w-full px-4 py-3 rounded-xl border transition-all duration-300 ${
+                    emailError
+                      ? 'border-red-300 focus:ring-2 focus:ring-red-500/20 focus:border-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500'
+                  }`}
                   placeholder="example@email.com"
                 />
+                {emailError && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {emailError}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -247,7 +309,7 @@ export default function ContactPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !!emailError || !validateEmail(formData.email.trim())}
                 className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white px-8 py-4 rounded-xl hover:from-primary-700 hover:to-primary-800 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -264,9 +326,16 @@ export default function ContactPage() {
               </button>
 
               {success && (
-                <div className="flex items-center gap-2 text-success-600 bg-success-50 p-4 rounded-xl animate-fade-in">
+                <div className="flex items-center gap-2 text-success-600 bg-success-50 p-4 rounded-xl animate-fade-in border border-success-200">
                   <CheckCircle className="w-5 h-5" />
-                  <span>Tin nhắn đã được gửi thành công!</span>
+                  <span>Tin nhắn đã được gửi thành công! Chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.</span>
+                </div>
+              )}
+
+              {error && (
+                <div className="flex items-start gap-2 text-red-600 bg-red-50 p-4 rounded-xl animate-fade-in border border-red-200">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
                 </div>
               )}
             </form>

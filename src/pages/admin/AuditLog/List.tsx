@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/admin/SidebarItems";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { 
   Search, 
   Filter,
@@ -26,16 +26,6 @@ function formatDate(iso: string) {
   });
 }
 
-function formatAction(action: string) {
-  const actionMap: Record<string, string> = {
-    'Create': 'Tạo mới',
-    'Update': 'Cập nhật',
-    'Delete': 'Xóa',
-    'StatusChange': 'Thay đổi trạng thái',
-    'TransferOwnership': 'Chuyển quyền sở hữu'
-  };
-  return actionMap[action] || action;
-}
 
 function getActionColor(action: string) {
   const colorMap: Record<string, string> = {
@@ -53,6 +43,7 @@ export default function AuditLogListPage() {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<AuditLogModel[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [userNames, setUserNames] = useState<Array<{ name: string; id: string }>>([]);
   
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -94,6 +85,43 @@ export default function AuditLogListPage() {
       setLoading(false);
     }
   };
+
+  // Fetch unique user names from all logs
+  const fetchUserNames = async () => {
+    try {
+      // Fetch a large number of logs to get all unique user names
+      const result = await auditLogService.getAll({
+        pageNumber: 1,
+        pageSize: 1000,
+        excludeDeleted: true
+      });
+      
+      // Extract unique user names with their IDs
+      const userMap = new Map<string, string>();
+      result.data.forEach((log: AuditLogModel) => {
+        if (log.changedByName && log.changedBy) {
+          userMap.set(log.changedByName, log.changedBy);
+        } else if (log.changedBy) {
+          // If no name, use ID as name
+          userMap.set(log.changedBy, log.changedBy);
+        }
+      });
+      
+      // Convert to array and sort by name
+      const userList = Array.from(userMap.entries())
+        .map(([name, id]) => ({ name, id }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      setUserNames(userList);
+    } catch (err) {
+      // Silent fail - không ảnh hưởng đến việc hiển thị logs
+    }
+  };
+
+  // Fetch user names on mount
+  useEffect(() => {
+    fetchUserNames();
+  }, []);
 
   // Fetch logs when filters change
   useEffect(() => {
@@ -164,7 +192,7 @@ export default function AuditLogListPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Audit Log</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Nhật ký kiểm toán</h1>
               <p className="text-neutral-600 mt-1">Theo dõi và xem lịch sử thay đổi của hệ thống</p>
             </div>
           </div>
@@ -217,7 +245,7 @@ export default function AuditLogListPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm theo entity name, action..."
+                  placeholder="Tìm kiếm theo tên thực thể, hành động..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   value={filters.entityName || ''}
                   onChange={(e) => handleFilterChange('entityName', e.target.value || undefined)}
@@ -236,7 +264,7 @@ export default function AuditLogListPage() {
               <div className="mt-4 pt-4 border-t border-neutral-200">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">Entity Name</label>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">Tên thực thể</label>
                     <input
                       type="text"
                       placeholder="VD: JobRequest, TalentApplication"
@@ -246,39 +274,44 @@ export default function AuditLogListPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">Entity ID</label>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">ID thực thể</label>
                     <input
                       type="number"
-                      placeholder="ID của entity"
+                      placeholder="ID của thực thể"
                       className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500"
                       value={filters.entityId || ''}
                       onChange={(e) => handleFilterChange('entityId', e.target.value ? parseInt(e.target.value) : undefined)}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">Action</label>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">Hành động</label>
                     <select
                       className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500"
                       value={filters.action || ''}
                       onChange={(e) => handleFilterChange('action', e.target.value || undefined)}
                     >
                       <option value="">Tất cả</option>
-                      <option value="Create">Create</option>
-                      <option value="Update">Update</option>
-                      <option value="Delete">Delete</option>
-                      <option value="StatusChange">StatusChange</option>
-                      <option value="TransferOwnership">TransferOwnership</option>
+                      <option value="Create">Tạo mới</option>
+                      <option value="Update">Cập nhật</option>
+                      <option value="Delete">Xóa</option>
+                      <option value="StatusChange">Thay đổi trạng thái</option>
+                      <option value="TransferOwnership">Chuyển quyền sở hữu</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">Changed By</label>
-                    <input
-                      type="text"
-                      placeholder="User ID"
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">Người thay đổi</label>
+                    <select
                       className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500"
                       value={filters.changedBy || ''}
                       onChange={(e) => handleFilterChange('changedBy', e.target.value || undefined)}
-                    />
+                    >
+                      <option value="">Tất cả</option>
+                      {userNames.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-2">Từ ngày</label>
@@ -346,9 +379,9 @@ export default function AuditLogListPage() {
               <thead className="bg-gray-50 text-gray-600 text-sm">
                 <tr>
                   <th className="px-4 py-3">Thời gian</th>
-                  <th className="px-4 py-3">Entity</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Field</th>
+                  <th className="px-4 py-3">Thực thể</th>
+                  <th className="px-4 py-3">Hành động</th>
+                  <th className="px-4 py-3">Trường</th>
                   <th className="px-4 py-3">Người thay đổi</th>
                   <th className="px-4 py-3">Giá trị cũ</th>
                   <th className="px-4 py-3">Giá trị mới</th>
@@ -385,7 +418,7 @@ export default function AuditLogListPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-lg text-xs font-medium ${getActionColor(log.action)}`}>
-                          {formatAction(log.action)}
+                          {log.action}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">

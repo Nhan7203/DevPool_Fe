@@ -225,6 +225,10 @@ const SalesApplyProcessStepListPage = React.lazy(() => import('../pages/sales_st
 // Payment Periods
 const SalesClientPeriods = React.lazy(() => import('../pages/sales_staff/payment-periods/ClientPeriods'));
 
+// Contact Inquiries
+const ContactInquiryListPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/List'));
+const ContactInquiryDetailPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/Detail'));
+
 // ========================================
 // ACCOUNTANT STAFF PAGES - Lazy Loading
 // ========================================
@@ -419,6 +423,10 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
               <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
               <Route path={ROUTES.SALES_STAFF.CONTRACTS.EDIT} element={<EditClientContractPage />} />
+
+              {/* Contact Inquiries */}
+              <Route path={ROUTES.SALES_STAFF.CONTACT_INQUIRIES.LIST} element={<ContactInquiryListPage />} />
+              <Route path={ROUTES.SALES_STAFF.CONTACT_INQUIRIES.DETAIL} element={<ContactInquiryDetailPage />} />
 
               {/* Applications */}
               <Route path={ROUTES.SALES_STAFF.APPLICATIONS.LIST} element={<SalesApplicationListPage />} />

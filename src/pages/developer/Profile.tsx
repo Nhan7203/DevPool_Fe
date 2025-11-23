@@ -35,6 +35,7 @@ export default function DeveloperProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Lookup data
   const [locationName, setLocationName] = useState<string>('—');
@@ -199,6 +200,44 @@ export default function DeveloperProfilePage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    const newErrors = { ...errors };
+
+    // Validate phone
+    if (name === 'phoneNumber') {
+      if (value && validatePhone(value)) {
+        delete newErrors.phoneNumber;
+      } else if (value && !validatePhone(value)) {
+        newErrors.phoneNumber = 'Số điện thoại phải có đúng 10 chữ số';
+      }
+    }
+
+    // Validate date of birth
+    if (name === 'dateOfBirth') {
+      if (value && validateDateOfBirth(value)) {
+        delete newErrors.dateOfBirth;
+      } else if (value && !validateDateOfBirth(value)) {
+        newErrors.dateOfBirth = 'Ngày sinh không hợp lệ (tuổi từ 18-100)';
+      }
+    }
+
+    // Validate URLs
+    if (name === 'githubUrl') {
+      if (value && validateURL(value)) {
+        delete newErrors.githubUrl;
+      } else if (value && !validateURL(value)) {
+        newErrors.githubUrl = 'URL không hợp lệ';
+      }
+    }
+
+    if (name === 'portfolioUrl') {
+      if (value && validateURL(value)) {
+        delete newErrors.portfolioUrl;
+      } else if (value && !validateURL(value)) {
+        newErrors.portfolioUrl = 'URL không hợp lệ';
+      }
+    }
+
+    setErrors(newErrors);
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -212,10 +251,39 @@ export default function DeveloperProfilePage() {
       return;
     }
 
+    // Validate all fields before submit
+    const newErrors: Record<string, string> = {};
+
+    // Validate phone
+    if (formData.phoneNumber && !validatePhone(formData.phoneNumber)) {
+      newErrors.phoneNumber = 'Số điện thoại phải có đúng 10 chữ số';
+    }
+
+    // Validate date of birth
+    if (formData.dateOfBirth && !validateDateOfBirth(formData.dateOfBirth)) {
+      newErrors.dateOfBirth = 'Ngày sinh không hợp lệ (tuổi từ 18-100)';
+    }
+
+    // Validate URLs
+    if (formData.githubUrl && !validateURL(formData.githubUrl)) {
+      newErrors.githubUrl = 'URL GitHub không hợp lệ';
+    }
+
+    if (formData.portfolioUrl && !validateURL(formData.portfolioUrl)) {
+      newErrors.portfolioUrl = 'URL Portfolio không hợp lệ';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setError('Vui lòng sửa các lỗi trước khi lưu');
+      return;
+    }
+
     try {
       setSaving(true);
       setError('');
       setSuccess(false);
+      setErrors({});
 
       // Get userId from token
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
@@ -308,6 +376,35 @@ export default function DeveloperProfilePage() {
     return workingModeLabels[modeNum] || workingMode;
   };
 
+  // Validation functions
+  const validatePhone = (phone: string): boolean => {
+    if (!phone || phone.trim() === '') return true; // Optional field
+    const phoneRegex = /^[0-9]{10}$/;
+    return phoneRegex.test(phone.replace(/\D/g, ''));
+  };
+
+  const validateDateOfBirth = (date: string): boolean => {
+    if (!date || date.trim() === '') return true; // Optional field
+    const birthDate = new Date(date);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      return age - 1 >= 18 && age - 1 <= 100;
+    }
+    return age >= 18 && age <= 100;
+  };
+
+  const validateURL = (url: string): boolean => {
+    if (!url || url.trim() === '') return true; // Optional field
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -396,9 +493,14 @@ export default function DeveloperProfilePage() {
                     name="phoneNumber"
                     value={formData.phoneNumber}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
+                      errors.phoneNumber ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
+                    }`}
                     placeholder="Nhập số điện thoại"
                   />
+                  {errors.phoneNumber && (
+                    <p className="mt-1 text-sm text-red-500">{errors.phoneNumber}</p>
+                  )}
                 </div>
 
                 {/* Ngày sinh */}
@@ -412,8 +514,13 @@ export default function DeveloperProfilePage() {
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
+                      errors.dateOfBirth ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
+                    }`}
                   />
+                  {errors.dateOfBirth && (
+                    <p className="mt-1 text-sm text-red-500">{errors.dateOfBirth}</p>
+                  )}
                 </div>
 
                 {/* Location */}
@@ -471,9 +578,14 @@ export default function DeveloperProfilePage() {
                     name="githubUrl"
                     value={formData.githubUrl}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
+                      errors.githubUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
+                    }`}
                     placeholder="https://github.com/username"
                   />
+                  {errors.githubUrl && (
+                    <p className="mt-1 text-sm text-red-500">{errors.githubUrl}</p>
+                  )}
                 </div>
 
                 {/* Portfolio URL */}
@@ -487,9 +599,14 @@ export default function DeveloperProfilePage() {
                     name="portfolioUrl"
                     value={formData.portfolioUrl}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
+                      errors.portfolioUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
+                    }`}
                     placeholder="https://yourportfolio.com"
                   />
+                  {errors.portfolioUrl && (
+                    <p className="mt-1 text-sm text-red-500">{errors.portfolioUrl}</p>
+                  )}
                 </div>
 
                 {/* Success/Error Messages */}
