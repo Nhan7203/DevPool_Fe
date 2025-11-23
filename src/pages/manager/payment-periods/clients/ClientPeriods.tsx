@@ -1,32 +1,36 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { clientPaymentPeriodService } from "../../../services/ClientPaymentPeriod";
-import type { ClientPaymentPeriod } from "../../../services/ClientPaymentPeriod";
-import { clientContractPaymentService } from "../../../services/ClientContractPayment";
-import type { ClientContractPayment } from "../../../services/ClientContractPayment";
-import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
-import { clientContractService, type ClientContract } from "../../../services/ClientContract";
-import { clientDocumentService, type ClientDocument } from "../../../services/ClientDocument";
-import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
-import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle, Upload, FileUp, CheckCircle } from "lucide-react";
-import { uploadFile } from "../../../utils/firebaseStorage";
-import { decodeJWT } from "../../../services/Auth";
-import { useAuth } from "../../../contexts/AuthContext";
-import type { ClientDocumentCreate } from "../../../services/ClientDocument";
-import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
-import { userService } from "../../../services/User";
-import { formatVND, getErrorMessage } from "../../../utils/helpers";
+import { clientPaymentPeriodService } from "../../../../services/ClientPaymentPeriod";
+import type { ClientPaymentPeriod } from "../../../../services/ClientPaymentPeriod";
+import { clientContractPaymentService } from "../../../../services/ClientContractPayment";
+import type { ClientContractPayment } from "../../../../services/ClientContractPayment";
+import { clientCompanyService, type ClientCompany } from "../../../../services/ClientCompany";
+import { clientContractService, type ClientContract } from "../../../../services/ClientContract";
+import { clientDocumentService, type ClientDocument } from "../../../../services/ClientDocument";
+import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
+import Sidebar from "../../../../components/common/Sidebar";
+import { sidebarItems } from "../../../../components/manager/SidebarItems";
+import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle, Upload, FileUp, CheckCircle, Search } from "lucide-react";
+import { uploadFile } from "../../../../utils/firebaseStorage";
+import { decodeJWT } from "../../../../services/Auth";
+import { useAuth } from "../../../../contexts/AuthContext";
+import type { ClientDocumentCreate } from "../../../../services/ClientDocument";
+import { notificationService, NotificationType, NotificationPriority } from "../../../../services/Notification";
+import { userService } from "../../../../services/User";
+import { formatVND, getErrorMessage } from "../../../../utils/helpers";
 
 const ManagerClientPeriods: React.FC = () => {
   const { user } = useAuth();
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [allContracts, setAllContracts] = useState<ClientContract[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAllCompanies, setShowAllCompanies] = useState(false);
   
   const [periods, setPeriods] = useState<ClientPaymentPeriod[]>([]);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [showClosedPeriods, setShowClosedPeriods] = useState(false);
 
   const [activePeriodId, setActivePeriodId] = useState<number | null>(null);
   const [payments, setPayments] = useState<ClientContractPayment[]>([]);
@@ -86,6 +90,14 @@ const ManagerClientPeriods: React.FC = () => {
       try {
         const contracts = await clientContractService.getAll({ excludeDeleted: true });
         const contractsData = contracts?.items ?? contracts ?? [];
+        setAllContracts(contractsData);
+        
+        // Tạo map contract ID -> contract
+        const contractMap = new Map<number, ClientContract>();
+        contractsData.forEach((c: ClientContract) => {
+          contractMap.set(c.id, c);
+        });
+        setContractsMap(contractMap);
         
         const companyIds = [...new Set(contractsData.map((c: ClientContract) => c.clientCompanyId))];
         
@@ -370,7 +382,8 @@ const ManagerClientPeriods: React.FC = () => {
     setDocuments([]);
   };
 
-  // Hàm mở modal reject
+  // Hàm mở modal reject (được dùng trong modal form)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleOpenRejectModal = (payment: ClientContractPayment) => {
     setSelectedPaymentForReject(payment);
     setShowRejectModal(true);
@@ -445,7 +458,8 @@ const ManagerClientPeriods: React.FC = () => {
     }
   };
 
-  // Hàm mở modal approve
+  // Hàm mở modal approve (được dùng trong modal form)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleOpenApproveModal = async (payment: ClientContractPayment) => {
     setSelectedPaymentForApprove(payment);
     setShowApproveModal(true);
@@ -725,6 +739,31 @@ const ManagerClientPeriods: React.FC = () => {
     return acc;
   }, {});
 
+  // Logic filter companies
+  const filteredCompanies = companies.filter(company => {
+    // Filter theo status hợp đồng
+    const companyContracts = allContracts.filter(c => c.clientCompanyId === company.id);
+    const hasActiveContract = companyContracts.some(c => 
+      c.status === 'Active' || c.status === 'Ongoing'
+    );
+    
+    // Nếu showAllCompanies = false, chỉ hiển thị companies có hợp đồng Active/Ongoing
+    if (!showAllCompanies && !hasActiveContract) {
+      return false;
+    }
+    
+    // Filter theo search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        company.name.toLowerCase().includes(searchLower) ||
+        (company.taxCode && company.taxCode.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    return true;
+  });
+
   const selectedCompany = companies.find(c => c.id === selectedCompanyId);
   const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                       'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
@@ -780,17 +819,46 @@ const ManagerClientPeriods: React.FC = () => {
 
         {/* Danh sách công ty */}
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách công ty có hợp đồng</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Danh sách công ty có hợp đồng</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm công ty..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 text-sm"
+                />
+              </div>
+              {/* Filter checkbox */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAllCompanies}
+                  onChange={(e) => setShowAllCompanies(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Hiển thị tất cả công ty</span>
+              </label>
+            </div>
+          </div>
           {loadingCompanies ? (
             <div className="flex items-center justify-center py-10 text-gray-600">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mr-3" />
               Đang tải danh sách công ty...
             </div>
-          ) : companies.length === 0 ? (
-            <div className="text-gray-500 text-sm py-4">Chưa có công ty nào có hợp đồng</div>
+          ) : filteredCompanies.length === 0 ? (
+            <div className="text-gray-500 text-sm py-4">
+              {companies.length === 0 
+                ? "Chưa có công ty nào có hợp đồng"
+                : "Không tìm thấy công ty nào phù hợp"}
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {companies.map(company => (
+              {filteredCompanies.map(company => (
                 <button
                   key={company.id}
                   onClick={() => {
@@ -828,10 +896,19 @@ const ManagerClientPeriods: React.FC = () => {
         {/* Danh sách kỳ thanh toán */}
         {selectedCompanyId && (
           <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-semibold text-gray-900">
                 Kỳ thanh toán - {selectedCompany?.name}
               </h2>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showClosedPeriods}
+                  onChange={(e) => setShowClosedPeriods(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Hiển thị kỳ đã đóng</span>
+              </label>
             </div>
             {loadingPeriods ? (
               <div className="flex items-center justify-center py-10 text-gray-600">
@@ -846,6 +923,7 @@ const ManagerClientPeriods: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {periods
+                  .filter(period => showClosedPeriods || period.status !== 'Closed')
                   .sort((a, b) => {
                     if (a.periodYear !== b.periodYear) return a.periodYear - b.periodYear;
                     return a.periodMonth - b.periodMonth;
@@ -971,28 +1049,13 @@ const ManagerClientPeriods: React.FC = () => {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {p.status === 'ReadyForInvoice' ? (
-                                <>
-                                  <button
-                                    onClick={() => handleOpenApproveModal(p)}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                    Duyệt
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenRejectModal(p)}
-                                    disabled={updatingStatus}
-                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                  >
-                                    <X className="w-4 h-4" />
-                                    Từ chối
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
-                              )}
+                              <Link
+                                to={`/manager/payment-periods/clients/${p.id}/detail`}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Xem chi tiết
+                              </Link>
                               <button
                                 onClick={() => handleViewDocuments(p)}
                                 className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"

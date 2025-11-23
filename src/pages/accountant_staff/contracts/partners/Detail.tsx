@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   FileText,
@@ -15,14 +15,14 @@ import {
   FileCheck,
   StickyNote,
 } from "lucide-react";
-import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
+import Sidebar from "../../../../components/common/Sidebar";
+import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
 import {
   partnerContractService,
   type PartnerContract,
-} from "../../../services/PartnerContract";
-import { partnerService } from "../../../services/Partner";
-import { talentService } from "../../../services/Talent";
+} from "../../../../services/PartnerContract";
+import { partnerService } from "../../../../services/Partner";
+import { talentService } from "../../../../services/Talent";
 
 interface EnrichedContract extends PartnerContract {
   partnerName?: string;
@@ -104,9 +104,13 @@ const getStatusConfig = (status: string) => {
 
 export default function PartnerContractDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const [contract, setContract] = useState<EnrichedContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Lấy trang trước đó từ state, mặc định là danh sách payment periods
+  const backUrl = (location.state as { from?: string })?.from || "/accountant/payment-periods/partners";
 
   useEffect(() => {
     const fetchContract = async () => {
@@ -182,7 +186,7 @@ export default function PartnerContractDetailPage() {
               {error || "Không tìm thấy hợp đồng"}
             </p>
             <Link
-              to="/accountant/payment-periods/partners"
+              to={backUrl}
               className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-200 rounded-lg hover:bg-neutral-300 transition"
             >
               ← Quay lại
@@ -204,7 +208,7 @@ export default function PartnerContractDetailPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link
-              to="/accountant/payment-periods/partners"
+              to={backUrl}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />

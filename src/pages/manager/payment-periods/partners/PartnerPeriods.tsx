@@ -1,29 +1,33 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { partnerPaymentPeriodService } from "../../../services/PartnerPaymentPeriod";
-import type { PartnerPaymentPeriod } from "../../../services/PartnerPaymentPeriod";
-import { partnerContractPaymentService } from "../../../services/PartnerContractPayment";
-import type { PartnerContractPayment } from "../../../services/PartnerContractPayment";
-import { partnerService, type Partner } from "../../../services/Partner";
-import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
-import { partnerDocumentService, type PartnerDocument } from "../../../services/PartnerDocument";
-import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
-import { talentService, type Talent } from "../../../services/Talent";
-import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle } from "lucide-react";
-import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
-import { userService } from "../../../services/User";
+import { partnerPaymentPeriodService } from "../../../../services/PartnerPaymentPeriod";
+import type { PartnerPaymentPeriod } from "../../../../services/PartnerPaymentPeriod";
+import { partnerContractPaymentService } from "../../../../services/PartnerContractPayment";
+import type { PartnerContractPayment } from "../../../../services/PartnerContractPayment";
+import { partnerService, type Partner } from "../../../../services/Partner";
+import { partnerContractService, type PartnerContract } from "../../../../services/PartnerContract";
+import { partnerDocumentService, type PartnerDocument } from "../../../../services/PartnerDocument";
+import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
+import { talentService, type Talent } from "../../../../services/Talent";
+import Sidebar from "../../../../components/common/Sidebar";
+import { sidebarItems } from "../../../../components/manager/SidebarItems";
+import { Building2, Calendar, X, Check, FileText, Eye, Download, AlertCircle, Search } from "lucide-react";
+import { notificationService, NotificationType, NotificationPriority } from "../../../../services/Notification";
+import { userService } from "../../../../services/User";
 
-import { formatVND } from "../../../utils/helpers";
+import { formatVND } from "../../../../utils/helpers";
 
 const ManagerPartnerPeriods: React.FC = () => {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null);
+  const [allContracts, setAllContracts] = useState<PartnerContract[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAllPartners, setShowAllPartners] = useState(false);
   
   const [periods, setPeriods] = useState<PartnerPaymentPeriod[]>([]);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [showClosedPeriods, setShowClosedPeriods] = useState(false);
 
   const [activePeriodId, setActivePeriodId] = useState<number | null>(null);
   const [payments, setPayments] = useState<PartnerContractPayment[]>([]);
@@ -63,6 +67,14 @@ const ManagerPartnerPeriods: React.FC = () => {
       try {
         const contracts = await partnerContractService.getAll({ excludeDeleted: true });
         const contractsData = contracts?.items ?? contracts ?? [];
+        setAllContracts(contractsData);
+        
+        // Tạo map contract ID -> contract
+        const contractMap = new Map<number, PartnerContract>();
+        contractsData.forEach((c: PartnerContract) => {
+          contractMap.set(c.id, c);
+        });
+        setContractsMap(contractMap);
         
         const partnerIds = [...new Set(contractsData.map((c: PartnerContract) => c.partnerId))];
         
@@ -252,6 +264,7 @@ const ManagerPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal reject
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleOpenRejectModal = (payment: PartnerContractPayment) => {
     setSelectedPaymentForReject(payment);
     setShowRejectModal(true);
@@ -343,6 +356,7 @@ const ManagerPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal approve
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleOpenApproveModal = (payment: PartnerContractPayment) => {
     setSelectedPaymentForApprove(payment);
     setShowApproveModal(true);
@@ -439,6 +453,31 @@ const ManagerPartnerPeriods: React.FC = () => {
     return acc;
   }, {});
 
+  // Logic filter partners
+  const filteredPartners = partners.filter(partner => {
+    // Filter theo status hợp đồng
+    const partnerContracts = allContracts.filter(c => c.partnerId === partner.id);
+    const hasActiveContract = partnerContracts.some(c => 
+      c.status === 'Active' || c.status === 'Ongoing'
+    );
+    
+    // Nếu showAllPartners = false, chỉ hiển thị partners có hợp đồng Active/Ongoing
+    if (!showAllPartners && !hasActiveContract) {
+      return false;
+    }
+    
+    // Filter theo search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        partner.companyName.toLowerCase().includes(searchLower) ||
+        (partner.taxCode && partner.taxCode.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    return true;
+  });
+
   const selectedPartner = partners.find(p => p.id === selectedPartnerId);
   const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                       'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
@@ -490,17 +529,46 @@ const ManagerPartnerPeriods: React.FC = () => {
 
         {/* Danh sách đối tác */}
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách nhân sự có hợp đồng</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Danh sách nhân sự có hợp đồng</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm đối tác..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 text-sm"
+                />
+              </div>
+              {/* Filter checkbox */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAllPartners}
+                  onChange={(e) => setShowAllPartners(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Hiển thị tất cả đối tác</span>
+              </label>
+            </div>
+          </div>
           {loadingPartners ? (
             <div className="flex items-center justify-center py-10 text-gray-600">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mr-3" />
               Đang tải danh sách nhân sự...
             </div>
-          ) : partners.length === 0 ? (
-            <div className="text-gray-500 text-sm py-4">Chưa có nhân sự nào có hợp đồng</div>
+          ) : filteredPartners.length === 0 ? (
+            <div className="text-gray-500 text-sm py-4">
+              {partners.length === 0 
+                ? "Chưa có nhân sự nào có hợp đồng"
+                : "Không tìm thấy đối tác nào phù hợp"}
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {partners.map(partner => (
+              {filteredPartners.map(partner => (
                 <button
                   key={partner.id}
                   onClick={() => {
@@ -538,10 +606,19 @@ const ManagerPartnerPeriods: React.FC = () => {
         {/* Danh sách kỳ thanh toán */}
         {selectedPartnerId && (
           <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-semibold text-gray-900">
                 Kỳ thanh toán - {selectedPartner?.companyName}
               </h2>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showClosedPeriods}
+                  onChange={(e) => setShowClosedPeriods(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Hiển thị kỳ đã đóng</span>
+              </label>
             </div>
             {loadingPeriods ? (
               <div className="flex items-center justify-center py-10 text-gray-600">
@@ -556,6 +633,7 @@ const ManagerPartnerPeriods: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {periods
+                  .filter(period => showClosedPeriods || period.status !== 'Closed')
                   .sort((a, b) => {
                     if (a.periodYear !== b.periodYear) return a.periodYear - b.periodYear;
                     return a.periodMonth - b.periodMonth;
@@ -683,26 +761,13 @@ const ManagerPartnerPeriods: React.FC = () => {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {p.status === 'PendingApproval' ? (
-                                <>
-                                  <button
-                                    onClick={() => handleOpenApproveModal(p)}
-                                    className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                    Duyệt
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenRejectModal(p)}
-                                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                  >
-                                    <X className="w-4 h-4" />
-                                    Từ chối
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
-                              )}
+                              <Link
+                                to={`/manager/payment-periods/partners/${p.id}/detail`}
+                                className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Xem chi tiết
+                              </Link>
                               <button
                                 onClick={() => handleViewDocuments(p)}
                                 className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"

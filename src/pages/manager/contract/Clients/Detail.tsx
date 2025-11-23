@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   AlertCircle,
@@ -110,10 +110,14 @@ const getStatusConfig = (status: string) => {
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { user } = useAuth();
   const [contract, setContract] = useState<EnrichedContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Lấy trang trước đó từ state, mặc định là danh sách contracts
+  const backUrl = (location.state as { from?: string })?.from || "/manager/contracts/clients";
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -406,7 +410,7 @@ export default function ClientDetailPage() {
               {error || "Không tìm thấy hợp đồng"}
             </p>
             <Link
-              to="/manager/contracts/clients"
+              to={backUrl}
               className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-200 rounded-lg hover:bg-neutral-300 transition"
             >
               ← Quay lại danh sách
@@ -428,7 +432,7 @@ export default function ClientDetailPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link
-              to="/manager/contracts/clients"
+              to={backUrl}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />

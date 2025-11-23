@@ -1,50 +1,50 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { partnerPaymentPeriodService } from "../../../services/PartnerPaymentPeriod";
-import type { PartnerPaymentPeriod } from "../../../services/PartnerPaymentPeriod";
-import { partnerContractPaymentService } from "../../../services/PartnerContractPayment";
-import type { PartnerContractPayment } from "../../../services/PartnerContractPayment";
-import { partnerService, type Partner } from "../../../services/Partner";
-import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
-import { talentService, type Talent } from "../../../services/Talent";
-import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
-import { Building2, Plus, Calendar, X, Save, Wallet, FileText, Download, Eye, Upload, FileUp, AlertCircle, Calculator, CheckCircle } from "lucide-react";
-import { partnerDocumentService, type PartnerDocument, type PartnerDocumentCreate } from "../../../services/PartnerDocument";
-import { documentTypeService, type DocumentType } from "../../../services/DocumentType";
-import { uploadFile } from "../../../utils/firebaseStorage";
-import { decodeJWT } from "../../../services/Auth";
-import { useAuth } from "../../../contexts/AuthContext";
-import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
-import { userService } from "../../../services/User";
-import { formatVND, getErrorMessage } from "../../../utils/helpers";
+import { clientPaymentPeriodService } from "../../../../services/ClientPaymentPeriod";
+import type { ClientPaymentPeriod } from "../../../../services/ClientPaymentPeriod";
+import { clientContractPaymentService } from "../../../../services/ClientContractPayment";
+import type { ClientContractPayment } from "../../../../services/ClientContractPayment";
+import { clientCompanyService, type ClientCompany } from "../../../../services/ClientCompany";
+import { clientContractService, type ClientContract } from "../../../../services/ClientContract";
+import Sidebar from "../../../../components/common/Sidebar";
+import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
+import { Building2, Plus, Calendar, X, Save, CheckCircle, Calculator, FileText, Download, Eye, Upload, FileUp, AlertCircle, Search } from "lucide-react";
+import { clientDocumentService, type ClientDocument, type ClientDocumentCreate } from "../../../../services/ClientDocument";
+import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
+import { uploadFile } from "../../../../utils/firebaseStorage";
+import { decodeJWT } from "../../../../services/Auth";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { notificationService, NotificationType, NotificationPriority } from "../../../../services/Notification";
+import { userService } from "../../../../services/User";
+import { formatVND, getErrorMessage } from "../../../../utils/helpers";
 
-const AccountantPartnerPeriods: React.FC = () => {
+const AccountantClientPeriods: React.FC = () => {
   const { user } = useAuth();
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [loadingPartners, setLoadingPartners] = useState(false);
-  const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null);
+  const [companies, setCompanies] = useState<ClientCompany[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [allContracts, setAllContracts] = useState<ClientContract[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAllCompanies, setShowAllCompanies] = useState(false);
   
-  const [periods, setPeriods] = useState<PartnerPaymentPeriod[]>([]);
+  const [periods, setPeriods] = useState<ClientPaymentPeriod[]>([]);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [creatingPeriods, setCreatingPeriods] = useState(false);
   const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [showClosedPeriods, setShowClosedPeriods] = useState(false);
 
   const [activePeriodId, setActivePeriodId] = useState<number | null>(null);
-  const [payments, setPayments] = useState<PartnerContractPayment[]>([]);
+  const [payments, setPayments] = useState<ClientContractPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | 'ALL'>('ALL');
   
-  // Map contract ID to contract and talent ID to talent for display
-  const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
-  const [talentsMap, setTalentsMap] = useState<Map<number, Talent>>(new Map());
+  // Map contract ID to contract number for display
+  const [contractsMap, setContractsMap] = useState<Map<number, ClientContract>>(new Map());
 
   // Modal tạo payment
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [contracts, setContracts] = useState<PartnerContract[]>([]);
-  const [talents, setTalents] = useState<Talent[]>([]);
+  const [contracts, setContracts] = useState<ClientContract[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(false);
-  const [loadingTalents, setLoadingTalents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createPaymentError, setCreatePaymentError] = useState<string | null>(null);
   const [createPaymentSuccess, setCreatePaymentSuccess] = useState(false);
@@ -54,52 +54,39 @@ const AccountantPartnerPeriods: React.FC = () => {
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
   const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
 
-  // Modal ghi nhận đã chi trả
-  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
-  const [selectedPaymentForMarkAsPaid, setSelectedPaymentForMarkAsPaid] = useState<PartnerContractPayment | null>(null);
-  const [markAsPaidFormData, setMarkAsPaidFormData] = useState({
-    paidAmount: 0,
+  // Modal ghi nhận thanh toán
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<ClientContractPayment | null>(null);
+  const [paymentFormData, setPaymentFormData] = useState({
+    receivedAmount: 0,
     paymentDate: "",
     notes: ""
   });
 
-  // Modal tạo tài liệu trong ghi nhận đã chi trả (Invoice và Receipt)
-  const [markAsPaidDocumentTypesList, setMarkAsPaidDocumentTypesList] = useState<DocumentType[]>([]);
-  const [loadingMarkAsPaidDocumentTypes, setLoadingMarkAsPaidDocumentTypes] = useState(false);
-  const [createInvoiceDocumentError, setCreateInvoiceDocumentError] = useState<string | null>(null);
-  const [createReceiptDocumentError, setCreateReceiptDocumentError] = useState<string | null>(null);
-  const [createInvoiceDocumentSuccess, setCreateInvoiceDocumentSuccess] = useState(false);
-  const [createReceiptDocumentSuccess, setCreateReceiptDocumentSuccess] = useState(false);
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [invoiceUploadProgress, setInvoiceUploadProgress] = useState<number>(0);
-  const [receiptUploadProgress, setReceiptUploadProgress] = useState<number>(0);
-  const [invoiceDocumentFormData, setInvoiceDocumentFormData] = useState({
+  // Modal tạo tài liệu trong ghi nhận thanh toán
+  const [recordPaymentDocumentTypesList, setRecordPaymentDocumentTypesList] = useState<DocumentType[]>([]);
+  const [loadingRecordPaymentDocumentTypes, setLoadingRecordPaymentDocumentTypes] = useState(false);
+  const [createRecordPaymentDocumentError, setCreateRecordPaymentDocumentError] = useState<string | null>(null);
+  const [createRecordPaymentDocumentSuccess, setCreateRecordPaymentDocumentSuccess] = useState(false);
+  const [recordPaymentFile, setRecordPaymentFile] = useState<File | null>(null);
+  const [recordPaymentUploadProgress, setRecordPaymentUploadProgress] = useState<number>(0);
+  const [recordPaymentDocumentFormData, setRecordPaymentDocumentFormData] = useState({
     documentTypeId: 0,
     fileName: "",
     filePath: "",
     description: "",
     source: "Accountant",
-    referencedClientDocumentId: 0
-  });
-  const [receiptDocumentFormData, setReceiptDocumentFormData] = useState({
-    documentTypeId: 0,
-    fileName: "",
-    filePath: "",
-    description: "",
-    source: "Accountant",
-    referencedClientDocumentId: 0
+    referencedPartnerDocumentId: 0
   });
 
   // Tính toán (Calculate) - Modal
   const [showCalculateModal, setShowCalculateModal] = useState(false);
-  const [selectedPaymentForCalculate, setSelectedPaymentForCalculate] = useState<PartnerContractPayment | null>(null);
+  const [selectedPaymentForCalculate, setSelectedPaymentForCalculate] = useState<ClientContractPayment | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [calculateError, setCalculateError] = useState<string | null>(null);
   const [calculateSuccess, setCalculateSuccess] = useState(false);
   const [calculateFormData, setCalculateFormData] = useState({
-    actualWorkHours: 0,
-    otHours: 0,
+    billableHours: 0,
     notes: ""
   });
 
@@ -116,19 +103,19 @@ const AccountantPartnerPeriods: React.FC = () => {
     filePath: "",
     description: "",
     source: "Accountant",
-    referencedClientDocumentId: 0
+    referencedPartnerDocumentId: 0
   });
   
   // Modal hiển thị tài liệu
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
-  const [selectedPaymentForDocuments, setSelectedPaymentForDocuments] = useState<PartnerContractPayment | null>(null);
-  const [documents, setDocuments] = useState<PartnerDocument[]>([]);
+  const [selectedPaymentForDocuments, setSelectedPaymentForDocuments] = useState<ClientContractPayment | null>(null);
+  const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
 
   // Modal tạo tài liệu độc lập
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
-  const [selectedPaymentForCreateDocument, setSelectedPaymentForCreateDocument] = useState<PartnerContractPayment | null>(null);
+  const [selectedPaymentForCreateDocument, setSelectedPaymentForCreateDocument] = useState<ClientContractPayment | null>(null);
   const [createDocumentModalDocumentTypesList, setCreateDocumentModalDocumentTypesList] = useState<DocumentType[]>([]);
   const [loadingCreateDocumentModalDocumentTypes, setLoadingCreateDocumentModalDocumentTypes] = useState(false);
   const [submittingCreateDocumentModal, setSubmittingCreateDocumentModal] = useState(false);
@@ -142,74 +129,67 @@ const AccountantPartnerPeriods: React.FC = () => {
     filePath: "",
     description: "",
     source: "Accountant",
-    referencedClientDocumentId: 0
+    referencedPartnerDocumentId: 0
   });
   
   // Form data
   const [formData, setFormData] = useState({
-    partnerPeriodId: 0,
-    partnerContractId: 0,
-    talentId: 0,
-    actualWorkHours: 0,
-    otHours: 0,
+    clientPeriodId: 0,
+    clientContractId: 0,
+    billableHours: 0,
     calculatedAmount: 0,
-    paidAmount: 0,
+    invoicedAmount: 0,
+    receivedAmount: 0,
+    invoiceNumber: "",
+    invoiceDate: "",
     paymentDate: "",
     status: "PendingCalculation",
     notes: ""
   });
 
-  // Lấy danh sách đối tác có hợp đồng
+  // Lấy danh sách công ty có hợp đồng
   useEffect(() => {
-    const loadPartners = async () => {
-      setLoadingPartners(true);
+    const loadCompanies = async () => {
+      setLoadingCompanies(true);
       try {
         // Lấy tất cả hợp đồng
-        const contracts = await partnerContractService.getAll({ excludeDeleted: true });
+        const contracts = await clientContractService.getAll({ excludeDeleted: true });
         const contractsData = contracts?.items ?? contracts ?? [];
+        setAllContracts(contractsData);
         
         // Tạo map contract ID -> contract
-        const contractMap = new Map<number, PartnerContract>();
-        contractsData.forEach((c: PartnerContract) => {
+        const contractMap = new Map<number, ClientContract>();
+        contractsData.forEach((c: ClientContract) => {
           contractMap.set(c.id, c);
         });
         setContractsMap(contractMap);
         
-        // Lấy danh sách các talentId duy nhất từ contracts
-        const talentIds = [...new Set(contractsData.map((c: PartnerContract) => c.talentId))];
+        // Lấy danh sách các clientCompanyId duy nhất
+        const companyIds = [...new Set(contractsData.map((c: ClientContract) => c.clientCompanyId))];
         
-        // Lấy thông tin các talent
-        const talentsData = await talentService.getAll({ excludeDeleted: true });
-        const allTalents = Array.isArray(talentsData) ? talentsData : (talentsData?.items || []);
+        // Lấy thông tin các công ty
+        const companiesData = await Promise.all(
+          companyIds.map(async (id: unknown) => {
+            try {
+              return await clientCompanyService.getById(id as number);
+            } catch (e) {
+              console.error(`Error loading company ${id}:`, e);
+              return null;
+            }
+          })
+        );
         
-        // Tạo map talent ID -> talent
-        const talentMap = new Map<number, Talent>();
-        allTalents.forEach((t: Talent) => {
-          if (talentIds.includes(t.id)) {
-            talentMap.set(t.id, t);
-          }
-        });
-        setTalentsMap(talentMap);
-        
-        // Lấy danh sách các partnerId duy nhất
-        const partnerIds = [...new Set(contractsData.map((c: PartnerContract) => c.partnerId))];
-        
-        // Lấy thông tin các đối tác từ danh sách tất cả partners
-        const allPartners = await partnerService.getAll();
-        const allPartnersData = allPartners?.items ?? allPartners ?? [];
-        
-        const partnersData = allPartnersData.filter((p: Partner) => partnerIds.includes(p.id));
-        
-        setPartners(partnersData);
+        setCompanies(companiesData.filter((c): c is ClientCompany => c !== null));
       } catch (e) {
         console.error(e);
       } finally {
-        setLoadingPartners(false);
+        setLoadingCompanies(false);
       }
     };
-    loadPartners();
+    loadCompanies();
   }, []);
 
+  // Load document types
   useEffect(() => {
     const loadDocumentTypes = async () => {
       try {
@@ -228,13 +208,13 @@ const AccountantPartnerPeriods: React.FC = () => {
   }, []);
 
   // Hàm mở modal hiển thị tài liệu
-  const handleViewDocuments = async (payment: PartnerContractPayment) => {
+  const handleViewDocuments = async (payment: ClientContractPayment) => {
     setSelectedPaymentForDocuments(payment);
     setShowDocumentsModal(true);
     setLoadingDocuments(true);
     try {
-      const data = await partnerDocumentService.getAll({
-        partnerContractPaymentId: payment.id,
+      const data = await clientDocumentService.getAll({
+        clientContractPaymentId: payment.id,
         excludeDeleted: true
       });
       setDocuments(Array.isArray(data) ? data : (data?.items || []));
@@ -254,7 +234,7 @@ const AccountantPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal tạo tài liệu độc lập
-  const handleOpenCreateDocumentModal = async (payment: PartnerContractPayment) => {
+  const handleOpenCreateDocumentModal = async (payment: ClientContractPayment) => {
     setSelectedPaymentForCreateDocument(payment);
     setShowCreateDocumentModal(true);
     setCreateDocumentModalError(null);
@@ -267,7 +247,7 @@ const AccountantPartnerPeriods: React.FC = () => {
       filePath: "",
       description: "",
       source: "Accountant",
-      referencedClientDocumentId: 0
+      referencedPartnerDocumentId: 0
     });
 
     // Load document types
@@ -296,7 +276,7 @@ const AccountantPartnerPeriods: React.FC = () => {
       filePath: "",
       description: "",
       source: "Accountant",
-      referencedClientDocumentId: 0
+      referencedPartnerDocumentId: 0
     });
     setCreateDocumentModalError(null);
     setCreateDocumentModalSuccess(false);
@@ -321,7 +301,7 @@ const AccountantPartnerPeriods: React.FC = () => {
     const { name, value } = e.target;
     setCreateDocumentModalFormData(prev => ({
       ...prev,
-      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+      [name]: name === 'documentTypeId' || name === 'referencedPartnerDocumentId'
         ? (value === '' ? 0 : Number(value))
         : value
     }));
@@ -361,14 +341,14 @@ const AccountantPartnerPeriods: React.FC = () => {
       }
 
       // Upload file lên Firebase
-      const path = `partner-documents/${selectedPaymentForCreateDocument.id}/${Date.now()}_${createDocumentModalFile.name}`;
+      const path = `client-documents/${selectedPaymentForCreateDocument.id}/${Date.now()}_${createDocumentModalFile.name}`;
       const downloadURL = await uploadFile(createDocumentModalFile, path, setCreateDocumentModalUploadProgress);
 
       // Tạo payload
-      const payload: PartnerDocumentCreate = {
-        partnerContractPaymentId: selectedPaymentForCreateDocument.id,
+      const payload: ClientDocumentCreate = {
+        clientContractPaymentId: selectedPaymentForCreateDocument.id,
         documentTypeId: createDocumentModalFormData.documentTypeId,
-        referencedClientDocumentId: createDocumentModalFormData.referencedClientDocumentId || null,
+        referencedPartnerDocumentId: createDocumentModalFormData.referencedPartnerDocumentId || null,
         fileName: createDocumentModalFile.name,
         filePath: downloadURL,
         uploadedByUserId,
@@ -376,14 +356,14 @@ const AccountantPartnerPeriods: React.FC = () => {
         source: createDocumentModalFormData.source || null
       };
 
-      await partnerDocumentService.create(payload);
+      await clientDocumentService.create(payload);
       setCreateDocumentModalSuccess(true);
 
       // Reload documents nếu đang mở modal xem tài liệu
       if (showDocumentsModal && selectedPaymentForDocuments?.id === selectedPaymentForCreateDocument.id) {
         try {
-          const data = await partnerDocumentService.getAll({
-            partnerContractPaymentId: selectedPaymentForCreateDocument.id,
+          const data = await clientDocumentService.getAll({
+            clientContractPaymentId: selectedPaymentForCreateDocument.id,
             excludeDeleted: true
           });
           setDocuments(Array.isArray(data) ? data : (data?.items || []));
@@ -403,9 +383,9 @@ const AccountantPartnerPeriods: React.FC = () => {
     }
   };
 
-  // Khi chọn đối tác, load các period của đối tác đó
+  // Khi chọn công ty, load các period của công ty đó
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (!selectedCompanyId) {
       setPeriods([]);
       return;
     }
@@ -413,8 +393,8 @@ const AccountantPartnerPeriods: React.FC = () => {
     const loadPeriods = async () => {
       setLoadingPeriods(true);
       try {
-        const data = await partnerPaymentPeriodService.getAll({ 
-          partnerId: selectedPartnerId, 
+        const data = await clientPaymentPeriodService.getAll({ 
+          clientCompanyId: selectedCompanyId, 
           excludeDeleted: true 
         });
         setPeriods(data?.items ?? data ?? []);
@@ -425,29 +405,29 @@ const AccountantPartnerPeriods: React.FC = () => {
       }
     };
     loadPeriods();
-  }, [selectedPartnerId]);
+  }, [selectedCompanyId]);
 
   // Hàm helper để tạo contract payment cho các period đã tồn tại khi hợp đồng được duyệt sau
   const createContractPaymentsForExistingPeriods = async () => {
-    if (!selectedPartnerId) return 0;
+    if (!selectedCompanyId) return 0;
 
     try {
       // Lấy tất cả các period hiện có
-      const allPeriods = await partnerPaymentPeriodService.getAll({ 
-        partnerId: selectedPartnerId, 
+      const allPeriods = await clientPaymentPeriodService.getAll({ 
+        clientCompanyId: selectedCompanyId, 
         excludeDeleted: true 
       });
       const allPeriodsData = allPeriods?.items ?? allPeriods ?? [];
 
-      // Lấy tất cả hợp đồng của đối tác đang ở trạng thái Active hoặc Ongoing
-      const contracts = await partnerContractService.getAll({ 
-        partnerId: selectedPartnerId,
+      // Lấy tất cả hợp đồng của công ty đang ở trạng thái Active hoặc Ongoing
+      const contracts = await clientContractService.getAll({ 
+        clientCompanyId: selectedCompanyId,
         excludeDeleted: true 
       });
       const contractsData = contracts?.items ?? contracts ?? [];
       
       // Lọc các hợp đồng đang hiệu lực (Active hoặc Ongoing)
-      const activeContracts = contractsData.filter((contract: PartnerContract) => 
+      const activeContracts = contractsData.filter((contract: ClientContract) => 
         contract.status === 'Active' || contract.status === 'Ongoing'
       );
 
@@ -461,13 +441,13 @@ const AccountantPartnerPeriods: React.FC = () => {
         const periodMonth = period.periodMonth;
 
         // Lấy tất cả contract payment hiện có của period này
-        const existingPayments = await partnerContractPaymentService.getAll({ 
-          partnerPeriodId: period.id, 
+        const existingPayments = await clientContractPaymentService.getAll({ 
+          clientPeriodId: period.id, 
           excludeDeleted: true 
         });
         const existingPaymentsData = existingPayments?.items ?? existingPayments ?? [];
         const existingContractIds = new Set(
-          existingPaymentsData.map((p: PartnerContractPayment) => p.partnerContractId)
+          existingPaymentsData.map((p: ClientContractPayment) => p.clientContractId)
         );
 
         // Duyệt qua từng hợp đồng đang hiệu lực
@@ -490,14 +470,15 @@ const AccountantPartnerPeriods: React.FC = () => {
           if (periodStartDate <= endDate && periodEndDate >= startDate) {
             try {
               // Tạo contract payment
-              await partnerContractPaymentService.create({
-                partnerPeriodId: period.id,
-                partnerContractId: contract.id,
-                talentId: contract.talentId,
-                actualWorkHours: 0,
-                otHours: null,
+              await clientContractPaymentService.create({
+                clientPeriodId: period.id,
+                clientContractId: contract.id,
+                billableHours: 0,
                 calculatedAmount: null,
-                paidAmount: null,
+                invoicedAmount: null,
+                receivedAmount: null,
+                invoiceNumber: null,
+                invoiceDate: null,
                 paymentDate: null,
                 status: 'PendingCalculation',
                 notes: null
@@ -519,35 +500,35 @@ const AccountantPartnerPeriods: React.FC = () => {
 
   // Hàm tạo period từ hợp đồng
   const handleCreatePeriods = async () => {
-    if (!selectedPartnerId) return;
+    if (!selectedCompanyId) return;
 
     setCreatingPeriods(true);
     setCreateMessage(null); // Xóa thông báo cũ
     try {
-      // Lấy tất cả hợp đồng của đối tác
-      const contracts = await partnerContractService.getAll({ 
-        partnerId: selectedPartnerId,
+      // Lấy tất cả hợp đồng của công ty
+      const contracts = await clientContractService.getAll({ 
+        clientCompanyId: selectedCompanyId,
         excludeDeleted: true 
       });
       const contractsData = contracts?.items ?? contracts ?? [];
 
       // Lấy các period hiện có để tránh trùng lặp
-      const existingPeriods = await partnerPaymentPeriodService.getAll({ 
-        partnerId: selectedPartnerId, 
+      const existingPeriods = await clientPaymentPeriodService.getAll({ 
+        clientCompanyId: selectedCompanyId, 
         excludeDeleted: true 
       });
       const existingPeriodsData = existingPeriods?.items ?? existingPeriods ?? [];
       
       // Tạo Set để kiểm tra period đã tồn tại (key: "year-month")
       const existingPeriodSet = new Set<string>();
-      existingPeriodsData.forEach((p: PartnerPaymentPeriod) => {
+      existingPeriodsData.forEach((p: ClientPaymentPeriod) => {
         existingPeriodSet.add(`${p.periodYear}-${p.periodMonth}`);
       });
 
       // Tính toán các tháng mà hợp đồng hiệu lực
       const activeMonths = new Set<string>(); // key: "year-month"
       
-      contractsData.forEach((contract: PartnerContract) => {
+      contractsData.forEach((contract: ClientContract) => {
         if (!contract.startDate) return;
         
         const startDate = new Date(contract.startDate);
@@ -582,8 +563,8 @@ const AccountantPartnerPeriods: React.FC = () => {
         const createdPeriods = await Promise.all(
           periodsToCreate.map(async ({ year, month }) => {
             try {
-              return await partnerPaymentPeriodService.create({
-                partnerId: selectedPartnerId,
+              return await clientPaymentPeriodService.create({
+                clientCompanyId: selectedCompanyId,
                 periodMonth: month,
                 periodYear: year,
                 status: 'Open'
@@ -602,8 +583,8 @@ const AccountantPartnerPeriods: React.FC = () => {
       const createdPaymentsCount = await createContractPaymentsForExistingPeriods();
       
       // Reload periods
-      const updatedPeriods = await partnerPaymentPeriodService.getAll({ 
-        partnerId: selectedPartnerId, 
+      const updatedPeriods = await clientPaymentPeriodService.getAll({ 
+        clientCompanyId: selectedCompanyId, 
         excludeDeleted: true 
       });
       setPeriods(updatedPeriods?.items ?? updatedPeriods ?? []);
@@ -631,46 +612,47 @@ const AccountantPartnerPeriods: React.FC = () => {
     }
   };
 
-  // Kiểm tra và cập nhật Cancelled cho các payment của contract terminated (chưa Paid)
+  // Kiểm tra và cập nhật Cancelled cho các payment của contract terminated (chưa Paid/Invoiced)
   const checkAndUpdateCancelled = async () => {
     if (!activePeriodId) return;
 
     try {
       // Lấy tất cả contracts để check status
-      const contractsData = await partnerContractService.getAll({ excludeDeleted: true });
+      const contractsData = await clientContractService.getAll({ excludeDeleted: true });
       const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
       const terminatedContractIds = new Set(
         contracts
-          .filter((c: PartnerContract) => c.status === 'Terminated')
-          .map((c: PartnerContract) => c.id)
+          .filter((c: ClientContract) => c.status === 'Terminated')
+          .map((c: ClientContract) => c.id)
       );
 
       if (terminatedContractIds.size === 0) return; // Không có contract nào bị terminated
 
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: activePeriodId, 
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
         excludeDeleted: true 
       });
       const paymentsData = data?.items ?? data ?? [];
 
-      // Lọc các payment cần cập nhật: thuộc contract terminated VÀ chưa Paid
-      const cancelledPayments = paymentsData.filter((p: PartnerContractPayment) => {
-        if (!terminatedContractIds.has(p.partnerContractId)) return false;
-        // Chưa Paid và chưa Cancelled
-        return p.status !== 'Paid' && p.status !== 'Cancelled';
+      // Lọc các payment cần cập nhật: thuộc contract terminated VÀ chưa Paid/Invoiced
+      const cancelledPayments = paymentsData.filter((p: ClientContractPayment) => {
+        if (!terminatedContractIds.has(p.clientContractId)) return false;
+        // Chưa Paid và chưa Invoiced
+        return p.status !== 'Paid' && p.status !== 'Invoiced' && p.status !== 'Overdue' && p.status !== 'Cancelled';
       });
 
       // Cập nhật các payment thành Cancelled
       for (const payment of cancelledPayments) {
         try {
-          await partnerContractPaymentService.update(payment.id, {
-            partnerPeriodId: payment.partnerPeriodId,
-            partnerContractId: payment.partnerContractId,
-            talentId: payment.talentId,
-            actualWorkHours: payment.actualWorkHours,
-            otHours: payment.otHours ?? null,
+          await clientContractPaymentService.update(payment.id, {
+            clientPeriodId: payment.clientPeriodId,
+            clientContractId: payment.clientContractId,
+            billableHours: payment.billableHours,
             calculatedAmount: payment.calculatedAmount ?? null,
-            paidAmount: payment.paidAmount ?? null,
+            invoicedAmount: payment.invoicedAmount ?? null,
+            receivedAmount: payment.receivedAmount ?? null,
+            invoiceNumber: payment.invoiceNumber ?? null,
+            invoiceDate: payment.invoiceDate ?? null,
             paymentDate: payment.paymentDate ?? null,
             status: 'Cancelled',
             notes: payment.notes ?? null
@@ -682,8 +664,8 @@ const AccountantPartnerPeriods: React.FC = () => {
 
       // Reload payments nếu có thay đổi
       if (cancelledPayments.length > 0) {
-        const updatedData = await partnerContractPaymentService.getAll({ 
-          partnerPeriodId: activePeriodId, 
+        const updatedData = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
           excludeDeleted: true 
         });
         setPayments(updatedData?.items ?? updatedData ?? []);
@@ -700,17 +682,16 @@ const AccountantPartnerPeriods: React.FC = () => {
     setActivePeriodId(periodId);
     setLoadingPayments(true);
     try {
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: periodId, 
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: periodId, 
         excludeDeleted: true 
       });
       setPayments(data?.items ?? data ?? []);
-      
-      // Kiểm tra và cập nhật Cancelled sau khi load
-      setTimeout(() => checkAndUpdateCancelled(), 500);
-      
-      // Cập nhật trạng thái period
-      await updatePeriodStatus(periodId);
+      // Kiểm tra và cập nhật Cancelled và Overdue sau khi load
+      setTimeout(() => {
+        checkAndUpdateCancelled();
+        checkAndUpdateOverdue();
+      }, 500);
     } catch (e) {
       console.error(e);
     } finally {
@@ -718,43 +699,38 @@ const AccountantPartnerPeriods: React.FC = () => {
     }
   };
 
-  // Load contracts và talents khi mở modal
+  // Load contracts khi mở modal
   const handleOpenCreateModal = async () => {
-    if (!selectedPartnerId) return;
+    if (!selectedCompanyId) return;
     setShowCreateModal(true);
     setCreatePaymentError(null);
     setCreatePaymentSuccess(false);
     setFormData({
-      partnerPeriodId: activePeriodId || 0,
-      partnerContractId: 0,
-      talentId: 0,
-      actualWorkHours: 0,
-      otHours: 0,
+      clientPeriodId: activePeriodId || 0,
+      clientContractId: 0,
+      billableHours: 0,
       calculatedAmount: 0,
-      paidAmount: 0,
+      invoicedAmount: 0,
+      receivedAmount: 0,
+      invoiceNumber: "",
+      invoiceDate: "",
       paymentDate: "",
       status: "PendingCalculation",
       notes: ""
     });
 
-    // Load contracts và talents của đối tác
+    // Load contracts của công ty
     setLoadingContracts(true);
-    setLoadingTalents(true);
     try {
-      const [contractsData, talentsData] = await Promise.all([
-        partnerContractService.getAll({ 
-          partnerId: selectedPartnerId,
-          excludeDeleted: true 
-        }),
-        talentService.getAll({ excludeDeleted: true })
-      ]);
+      const contractsData = await clientContractService.getAll({ 
+        clientCompanyId: selectedCompanyId,
+        excludeDeleted: true 
+      });
       setContracts(contractsData?.items ?? contractsData ?? []);
-      setTalents(talentsData?.items ?? talentsData ?? []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingContracts(false);
-      setLoadingTalents(false);
     }
   };
 
@@ -768,9 +744,8 @@ const AccountantPartnerPeriods: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'partnerPeriodId' || name === 'partnerContractId' || name === 'talentId' 
-        || name === 'actualWorkHours' || name === 'otHours' 
-        || name === 'calculatedAmount' || name === 'paidAmount'
+      [name]: name === 'clientPeriodId' || name === 'clientContractId' || name === 'billableHours' 
+        || name === 'calculatedAmount' || name === 'invoicedAmount' || name === 'receivedAmount'
         ? (value === '' ? 0 : Number(value))
         : value
     }));
@@ -786,24 +761,25 @@ const AccountantPartnerPeriods: React.FC = () => {
 
     try {
       const payload = {
-        partnerPeriodId: activePeriodId,
-        partnerContractId: formData.partnerContractId,
-        talentId: formData.talentId,
-        actualWorkHours: formData.actualWorkHours,
-        otHours: formData.otHours || null,
+        clientPeriodId: activePeriodId,
+        clientContractId: formData.clientContractId,
+        billableHours: formData.billableHours,
         calculatedAmount: formData.calculatedAmount || null,
-        paidAmount: formData.paidAmount || null,
+        invoicedAmount: formData.invoicedAmount || null,
+        receivedAmount: formData.receivedAmount || null,
+        invoiceNumber: formData.invoiceNumber || null,
+        invoiceDate: formData.invoiceDate || null,
         paymentDate: formData.paymentDate || null,
-        status: 'PendingCalculation', // Luôn là PendingCalculation khi tạo mới
+        status: "PendingCalculation", // Luôn là PendingCalculation khi tạo mới
         notes: formData.notes || null
       };
 
-      await partnerContractPaymentService.create(payload);
+      await clientContractPaymentService.create(payload);
       setCreatePaymentSuccess(true);
 
       // Reload payments
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: activePeriodId, 
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
         excludeDeleted: true 
       });
       setPayments(data?.items ?? data ?? []);
@@ -818,94 +794,16 @@ const AccountantPartnerPeriods: React.FC = () => {
         handleCloseCreateModal();
       }, 1000);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Không thể tạo thanh toán';
-      setCreatePaymentError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || errorMessage);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setCreatePaymentError(error.response?.data?.message || error.message || 'Không thể tạo thanh toán');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Hàm cập nhật trạng thái period dựa trên payments
-  const updatePeriodStatus = async (periodId: number) => {
-    try {
-      // Lấy tất cả payments của period
-      const data = await partnerContractPaymentService.getAll({ 
-        partnerPeriodId: periodId, 
-        excludeDeleted: true 
-      });
-      const paymentsData = data?.items ?? data ?? [];
-      
-      if (paymentsData.length === 0) {
-        // Nếu không có payment nào, giữ nguyên trạng thái hiện tại
-        return;
-      }
-
-      // Lấy thông tin period hiện tại
-      const period = await partnerPaymentPeriodService.getById(periodId);
-      const currentStatus = period.status;
-
-      // Xác định trạng thái cuối cùng và tiến độ
-      const stageOrder: Record<string, number> = {
-        PendingCalculation: 1,
-        PendingApproval: 2,
-        Rejected: 0,
-        Approved: 3,
-        Paid: 4,
-      };
-      const maxStage = 4;
-      const finalStatus = 'Paid'; // Trạng thái cuối cùng
-
-      // Kiểm tra xem có payment nào đã thay đổi trạng thái (không phải PendingCalculation)
-      const hasChangedStatus = paymentsData.some((p: PartnerContractPayment) => 
-        p.status !== 'PendingCalculation'
-      );
-
-      // Kiểm tra xem tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
-      const allFinalStatus = paymentsData.every((p: PartnerContractPayment) => 
-        p.status === finalStatus
-      );
-      const all100Percent = paymentsData.every((p: PartnerContractPayment) => {
-        const current = stageOrder[p.status] ?? 0;
-        const percent = current > 0 ? Math.round((current / maxStage) * 100) : 0;
-        return percent === 100;
-      });
-
-      // Xác định trạng thái mới cho period
-      let newStatus = currentStatus;
-      
-      if (allFinalStatus && all100Percent) {
-        // Tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
-        newStatus = 'Closed';
-      } else if (hasChangedStatus && currentStatus === 'Open') {
-        // Có ít nhất một payment đã thay đổi trạng thái và period đang là Open
-        newStatus = 'Processing';
-      }
-
-      // Cập nhật period nếu trạng thái thay đổi
-      if (newStatus !== currentStatus) {
-        await partnerPaymentPeriodService.update(periodId, {
-          partnerId: period.partnerId,
-          periodMonth: period.periodMonth,
-          periodYear: period.periodYear,
-          status: newStatus
-        });
-
-        // Reload periods để cập nhật UI
-        if (selectedPartnerId) {
-          const updatedPeriods = await partnerPaymentPeriodService.getAll({ 
-            partnerId: selectedPartnerId, 
-            excludeDeleted: true 
-          });
-          setPeriods(updatedPeriods?.items ?? updatedPeriods ?? []);
-        }
-      }
-    } catch (err) {
-      console.error('Error updating period status:', err);
-    }
-  };
 
   // Hàm mở modal tính toán
-  const handleOpenCalculateModal = async (payment: PartnerContractPayment) => {
+  const handleOpenCalculateModal = async (payment: ClientContractPayment) => {
     if (payment.status !== 'PendingCalculation') return;
 
     setSelectedPaymentForCalculate(payment);
@@ -917,51 +815,34 @@ const AccountantPartnerPeriods: React.FC = () => {
     setFile(null);
     setUploadProgress(0);
     setCalculateFormData({
-      actualWorkHours: payment.actualWorkHours || 0,
-      otHours: payment.otHours || 0,
+      billableHours: payment.billableHours || 0,
       notes: payment.notes || ""
     });
-    // Load document types và tìm Acceptant trước
+    setDocumentFormData({
+      documentTypeId: 0,
+      fileName: "",
+      filePath: "",
+      description: "",
+      source: "Accountant",
+      referencedPartnerDocumentId: 0
+    });
+
+    // Load document types và tìm Worksheet
     setLoadingDocumentTypes(true);
     try {
       const typesData = await documentTypeService.getAll({ excludeDeleted: true });
       const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
       setDocumentTypesList(types);
       
-      // Tìm và set Acceptant làm mặc định (tìm theo nhiều cách)
-      const acceptantType = types.find((t: DocumentType) => {
-        const name = t.typeName.toLowerCase().trim();
-        return name === 'acceptant' || 
-               name === 'acceptance' || 
-               name.includes('acceptant') ||
-               name.includes('acceptance');
-      });
-      
-      // Set documentFormData với Acceptant đã được tìm thấy
-      setDocumentFormData({
-        documentTypeId: acceptantType ? acceptantType.id : 0,
-        fileName: "",
-        filePath: "",
-        description: "",
-        source: "Accountant",
-        referencedClientDocumentId: 0
-      });
-      
-      if (!acceptantType) {
-        // Nếu không tìm thấy, log để debug
-        console.warn("Không tìm thấy document type 'Acceptant'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
+      // Tìm và set Worksheet làm mặc định
+      const worksheetType = types.find((t: DocumentType) => 
+        t.typeName.toLowerCase() === 'worksheet'
+      );
+      if (worksheetType) {
+        setDocumentFormData(prev => ({ ...prev, documentTypeId: worksheetType.id }));
       }
     } catch (e) {
       console.error("Error loading document types:", e);
-      // Nếu có lỗi, vẫn set form data với documentTypeId = 0
-      setDocumentFormData({
-        documentTypeId: 0,
-        fileName: "",
-        filePath: "",
-        description: "",
-        source: "Accountant",
-        referencedClientDocumentId: 0
-      });
     } finally {
       setLoadingDocumentTypes(false);
     }
@@ -978,8 +859,7 @@ const AccountantPartnerPeriods: React.FC = () => {
     setFile(null);
     setUploadProgress(0);
     setCalculateFormData({
-      actualWorkHours: 0,
-      otHours: 0,
+      billableHours: 0,
       notes: ""
     });
     setDocumentFormData({
@@ -988,7 +868,7 @@ const AccountantPartnerPeriods: React.FC = () => {
       filePath: "",
       description: "",
       source: "Accountant",
-      referencedClientDocumentId: 0
+      referencedPartnerDocumentId: 0
     });
   };
 
@@ -1011,7 +891,7 @@ const AccountantPartnerPeriods: React.FC = () => {
     const { name, value } = e.target;
     setDocumentFormData(prev => ({
       ...prev,
-      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+      [name]: name === 'documentTypeId' || name === 'referencedPartnerDocumentId'
         ? (value === '' ? 0 : Number(value))
         : value
     }));
@@ -1072,14 +952,14 @@ const AccountantPartnerPeriods: React.FC = () => {
           }
 
           // Upload file lên Firebase
-          const path = `partner-documents/${selectedPaymentForCalculate.id}/${Date.now()}_${file.name}`;
+          const path = `client-documents/${selectedPaymentForCalculate.id}/${Date.now()}_${file.name}`;
           const downloadURL = await uploadFile(file, path, setUploadProgress);
 
           // Tạo payload
-          const payload: PartnerDocumentCreate = {
-            partnerContractPaymentId: selectedPaymentForCalculate.id,
+          const payload: ClientDocumentCreate = {
+            clientContractPaymentId: selectedPaymentForCalculate.id,
             documentTypeId: documentFormData.documentTypeId,
-            referencedClientDocumentId: documentFormData.referencedClientDocumentId || null,
+            referencedPartnerDocumentId: documentFormData.referencedPartnerDocumentId || null,
             fileName: file.name,
             filePath: downloadURL,
             uploadedByUserId,
@@ -1087,7 +967,7 @@ const AccountantPartnerPeriods: React.FC = () => {
             source: documentFormData.source || null
           };
 
-          await partnerDocumentService.create(payload);
+          await clientDocumentService.create(payload);
           setCreateDocumentSuccess(true);
         } catch (docErr: unknown) {
           setCreateDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu');
@@ -1096,11 +976,10 @@ const AccountantPartnerPeriods: React.FC = () => {
       }
 
       // Bước 2: Tính toán và submit
-      await partnerContractPaymentService.calculateAndSubmit(
+      await clientContractPaymentService.calculateAndSubmit(
         selectedPaymentForCalculate.id,
         {
-          actualWorkHours: calculateFormData.actualWorkHours,
-          otHours: calculateFormData.otHours || null,
+          billableHours: calculateFormData.billableHours || null,
           notes: calculateFormData.notes || null
         }
       );
@@ -1109,17 +988,16 @@ const AccountantPartnerPeriods: React.FC = () => {
       try {
         const managerUserIds = await getUserIdByRole('Manager');
         if (managerUserIds.length > 0) {
-          const contract = contractsMap.get(selectedPaymentForCalculate.partnerContractId);
-          const talent = talentsMap.get(selectedPaymentForCalculate.talentId);
+          const contract = contractsMap.get(selectedPaymentForCalculate.clientContractId);
           await notificationService.create({
-            title: "Thanh toán hợp đồng đối tác chờ duyệt",
-            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForCalculate.partnerContractId} - ${talent?.fullName || selectedPaymentForCalculate.talentId} đã được tính toán và submit. Vui lòng duyệt.`,
+            title: "Thanh toán hợp đồng khách hàng chờ duyệt",
+            message: `Thanh toán hợp đồng ${contract?.contractNumber || selectedPaymentForCalculate.clientContractId} đã được tính toán và submit. Vui lòng duyệt.`,
             type: NotificationType.PaymentDueSoon,
             priority: NotificationPriority.Medium,
             userIds: managerUserIds,
-            entityType: "PartnerContractPayment",
+            entityType: "ClientContractPayment",
             entityId: selectedPaymentForCalculate.id,
-            actionUrl: `/manager/payment-periods/partners`
+            actionUrl: `/manager/payment-periods/clients`
           });
         }
       } catch (notifError) {
@@ -1131,8 +1009,8 @@ const AccountantPartnerPeriods: React.FC = () => {
 
       // Reload payments
       if (activePeriodId) {
-        const data = await partnerContractPaymentService.getAll({ 
-          partnerPeriodId: activePeriodId, 
+        const data = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
           excludeDeleted: true 
         });
         setPayments(data?.items ?? data ?? []);
@@ -1147,16 +1025,16 @@ const AccountantPartnerPeriods: React.FC = () => {
       }, 2000);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setCalculateError(error.response?.data?.message || error.message || 'Không thể tính toán và submit');
+      setCalculateError(error.response?.data?.message || error.message || 'Không thể tính toán');
     } finally {
       setCalculating(false);
     }
   };
 
-  // Hàm mở modal ghi nhận đã chi trả
-  const handleOpenMarkAsPaidModal = async (payment: PartnerContractPayment) => {
-    setSelectedPaymentForMarkAsPaid(payment);
-    setShowMarkAsPaidModal(true);
+  // Hàm mở modal ghi nhận thanh toán
+  const handleOpenRecordPaymentModal = async (payment: ClientContractPayment) => {
+    setSelectedPaymentForRecord(payment);
+    setShowRecordPaymentModal(true);
     // Set thời gian hiện tại theo giờ Việt Nam (UTC+7) làm mặc định cho paymentDate
     const now = new Date();
     const vietnamTimeString = now.toLocaleString('en-US', {
@@ -1172,300 +1050,195 @@ const AccountantPartnerPeriods: React.FC = () => {
     const [datePart, timePart] = vietnamTimeString.split(', ');
     const [month, day, year] = datePart.split('/');
     const currentDateTime = `${year}-${month}-${day}T${timePart}`;
-    setMarkAsPaidFormData({
-      paidAmount: payment.paidAmount || payment.calculatedAmount || 0,
+    setPaymentFormData({
+      receivedAmount: payment.receivedAmount || payment.invoicedAmount || 0,
       paymentDate: currentDateTime, // Thời gian thực theo giờ Việt Nam
       notes: payment.notes || ""
     });
     setStatusUpdateError(null);
     setStatusUpdateSuccess(false);
-    setCreateInvoiceDocumentError(null);
-    setCreateReceiptDocumentError(null);
-    setCreateInvoiceDocumentSuccess(false);
-    setCreateReceiptDocumentSuccess(false);
-    setInvoiceFile(null);
-    setReceiptFile(null);
-    setInvoiceUploadProgress(0);
-    setReceiptUploadProgress(0);
-    setInvoiceDocumentFormData({
+    setCreateRecordPaymentDocumentError(null);
+    setCreateRecordPaymentDocumentSuccess(false);
+    setRecordPaymentFile(null);
+    setRecordPaymentUploadProgress(0);
+    setRecordPaymentDocumentFormData({
       documentTypeId: 0,
       fileName: "",
       filePath: "",
       description: "",
       source: "Accountant",
-      referencedClientDocumentId: 0
-    });
-    setReceiptDocumentFormData({
-      documentTypeId: 0,
-      fileName: "",
-      filePath: "",
-      description: "",
-      source: "Accountant",
-      referencedClientDocumentId: 0
+      referencedPartnerDocumentId: 0
     });
 
-    // Load document types và tìm Invoice và Receipt
-    setLoadingMarkAsPaidDocumentTypes(true);
+    // Load document types và tìm Receipt
+    setLoadingRecordPaymentDocumentTypes(true);
     try {
       const typesData = await documentTypeService.getAll({ excludeDeleted: true });
       const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
-      setMarkAsPaidDocumentTypesList(types);
+      setRecordPaymentDocumentTypesList(types);
       
-      // Tìm và set Invoice và Receipt làm mặc định
-      const invoiceType = types.find((t: DocumentType) => {
-        const name = t.typeName.toLowerCase().trim();
-        return name === 'invoice' || name.includes('invoice');
-      });
-      
+      // Tìm và set Receipt làm mặc định
       const receiptType = types.find((t: DocumentType) => {
         const name = t.typeName.toLowerCase().trim();
         return name === 'receipt' || name.includes('receipt');
       });
       
-      // Set documentFormData với Invoice và Receipt đã được tìm thấy
-      setInvoiceDocumentFormData({
-        documentTypeId: invoiceType ? invoiceType.id : 0,
-        fileName: "",
-        filePath: "",
-        description: "",
-        source: "Accountant",
-        referencedClientDocumentId: 0
-      });
-      
-      setReceiptDocumentFormData({
+      // Set documentFormData với Receipt đã được tìm thấy
+      setRecordPaymentDocumentFormData({
         documentTypeId: receiptType ? receiptType.id : 0,
         fileName: "",
         filePath: "",
         description: "",
         source: "Accountant",
-        referencedClientDocumentId: 0
+        referencedPartnerDocumentId: 0
       });
       
-      if (!invoiceType || !receiptType) {
-        console.warn("Không tìm thấy document type 'Invoice' hoặc 'Receipt'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
+      if (!receiptType) {
+        // Nếu không tìm thấy, log để debug
+        console.warn("Không tìm thấy document type 'Receipt'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
       }
     } catch (e) {
       console.error("Error loading document types:", e);
-      setInvoiceDocumentFormData({
+      // Nếu có lỗi, vẫn set form data với documentTypeId = 0
+      setRecordPaymentDocumentFormData({
         documentTypeId: 0,
         fileName: "",
         filePath: "",
         description: "",
         source: "Accountant",
-        referencedClientDocumentId: 0
-      });
-      setReceiptDocumentFormData({
-        documentTypeId: 0,
-        fileName: "",
-        filePath: "",
-        description: "",
-        source: "Accountant",
-        referencedClientDocumentId: 0
+        referencedPartnerDocumentId: 0
       });
     } finally {
-      setLoadingMarkAsPaidDocumentTypes(false);
+      setLoadingRecordPaymentDocumentTypes(false);
     }
   };
 
-  // Hàm đóng modal ghi nhận đã chi trả
-  const handleCloseMarkAsPaidModal = () => {
-    setShowMarkAsPaidModal(false);
-    setSelectedPaymentForMarkAsPaid(null);
-    setMarkAsPaidFormData({
-      paidAmount: 0,
+  // Hàm đóng modal ghi nhận thanh toán
+  const handleCloseRecordPaymentModal = () => {
+    setShowRecordPaymentModal(false);
+    setSelectedPaymentForRecord(null);
+    setPaymentFormData({
+      receivedAmount: 0,
       paymentDate: "",
       notes: ""
     });
     setStatusUpdateError(null);
     setStatusUpdateSuccess(false);
-    setCreateInvoiceDocumentError(null);
-    setCreateReceiptDocumentError(null);
-    setCreateInvoiceDocumentSuccess(false);
-    setCreateReceiptDocumentSuccess(false);
-    setInvoiceFile(null);
-    setReceiptFile(null);
-    setInvoiceUploadProgress(0);
-    setReceiptUploadProgress(0);
-    setInvoiceDocumentFormData({
+    setCreateRecordPaymentDocumentError(null);
+    setCreateRecordPaymentDocumentSuccess(false);
+    setRecordPaymentFile(null);
+    setRecordPaymentUploadProgress(0);
+    setRecordPaymentDocumentFormData({
       documentTypeId: 0,
       fileName: "",
       filePath: "",
       description: "",
       source: "Accountant",
-      referencedClientDocumentId: 0
-    });
-    setReceiptDocumentFormData({
-      documentTypeId: 0,
-      fileName: "",
-      filePath: "",
-      description: "",
-      source: "Accountant",
-      referencedClientDocumentId: 0
+      referencedPartnerDocumentId: 0
     });
   };
 
-  // Hàm xử lý file upload cho Invoice
-  const onInvoiceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Hàm xử lý file upload cho record payment
+  const onRecordPaymentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     if (f && f.size > 10 * 1024 * 1024) {
-      setCreateInvoiceDocumentError("File quá lớn (tối đa 10MB)");
+      setCreateRecordPaymentDocumentError("File quá lớn (tối đa 10MB)");
       return;
     }
-    setCreateInvoiceDocumentError(null);
-    setInvoiceFile(f);
+    setCreateRecordPaymentDocumentError(null);
+    setRecordPaymentFile(f);
     if (f) {
-      setInvoiceDocumentFormData(prev => ({ ...prev, fileName: f.name }));
+      setRecordPaymentDocumentFormData(prev => ({ ...prev, fileName: f.name }));
     }
   };
 
-  // Hàm xử lý file upload cho Receipt
-  const onReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    if (f && f.size > 10 * 1024 * 1024) {
-      setCreateReceiptDocumentError("File quá lớn (tối đa 10MB)");
-      return;
-    }
-    setCreateReceiptDocumentError(null);
-    setReceiptFile(f);
-    if (f) {
-      setReceiptDocumentFormData(prev => ({ ...prev, fileName: f.name }));
-    }
-  };
-
-  // Hàm xử lý thay đổi form document cho Invoice
-  const handleInvoiceDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  // Hàm xử lý thay đổi form document cho record payment
+  const handleRecordPaymentDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setInvoiceDocumentFormData(prev => ({
+    setRecordPaymentDocumentFormData(prev => ({
       ...prev,
-      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
+      [name]: name === 'documentTypeId' || name === 'referencedPartnerDocumentId'
         ? (value === '' ? 0 : Number(value))
         : value
     }));
   };
 
-  // Hàm xử lý thay đổi form document cho Receipt
-  const handleReceiptDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setReceiptDocumentFormData(prev => ({
-      ...prev,
-      [name]: name === 'documentTypeId' || name === 'referencedClientDocumentId'
-        ? (value === '' ? 0 : Number(value))
-        : value
-    }));
-  };
-
-
-  // Hàm ghi nhận đã chi trả (Paid) - Accountant
-  const handleMarkAsPaid = async (e: React.FormEvent) => {
+  // Hàm ghi nhận thanh toán (Paid) - Accountant (kèm tạo tài liệu nếu có)
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPaymentForMarkAsPaid) return;
-
-    // Kiểm tra bắt buộc phải có cả Invoice và Receipt
-    if (!invoiceFile || !invoiceDocumentFormData.documentTypeId) {
-      setStatusUpdateError("Vui lòng upload file Invoice");
-      return;
-    }
-    if (!receiptFile || !receiptDocumentFormData.documentTypeId) {
-      setStatusUpdateError("Vui lòng upload file Receipt");
-      return;
-    }
+    if (!selectedPaymentForRecord) return;
 
     setUpdatingStatus(true);
     setStatusUpdateError(null);
     setStatusUpdateSuccess(false);
-    setCreateInvoiceDocumentError(null);
-    setCreateReceiptDocumentError(null);
-    setCreateInvoiceDocumentSuccess(false);
-    setCreateReceiptDocumentSuccess(false);
-    setCreateInvoiceDocumentError(null);
-    setCreateReceiptDocumentError(null);
-    setCreateInvoiceDocumentSuccess(false);
-    setCreateReceiptDocumentSuccess(false);
+    setCreateRecordPaymentDocumentError(null);
+    setCreateRecordPaymentDocumentSuccess(false);
 
     try {
-      // Lấy userId từ token hoặc user context (dùng chung cho cả 2 document)
-      let uploadedByUserId: string | null = null;
-      
-      if (user?.id) {
-        uploadedByUserId = user.id;
-      } else {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          try {
-            const decoded = decodeJWT(token);
-            if (decoded) {
-              uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+      // Bước 1: Tạo document nếu có file
+      if (recordPaymentFile && recordPaymentDocumentFormData.documentTypeId) {
+        try {
+          // Lấy userId từ token hoặc user context
+          let uploadedByUserId: string | null = null;
+          
+          if (user?.id) {
+            uploadedByUserId = user.id;
+          } else {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+              try {
+                const decoded = decodeJWT(token);
+                if (decoded) {
+                  uploadedByUserId = decoded.nameid || decoded.sub || decoded.userId || decoded.uid || null;
+                }
+              } catch (error) {
+                console.error('Error decoding JWT:', error);
+              }
             }
-          } catch (error) {
-            console.error('Error decoding JWT:', error);
           }
+          
+          if (!uploadedByUserId) {
+            throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
+          }
+
+          // Upload file lên Firebase
+          const path = `client-documents/${selectedPaymentForRecord.id}/${Date.now()}_${recordPaymentFile.name}`;
+          const downloadURL = await uploadFile(recordPaymentFile, path, setRecordPaymentUploadProgress);
+
+          // Tạo payload
+          const payload: ClientDocumentCreate = {
+            clientContractPaymentId: selectedPaymentForRecord.id,
+            documentTypeId: recordPaymentDocumentFormData.documentTypeId,
+            referencedPartnerDocumentId: recordPaymentDocumentFormData.referencedPartnerDocumentId || null,
+            fileName: recordPaymentFile.name,
+            filePath: downloadURL,
+            uploadedByUserId,
+            description: recordPaymentDocumentFormData.description || null,
+            source: recordPaymentDocumentFormData.source || null
+          };
+
+          await clientDocumentService.create(payload);
+          setCreateRecordPaymentDocumentSuccess(true);
+        } catch (docErr: unknown) {
+          setCreateRecordPaymentDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu');
+          throw docErr; // Dừng lại nếu không tạo được tài liệu
         }
       }
-      
-      if (!uploadedByUserId) {
-        throw new Error('Không xác định được người dùng (uploadedByUserId). Vui lòng đăng nhập lại.');
-      }
 
-      // Bước 1: Tạo document Invoice
-      try {
-        const path = `partner-documents/${selectedPaymentForMarkAsPaid.id}/${Date.now()}_invoice_${invoiceFile.name}`;
-        const downloadURL = await uploadFile(invoiceFile, path, setInvoiceUploadProgress);
-
-        const payload: PartnerDocumentCreate = {
-          partnerContractPaymentId: selectedPaymentForMarkAsPaid.id,
-          documentTypeId: invoiceDocumentFormData.documentTypeId,
-          referencedClientDocumentId: invoiceDocumentFormData.referencedClientDocumentId || null,
-          fileName: invoiceFile.name,
-          filePath: downloadURL,
-          uploadedByUserId,
-          description: invoiceDocumentFormData.description || null,
-          source: invoiceDocumentFormData.source || null
-        };
-
-        await partnerDocumentService.create(payload);
-        setCreateInvoiceDocumentSuccess(true);
-      } catch (docErr: unknown) {
-        setCreateInvoiceDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu Invoice');
-        throw docErr;
-      }
-
-      // Bước 2: Tạo document Receipt
-      try {
-        const path = `partner-documents/${selectedPaymentForMarkAsPaid.id}/${Date.now()}_receipt_${receiptFile.name}`;
-        const downloadURL = await uploadFile(receiptFile, path, setReceiptUploadProgress);
-
-        const payload: PartnerDocumentCreate = {
-          partnerContractPaymentId: selectedPaymentForMarkAsPaid.id,
-          documentTypeId: receiptDocumentFormData.documentTypeId,
-          referencedClientDocumentId: receiptDocumentFormData.referencedClientDocumentId || null,
-          fileName: receiptFile.name,
-          filePath: downloadURL,
-          uploadedByUserId,
-          description: receiptDocumentFormData.description || null,
-          source: receiptDocumentFormData.source || null
-        };
-
-        await partnerDocumentService.create(payload);
-        setCreateReceiptDocumentSuccess(true);
-      } catch (docErr: unknown) {
-        setCreateReceiptDocumentError(getErrorMessage(docErr) || 'Không thể tạo tài liệu Receipt');
-        throw docErr;
-      }
-
-      // Bước 3: Mark as paid
-      const paymentDateISO = new Date(markAsPaidFormData.paymentDate).toISOString();
-      await partnerContractPaymentService.markAsPaid(selectedPaymentForMarkAsPaid.id, {
-        paidAmount: markAsPaidFormData.paidAmount,
+      // Bước 2: Record payment
+      const paymentDateISO = new Date(paymentFormData.paymentDate).toISOString();
+      await clientContractPaymentService.recordPayment(selectedPaymentForRecord.id, {
+        receivedAmount: paymentFormData.receivedAmount,
         paymentDate: paymentDateISO,
-        notes: markAsPaidFormData.notes || null
+        notes: paymentFormData.notes || null
       });
       
       setStatusUpdateSuccess(true);
 
       // Reload payments
       if (activePeriodId) {
-        const data = await partnerContractPaymentService.getAll({ 
-          partnerPeriodId: activePeriodId, 
+        const data = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
           excludeDeleted: true 
         });
         setPayments(data?.items ?? data ?? []);
@@ -1476,23 +1249,187 @@ const AccountantPartnerPeriods: React.FC = () => {
 
       // Đóng modal sau 2 giây
       setTimeout(() => {
-        handleCloseMarkAsPaidModal();
+        handleCloseRecordPaymentModal();
         setStatusUpdateSuccess(false);
       }, 2000);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } }; message?: string };
-      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể ghi nhận đã chi trả');
+      setStatusUpdateError(error.response?.data?.message || error.message || 'Không thể ghi nhận thanh toán');
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  // Hàm cập nhật trạng thái period dựa trên payments
+  const updatePeriodStatus = async (periodId: number) => {
+    try {
+      // Lấy tất cả payments của period
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: periodId, 
+        excludeDeleted: true 
+      });
+      const paymentsData = data?.items ?? data ?? [];
+      
+      if (paymentsData.length === 0) {
+        // Nếu không có payment nào, giữ nguyên trạng thái hiện tại
+        return;
+      }
+
+      // Lấy thông tin period hiện tại
+      const period = await clientPaymentPeriodService.getById(periodId);
+      const currentStatus = period.status;
+
+      // Xác định trạng thái cuối cùng và tiến độ
+      const stageOrder: Record<string, number> = {
+        PendingCalculation: 1,
+        ReadyForInvoice: 2,
+        Cancelled: 0,
+        Invoiced: 3,
+        Overdue: 3,
+        Paid: 4,
+      };
+      const maxStage = 4;
+      const finalStatus = 'Paid'; // Trạng thái cuối cùng
+
+      // Kiểm tra xem có payment nào đã thay đổi trạng thái (không phải PendingCalculation)
+      const hasChangedStatus = paymentsData.some((p: ClientContractPayment) => 
+        p.status !== 'PendingCalculation'
+      );
+
+      // Kiểm tra xem tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
+      const allFinalStatus = paymentsData.every((p: ClientContractPayment) => 
+        p.status === finalStatus
+      );
+      const all100Percent = paymentsData.every((p: ClientContractPayment) => {
+        const current = stageOrder[p.status] ?? 0;
+        const percent = current > 0 ? Math.round((current / maxStage) * 100) : 0;
+        return percent === 100;
+      });
+
+      // Xác định trạng thái mới cho period
+      let newStatus = currentStatus;
+      
+      if (allFinalStatus && all100Percent) {
+        // Tất cả payments đều ở trạng thái cuối cùng và tiến độ 100%
+        newStatus = 'Closed';
+      } else if (hasChangedStatus && currentStatus === 'Open') {
+        // Có ít nhất một payment đã thay đổi trạng thái và period đang là Open
+        newStatus = 'Processing';
+      }
+
+      // Cập nhật period nếu trạng thái thay đổi
+      if (newStatus !== currentStatus) {
+        await clientPaymentPeriodService.update(periodId, {
+          clientCompanyId: period.clientCompanyId,
+          periodMonth: period.periodMonth,
+          periodYear: period.periodYear,
+          status: newStatus
+        });
+
+        // Reload periods để cập nhật UI
+        if (selectedCompanyId) {
+          const updatedPeriods = await clientPaymentPeriodService.getAll({ 
+            clientCompanyId: selectedCompanyId, 
+            excludeDeleted: true 
+          });
+          setPeriods(updatedPeriods?.items ?? updatedPeriods ?? []);
+        }
+      }
+    } catch (err) {
+      console.error('Error updating period status:', err);
+    }
+  };
+
+  // Kiểm tra và tự động chuyển Invoiced → Overdue nếu quá 30 ngày (Background Job CheckAndNotifyOverdueInvoices)
+  const checkAndUpdateOverdue = async () => {
+    if (!activePeriodId) return;
+
+    try {
+      const data = await clientContractPaymentService.getAll({ 
+        clientPeriodId: activePeriodId, 
+        excludeDeleted: true 
+      });
+      const paymentsData = data?.items ?? data ?? [];
+      
+      const now = new Date();
+
+      // Lọc các payment cần cập nhật: Status == Invoiced VÀ InvoiceDate + 30 ngày < Today VÀ PaymentDate == null
+      const overduePayments = paymentsData.filter((p: ClientContractPayment) => {
+        if (p.status !== 'Invoiced' || !p.invoiceDate || p.paymentDate !== null) return false;
+        const invoiceDate = new Date(p.invoiceDate);
+        const invoiceDatePlus30 = new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return invoiceDatePlus30 < now;
+      });
+
+      // Cập nhật các payment quá hạn và gửi thông báo
+      for (const payment of overduePayments) {
+        try {
+          await clientContractPaymentService.update(payment.id, {
+            clientPeriodId: payment.clientPeriodId,
+            clientContractId: payment.clientContractId,
+            billableHours: payment.billableHours,
+            calculatedAmount: payment.calculatedAmount ?? null,
+            invoicedAmount: payment.invoicedAmount ?? null,
+            receivedAmount: payment.receivedAmount ?? null,
+            invoiceNumber: payment.invoiceNumber ?? null,
+            invoiceDate: payment.invoiceDate ?? null,
+            paymentDate: payment.paymentDate ?? null,
+            status: 'Overdue',
+            notes: payment.notes ?? null
+          });
+
+          // Gửi thông báo cho accountant và manager
+          try {
+            const [accountantUserIds, managerUserIds] = await Promise.all([
+              getUserIdByRole('AccountantStaff'),
+              getUserIdByRole('Manager')
+            ]);
+            const allUserIds = [...accountantUserIds, ...managerUserIds];
+            
+            if (allUserIds.length > 0) {
+              const contract = contractsMap.get(payment.clientContractId);
+              await notificationService.create({
+                title: "Hóa đơn quá hạn thanh toán",
+                message: `Hóa đơn ${payment.invoiceNumber || payment.id} của hợp đồng ${contract?.contractNumber || payment.clientContractId} đã quá hạn 30 ngày. Vui lòng xử lý.`,
+                type: NotificationType.PaymentOverdue,
+                priority: NotificationPriority.High,
+                userIds: allUserIds,
+                entityType: "ClientContractPayment",
+                entityId: payment.id,
+                actionUrl: `/accountant/payment-periods/clients`
+              });
+            }
+          } catch (notifError) {
+            console.error("Error sending notification:", notifError);
+          }
+        } catch (err) {
+          console.error(`Error updating payment ${payment.id} to Overdue:`, err);
+        }
+      }
+
+      // Reload payments nếu có thay đổi
+      if (overduePayments.length > 0) {
+        const updatedData = await clientContractPaymentService.getAll({ 
+          clientPeriodId: activePeriodId, 
+          excludeDeleted: true 
+        });
+        setPayments(updatedData?.items ?? updatedData ?? []);
+        
+        // Cập nhật trạng thái period
+        await updatePeriodStatus(activePeriodId);
+      }
+    } catch (err) {
+      console.error('Error checking overdue payments:', err);
     }
   };
 
   // Mapping tiến trình theo status
   const stageOrder: Record<string, number> = {
     PendingCalculation: 1,
-    PendingApproval: 2,
-    Rejected: 0,
-    Approved: 3,
+    ReadyForInvoice: 2,
+    Cancelled: 0,
+    Invoiced: 3,
+    Overdue: 3,
     Paid: 4,
   };
 
@@ -1502,12 +1439,14 @@ const AccountantPartnerPeriods: React.FC = () => {
     switch (status) {
       case 'PendingCalculation':
         return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-      case 'PendingApproval':
+      case 'ReadyForInvoice':
         return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Rejected':
+      case 'Cancelled':
         return 'bg-red-50 text-red-700 border-red-200';
-      case 'Approved':
+      case 'Invoiced':
         return 'bg-green-50 text-green-700 border-green-200';
+      case 'Overdue':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
       case 'Paid':
         return 'bg-purple-50 text-purple-700 border-purple-200';
       default:
@@ -1520,14 +1459,16 @@ const AccountantPartnerPeriods: React.FC = () => {
     switch (status) {
       case 'PendingCalculation':
         return 'Chờ tính toán';
-      case 'PendingApproval':
-        return 'Chờ duyệt';
-      case 'Rejected':
-        return 'Từ chối';
-      case 'Approved':
-        return 'Đã duyệt';
+      case 'ReadyForInvoice':
+        return 'Sẵn sàng xuất hóa đơn';
+      case 'Cancelled':
+        return 'Đã hủy';
+      case 'Invoiced':
+        return 'Đã xuất hóa đơn';
+      case 'Overdue':
+        return 'Quá hạn';
       case 'Paid':
-        return 'Đã chi trả';
+        return 'Đã thanh toán';
       default:
         return status;
     }
@@ -1543,7 +1484,32 @@ const AccountantPartnerPeriods: React.FC = () => {
     return acc;
   }, {});
 
-  const selectedPartner = partners.find(p => p.id === selectedPartnerId);
+  // Logic filter companies
+  const filteredCompanies = companies.filter(company => {
+    // Filter theo status hợp đồng
+    const companyContracts = allContracts.filter(c => c.clientCompanyId === company.id);
+    const hasActiveContract = companyContracts.some(c => 
+      c.status === 'Active' || c.status === 'Ongoing'
+    );
+    
+    // Nếu showAllCompanies = false, chỉ hiển thị companies có hợp đồng Active/Ongoing
+    if (!showAllCompanies && !hasActiveContract) {
+      return false;
+    }
+    
+    // Filter theo search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        company.name.toLowerCase().includes(searchLower) ||
+        (company.taxCode && company.taxCode.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    return true;
+  });
+
+  const selectedCompany = companies.find(c => c.id === selectedCompanyId);
   const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                       'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
@@ -1553,48 +1519,77 @@ const AccountantPartnerPeriods: React.FC = () => {
 
       <div className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Kỳ Thanh Toán Nhân Sự</h1>
-          <p className="text-neutral-600 mt-1">Chọn nhân sự để xem các kỳ thanh toán</p>
+          <h1 className="text-3xl font-bold text-gray-900">Kỳ Thanh Toán Khách hàng</h1>
+          <p className="text-neutral-600 mt-1">Chọn công ty để xem các kỳ thanh toán</p>
         </div>
 
-        {/* Danh sách đối tác */}
+        {/* Danh sách công ty */}
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Danh sách nhân sự có hợp đồng</h2>
-          {loadingPartners ? (
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Danh sách công ty có hợp đồng</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm công ty..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500 text-sm"
+                />
+              </div>
+              {/* Filter checkbox */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAllCompanies}
+                  onChange={(e) => setShowAllCompanies(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Hiển thị tất cả công ty</span>
+              </label>
+            </div>
+          </div>
+          {loadingCompanies ? (
             <div className="flex items-center justify-center py-10 text-gray-600">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mr-3" />
-              Đang tải danh sách nhân sự...
+              Đang tải danh sách công ty...
             </div>
-          ) : partners.length === 0 ? (
-            <div className="text-gray-500 text-sm py-4">Chưa có nhân sự nào có hợp đồng</div>
+          ) : filteredCompanies.length === 0 ? (
+            <div className="text-gray-500 text-sm py-4">
+              {companies.length === 0 
+                ? "Chưa có công ty nào có hợp đồng"
+                : "Không tìm thấy công ty nào phù hợp"}
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {partners.map(partner => (
+              {filteredCompanies.map(company => (
                 <button
-                  key={partner.id}
+                  key={company.id}
                   onClick={() => {
-                    setSelectedPartnerId(partner.id);
+                    setSelectedCompanyId(company.id);
                     setActivePeriodId(null);
                     setPayments([]);
                   }}
                   className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    selectedPartnerId === partner.id
+                    selectedCompanyId === company.id
                       ? 'border-primary-500 bg-primary-50 shadow-md'
                       : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <Building2 className={`w-5 h-5 mt-0.5 ${
-                      selectedPartnerId === partner.id ? 'text-primary-600' : 'text-gray-400'
+                      selectedCompanyId === company.id ? 'text-primary-600' : 'text-gray-400'
                     }`} />
                     <div className="flex-1">
                       <div className={`font-semibold ${
-                        selectedPartnerId === partner.id ? 'text-primary-900' : 'text-gray-900'
+                        selectedCompanyId === company.id ? 'text-primary-900' : 'text-gray-900'
                       }`}>
-                        {partner.companyName}
+                        {company.name}
                       </div>
-                      {partner.taxCode && (
-                        <div className="text-xs text-gray-500 mt-1">Mã số thuế: {partner.taxCode}</div>
+                      {company.taxCode && (
+                        <div className="text-xs text-gray-500 mt-1">Mã số thuế: {company.taxCode}</div>
                       )}
                     </div>
                   </div>
@@ -1605,20 +1600,31 @@ const AccountantPartnerPeriods: React.FC = () => {
         </div>
 
         {/* Danh sách kỳ thanh toán */}
-        {selectedPartnerId && (
+        {selectedCompanyId && (
           <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 mb-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-semibold text-gray-900">
-                Kỳ thanh toán - {selectedPartner?.companyName}
+                Kỳ thanh toán - {selectedCompany?.name}
               </h2>
-              <button
-                onClick={handleCreatePeriods}
-                disabled={creatingPeriods}
-                className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 shadow-soft flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                {creatingPeriods ? 'Đang tạo...' : 'Tạo kỳ thanh toán từ hợp đồng'}
-              </button>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showClosedPeriods}
+                    onChange={(e) => setShowClosedPeriods(e.target.checked)}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Hiển thị kỳ đã đóng</span>
+                </label>
+                <button
+                  onClick={handleCreatePeriods}
+                  disabled={creatingPeriods}
+                  className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 shadow-soft flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                  {creatingPeriods ? 'Đang tạo...' : 'Tạo kỳ thanh toán từ hợp đồng'}
+                </button>
+              </div>
             </div>
             {createMessage && (
               <div className={`mb-4 p-3 rounded-xl border ${
@@ -1652,6 +1658,7 @@ const AccountantPartnerPeriods: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {periods
+                  .filter(period => showClosedPeriods || period.status !== 'Closed')
                   .sort((a, b) => {
                     if (a.periodYear !== b.periodYear) return a.periodYear - b.periodYear;
                     return a.periodMonth - b.periodMonth;
@@ -1689,7 +1696,7 @@ const AccountantPartnerPeriods: React.FC = () => {
         )}
 
         {/* Chi tiết thanh toán */}
-        {selectedPartnerId && (
+        {selectedCompanyId && (
           <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Chi tiết thanh toán</h2>
@@ -1717,16 +1724,6 @@ const AccountantPartnerPeriods: React.FC = () => {
                 )}
               </div>
             </div>
-            {statusUpdateSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700">
-                Cập nhật trạng thái thành công!
-              </div>
-            )}
-            {statusUpdateError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
-                {statusUpdateError}
-              </div>
-            )}
             {!activePeriodId ? (
               <div className="text-gray-500 text-sm">Chọn một kỳ thanh toán để xem chi tiết</div>
             ) : loadingPayments ? (
@@ -1741,50 +1738,44 @@ const AccountantPartnerPeriods: React.FC = () => {
                 <table className="min-w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
-                      <th className="p-3 border-b text-left whitespace-nowrap">ID</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Hợp đồng</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Nhân sự</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Giờ thực tế</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">OT</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Tính toán</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Đã chi</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Trạng thái</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Tiến độ</th>
-                      <th className="p-3 border-b text-left whitespace-nowrap">Thao tác</th>
+                      <th className="p-3 border-b text-left">ID</th>
+                      <th className="p-3 border-b text-left">Hợp đồng</th>
+                      <th className="p-3 border-b text-left">Giờ bill</th>
+                      <th className="p-3 border-b text-left">Tính toán</th>
+                      <th className="p-3 border-b text-left">Hóa đơn</th>
+                      <th className="p-3 border-b text-left">Đã nhận</th>
+                      <th className="p-3 border-b text-left">Trạng thái</th>
+                      <th className="p-3 border-b text-left">Tiến độ</th>
+                      <th className="p-3 border-b text-left">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredPayments.map(p => {
-                      const contract = contractsMap.get(p.partnerContractId);
-                      const talent = talentsMap.get(p.talentId);
                       return (
                         <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="p-3 whitespace-nowrap">{p.id}</td>
+                          <td className="p-3">{p.id}</td>
                           <td className="p-3">
-                            {contract ? (
+                            {contractsMap.get(p.clientContractId) ? (
                               <Link
-                                to={`/accountant/contracts/partners/${p.partnerContractId}`}
-                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors whitespace-nowrap"
+                                to={`/accountant/contracts/clients/${p.clientContractId}`}
+                                className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
                               >
-                                {contract.contractNumber || p.partnerContractId}
+                                {contractsMap.get(p.clientContractId)?.contractNumber || p.clientContractId}
                               </Link>
                             ) : (
-                              <span className="whitespace-nowrap">{p.partnerContractId}</span>
+                              p.clientContractId
                             )}
                           </td>
+                          <td className="p-3">{p.billableHours}</td>
+                          <td className="p-3">{formatVND(p.calculatedAmount)}</td>
+                          <td className="p-3">{formatVND(p.invoicedAmount)}</td>
+                          <td className="p-3">{formatVND(p.receivedAmount)}</td>
                           <td className="p-3">
-                            <span className="whitespace-nowrap">{talent?.fullName || p.talentId}</span>
-                          </td>
-                          <td className="p-3 whitespace-nowrap">{p.actualWorkHours}</td>
-                          <td className="p-3 whitespace-nowrap">{p.otHours ?? "-"}</td>
-                          <td className="p-3 whitespace-nowrap">{formatVND(p.calculatedAmount)}</td>
-                          <td className="p-3 whitespace-nowrap">{formatVND(p.paidAmount)}</td>
-                          <td className="p-3 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
                               {getStatusLabel(p.status)}
                             </span>
                           </td>
-                          <td className="p-3 whitespace-nowrap">
+                          <td className="p-3">
                             {(() => {
                               const current = stageOrder[p.status] ?? 0;
                               const percent = current > 0 ? Math.round((current / maxStage) * 100) : 0;
@@ -1798,26 +1789,15 @@ const AccountantPartnerPeriods: React.FC = () => {
                               );
                             })()}
                           </td>
-                          <td className="p-3 whitespace-nowrap">
+                          <td className="p-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {p.status === 'PendingCalculation' && (
-                                <button
-                                  onClick={() => handleOpenCalculateModal(p)}
-                                  className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                  <Calculator className="w-4 h-4" />
-                                  Tính toán
-                                </button>
-                              )}
-                              {p.status === 'Approved' && (
-                                <button
-                                  onClick={() => handleOpenMarkAsPaidModal(p)}
-                                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                  <Wallet className="w-4 h-4" />
-                                  Đã chi trả
-                                </button>
-                              )}
+                              <Link
+                                to={`/accountant/payment-periods/clients/${p.id}/detail`}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Xem chi tiết
+                              </Link>
                               <button
                                 onClick={() => handleViewDocuments(p)}
                                 className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-2 transition-all whitespace-nowrap"
@@ -1825,16 +1805,6 @@ const AccountantPartnerPeriods: React.FC = () => {
                                 <FileText className="w-4 h-4" />
                                 Tài liệu
                               </button>
-                              <button
-                                onClick={() => handleOpenCreateDocumentModal(p)}
-                                className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                              >
-                                <Upload className="w-4 h-4" />
-                                Tạo tài liệu
-                              </button>
-                              {p.status !== 'PendingCalculation' && p.status !== 'Approved' && (
-                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -1896,12 +1866,12 @@ const AccountantPartnerPeriods: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Giờ làm việc thực tế <span className="text-red-500">*</span>
+                        Giờ bill <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
-                        value={calculateFormData.actualWorkHours}
-                        onChange={(e) => setCalculateFormData(prev => ({ ...prev, actualWorkHours: Number(e.target.value) || 0 }))}
+                        value={calculateFormData.billableHours}
+                        onChange={(e) => setCalculateFormData(prev => ({ ...prev, billableHours: Number(e.target.value) || 0 }))}
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                         required
                         min="0"
@@ -1911,38 +1881,11 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Giờ OT
-                      </label>
-                      <input
-                        type="number"
-                        value={calculateFormData.otHours}
-                        onChange={(e) => setCalculateFormData(prev => ({ ...prev, otHours: Number(e.target.value) || 0 }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                        min="0"
-                        step="0.1"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Hợp đồng
                       </label>
                       <input
                         type="text"
-                        value={contractsMap.get(selectedPaymentForCalculate.partnerContractId)?.contractNumber || selectedPaymentForCalculate.partnerContractId}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
-                        readOnly
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nhân sự
-                      </label>
-                      <input
-                        type="text"
-                        value={talentsMap.get(selectedPaymentForCalculate.talentId)?.fullName || selectedPaymentForCalculate.talentId}
+                        value={contractsMap.get(selectedPaymentForCalculate.clientContractId)?.contractNumber || selectedPaymentForCalculate.clientContractId}
                         disabled
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                         readOnly
@@ -1964,9 +1907,9 @@ const AccountantPartnerPeriods: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Tạo tài liệu (Acceptant) - Tùy chọn */}
+                {/* Tạo tài liệu (Worksheet) - Tùy chọn */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu (Acceptant) - Tùy chọn</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu (Worksheet) - Tùy chọn</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2089,14 +2032,14 @@ const AccountantPartnerPeriods: React.FC = () => {
           </div>
         )}
 
-        {/* Modal ghi nhận đã chi trả */}
-        {showMarkAsPaidModal && selectedPaymentForMarkAsPaid && (
+        {/* Modal ghi nhận thanh toán */}
+        {showRecordPaymentModal && selectedPaymentForRecord && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 max-w-2xl w-full mx-4">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Ghi nhận đã chi trả</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Ghi nhận thanh toán</h2>
                 <button
-                  onClick={handleCloseMarkAsPaidModal}
+                  onClick={handleCloseRecordPaymentModal}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -2106,7 +2049,7 @@ const AccountantPartnerPeriods: React.FC = () => {
               {statusUpdateSuccess && (
                 <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <p className="text-green-700 font-medium">✅ Ghi nhận đã chi trả thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                  <p className="text-green-700 font-medium">✅ Ghi nhận thanh toán thành công! Modal sẽ tự động đóng sau 2 giây.</p>
                 </div>
               )}
 
@@ -2117,35 +2060,7 @@ const AccountantPartnerPeriods: React.FC = () => {
                 </div>
               )}
 
-              {createInvoiceDocumentSuccess && (
-                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <p className="text-green-700 font-medium">✅ Tạo tài liệu Invoice thành công!</p>
-                </div>
-              )}
-
-              {createInvoiceDocumentError && (
-                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  <p className="text-red-700 font-medium">{createInvoiceDocumentError}</p>
-                </div>
-              )}
-
-              {createReceiptDocumentSuccess && (
-                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <p className="text-green-700 font-medium">✅ Tạo tài liệu Receipt thành công!</p>
-                </div>
-              )}
-
-              {createReceiptDocumentError && (
-                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  <p className="text-red-700 font-medium">{createReceiptDocumentError}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleMarkAsPaid} className="space-y-4">
+              <form onSubmit={handleRecordPayment} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2153,7 +2068,7 @@ const AccountantPartnerPeriods: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={contractsMap.get(selectedPaymentForMarkAsPaid.partnerContractId)?.contractNumber || selectedPaymentForMarkAsPaid.partnerContractId}
+                      value={contractsMap.get(selectedPaymentForRecord.clientContractId)?.contractNumber || selectedPaymentForRecord.clientContractId}
                       disabled
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                       readOnly
@@ -2162,11 +2077,11 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nhân sự
+                      Số tiền hóa đơn
                     </label>
                     <input
                       type="text"
-                      value={talentsMap.get(selectedPaymentForMarkAsPaid.talentId)?.fullName || selectedPaymentForMarkAsPaid.talentId}
+                      value={formatVND(selectedPaymentForRecord.invoicedAmount)}
                       disabled
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                       readOnly
@@ -2175,25 +2090,12 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số tiền đã tính toán
-                    </label>
-                    <input
-                      type="text"
-                      value={formatVND(selectedPaymentForMarkAsPaid.calculatedAmount)}
-                      disabled
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
-                      readOnly
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số tiền đã chi trả <span className="text-red-500">*</span>
+                      Số tiền đã nhận <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
-                      value={markAsPaidFormData.paidAmount}
-                      onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) || 0 }))}
+                      value={paymentFormData.receivedAmount}
+                      onChange={(e) => setPaymentFormData(prev => ({ ...prev, receivedAmount: Number(e.target.value) || 0 }))}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       required
                       min="0"
@@ -2203,12 +2105,12 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ngày chi trả <span className="text-red-500">*</span>
+                      Ngày thanh toán <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="datetime-local"
-                      value={markAsPaidFormData.paymentDate}
-                      onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, paymentDate: e.target.value }))}
+                      value={paymentFormData.paymentDate}
+                      onChange={(e) => setPaymentFormData(prev => ({ ...prev, paymentDate: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       required
                     />
@@ -2220,33 +2122,46 @@ const AccountantPartnerPeriods: React.FC = () => {
                     Ghi chú
                   </label>
                   <textarea
-                    value={markAsPaidFormData.notes}
-                    onChange={(e) => setMarkAsPaidFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    value={paymentFormData.notes}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, notes: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                     rows={3}
-                    placeholder="Ghi chú về việc chi trả"
+                    placeholder="Ghi chú về thanh toán"
                   />
                 </div>
 
-                {/* Form tạo tài liệu Invoice */}
+                {/* Form tạo tài liệu - Tùy chọn */}
                 <div className="border-t pt-6 mt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu Invoice <span className="text-red-500">*</span></h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu (Receipt) - Tùy chọn</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {createRecordPaymentDocumentSuccess && (
+                    <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <p className="text-green-700 font-medium">✅ Tạo tài liệu thành công!</p>
+                    </div>
+                  )}
+
+                  {createRecordPaymentDocumentError && (
+                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                      <p className="text-red-700 font-medium">{createRecordPaymentDocumentError}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Loại tài liệu <span className="text-red-500">*</span>
                       </label>
                       <select
                         name="documentTypeId"
-                        value={invoiceDocumentFormData.documentTypeId}
-                        onChange={handleInvoiceDocumentFormChange}
+                        value={recordPaymentDocumentFormData.documentTypeId}
+                        onChange={handleRecordPaymentDocumentFormChange}
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                        required={!!invoiceFile}
-                        disabled={loadingMarkAsPaidDocumentTypes}
+                        disabled={loadingRecordPaymentDocumentTypes}
                       >
-                        <option value="0">-- Chọn loại tài liệu --</option>
-                        {markAsPaidDocumentTypesList.map(type => (
+                        <option value="0">-- Chọn loại tài liệu (tùy chọn) --</option>
+                        {recordPaymentDocumentTypesList.map(type => (
                           <option key={type.id} value={type.id}>
                             {type.typeName}
                           </option>
@@ -2261,30 +2176,33 @@ const AccountantPartnerPeriods: React.FC = () => {
                       <input
                         type="text"
                         name="source"
-                        value={invoiceDocumentFormData.source}
-                        onChange={handleInvoiceDocumentFormChange}
+                        value={recordPaymentDocumentFormData.source}
+                        onChange={handleRecordPaymentDocumentFormChange}
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                         placeholder="Accountant"
                       />
                     </div>
                   </div>
 
-                  <div className="mb-4">
+                  <div className="mt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      File Invoice <span className="text-red-500">*</span>
+                      File
                     </label>
+                    {recordPaymentFile && !recordPaymentDocumentFormData.documentTypeId && (
+                      <p className="text-sm text-amber-600 mb-1">⚠️ Vui lòng chọn loại tài liệu nếu muốn tạo tài liệu</p>
+                    )}
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
-                      {invoiceFile ? (
+                      {recordPaymentFile ? (
                         <div className="flex flex-col items-center text-primary-700">
                           <FileUp className="w-8 h-8 mb-2" />
-                          <p className="font-medium">{invoiceFile.name}</p>
-                          <p className="text-sm text-gray-600">{(invoiceFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                          {invoiceUploadProgress > 0 && invoiceUploadProgress < 100 && (
-                            <p className="text-sm text-gray-600 mt-1">Đang upload: {invoiceUploadProgress}%</p>
+                          <p className="font-medium">{recordPaymentFile.name}</p>
+                          <p className="text-sm text-gray-600">{(recordPaymentFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          {recordPaymentUploadProgress > 0 && recordPaymentUploadProgress < 100 && (
+                            <p className="text-sm text-gray-600 mt-1">Đang upload: {recordPaymentUploadProgress}%</p>
                           )}
                           <button
                             type="button"
-                            onClick={() => setInvoiceFile(null)}
+                            onClick={() => setRecordPaymentFile(null)}
                             className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
                           >
                             Xóa file
@@ -2293,123 +2211,30 @@ const AccountantPartnerPeriods: React.FC = () => {
                       ) : (
                         <label className="flex flex-col items-center text-gray-500 cursor-pointer">
                           <Upload className="w-12 h-12 mb-4" />
-                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file Invoice vào đây</span>
+                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file vào đây (tùy chọn)</span>
                           <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
                           <input
                             type="file"
                             accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                             className="hidden"
-                            onChange={onInvoiceFileChange}
+                            onChange={onRecordPaymentFileChange}
                           />
                         </label>
                       )}
                     </div>
                   </div>
 
-                  <div>
+                  <div className="mt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Mô tả
                     </label>
                     <textarea
                       name="description"
-                      value={invoiceDocumentFormData.description}
-                      onChange={handleInvoiceDocumentFormChange}
+                      value={recordPaymentDocumentFormData.description}
+                      onChange={handleRecordPaymentDocumentFormChange}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                      rows={2}
-                      placeholder="Mô tả tài liệu Invoice"
-                    />
-                  </div>
-                </div>
-
-                {/* Form tạo tài liệu Receipt */}
-                <div className="border-t pt-6 mt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo tài liệu Receipt <span className="text-red-500">*</span></h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Loại tài liệu <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="documentTypeId"
-                        value={receiptDocumentFormData.documentTypeId}
-                        onChange={handleReceiptDocumentFormChange}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                        required={!!receiptFile}
-                        disabled={loadingMarkAsPaidDocumentTypes}
-                      >
-                        <option value="0">-- Chọn loại tài liệu --</option>
-                        {markAsPaidDocumentTypesList.map(type => (
-                          <option key={type.id} value={type.id}>
-                            {type.typeName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Source
-                      </label>
-                      <input
-                        type="text"
-                        name="source"
-                        value={receiptDocumentFormData.source}
-                        onChange={handleReceiptDocumentFormChange}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                        placeholder="Accountant"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      File Receipt <span className="text-red-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary-500 transition-all cursor-pointer bg-gray-50 hover:bg-primary-50">
-                      {receiptFile ? (
-                        <div className="flex flex-col items-center text-primary-700">
-                          <FileUp className="w-8 h-8 mb-2" />
-                          <p className="font-medium">{receiptFile.name}</p>
-                          <p className="text-sm text-gray-600">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                          {receiptUploadProgress > 0 && receiptUploadProgress < 100 && (
-                            <p className="text-sm text-gray-600 mt-1">Đang upload: {receiptUploadProgress}%</p>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setReceiptFile(null)}
-                            className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
-                          >
-                            Xóa file
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex flex-col items-center text-gray-500 cursor-pointer">
-                          <Upload className="w-12 h-12 mb-4" />
-                          <span className="text-lg font-medium mb-2">Chọn hoặc kéo thả file Receipt vào đây</span>
-                          <span className="text-sm">Hỗ trợ: PDF, DOCX, JPG, PNG (tối đa 10MB)</span>
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                            className="hidden"
-                            onChange={onReceiptFileChange}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mô tả
-                    </label>
-                    <textarea
-                      name="description"
-                      value={receiptDocumentFormData.description}
-                      onChange={handleReceiptDocumentFormChange}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                      rows={2}
-                      placeholder="Mô tả tài liệu Receipt"
+                      rows={3}
+                      placeholder="Mô tả tài liệu"
                     />
                   </div>
                 </div>
@@ -2417,14 +2242,14 @@ const AccountantPartnerPeriods: React.FC = () => {
                 <div className="flex items-center justify-end gap-3 pt-4 border-t">
                   <button
                     type="button"
-                    onClick={handleCloseMarkAsPaidModal}
+                    onClick={handleCloseRecordPaymentModal}
                     className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    disabled={updatingStatus || !invoiceFile || !receiptFile || !invoiceDocumentFormData.documentTypeId || !receiptDocumentFormData.documentTypeId}
+                    disabled={updatingStatus || (recordPaymentFile !== null && !recordPaymentDocumentFormData.documentTypeId)}
                     className="px-4 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {updatingStatus ? (
@@ -2434,8 +2259,8 @@ const AccountantPartnerPeriods: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <Wallet className="w-4 h-4" />
-                        Ghi nhận đã chi trả và tạo tài liệu
+                        <CheckCircle className="w-4 h-4" />
+                        {recordPaymentFile && recordPaymentDocumentFormData.documentTypeId ? 'Ghi nhận thanh toán và tạo tài liệu' : 'Ghi nhận thanh toán'}
                       </>
                     )}
                   </button>
@@ -2478,8 +2303,8 @@ const AccountantPartnerPeriods: React.FC = () => {
                       Hợp đồng <span className="text-red-500">*</span>
                     </label>
                     <select
-                      name="partnerContractId"
-                      value={formData.partnerContractId}
+                      name="clientContractId"
+                      value={formData.clientContractId}
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       required
@@ -2496,51 +2321,15 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Talent <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="talentId"
-                      value={formData.talentId}
-                      onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                      required
-                      disabled={loadingTalents}
-                    >
-                      <option value="0">-- Chọn talent --</option>
-                      {talents.map(talent => (
-                        <option key={talent.id} value={talent.id}>
-                          {talent.fullName} - {talent.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Giờ thực tế <span className="text-red-500">*</span>
+                      Giờ bill <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
-                      name="actualWorkHours"
-                      value={formData.actualWorkHours}
+                      name="billableHours"
+                      value={formData.billableHours}
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       required
-                      min="0"
-                      step="0.1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Giờ OT
-                    </label>
-                    <input
-                      type="number"
-                      name="otHours"
-                      value={formData.otHours}
-                      onChange={handleFormChange}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       min="0"
                       step="0.1"
                     />
@@ -2563,16 +2352,57 @@ const AccountantPartnerPeriods: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số tiền đã chi
+                      Số tiền hóa đơn
                     </label>
                     <input
                       type="number"
-                      name="paidAmount"
-                      value={formData.paidAmount}
+                      name="invoicedAmount"
+                      value={formData.invoicedAmount}
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                       min="0"
                       step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tiền đã nhận
+                    </label>
+                    <input
+                      type="number"
+                      name="receivedAmount"
+                      value={formData.receivedAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số hóa đơn
+                    </label>
+                    <input
+                      type="text"
+                      name="invoiceNumber"
+                      value={formData.invoiceNumber}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ngày hóa đơn
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="invoiceDate"
+                      value={formData.invoiceDate}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
                     />
                   </div>
 
@@ -2595,12 +2425,12 @@ const AccountantPartnerPeriods: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      name="status"
                       value={getStatusLabel(formData.status)}
                       disabled
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                       readOnly
                     />
+                    <p className="text-xs text-gray-500 mt-1">Trạng thái mặc định khi tạo mới</p>
                   </div>
                 </div>
 
@@ -2648,7 +2478,16 @@ const AccountantPartnerPeriods: React.FC = () => {
           </div>
         )}
 
-      </div>
+            {statusUpdateSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700">
+                Đã đánh dấu thanh toán thành công!
+              </div>
+            )}
+            {statusUpdateError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700">
+                {statusUpdateError}
+          </div>
+        )}
 
         {/* Modal hiển thị tài liệu */}
         {showDocumentsModal && selectedPaymentForDocuments && (
@@ -2665,8 +2504,7 @@ const AccountantPartnerPeriods: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">Tài liệu thanh toán</h3>
                   <p className="text-sm text-neutral-600 mt-1">
-                    Hợp đồng: {contractsMap.get(selectedPaymentForDocuments.partnerContractId)?.contractNumber || selectedPaymentForDocuments.partnerContractId} | 
-                    Nhân sự: {talentsMap.get(selectedPaymentForDocuments.talentId)?.fullName || selectedPaymentForDocuments.talentId}
+                    Hợp đồng: {contractsMap.get(selectedPaymentForDocuments.clientContractId)?.contractNumber || selectedPaymentForDocuments.clientContractId}
                   </p>
                 </div>
                 <button
@@ -2793,7 +2631,7 @@ const AccountantPartnerPeriods: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={contractsMap.get(selectedPaymentForCreateDocument.partnerContractId)?.contractNumber || selectedPaymentForCreateDocument.partnerContractId}
+                      value={contractsMap.get(selectedPaymentForCreateDocument.clientContractId)?.contractNumber || selectedPaymentForCreateDocument.clientContractId}
                       disabled
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                       readOnly
@@ -2801,19 +2639,6 @@ const AccountantPartnerPeriods: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nhân sự
-                    </label>
-                    <input
-                      type="text"
-                      value={talentsMap.get(selectedPaymentForCreateDocument.talentId)?.fullName || selectedPaymentForCreateDocument.talentId}
-                      disabled
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
-                      readOnly
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Loại tài liệu <span className="text-red-500">*</span>
                     </label>
@@ -2930,8 +2755,9 @@ const AccountantPartnerPeriods: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
     </div>
   );
 };
 
-export default AccountantPartnerPeriods;
+export default AccountantClientPeriods;

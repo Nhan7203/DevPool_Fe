@@ -18,8 +18,8 @@ export const sidebarItems = [
     href: "/manager/contract",
     icon: Users,
     subItems: [
-      { label: "Hợp Đồng Khách Hàng", href: "/manager/contracts/clients" },
-      { label: "Hợp Đồng Nhân Sự", href: "/manager/contracts/developers" },
+      { label: "Khách Hàng", href: "/manager/contracts/clients" },
+      { label: "Nhân Sự", href: "/manager/contracts/developers" },
     ],
   },
   {

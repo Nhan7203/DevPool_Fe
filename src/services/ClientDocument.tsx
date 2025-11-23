@@ -92,5 +92,17 @@ export const clientDocumentService = {
       throw { message: "Lỗi không xác định khi tạo tài liệu khách hàng" };
     }
   },
+
+  // Xóa ClientDocument
+  async delete(id: number) {
+    try {
+      const response = await axios.delete(`/clientdocument/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể xóa tài liệu khách hàng" };
+      throw { message: "Lỗi không xác định khi xóa tài liệu khách hàng" };
+    }
+  },
 };
 

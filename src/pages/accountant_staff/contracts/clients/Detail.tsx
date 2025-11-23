@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   AlertCircle,
@@ -16,15 +16,15 @@ import {
   FileCheck,
   StickyNote,
 } from "lucide-react";
-import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
+import Sidebar from "../../../../components/common/Sidebar";
+import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
 import {
   clientContractService,
   type ClientContract,
-} from "../../../services/ClientContract";
-import { clientCompanyService } from "../../../services/ClientCompany";
-import { projectService } from "../../../services/Project";
-import { talentService } from "../../../services/Talent";
+} from "../../../../services/ClientContract";
+import { clientCompanyService } from "../../../../services/ClientCompany";
+import { projectService } from "../../../../services/Project";
+import { talentService } from "../../../../services/Talent";
 
 interface EnrichedContract extends ClientContract {
   clientCompanyName: string;
@@ -102,9 +102,13 @@ const getStatusConfig = (status: string) => {
 
 export default function ClientContractDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const [contract, setContract] = useState<EnrichedContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Lấy trang trước đó từ state, mặc định là danh sách payment periods
+  const backUrl = (location.state as { from?: string })?.from || "/accountant/payment-periods/clients";
 
   useEffect(() => {
     const fetchContract = async () => {
@@ -192,7 +196,7 @@ export default function ClientContractDetailPage() {
               {error || "Không tìm thấy hợp đồng"}
             </p>
             <Link
-              to="/accountant/payment-periods/clients"
+              to={backUrl}
               className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-200 rounded-lg hover:bg-neutral-300 transition"
             >
               ← Quay lại
@@ -214,7 +218,7 @@ export default function ClientContractDetailPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link
-              to="/accountant/payment-periods/clients"
+              to={backUrl}
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />

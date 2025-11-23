@@ -92,5 +92,17 @@ export const partnerDocumentService = {
       throw { message: "Lỗi không xác định khi tạo tài liệu đối tác" };
     }
   },
+
+  // Xóa PartnerDocument
+  async delete(id: number) {
+    try {
+      const response = await axios.delete(`/partnerdocument/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể xóa tài liệu đối tác" };
+      throw { message: "Lỗi không xác định khi xóa tài liệu đối tác" };
+    }
+  },
 };
 
