@@ -12,6 +12,8 @@ import {
   Clock,
   XCircle,
   Link2,
+  FileCheck,
+  StickyNote,
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
@@ -253,10 +255,33 @@ export default function PartnerContractDetailPage() {
                   label="Nhân sự"
                   value={contract.talentName || "—"}
                 />
+                {contract.talentApplicationId && (
+                  <InfoItem
+                    icon={<FileCheck className="w-4 h-4" />}
+                    label="Đơn ứng tuyển"
+                    value={
+                      <Link
+                        to={`/hr/applications/${contract.talentApplicationId}`}
+                        className="text-primary-600 hover:text-primary-800 underline"
+                      >
+                        Xem đơn #{contract.talentApplicationId}
+                      </Link>
+                    }
+                  />
+                )}
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Mức lương"
                   value={formatCurrency(contract.devRate)}
+                />
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ tiêu chuẩn/tháng"
+                  value={
+                    contract.standardHoursPerMonth
+                      ? `${contract.standardHoursPerMonth} giờ`
+                      : "—"
+                  }
                 />
                 <InfoItem
                   icon={<Calendar className="w-4 h-4" />}
@@ -291,6 +316,16 @@ export default function PartnerContractDetailPage() {
                   </a>
                 </div>
               )}
+
+              {contract.notes && (
+                <div className="mt-6 pt-6 border-t border-neutral-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <StickyNote className="w-4 h-4 text-neutral-400" />
+                    <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                  </div>
+                  <p className="text-gray-900 whitespace-pre-wrap">{contract.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -306,7 +341,7 @@ function InfoItem({
 }: {
   icon?: ReactNode;
   label: string;
-  value: string;
+  value: string | ReactNode;
 }) {
   return (
     <div className="group">
@@ -314,9 +349,15 @@ function InfoItem({
         {icon && <div className="text-neutral-400">{icon}</div>}
         <p className="text-neutral-500 text-sm font-medium">{label}</p>
       </div>
-      <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
-        {value || "—"}
-      </p>
+      {typeof value === "string" ? (
+        <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+          {value || "—"}
+        </p>
+      ) : (
+        <div className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors duration-300">
+          {value}
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,10 @@ import {
   AlertCircle,
   CheckCircle,
   Upload,
+  DollarSign,
+  Clock,
+  FileCheck,
+  StickyNote,
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
@@ -49,10 +53,15 @@ export default function CreateClientContractPage() {
     clientCompanyId: undefined,
     talentId: undefined,
     projectId: undefined,
+    talentApplicationId: undefined,
+    billingRate: undefined,
+    standardHoursPerMonth: 160,
+    rateType: "ManMonth",
     startDate: "",
     endDate: undefined,
     status: "Draft",
     contractFileUrl: undefined,
+    notes: undefined,
   });
 
   useEffect(() => {
@@ -84,12 +93,16 @@ export default function CreateClientContractPage() {
         const clientCompanyIdParam = searchParams.get("clientCompanyId");
         const talentIdParam = searchParams.get("talentId");
         const projectIdParam = searchParams.get("projectId");
+        const talentApplicationIdParam = searchParams.get("talentApplicationId");
 
         if (clientCompanyIdParam && talentIdParam) {
           const clientCompanyId = parseInt(clientCompanyIdParam, 10);
           const talentId = parseInt(talentIdParam, 10);
           const projectId = projectIdParam
             ? parseInt(projectIdParam, 10)
+            : undefined;
+          const talentApplicationId = talentApplicationIdParam
+            ? parseInt(talentApplicationIdParam, 10)
             : undefined;
 
           // Kiểm tra clientCompany có tồn tại không
@@ -106,6 +119,7 @@ export default function CreateClientContractPage() {
               clientCompanyId: clientCompanyId,
               talentId: talentId,
               projectId: projectId,
+              talentApplicationId: talentApplicationId,
             }));
 
              // Load talents theo clientCompanyId
@@ -240,7 +254,7 @@ export default function CreateClientContractPage() {
    }, [form.clientCompanyId, form.talentId, allContracts]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({
@@ -248,13 +262,19 @@ export default function CreateClientContractPage() {
       [name]:
         name === "clientCompanyId" ||
         name === "projectId" ||
-        name === "talentId"
+        name === "talentId" ||
+        name === "talentApplicationId"
+          ? value
+            ? Number(value)
+            : undefined
+          : name === "billingRate" ||
+            name === "standardHoursPerMonth"
           ? value
             ? Number(value)
             : undefined
           : name === "contractNumber"
           ? value.toUpperCase()
-          : value === "" && name === "endDate"
+          : value === "" && (name === "endDate" || name === "talentApplicationId" || name === "notes")
           ? undefined
           : value,
     }));
@@ -295,7 +315,9 @@ export default function CreateClientContractPage() {
         !form.clientCompanyId ||
         !form.projectId ||
         !form.talentId ||
-        !form.startDate
+        !form.startDate ||
+        !form.billingRate ||
+        !form.standardHoursPerMonth
       ) {
         setError("Vui lòng điền đầy đủ các trường bắt buộc");
         setSubmitting(false);
@@ -352,10 +374,15 @@ export default function CreateClientContractPage() {
         clientCompanyId: form.clientCompanyId!,
         talentId: form.talentId!,
         projectId: form.projectId!,
+        talentApplicationId: form.talentApplicationId || undefined,
+        billingRate: form.billingRate!,
+        standardHoursPerMonth: form.standardHoursPerMonth || 160,
+        rateType: form.rateType || "ManMonth",
         startDate: form.startDate!,
         endDate: form.endDate || undefined,
         status: "Draft",
         contractFileUrl: fileUrl,
+        notes: form.notes || undefined,
       };
 
       await clientContractService.create(payload);
@@ -367,10 +394,15 @@ export default function CreateClientContractPage() {
         clientCompanyId: undefined,
         talentId: undefined,
         projectId: undefined,
+        talentApplicationId: undefined,
+        billingRate: undefined,
+        standardHoursPerMonth: 160,
+        rateType: "ManMonth",
         startDate: "",
         endDate: undefined,
         status: "Draft",
         contractFileUrl: undefined,
+        notes: undefined,
       });
       setContractFile(null);
 
@@ -609,6 +641,95 @@ export default function CreateClientContractPage() {
                       Để trống nếu hợp đồng không có thời hạn
                     </p>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Đơn ứng tuyển */}
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                      <FileCheck className="w-4 h-4" />
+                      Đơn ứng tuyển
+                    </label>
+                    <input
+                      type="number"
+                      name="talentApplicationId"
+                      value={form.talentApplicationId || ""}
+                      onChange={handleChange}
+                      min="1"
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      placeholder="Nhập ID đơn ứng tuyển (tùy chọn)"
+                    />
+                    <p className="text-xs text-neutral-500 mt-2">
+                      ID đơn ứng tuyển liên quan đến hợp đồng này (nếu có)
+                    </p>
+                  </div>
+
+                  {/* Giá thanh toán */}
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                      <DollarSign className="w-4 h-4" />
+                      Giá thanh toán (VNĐ) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="billingRate"
+                      value={form.billingRate || ""}
+                      onChange={handleChange}
+                      required
+                      min="0"
+                      step="1000"
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                      placeholder="VD: 50000000"
+                    />
+                    {form.billingRate && (
+                      <p className="text-xs text-neutral-500 mt-2">
+                        {form.billingRate.toLocaleString("vi-VN")} VNĐ
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Số giờ tiêu chuẩn/tháng */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Số giờ tiêu chuẩn/tháng <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="standardHoursPerMonth"
+                    value={form.standardHoursPerMonth || 160}
+                    onChange={handleChange}
+                    required
+                    min="1"
+                    max="744"
+                    step="1"
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    placeholder="160"
+                  />
+                  <p className="text-xs text-neutral-500 mt-2">
+                    Số giờ làm việc tiêu chuẩn mỗi tháng (mặc định: 160 giờ)
+                  </p>
+                </div>
+
+                {/* Ghi chú */}
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <StickyNote className="w-4 h-4" />
+                    Ghi chú
+                  </label>
+                  <textarea
+                    name="notes"
+                    value={form.notes || ""}
+                    onChange={handleChange}
+                    rows={4}
+                    maxLength={4000}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                    placeholder="Nhập ghi chú về hợp đồng (tùy chọn, tối đa 4000 ký tự)"
+                  />
+                  <p className="text-xs text-neutral-500 mt-2">
+                    {(form.notes || "").length}/4000 ký tự
+                  </p>
                 </div>
 
                 {/* Upload File Hợp Đồng */}

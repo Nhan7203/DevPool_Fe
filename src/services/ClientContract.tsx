@@ -6,22 +6,32 @@ export interface ClientContract {
   clientCompanyId: number;
   talentId: number;
   projectId: number;
+  talentApplicationId?: number | null;
+  billingRate: number;
+  standardHoursPerMonth: number;
+  rateType: string;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface ClientContractPayload {
   clientCompanyId: number;
   talentId: number;
   projectId: number;
+  talentApplicationId?: number | null;
+  billingRate: number;
+  standardHoursPerMonth: number;
+  rateType: string;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface ClientContractUpdatePayload {
@@ -29,11 +39,16 @@ export interface ClientContractUpdatePayload {
   clientCompanyId: number;
   talentId: number;
   projectId: number;
+  talentApplicationId?: number | null;
+  billingRate: number;
+  standardHoursPerMonth: number;
+  rateType: string;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface ClientContractFilter {

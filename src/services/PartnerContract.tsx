@@ -5,38 +5,47 @@ export interface PartnerContract {
   id: number;
   partnerId: number;
   talentId: number;
+  talentApplicationId?: number | null;
   devRate?: number | null;
   rateType: string;
+  standardHoursPerMonth: number;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface PartnerContractPayload {
   partnerId: number;
   talentId: number;
+  talentApplicationId?: number | null;
   devRate?: number | null;
   rateType: string;
+  standardHoursPerMonth: number;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface PartnerContractUpdatePayload {
   id: number;
   partnerId: number;
   talentId: number;
+  talentApplicationId?: number | null;
   devRate?: number | null;
   rateType: string;
+  standardHoursPerMonth: number;
   contractNumber: string;
   status: string;
   startDate: string;
   endDate?: string | null;
-  contractFileUrl?: string | null;
+  contractFileUrl: string;
+  notes?: string | null;
 }
 
 export interface PartnerContractFilter {

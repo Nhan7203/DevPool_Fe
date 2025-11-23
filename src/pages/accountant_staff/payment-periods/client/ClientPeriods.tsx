@@ -1720,24 +1720,6 @@ const AccountantClientPeriods: React.FC = () => {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {p.status === 'PendingCalculation' && (
-                                <button
-                                  onClick={() => handleOpenCalculateModal(p)}
-                                  className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                  <Calculator className="w-4 h-4" />
-                                  Tính toán
-                                </button>
-                              )}
-                              {(p.status === 'Invoiced' || p.status === 'Overdue') && (
-                                <button
-                                  onClick={() => handleOpenRecordPaymentModal(p)}
-                                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Đã thanh toán
-                                </button>
-                              )}
                               <Link
                                 to={`/accountant/payment-periods/clients/${p.id}/detail`}
                                 className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-2 transition-all whitespace-nowrap"
@@ -1752,16 +1734,6 @@ const AccountantClientPeriods: React.FC = () => {
                                 <FileText className="w-4 h-4" />
                                 Tài liệu
                               </button>
-                              <button
-                                onClick={() => handleOpenCreateDocumentModal(p)}
-                                className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                              >
-                                <Upload className="w-4 h-4" />
-                                Tạo tài liệu
-                              </button>
-                              {p.status !== 'PendingCalculation' && p.status !== 'Invoiced' && p.status !== 'Overdue' && (
-                                <span className="text-gray-400 text-xs whitespace-nowrap">Không thể đổi</span>
-                              )}
                             </div>
                           </td>
                         </tr>

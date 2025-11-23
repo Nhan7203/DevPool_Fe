@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon, Edit, Trash2, Send, RotateCcw } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon, Edit, Trash2, Send, RotateCcw, FileCheck, Clock, StickyNote } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
@@ -463,6 +463,20 @@ export default function ContractDetailPage() {
                                     value={talent?.fullName || '—'}
                                     icon={<UserCheck className="w-4 h-4" />}
                                 />
+                                {contract.talentApplicationId && (
+                                    <InfoItem 
+                                        label="Đơn ứng tuyển" 
+                                        value={
+                                            <Link 
+                                                to={`/hr/applications/${contract.talentApplicationId}`}
+                                                className="text-primary-600 hover:text-primary-800 underline"
+                                            >
+                                                Xem đơn #{contract.talentApplicationId}
+                                            </Link>
+                                        }
+                                        icon={<FileCheck className="w-4 h-4" />}
+                                    />
+                                )}
                                 <InfoItem 
                                     label="Hình thức tính lương" 
                                     value={contract.rateType ? getRateTypeText(contract.rateType) : '—'} 
@@ -472,6 +486,11 @@ export default function ContractDetailPage() {
                                     label="Mức lương nhân sự" 
                                     value={formatCurrency(contract.devRate)} 
                                     icon={<DollarSign className="w-4 h-4" />}
+                                />
+                                <InfoItem 
+                                    label="Số giờ tiêu chuẩn/tháng" 
+                                    value={contract.standardHoursPerMonth ? `${contract.standardHoursPerMonth} giờ` : '—'}
+                                    icon={<Clock className="w-4 h-4" />}
                                 />
                                 <InfoItem 
                                     label="Ngày bắt đầu" 
@@ -500,6 +519,15 @@ export default function ContractDetailPage() {
                                     />
                                 )}
                             </div>
+                            {contract.notes && (
+                                <div className="mt-6 pt-6 border-t border-neutral-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <StickyNote className="w-4 h-4 text-neutral-400" />
+                                        <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                                    </div>
+                                    <p className="text-gray-900 whitespace-pre-wrap">{contract.notes}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -522,9 +550,15 @@ function InfoItem({ label, value, icon }: { label: string; value: string | React
                     {label}
                 </p>
             </div>
-            <p className="text-gray-900 font-semibold text-lg group-hover:text-primary-700 transition-colors duration-300">
-                {value}
-            </p>
+            {typeof value === "string" ? (
+                <p className="text-gray-900 font-semibold text-lg group-hover:text-primary-700 transition-colors duration-300">
+                    {value}
+                </p>
+            ) : (
+                <div className="text-gray-900 font-semibold text-lg group-hover:text-primary-700 transition-colors duration-300">
+                    {value}
+                </div>
+            )}
         </div>
     );
 }

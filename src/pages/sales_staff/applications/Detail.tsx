@@ -469,7 +469,7 @@ export default function SalesApplicationDetailPage() {
     const params = new URLSearchParams({
       clientCompanyId: companyId.toString(),
       talentId: talentId.toString(),
-      applicationId: application.id.toString()
+      talentApplicationId: application.id.toString()
     });
     if (projectId) {
       params.append('projectId', projectId.toString());

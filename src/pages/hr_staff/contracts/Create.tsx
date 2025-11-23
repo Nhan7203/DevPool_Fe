@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, Search } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, Search, FileCheck, Clock, StickyNote } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContractPayload, type PartnerContract } from '../../../services/PartnerContract';
@@ -29,13 +29,16 @@ export default function CreatePartnerContractPage() {
     const [form, setForm] = useState<PartnerContractPayload>({
         partnerId: 0,
         talentId: 0,
+        talentApplicationId: undefined,
         devRate: undefined,
         rateType: '', // Giữ lại để tương thích với backend, nhưng không hiển thị trong UI
+        standardHoursPerMonth: 160,
         contractNumber: '',
         status: 'Draft',
         startDate: '',
         endDate: undefined,
         contractFileUrl: undefined,
+        notes: undefined,
     });
 
 
@@ -62,10 +65,14 @@ export default function CreatePartnerContractPage() {
                 // Pre-fill form từ query params nếu có
                 const partnerIdParam = searchParams.get('partnerId');
                 const talentIdParam = searchParams.get('talentId');
+                const talentApplicationIdParam = searchParams.get('talentApplicationId');
                 
                 if (partnerIdParam && talentIdParam) {
                     const partnerId = parseInt(partnerIdParam, 10);
                     const talentId = parseInt(talentIdParam, 10);
+                    const talentApplicationId = talentApplicationIdParam
+                        ? parseInt(talentApplicationIdParam, 10)
+                        : undefined;
                     
                     // Kiểm tra partner và talent có tồn tại không
                     const partnerExists = partnersData.some((p: Partner) => p.id === partnerId);
@@ -75,7 +82,8 @@ export default function CreatePartnerContractPage() {
                         setForm(prev => ({
                             ...prev,
                             partnerId: partnerId,
-                            talentId: talentId
+                            talentId: talentId,
+                            talentApplicationId: talentApplicationId,
                         }));
                     }
                 }
@@ -152,7 +160,7 @@ export default function CreatePartnerContractPage() {
         return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         
         // Xử lý đặc biệt cho devRate - format số tiền
@@ -171,6 +179,13 @@ export default function CreatePartnerContractPage() {
             }
             return;
         }
+
+        // Xử lý số cho talentApplicationId và standardHoursPerMonth
+        if (name === 'talentApplicationId' || name === 'standardHoursPerMonth') {
+            const numValue = value ? Number(value) : undefined;
+            setForm(prev => ({ ...prev, [name]: numValue }));
+            return;
+        }
         
         setForm(prev => ({
             ...prev,
@@ -178,7 +193,7 @@ export default function CreatePartnerContractPage() {
                 ? (value ? Number(value) : undefined)
                 : name === 'contractNumber'
                 ? value.toUpperCase() // Tự động chuyển thành chữ hoa khi nhập
-                : value === '' && (name === 'endDate' || name === 'contractFileUrl')
+                : value === '' && (name === 'endDate' || name === 'contractFileUrl' || name === 'talentApplicationId' || name === 'notes')
                 ? undefined
                 : value
         }));
@@ -212,7 +227,7 @@ export default function CreatePartnerContractPage() {
 
         try {
             // Validate required fields
-            if (!form.partnerId || !form.talentId || !form.contractNumber || !form.startDate) {
+            if (!form.partnerId || !form.talentId || !form.contractNumber || !form.startDate || !form.standardHoursPerMonth) {
                 setError("Vui lòng điền đầy đủ các trường bắt buộc");
                 setLoading(false);
                 return;
@@ -282,6 +297,9 @@ export default function CreatePartnerContractPage() {
                 status: 'Draft', // Luôn tạo với trạng thái Draft
                 contractFileUrl: fileUrl,
                 rateType: form.rateType || 'Fixed', // Giá trị mặc định nếu backend yêu cầu
+                standardHoursPerMonth: form.standardHoursPerMonth || 160,
+                talentApplicationId: form.talentApplicationId || undefined,
+                notes: form.notes || undefined,
             };
 
             await partnerContractService.create(payload);
@@ -543,7 +561,7 @@ export default function CreatePartnerContractPage() {
                                 </div>
                             </div>
 
-                            <div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* Mức Lương nhân sự */}
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
@@ -568,6 +586,51 @@ export default function CreatePartnerContractPage() {
                                             Số tiền: {formatCurrency(form.devRate)} VNĐ
                                         </p>
                                     )}
+                                </div>
+
+                                {/* Số giờ tiêu chuẩn/tháng */}
+                                <div>
+                                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                                        <Clock className="w-4 h-4" />
+                                        Số giờ tiêu chuẩn/tháng <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="standardHoursPerMonth"
+                                        value={form.standardHoursPerMonth || 160}
+                                        onChange={handleChange}
+                                        required
+                                        min="1"
+                                        max="744"
+                                        step="1"
+                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        placeholder="160"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-2">
+                                        Số giờ làm việc tiêu chuẩn mỗi tháng (mặc định: 160 giờ)
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Đơn ứng tuyển */}
+                                <div>
+                                    <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                                        <FileCheck className="w-4 h-4" />
+                                        Đơn ứng tuyển
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="talentApplicationId"
+                                        value={form.talentApplicationId || ""}
+                                        onChange={handleChange}
+                                        min="1"
+                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        placeholder="Nhập ID đơn ứng tuyển (tùy chọn)"
+                                    />
+                                    <p className="text-xs text-neutral-500 mt-2">
+                                        ID đơn ứng tuyển liên quan đến hợp đồng này (nếu có)
+                                    </p>
                                 </div>
                             </div>
 
@@ -606,6 +669,26 @@ export default function CreatePartnerContractPage() {
                                     />
                                     <p className="text-xs text-neutral-500 mt-2">Để trống nếu hợp đồng không có thời hạn</p>
                                 </div>
+                            </div>
+
+                            {/* Ghi chú */}
+                            <div>
+                                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                                    <StickyNote className="w-4 h-4" />
+                                    Ghi chú
+                                </label>
+                                <textarea
+                                    name="notes"
+                                    value={form.notes || ""}
+                                    onChange={handleChange}
+                                    rows={4}
+                                    maxLength={4000}
+                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                                    placeholder="Nhập ghi chú về hợp đồng (tùy chọn, tối đa 4000 ký tự)"
+                                />
+                                <p className="text-xs text-neutral-500 mt-2">
+                                    {(form.notes || "").length}/4000 ký tự
+                                </p>
                             </div>
 
                             {/* Upload File Hợp Đồng */}

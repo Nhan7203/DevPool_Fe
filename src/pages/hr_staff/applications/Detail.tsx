@@ -693,7 +693,9 @@ export default function TalentCVApplicationDetailPage() {
     }
 
     // Chuyển đến trang tạo hợp đồng với query params
-    navigate(`/hr/contracts/create?partnerId=${partnerId}&talentId=${talentId}&applicationId=${application?.id}`);
+    // talentApplicationId: để pre-fill vào form
+    // applicationId: để quay lại trang detail sau khi tạo
+    navigate(`/hr/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
   };
 
   return (

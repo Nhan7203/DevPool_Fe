@@ -15,7 +15,11 @@ import {
   Trash2,
   Send,
   XCircle,
-  RotateCcw
+  RotateCcw,
+  DollarSign,
+  Clock,
+  FileCheck,
+  StickyNote
 } from 'lucide-react';
 import { clientContractService, type ClientContract } from '../../../services/ClientContract';
 import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
@@ -443,6 +447,20 @@ export default function ContractDetailPage() {
                   value={talent?.fullName || '—'}
                   icon={<Building2 className="w-4 h-4" />}
                 />
+                {contract.talentApplicationId && (
+                  <InfoItem 
+                    label="Đơn ứng tuyển" 
+                    value={
+                      <Link 
+                        to={`/sales/applications/${contract.talentApplicationId}`}
+                        className="text-primary-600 hover:text-primary-800 underline"
+                      >
+                        Xem đơn #{contract.talentApplicationId}
+                      </Link>
+                    }
+                    icon={<FileCheck className="w-4 h-4" />}
+                  />
+                )}
                 <InfoItem 
                   label="Ngày bắt đầu" 
                   value={new Date(contract.startDate).toLocaleDateString('vi-VN')}
@@ -452,6 +470,16 @@ export default function ContractDetailPage() {
                   label="Ngày kết thúc" 
                   value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
                   icon={<CalendarDays className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Giá thanh toán" 
+                  value={contract.billingRate ? `${contract.billingRate.toLocaleString('vi-VN')} VNĐ` : '—'} 
+                  icon={<DollarSign className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Số giờ tiêu chuẩn/tháng" 
+                  value={contract.standardHoursPerMonth ? `${contract.standardHoursPerMonth} giờ` : '—'} 
+                  icon={<Clock className="w-4 h-4" />}
                 />
                 {contract.contractFileUrl && (
                   <InfoItem 
@@ -470,6 +498,15 @@ export default function ContractDetailPage() {
                   />
                 )}
               </div>
+              {contract.notes && (
+                <div className="mt-6 pt-6 border-t border-neutral-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <StickyNote className="w-4 h-4 text-neutral-400" />
+                    <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                  </div>
+                  <p className="text-gray-900 whitespace-pre-wrap">{contract.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
