@@ -32,11 +32,12 @@ export default function EditPartnerContractPage() {
         talentId: 0,
         devRate: undefined,
         rateType: '',
+        standardHoursPerMonth: 160,
         contractNumber: '',
         status: 'Draft',
         startDate: '',
         endDate: undefined,
-        contractFileUrl: undefined,
+        contractFileUrl: '',
     });
 
     const formatDateForInput = (date: Date | string) => {
@@ -84,11 +85,12 @@ export default function EditPartnerContractPage() {
                     talentId: contractData.talentId,
                     devRate: contractData.devRate || undefined,
                     rateType: contractData.rateType,
+                    standardHoursPerMonth: contractData.standardHoursPerMonth || 160,
                     contractNumber: contractData.contractNumber,
                     status: contractData.status,
                     startDate: formatDateForInput(contractData.startDate),
                     endDate: contractData.endDate ? formatDateForInput(contractData.endDate) : undefined,
-                    contractFileUrl: contractData.contractFileUrl || undefined,
+                    contractFileUrl: contractData.contractFileUrl || '',
                 });
 
                 // Process eligible talents

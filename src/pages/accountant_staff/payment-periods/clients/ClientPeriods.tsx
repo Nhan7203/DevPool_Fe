@@ -234,6 +234,7 @@ const AccountantClientPeriods: React.FC = () => {
   };
 
   // Hàm mở modal tạo tài liệu độc lập
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenCreateDocumentModal = async (payment: ClientContractPayment) => {
     setSelectedPaymentForCreateDocument(payment);
     setShowCreateDocumentModal(true);
@@ -803,6 +804,7 @@ const AccountantClientPeriods: React.FC = () => {
 
 
   // Hàm mở modal tính toán
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenCalculateModal = async (payment: ClientContractPayment) => {
     if (payment.status !== 'PendingCalculation') return;
 
@@ -1032,6 +1034,7 @@ const AccountantClientPeriods: React.FC = () => {
   };
 
   // Hàm mở modal ghi nhận thanh toán
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenRecordPaymentModal = async (payment: ClientContractPayment) => {
     setSelectedPaymentForRecord(payment);
     setShowRecordPaymentModal(true);

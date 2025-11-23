@@ -66,8 +66,7 @@ export default function PartnerContractDetailPage() {
                 setError('');
                 
                 // Fetch payment detail
-                const paymentData = await partnerContractPaymentService.getById(Number(id));
-                setPayment(paymentData);
+                let paymentData = await partnerContractPaymentService.getById(Number(id));
                 
                 // Fetch related data in parallel
                 const [contractData, periodData] = await Promise.all([
@@ -77,6 +76,32 @@ export default function PartnerContractDetailPage() {
                 
                 setContract(contractData);
                 setPeriod(periodData);
+                
+                // Kiểm tra và tự động chuyển thành Cancelled nếu contract Terminated và payment chưa Paid
+                if (contractData.status === 'Terminated' && paymentData.status !== 'Paid') {
+                    try {
+                        await partnerContractPaymentService.update(paymentData.id, {
+                            partnerPeriodId: paymentData.partnerPeriodId,
+                            partnerContractId: paymentData.partnerContractId,
+                            talentId: paymentData.talentId,
+                            actualWorkHours: paymentData.actualWorkHours,
+                            otHours: paymentData.otHours ?? null,
+                            calculatedAmount: paymentData.calculatedAmount ?? null,
+                            paidAmount: paymentData.paidAmount ?? null,
+                            paymentDate: paymentData.paymentDate ?? null,
+                            status: 'Cancelled',
+                            notes: paymentData.notes ?? null
+                        });
+                        // Reload payment với status mới
+                        paymentData = await partnerContractPaymentService.getById(Number(id));
+                    } catch (updateErr) {
+                        console.error("Lỗi khi tự động chuyển payment thành Cancelled:", updateErr);
+                        // Vẫn tiếp tục load dữ liệu bình thường
+                    }
+                }
+                
+                // Set payment sau khi đã xử lý logic tự động chuyển thành Cancelled
+                setPayment(paymentData);
                 
                 // Fetch partner
                 try {
@@ -229,7 +254,10 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal duyệt
     const handleOpenApproveModal = () => {
-        if (!payment || !isPendingApproval(payment.status)) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (!isPendingApproval(payment.status)) return;
 
         setShowApproveModal(true);
         setApproveError(null);
@@ -283,7 +311,10 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal từ chối
     const handleOpenRejectModal = () => {
-        if (!payment || !isPendingApproval(payment.status)) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (!isPendingApproval(payment.status)) return;
 
         setShowRejectModal(true);
         setRejectError(null);
@@ -439,7 +470,10 @@ export default function PartnerContractDetailPage() {
     }
 
     // Kiểm tra xem có nên hiển thị nút duyệt/từ chối không
-    const canApproveOrReject = payment && isPendingApproval(payment.status);
+    // Kiểm tra xem có nên hiển thị nút duyệt/từ chối không
+    const isCancelled = payment?.status === 'Cancelled';
+    const isContractTerminated = contract?.status === 'Terminated';
+    const canApproveOrReject = payment && isPendingApproval(payment.status) && !isCancelled && !isContractTerminated;
 
     return (
         <div className="flex bg-gray-50 min-h-screen">

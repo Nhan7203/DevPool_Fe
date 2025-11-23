@@ -126,8 +126,7 @@ export default function PartnerContractDetailPage() {
                 setError('');
                 
                 // Fetch payment detail
-                const paymentData = await partnerContractPaymentService.getById(Number(id));
-                setPayment(paymentData);
+                let paymentData = await partnerContractPaymentService.getById(Number(id));
                 
                 // Fetch related data in parallel
                 const [contractData, periodData] = await Promise.all([
@@ -137,6 +136,32 @@ export default function PartnerContractDetailPage() {
                 
                 setContract(contractData);
                 setPeriod(periodData);
+                
+                // Kiểm tra và tự động chuyển thành Cancelled nếu contract Terminated và payment chưa Paid
+                if (contractData.status === 'Terminated' && paymentData.status !== 'Paid') {
+                    try {
+                        await partnerContractPaymentService.update(paymentData.id, {
+                            partnerPeriodId: paymentData.partnerPeriodId,
+                            partnerContractId: paymentData.partnerContractId,
+                            talentId: paymentData.talentId,
+                            actualWorkHours: paymentData.actualWorkHours,
+                            otHours: paymentData.otHours ?? null,
+                            calculatedAmount: paymentData.calculatedAmount ?? null,
+                            paidAmount: paymentData.paidAmount ?? null,
+                            paymentDate: paymentData.paymentDate ?? null,
+                            status: 'Cancelled',
+                            notes: paymentData.notes ?? null
+                        });
+                        // Reload payment với status mới
+                        paymentData = await partnerContractPaymentService.getById(Number(id));
+                    } catch (updateErr) {
+                        console.error("Lỗi khi tự động chuyển payment thành Cancelled:", updateErr);
+                        // Vẫn tiếp tục load dữ liệu bình thường
+                    }
+                }
+                
+                // Set payment sau khi đã xử lý logic tự động chuyển thành Cancelled
+                setPayment(paymentData);
                 
                 // Fetch partner
                 try {
@@ -279,7 +304,10 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal tính toán
     const handleOpenCalculateModal = async () => {
-        if (!payment || (payment.status !== 'PendingCalculation' && payment.status !== 'Rejected')) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (payment.status !== 'PendingCalculation' && payment.status !== 'Rejected') return;
 
         setShowCalculateModal(true);
         setCalculateError(null);
@@ -480,7 +508,10 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal đánh dấu đã thanh toán
     const handleOpenMarkAsPaidModal = async () => {
-        if (!payment || payment.status !== 'Approved') return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (payment.status !== 'Approved') return;
 
         setShowMarkAsPaidModal(true);
         setMarkAsPaidError(null);
@@ -843,24 +874,37 @@ export default function PartnerContractDetailPage() {
                                 {getStatusText(payment.status)}
                             </span>
                             {/* Nút thao tác */}
-                            {(payment.status === 'PendingCalculation' || payment.status === 'Rejected') && (
-                                <button
-                                    onClick={handleOpenCalculateModal}
-                                    className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                    <Calculator className="w-4 h-4" />
-                                    Tính toán
-                                </button>
-                            )}
-                            {payment.status === 'Approved' && (
-                                <button
-                                    onClick={handleOpenMarkAsPaidModal}
-                                    className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                    <CheckCircle className="w-4 h-4" />
-                                    Đã thanh toán
-                                </button>
-                            )}
+                            {(() => {
+                                // Không cho phép thao tác nếu payment đã Cancelled hoặc contract đã Terminated
+                                const isCancelled = payment.status === 'Cancelled';
+                                const isContractTerminated = contract?.status === 'Terminated';
+                                const canPerformActions = !isCancelled && !isContractTerminated;
+                                
+                                if (!canPerformActions) return null;
+                                
+                                return (
+                                    <>
+                                        {(payment.status === 'PendingCalculation' || payment.status === 'Rejected') && (
+                                            <button
+                                                onClick={handleOpenCalculateModal}
+                                                className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                            >
+                                                <Calculator className="w-4 h-4" />
+                                                Tính toán
+                                            </button>
+                                        )}
+                                        {payment.status === 'Approved' && (
+                                            <button
+                                                onClick={handleOpenMarkAsPaidModal}
+                                                className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                            >
+                                                <CheckCircle className="w-4 h-4" />
+                                                Đã thanh toán
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

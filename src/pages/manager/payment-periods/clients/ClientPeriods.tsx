@@ -384,6 +384,7 @@ const ManagerClientPeriods: React.FC = () => {
 
   // Hàm mở modal reject (được dùng trong modal form)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenRejectModal = (payment: ClientContractPayment) => {
     setSelectedPaymentForReject(payment);
     setShowRejectModal(true);
@@ -460,6 +461,7 @@ const ManagerClientPeriods: React.FC = () => {
 
   // Hàm mở modal approve (được dùng trong modal form)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenApproveModal = async (payment: ClientContractPayment) => {
     setSelectedPaymentForApprove(payment);
     setShowApproveModal(true);

@@ -112,8 +112,7 @@ export default function ClientContractDetailPage() {
                 setError('');
                 
                 // Fetch payment detail
-                const paymentData = await clientContractPaymentService.getById(Number(id));
-                setPayment(paymentData);
+                let paymentData = await clientContractPaymentService.getById(Number(id));
                 
                 // Fetch related data in parallel
                 const [contractData, periodData] = await Promise.all([
@@ -123,6 +122,33 @@ export default function ClientContractDetailPage() {
                 
                 setContract(contractData);
                 setPeriod(periodData);
+                
+                // Kiểm tra và tự động chuyển thành Cancelled nếu contract Terminated và payment chưa Paid
+                if (contractData.status === 'Terminated' && paymentData.status !== 'Paid') {
+                    try {
+                        await clientContractPaymentService.update(paymentData.id, {
+                            clientPeriodId: paymentData.clientPeriodId,
+                            clientContractId: paymentData.clientContractId,
+                            billableHours: paymentData.billableHours,
+                            calculatedAmount: paymentData.calculatedAmount ?? null,
+                            invoicedAmount: paymentData.invoicedAmount ?? null,
+                            receivedAmount: paymentData.receivedAmount ?? null,
+                            invoiceNumber: paymentData.invoiceNumber ?? null,
+                            invoiceDate: paymentData.invoiceDate ?? null,
+                            paymentDate: paymentData.paymentDate ?? null,
+                            status: 'Cancelled',
+                            notes: paymentData.notes ?? null
+                        });
+                        // Reload payment với status mới
+                        paymentData = await clientContractPaymentService.getById(Number(id));
+                    } catch (updateErr) {
+                        console.error("Lỗi khi tự động chuyển payment thành Cancelled:", updateErr);
+                        // Vẫn tiếp tục load dữ liệu bình thường
+                    }
+                }
+                
+                // Set payment sau khi đã xử lý logic tự động chuyển thành Cancelled
+                setPayment(paymentData);
                 
                 // Fetch company
                 try {
@@ -215,6 +241,7 @@ export default function ClientContractDetailPage() {
             'Overdue': 'bg-orange-50 text-orange-800 border-orange-200',
             'Paid': 'bg-emerald-50 text-emerald-800 border-emerald-200',
             'Rejected': 'bg-red-50 text-red-800 border-red-200',
+            'Cancelled': 'bg-gray-50 text-gray-800 border-gray-200',
         };
         return statusMap[status] || 'bg-gray-50 text-gray-800 border-gray-200';
     };
@@ -229,6 +256,7 @@ export default function ClientContractDetailPage() {
             'Overdue': 'Quá hạn',
             'Paid': 'Đã thanh toán',
             'Rejected': 'Đã từ chối',
+            'Cancelled': 'Đã hủy',
         };
         return statusMap[status] || status;
     };
@@ -274,7 +302,10 @@ export default function ClientContractDetailPage() {
 
     // Hàm mở modal tính toán
     const handleOpenCalculateModal = async () => {
-        if (!payment || (payment.status !== 'PendingCalculation' && payment.status !== 'Rejected')) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (payment.status !== 'PendingCalculation' && payment.status !== 'Rejected') return;
 
         setShowCalculateModal(true);
         setCalculateError(null);
@@ -474,7 +505,9 @@ export default function ClientContractDetailPage() {
 
     // Hàm mở modal ghi nhận thanh toán
     const handleOpenRecordPaymentModal = async () => {
-        if (!payment) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
 
         setShowRecordPaymentModal(true);
         
@@ -777,24 +810,37 @@ export default function ClientContractDetailPage() {
                                 {getStatusText(payment.status)}
                             </span>
                             {/* Nút thao tác */}
-                            {(payment.status === 'PendingCalculation' || payment.status === 'Rejected') && (
-                                <button
-                                    onClick={handleOpenCalculateModal}
-                                    className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                    <Calculator className="w-4 h-4" />
-                                    Tính toán
-                                </button>
-                            )}
-                            {(payment.status === 'Invoiced' || payment.status === 'Overdue') && (
-                                <button
-                                    onClick={handleOpenRecordPaymentModal}
-                                    className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                >
-                                    <CheckCircle className="w-4 h-4" />
-                                    Đã thanh toán
-                                </button>
-                            )}
+                            {(() => {
+                                // Không cho phép thao tác nếu payment đã Cancelled hoặc contract đã Terminated
+                                const isCancelled = payment.status === 'Cancelled';
+                                const isContractTerminated = contract?.status === 'Terminated';
+                                const canPerformActions = !isCancelled && !isContractTerminated;
+                                
+                                if (!canPerformActions) return null;
+                                
+                                return (
+                                    <>
+                                        {(payment.status === 'PendingCalculation' || payment.status === 'Rejected') && (
+                                            <button
+                                                onClick={handleOpenCalculateModal}
+                                                className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                            >
+                                                <Calculator className="w-4 h-4" />
+                                                Tính toán
+                                            </button>
+                                        )}
+                                        {(payment.status === 'Invoiced' || payment.status === 'Overdue') && (
+                                            <button
+                                                onClick={handleOpenRecordPaymentModal}
+                                                className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                            >
+                                                <CheckCircle className="w-4 h-4" />
+                                                Đã thanh toán
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

@@ -37,7 +37,7 @@ export default function CreatePartnerContractPage() {
         status: 'Draft',
         startDate: '',
         endDate: undefined,
-        contractFileUrl: undefined,
+        contractFileUrl: '',
         notes: undefined,
     });
 

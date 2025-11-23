@@ -265,6 +265,7 @@ const ManagerPartnerPeriods: React.FC = () => {
 
   // Hàm mở modal reject
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenRejectModal = (payment: PartnerContractPayment) => {
     setSelectedPaymentForReject(payment);
     setShowRejectModal(true);
@@ -357,6 +358,7 @@ const ManagerPartnerPeriods: React.FC = () => {
 
   // Hàm mở modal approve
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenApproveModal = (payment: PartnerContractPayment) => {
     setSelectedPaymentForApprove(payment);
     setShowApproveModal(true);
@@ -494,6 +496,8 @@ const ManagerPartnerPeriods: React.FC = () => {
         return 'bg-green-50 text-green-700 border-green-200';
       case 'Paid':
         return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'Cancelled':
+        return 'bg-red-50 text-red-700 border-red-200';
       default:
         return 'bg-gray-50 text-gray-700 border-gray-200';
     }
@@ -512,6 +516,8 @@ const ManagerPartnerPeriods: React.FC = () => {
         return 'Đã duyệt';
       case 'Paid':
         return 'Đã chi trả';
+      case 'Cancelled':
+        return 'Đã hủy';
       default:
         return status;
     }

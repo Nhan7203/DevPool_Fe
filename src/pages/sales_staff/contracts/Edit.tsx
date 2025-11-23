@@ -245,7 +245,7 @@ export default function EditClientContractPage() {
         return;
       }
 
-      let fileUrl = existingFileUrl;
+      let fileUrl: string = existingFileUrl || '';
       if (contractFile) {
         fileUrl = await uploadFile(
           contractFile,
@@ -253,15 +253,26 @@ export default function EditClientContractPage() {
         );
       }
 
+      if (!fileUrl) {
+        setFileError("⚠️ Vui lòng chọn file hợp đồng");
+        setSubmitting(false);
+        return;
+      }
+
       const payload: ClientContractPayload = {
         contractNumber: contractNumberUpper,
-        clientCompanyId: form.clientCompanyId,
-        talentId: form.talentId,
-        projectId: form.projectId,
-        startDate: form.startDate,
+        clientCompanyId: form.clientCompanyId!,
+        talentId: form.talentId!,
+        projectId: form.projectId!,
+        talentApplicationId: currentContract?.talentApplicationId || null,
+        billingRate: currentContract?.billingRate || 0,
+        standardHoursPerMonth: currentContract?.standardHoursPerMonth || 160,
+        rateType: currentContract?.rateType || 'ManMonth',
+        startDate: form.startDate!,
         endDate: form.endDate || undefined,
         status: form.status || currentContract?.status || "Draft",
         contractFileUrl: fileUrl,
+        notes: currentContract?.notes || null,
       };
 
       await clientContractService.update(Number(id), payload);

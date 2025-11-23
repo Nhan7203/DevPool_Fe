@@ -95,8 +95,7 @@ export default function ClientContractDetailPage() {
                 setError('');
                 
                 // Fetch payment detail
-                const paymentData = await clientContractPaymentService.getById(Number(id));
-                setPayment(paymentData);
+                let paymentData = await clientContractPaymentService.getById(Number(id));
                 
                 // Fetch related data in parallel
                 const [contractData, periodData] = await Promise.all([
@@ -106,6 +105,33 @@ export default function ClientContractDetailPage() {
                 
                 setContract(contractData);
                 setPeriod(periodData);
+                
+                // Kiểm tra và tự động chuyển thành Cancelled nếu contract Terminated và payment chưa Paid
+                if (contractData.status === 'Terminated' && paymentData.status !== 'Paid') {
+                    try {
+                        await clientContractPaymentService.update(paymentData.id, {
+                            clientPeriodId: paymentData.clientPeriodId,
+                            clientContractId: paymentData.clientContractId,
+                            billableHours: paymentData.billableHours,
+                            calculatedAmount: paymentData.calculatedAmount ?? null,
+                            invoicedAmount: paymentData.invoicedAmount ?? null,
+                            receivedAmount: paymentData.receivedAmount ?? null,
+                            invoiceNumber: paymentData.invoiceNumber ?? null,
+                            invoiceDate: paymentData.invoiceDate ?? null,
+                            paymentDate: paymentData.paymentDate ?? null,
+                            status: 'Cancelled',
+                            notes: paymentData.notes ?? null
+                        });
+                        // Reload payment với status mới
+                        paymentData = await clientContractPaymentService.getById(Number(id));
+                    } catch (updateErr) {
+                        console.error("Lỗi khi tự động chuyển payment thành Cancelled:", updateErr);
+                        // Vẫn tiếp tục load dữ liệu bình thường
+                    }
+                }
+                
+                // Set payment sau khi đã xử lý logic tự động chuyển thành Cancelled
+                setPayment(paymentData);
                 
                 // Fetch company
                 try {
@@ -198,6 +224,7 @@ export default function ClientContractDetailPage() {
             'Overdue': 'bg-orange-50 text-orange-800 border-orange-200',
             'Paid': 'bg-emerald-50 text-emerald-800 border-emerald-200',
             'Rejected': 'bg-red-50 text-red-800 border-red-200',
+            'Cancelled': 'bg-gray-50 text-gray-800 border-gray-200',
         };
         return statusMap[status] || 'bg-gray-50 text-gray-800 border-gray-200';
     };
@@ -212,6 +239,7 @@ export default function ClientContractDetailPage() {
             'Overdue': 'Quá hạn',
             'Paid': 'Đã thanh toán',
             'Rejected': 'Đã từ chối',
+            'Cancelled': 'Đã hủy',
         };
         return statusMap[status] || status;
     };
@@ -268,7 +296,10 @@ export default function ClientContractDetailPage() {
 
     // Hàm mở modal duyệt
     const handleOpenApproveModal = async () => {
-        if (!payment || !isReadyForInvoice(payment.status)) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (!isReadyForInvoice(payment.status)) return;
 
         setShowApproveModal(true);
         setApproveError(null);
@@ -489,7 +520,10 @@ export default function ClientContractDetailPage() {
 
     // Hàm mở modal từ chối
     const handleOpenRejectModal = () => {
-        if (!payment || !isReadyForInvoice(payment.status)) return;
+        if (!payment || !contract) return;
+        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
+        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
+        if (!isReadyForInvoice(payment.status)) return;
 
         setShowRejectModal(true);
         setRejectError(null);
@@ -645,7 +679,9 @@ export default function ClientContractDetailPage() {
     }
 
     // Kiểm tra xem có nên hiển thị nút duyệt/từ chối không
-    const canApproveOrReject = payment && isReadyForInvoice(payment.status);
+    const isCancelled = payment?.status === 'Cancelled';
+    const isContractTerminated = contract?.status === 'Terminated';
+    const canApproveOrReject = payment && isReadyForInvoice(payment.status) && !isCancelled && !isContractTerminated;
 
     return (
         <div className="flex bg-gray-50 min-h-screen">

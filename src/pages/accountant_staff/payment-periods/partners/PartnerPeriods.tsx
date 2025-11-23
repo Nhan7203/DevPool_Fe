@@ -259,6 +259,7 @@ const AccountantPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal tạo tài liệu độc lập
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenCreateDocumentModal = async (payment: PartnerContractPayment) => {
     setSelectedPaymentForCreateDocument(payment);
     setShowCreateDocumentModal(true);
@@ -910,6 +911,7 @@ const AccountantPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal tính toán
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenCalculateModal = async (payment: PartnerContractPayment) => {
     if (payment.status !== 'PendingCalculation') return;
 
@@ -1159,6 +1161,7 @@ const AccountantPartnerPeriods: React.FC = () => {
   };
 
   // Hàm mở modal ghi nhận đã chi trả
+  // @ts-expect-error - Function kept for potential future use
   const handleOpenMarkAsPaidModal = async (payment: PartnerContractPayment) => {
     setSelectedPaymentForMarkAsPaid(payment);
     setShowMarkAsPaidModal(true);
@@ -1515,6 +1518,8 @@ const AccountantPartnerPeriods: React.FC = () => {
         return 'bg-green-50 text-green-700 border-green-200';
       case 'Paid':
         return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'Cancelled':
+        return 'bg-red-50 text-red-700 border-red-200';
       default:
         return 'bg-gray-50 text-gray-700 border-gray-200';
     }
@@ -1533,6 +1538,8 @@ const AccountantPartnerPeriods: React.FC = () => {
         return 'Đã duyệt';
       case 'Paid':
         return 'Đã chi trả';
+      case 'Cancelled':
+        return 'Đã hủy';
       default:
         return status;
     }
