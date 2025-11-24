@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentService, type TalentCreate } from "../../../services/Talent";
+import { talentService, type TalentCreate, type TalentStatusUpdateModel } from "../../../services/Talent";
 import { locationService, type Location } from "../../../services/location";
 import { partnerService, type Partner } from "../../../services/Partner";
 import { WorkingMode } from "../../../types/WorkingMode";
@@ -42,7 +42,7 @@ export default function TalentEditPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [formData, setFormData] = useState<TalentCreate>({
     currentPartnerId: 1, // Default partner ID
-    userId: "",
+    userId: null,
     fullName: "",
     email: "",
     phone: "",
@@ -57,6 +57,9 @@ export default function TalentEditPage() {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>("");
+  const [originalStatus, setOriginalStatus] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [changingStatus, setChangingStatus] = useState(false);
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -104,19 +107,22 @@ export default function TalentEditPage() {
           }
         }
 
+        const currentStatus = data.status || "Available";
         setFormData({
           currentPartnerId: data.currentPartnerId,
-          userId: data.userId,
-          fullName: data.fullName,
-          email: data.email,
-          phone: data.phone,
+          userId: data.userId || null,
+          fullName: data.fullName || "",
+          email: data.email || "",
+          phone: data.phone || "",
           dateOfBirth: formattedDateOfBirth,
           locationId: data.locationId,
           workingMode: data.workingMode,
-          githubUrl: data.githubUrl,
-          portfolioUrl: data.portfolioUrl,
-          status: data.status,
+          githubUrl: data.githubUrl || "",
+          portfolioUrl: data.portfolioUrl || "",
+          status: currentStatus,
         });
+        setOriginalStatus(currentStatus);
+        setSelectedStatus(currentStatus);
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin nhân sự!");
@@ -229,6 +235,55 @@ export default function TalentEditPage() {
     }));
   };
 
+  // 🔄 Thay đổi trạng thái
+  const handleStatusChange = async () => {
+    if (!id) return;
+    
+    if (selectedStatus === originalStatus) {
+      alert("Trạng thái không thay đổi!");
+      return;
+    }
+
+    const confirmed = window.confirm(`Bạn có chắc chắn muốn thay đổi trạng thái từ "${getStatusLabel(originalStatus)}" sang "${getStatusLabel(selectedStatus)}"?`);
+    if (!confirmed) {
+      setSelectedStatus(originalStatus);
+      return;
+    }
+
+    try {
+      setChangingStatus(true);
+      const statusPayload: TalentStatusUpdateModel = {
+        newStatus: selectedStatus,
+      };
+      await talentService.changeStatus(Number(id), statusPayload);
+      
+      // Cập nhật trạng thái trong formData và originalStatus
+      setFormData(prev => ({ ...prev, status: selectedStatus }));
+      setOriginalStatus(selectedStatus);
+      
+      alert("✅ Thay đổi trạng thái thành công!");
+    } catch (statusErr: any) {
+      console.error("❌ Lỗi khi thay đổi trạng thái:", statusErr);
+      const statusErrorMsg = statusErr?.response?.data?.message || statusErr?.message || "Không thể thay đổi trạng thái";
+      alert(`❌ ${statusErrorMsg}`);
+      setSelectedStatus(originalStatus);
+    } finally {
+      setChangingStatus(false);
+    }
+  };
+
+  // 📝 Lấy nhãn trạng thái
+  const getStatusLabel = (status: string): string => {
+    const statusLabels: Record<string, string> = {
+      "Available": "Sẵn sàng",
+      "Busy": "Đang bận",
+      "Unavailable": "Tạm ngưng",
+      "Working": "Đang làm việc",
+      "Applying": "Đang ứng tuyển",
+    };
+    return statusLabels[status] || status;
+  };
+
   // 💾 Gửi form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,8 +335,10 @@ export default function TalentEditPage() {
 
     try {
       // Format dateOfBirth to UTC ISO string if it exists
+      // Loại bỏ status khỏi payload vì đã xử lý riêng bằng changeStatus API
+      const { status, ...updatePayload } = formData;
       const payload = {
-        ...formData,
+        ...updatePayload,
         dateOfBirth: formData.dateOfBirth 
           ? new Date(formData.dateOfBirth + 'T00:00:00.000Z').toISOString()
           : undefined
@@ -458,7 +515,7 @@ export default function TalentEditPage() {
                 </label>
                 <Input
                   name="fullName"
-                  value={formData.fullName}
+                  value={formData.fullName || ""}
                   onChange={handleChange}
                   placeholder="Nhập họ và tên..."
                   required
@@ -481,7 +538,7 @@ export default function TalentEditPage() {
                   <Input
                     type="email"
                     name="email"
-                    value={formData.email}
+                    value={formData.email || ""}
                     onChange={handleChange}
                     placeholder="Nhập email..."
                     required
@@ -502,7 +559,7 @@ export default function TalentEditPage() {
                   </label>
                   <Input
                     name="phone"
-                    value={formData.phone}
+                    value={formData.phone || ""}
                     onChange={handleChange}
                     placeholder="Nhập số điện thoại..."
                     required
@@ -539,7 +596,7 @@ export default function TalentEditPage() {
                   <Input
                     type="date"
                     name="dateOfBirth"
-                    value={formData.dateOfBirth}
+                    value={formData.dateOfBirth || ""}
                     onChange={handleChange}
                     className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${
                       errors.dateOfBirth ? 'border-red-500' : ''
@@ -626,18 +683,41 @@ export default function TalentEditPage() {
                     <FileText className="w-4 h-4" />
                     Trạng thái
                   </label>
-                  <div className="relative">
-                    <select
-                      name="status"
-                      value={formData.status}
-                      onChange={handleChange}
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <select
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        disabled={changingStatus}
+                        className={`w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                          changingStatus ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <option value="Available">Sẵn sàng</option>
+                        <option value="Busy">Đang bận</option>
+                        <option value="Unavailable">Tạm ngưng</option>
+                        <option value="Working" disabled={originalStatus !== "Working"}>Đang làm việc</option>
+                        <option value="Applying" disabled={originalStatus !== "Applying"}>Đang ứng tuyển</option>
+                      </select>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleStatusChange}
+                      disabled={changingStatus || selectedStatus === originalStatus}
+                      className={`px-4 py-3 rounded-xl font-medium transition-all duration-300 ${
+                        changingStatus || selectedStatus === originalStatus
+                          ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                          : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-soft hover:shadow-glow transform hover:scale-105"
+                      }`}
                     >
-                      <option value="Available">Available</option>
-                      <option value="Busy">Busy</option>
-                      <option value="Unavailable">Unavailable</option>
-                    </select>
+                      {changingStatus ? "Đang xử lý..." : "Thay đổi"}
+                    </Button>
                   </div>
+                  {selectedStatus !== originalStatus && (
+                    <p className="mt-1 text-xs text-yellow-600">
+                      Trạng thái sẽ thay đổi từ "{getStatusLabel(originalStatus)}" sang "{getStatusLabel(selectedStatus)}"
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -664,7 +744,7 @@ export default function TalentEditPage() {
                   <Input
                     type="url"
                     name="githubUrl"
-                    value={formData.githubUrl}
+                    value={formData.githubUrl || ""}
                     onChange={handleChange}
                     placeholder="https://github.com/username"
                     className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
@@ -680,7 +760,7 @@ export default function TalentEditPage() {
                   <Input
                     type="url"
                     name="portfolioUrl"
-                    value={formData.portfolioUrl}
+                    value={formData.portfolioUrl || ""}
                     onChange={handleChange}
                     placeholder="https://portfolio.example.com"
                     className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"

@@ -39,7 +39,10 @@ export default function TalentJobRoleLevelCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const jobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const jobRoleLevels = await jobRoleLevelService.getAll({ 
+          excludeDeleted: true,
+          distinctByName: true 
+        });
         setAllJobRoleLevels(jobRoleLevels);
       } catch (error) {
         console.error("❌ Error loading job role levels", error);
@@ -319,7 +322,7 @@ export default function TalentJobRoleLevelCreatePage() {
                         disabled={isDisabled}
                         style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
                       >
-                        {jobRoleLevel.name} - Level {jobRoleLevel.level}{isDisabled ? ' (đã chọn)' : ''}
+                        {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
                       </option>
                     );
                   })}

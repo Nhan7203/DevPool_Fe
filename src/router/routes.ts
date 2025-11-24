@@ -278,6 +278,7 @@ export const ROUTES = {
     // Thông tin cá nhân
     PROFILE: '/developer/profile',              // Xem/sửa thông tin cá nhân
     CV: '/developer/cv',                        // submit thay đổi → HR duyệt
+    CV_CREATE: '/developer/cv/create',          // Tạo CV mới
 
     // Hợp đồng
     CONTRACTS: {

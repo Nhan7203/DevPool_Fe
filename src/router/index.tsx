@@ -476,6 +476,7 @@ const AppRouter: React.FC = () => {
             <Route element={<ProtectedRoute requiredRole="Developer"><Outlet /></ProtectedRoute>}>
               <Route path={ROUTES.DEVELOPER.DASHBOARD} element={<DeveloperDashboard />} />
               <Route path={ROUTES.DEVELOPER.PROFILE} element={<DeveloperProfile />} />
+              <Route path={ROUTES.DEVELOPER.CV_CREATE} element={<TalentCVCreatePage />} />
               <Route path={ROUTES.DEVELOPER.CONTRACTS.LIST} element={<DeveloperContractsList />} />
               <Route path="/developer/contracts/:type/:id" element={<DeveloperContractDetail />} />
               <Route path={ROUTES.DEVELOPER.PAYMENTS.LIST} element={<DeveloperPaymentsList />} />

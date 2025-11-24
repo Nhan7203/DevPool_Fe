@@ -15,6 +15,7 @@ import {
   Code,
   Users,
   UserPen,
+  MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDashboardRoute, ROUTES, NOTIFICATION_CENTER_ROUTE } from '../../router/routes';
@@ -26,6 +27,9 @@ import {
 } from '../../services/Notification';
 import { decodeJWT } from '../../services/Auth';
 import { useNotification } from '../../contexts/NotificationContext';
+import { talentCVService } from '../../services/TalentCV';
+import { talentService } from '../../services/Talent';
+import { jobRoleLevelService } from '../../services/JobRoleLevel';
 
 type ExtendedNotification = Notification & {
   metaData?: Record<string, string | number | boolean> | null;
@@ -44,6 +48,9 @@ function getNotificationGroup(type: NotificationType): string {
   if (type >= 3000 && type < 4000) return 'Hợp đồng';
   if (type >= 5000 && type < 6000) return 'Talent';
   if (type >= 6000 && type < 7000) return 'Tài liệu';
+  if (type >= 7000 && type < 8000) return 'Kỹ năng & Phân tích CV';
+  if (type >= 8000 && type < 9000) return 'Thanh toán';
+  if (type >= 9000 && type < 10000) return 'Yêu cầu liên hệ';
   return 'Thông báo khác';
 }
 
@@ -70,6 +77,9 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [viewNotification, setViewNotification] = useState<ExtendedNotification | null>(null);
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
+  const [replyNotification, setReplyNotification] = useState<ExtendedNotification | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { unread, items, setUnread, setItems, updateItemById } = useNotification();
@@ -191,7 +201,6 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
           if (token && !isUnauthorized && user && resolvedUserId) {
             const finalKey = `${user.id}-${user.role}-${resolvedUserId}`;
             if (finalKey === userKeyToFetch && prevUserKeyRef.current === userKeyToFetch) {
-              console.error('Không thể tải thông báo:', error);
               setItems([]);
               setUnread(0);
             }
@@ -279,7 +288,6 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       // unread sẽ được tự động tính lại bởi useEffect dựa trên items
       return updated;
     } catch (error) {
-      console.error('Không thể đánh dấu thông báo đã đọc:', error);
       // Giữ optimistic update nếu API fail
       return optimisticUpdate;
     }
@@ -335,37 +343,173 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const roleDisplay = useMemo(getRoleDisplay, [user?.role]);
   const handleNotificationNavigate = async (notification: ExtendedNotification) => {
+    // Lưu actionUrl gốc TRƯỚC KHI làm bất cứ điều gì
+    let originalActionUrl = notification.actionUrl;
+    
+    if (!originalActionUrl) {
+      setIsNotificationOpen(false);
+      return;
+    }
+    
+    // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
+    // Vì backend có thể tạo actionUrl với format cũ hoặc có notification cũ
+    if (originalActionUrl.startsWith('/hr/talents/')) {
+      originalActionUrl = originalActionUrl.replace('/hr/talents/', '/hr/developers/');
+    }
+    
+    // Đóng notification dropdown ngay lập tức
+    setIsNotificationOpen(false);
+    
+    // Navigate ngay với actionUrl đã được fix, không đợi mark as read
+    navigate(originalActionUrl);
+    
+    // Mark as read sau khi navigate (không block navigation)
     try {
-      // Đánh dấu đã đọc trước, để UI cập nhật ngay
-      const resolved = await markNotificationAsRead(notification);
-      // Đợi một chút để người dùng thấy thay đổi (notification chuyển sang màu xám)
-      await new Promise(resolve => setTimeout(resolve, 200));
-      setIsNotificationOpen(false);
-      navigate(resolved.actionUrl || notification.actionUrl || '/');
+      await markNotificationAsRead(notification);
     } catch (error) {
-      console.error('Không thể chuyển hướng thông báo:', error);
-      setIsNotificationOpen(false);
-      if (notification.actionUrl) {
-        navigate(notification.actionUrl);
-      }
+      // Không block navigation nếu mark as read fail
     }
   };
 
   const handleNotificationDetail = async (notification: ExtendedNotification) => {
     try {
+      // Lưu actionUrl gốc trước khi mark as read
+      const originalActionUrl = notification.actionUrl;
+      
       // Đánh dấu đã đọc trước, để UI cập nhật ngay
       const resolved = await markNotificationAsRead(notification);
+      
       // Đợi một chút để người dùng thấy thay đổi (notification chuyển sang màu xám)
       await new Promise(resolve => setTimeout(resolve, 200));
       setIsNotificationOpen(false);
-      setViewNotification(resolved);
+      
+      // LUÔN giữ lại actionUrl gốc của notification, không dùng từ resolved
+      setViewNotification({
+        ...resolved,
+        actionUrl: originalActionUrl || notification.actionUrl || resolved?.actionUrl,
+      });
     } catch (error) {
-      console.error('Không thể cập nhật thông báo:', error);
+      // Nếu có lỗi, vẫn hiển thị notification với actionUrl gốc
+      setIsNotificationOpen(false);
+      setViewNotification(notification);
     }
   };
 
   const handleCloseNotificationDetail = () => {
     setViewNotification(null);
+  };
+
+  const openReplyModal = async (notification: ExtendedNotification) => {
+    setReplyNotification(notification);
+    setReplyMessage('HR sẽ sử dụng CV này để cập nhật hồ sơ talent của bạn trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
+    setReplyModalOpen(true);
+  };
+
+  const handleSendReply = async () => {
+    if (!replyNotification) return;
+    
+    try {
+      let developerId: string | null = null;
+      let developerName = 'Developer';
+      let talentName = '';
+      let cvVersion = '';
+      let jobRoleLevelName = '';
+      
+      // Ưu tiên lấy từ metaData
+      if (replyNotification.metaData) {
+        developerId = (replyNotification.metaData as any)?.developerId || 
+                      (replyNotification.metaData as any)?.userId ||
+                      (replyNotification.metaData as any)?.talentUserId ||
+                      null;
+        developerName = (replyNotification.metaData as any)?.developerName || 
+                        (replyNotification.metaData as any)?.talentName || 
+                        'Developer';
+        talentName = (replyNotification.metaData as any)?.talentName || '';
+        cvVersion = (replyNotification.metaData as any)?.cvVersion || '';
+        jobRoleLevelName = (replyNotification.metaData as any)?.jobRoleLevelName || '';
+      }
+      
+      // Fallback: Lấy từ entityId nếu là TalentCV
+      if (!developerId && replyNotification.entityType === 'TalentCV' && replyNotification.entityId) {
+        try {
+          const talentCV = await talentCVService.getById(replyNotification.entityId);
+          if (talentCV?.talentId) {
+            const talent = await talentService.getById(talentCV.talentId);
+            if (talent?.userId) {
+              developerId = talent.userId;
+              developerName = talent.fullName || 'Developer';
+              talentName = talent.fullName || '';
+              cvVersion = String(talentCV.version || '');
+              
+              // Lấy jobRoleLevel name
+              if (talentCV.jobRoleLevelId) {
+                try {
+                  const jobRoleLevel = await jobRoleLevelService.getById(talentCV.jobRoleLevelId);
+                  jobRoleLevelName = jobRoleLevel?.name || '';
+                } catch (err) {
+                  // Silent fail
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // Silent fail, sẽ alert sau
+        }
+      }
+      
+      if (!developerId) {
+        alert('Không tìm thấy thông tin developer để phản hồi.');
+        return;
+      }
+
+      // Lấy tên HR từ user context thay vì email
+      const hrStaffName = user?.name || 'HR Staff';
+
+      // Tạo title với jobRoleLevel name
+      const title = jobRoleLevelName 
+        ? `[Phản hồi] ${hrStaffName} đã nhận CV mới - ${jobRoleLevelName}`
+        : `[Phản hồi] ${hrStaffName} đã nhận CV mới của bạn`;
+
+      await notificationService.create({
+        title: title,
+        message: `${hrStaffName} đã nhận được CV mới${cvVersion ? ` (Version ${cvVersion})` : ''}${jobRoleLevelName ? ` cho vị trí ${jobRoleLevelName}` : ''}${talentName ? ` của bạn cho talent ${talentName}` : ' của bạn'}.\n\n${replyMessage}`,
+        type: NotificationType.DocumentUploaded,
+        priority: NotificationPriority.Low,
+        userIds: [String(developerId)],
+        entityType: replyNotification.entityType || null,
+        entityId: replyNotification.entityId || null,
+        actionUrl: '/developer/profile', // Developer nên vào trang profile của họ
+        metaData: {
+          originalNotificationId: String(replyNotification.id),
+          cvVersion: cvVersion,
+          talentName: talentName,
+          hrStaffName: hrStaffName,
+          jobRoleLevelName: jobRoleLevelName,
+          replyTo: 'cv-upload',
+        },
+      });
+
+      // Đánh dấu đã đọc sau khi phản hồi thành công
+      try {
+        await notificationService.markAsRead(replyNotification.id);
+        // Cập nhật local state
+        updateItemById(replyNotification.id, { isRead: true, readAt: new Date().toISOString() });
+      } catch (markReadError) {
+        // Silent fail - đã phản hồi thành công rồi
+      }
+
+      alert('✅ Đã gửi thông báo phản hồi đến developer thành công!');
+      setReplyModalOpen(false);
+      setReplyNotification(null);
+      setReplyMessage('');
+      // Refresh notifications để cập nhật UI
+      if (isNotificationOpen) {
+        setIsNotificationOpen(false);
+      }
+      setViewNotification(null);
+    } catch (error) {
+      alert('Không thể gửi thông báo phản hồi. Vui lòng thử lại.');
+    }
   };
 
   const handleLogout = () => {
@@ -809,17 +953,43 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                 </div>
               </div>
             )}
-            {viewNotification.actionUrl && (
-              <button
-                onClick={() => {
-                  handleCloseNotificationDetail();
-                  navigate(viewNotification.actionUrl!);
-                }}
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2.5 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow"
-              >
-                Xem chi tiết
-              </button>
-            )}
+            <div className="flex flex-col gap-2">
+              {viewNotification.actionUrl && (
+                <button
+                  onClick={() => {
+                    let targetUrl = viewNotification.actionUrl;
+                    
+                    // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
+                    if (targetUrl && targetUrl.startsWith('/hr/talents/')) {
+                      targetUrl = targetUrl.replace('/hr/talents/', '/hr/developers/');
+                    }
+                    
+                    handleCloseNotificationDetail();
+                    if (targetUrl) {
+                      navigate(targetUrl);
+                    }
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2.5 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow"
+                >
+                  Xem chi tiết
+                </button>
+              )}
+              {/* Nút phản hồi cho thông báo CV mới từ developer */}
+              {(viewNotification.type === NotificationType.CVUploadedByDeveloper || 
+                (viewNotification.type as number) === 7002) && 
+               viewNotification.entityType === 'TalentCV' && 
+               viewNotification.entityId &&
+               !viewNotification.isRead && (
+                <button
+                  onClick={() => openReplyModal(viewNotification)}
+                  disabled={viewNotification.isRead}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-700 text-white px-4 py-2.5 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Phản hồi Developer
+                </button>
+              )}
+            </div>
           </div>
           <div className="px-6 py-3 border-t border-neutral-200 bg-neutral-50 text-right">
             <button
@@ -827,6 +997,63 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
               className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
             >
               Đóng
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Modal chỉnh sửa tin nhắn phản hồi */}
+    {replyModalOpen && replyNotification && (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
+        <div className="w-full max-w-lg bg-white rounded-2xl shadow-soft border border-neutral-200 overflow-hidden animate-slide-up">
+          <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-neutral-900">Phản hồi Developer</p>
+              <p className="text-xs text-neutral-500">Chỉnh sửa nội dung tin nhắn trước khi gửi</p>
+            </div>
+            <button
+              onClick={() => {
+                setReplyModalOpen(false);
+                setReplyNotification(null);
+                setReplyMessage('');
+              }}
+              className="text-neutral-400 hover:text-neutral-600 transition-colors text-xl leading-none"
+              aria-label="Đóng"
+            >
+              ×
+            </button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
+                Nội dung tin nhắn
+              </label>
+              <textarea
+                value={replyMessage}
+                onChange={(e) => setReplyMessage(e.target.value)}
+                rows={6}
+                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none text-sm"
+                placeholder="Nhập nội dung tin nhắn phản hồi..."
+              />
+            </div>
+          </div>
+          <div className="px-6 py-3 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setReplyModalOpen(false);
+                setReplyNotification(null);
+                setReplyMessage('');
+              }}
+              className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={handleSendReply}
+              disabled={!replyMessage.trim()}
+              className="px-4 py-2 bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Gửi phản hồi
             </button>
           </div>
         </div>

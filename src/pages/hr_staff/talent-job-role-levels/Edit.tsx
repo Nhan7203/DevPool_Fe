@@ -61,7 +61,10 @@ export default function TalentJobRoleLevelEditPage() {
   useEffect(() => {
     const fetchJobRoleLevels = async () => {
       try {
-        const jobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const jobRoleLevels = await jobRoleLevelService.getAll({ 
+          excludeDeleted: true,
+          distinctByName: true 
+        });
         setAllJobRoleLevels(jobRoleLevels);
       } catch (err) {
         console.error("❌ Lỗi tải danh sách vị trí công việc:", err);
@@ -249,7 +252,7 @@ export default function TalentJobRoleLevelEditPage() {
                           disabled={isDisabled}
                           style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
                         >
-                          {jobRoleLevel.name} - Level {jobRoleLevel.level}{isDisabled ? ' (đã chọn)' : ''}
+                          {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
                         </option>
                       );
                     })}

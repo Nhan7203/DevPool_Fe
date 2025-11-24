@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   RadarChart,
@@ -20,10 +18,9 @@ import {
   Code2,
   Timer,
   ClipboardList,
-  ChevronUp,
-  ChevronDown,
   CheckCircle2,
-  DollarSign
+  DollarSign,
+  TrendingUp
 } from 'lucide-react';
 import { sidebarItems } from '../../components/developer/SidebarItems';
 import Sidebar from '../../components/common/Sidebar';
@@ -33,14 +30,14 @@ import { talentService, type Talent } from '../../services/Talent';
 import { partnerContractService, type PartnerContract } from '../../services/PartnerContract';
 import { clientContractService, type ClientContract } from '../../services/ClientContract';
 import { partnerContractPaymentService, type PartnerContractPayment } from '../../services/PartnerContractPayment';
+import { talentSkillService, type TalentSkill } from '../../services/TalentSkill';
+import { skillService, type Skill } from '../../services/Skill';
 
 interface DevStats {
   currentAssignments: number;
   utilizationRate: number; // %
   hoursThisMonth: number;  // hours
   totalEarnings: number; // VNĐ
-  velocity: { sprint: string; points: number }[];
-  weeklyHours: { week: string; hours: number; billable: number }[];
   monthlyEarnings: { month: string; earnings: number }[];
   techStack: { skill: string; level: number }[]; // 0..100
 }
@@ -55,8 +52,6 @@ export default function DeveloperDashboard() {
     utilizationRate: 0,
     hoursThisMonth: 0,
     totalEarnings: 0,
-    velocity: [],
-    weeklyHours: [],
     monthlyEarnings: [],
     techStack: []
   });
@@ -108,11 +103,13 @@ export default function DeveloperDashboard() {
         setLoading(true);
         setError('');
         
-        // Fetch contracts and payments in parallel
-        const [partnerContractsData, clientContractsData, paymentsData] = await Promise.all([
+        // Fetch contracts, payments, and skills in parallel
+        const [partnerContractsData, clientContractsData, paymentsData, talentSkillsData, allSkillsData] = await Promise.all([
           partnerContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           clientContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-          partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true })
+          partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
+          talentSkillService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
+          skillService.getAll({ excludeDeleted: true })
         ]);
 
         const partnerContracts = Array.isArray(partnerContractsData) ? partnerContractsData : [];
@@ -173,40 +170,60 @@ export default function DeveloperDashboard() {
           .sort((a, b) => a.month.localeCompare(b.month))
           .slice(-6);
 
-        // 6. Weekly Hours (4 tuần gần nhất) - mock data vì không có work report API
-        const weeklyHours = [
-          { week: 'W1', hours: Math.round(hoursThisMonth * 0.25), billable: Math.round(hoursThisMonth * 0.2) },
-          { week: 'W2', hours: Math.round(hoursThisMonth * 0.25), billable: Math.round(hoursThisMonth * 0.2) },
-          { week: 'W3', hours: Math.round(hoursThisMonth * 0.25), billable: Math.round(hoursThisMonth * 0.2) },
-          { week: 'W4', hours: Math.round(hoursThisMonth * 0.25), billable: Math.round(hoursThisMonth * 0.2) }
-        ];
+        // 6. Tech Stack - fetch từ API
+        const talentSkills = Array.isArray(talentSkillsData) ? talentSkillsData : [];
+        const allSkills = Array.isArray(allSkillsData) ? allSkillsData : [];
+        
+        // Map level từ string sang số (0-100)
+        const levelToNumber = (level: string): number => {
+          const normalizedLevel = (level || '').toLowerCase().trim();
+          switch (normalizedLevel) {
+            case 'beginner':
+            case 'junior':
+              return 25;
+            case 'intermediate':
+            case 'middle':
+              return 50;
+            case 'advanced':
+            case 'senior':
+              return 75;
+            case 'expert':
+            case 'lead':
+              return 100;
+            default:
+              return 50; // Default to intermediate
+          }
+        };
 
-        // 7. Velocity - mock data vì không có sprint data
-        const velocity = [
-          { sprint: 'S1', points: Math.round(currentAssignments * 8) },
-          { sprint: 'S2', points: Math.round(currentAssignments * 9) },
-          { sprint: 'S3', points: Math.round(currentAssignments * 10) },
-          { sprint: 'S4', points: Math.round(currentAssignments * 9) },
-          { sprint: 'S5', points: Math.round(currentAssignments * 11) },
-          { sprint: 'S6', points: Math.round(currentAssignments * 12) }
-        ];
-
-        // 8. Tech Stack - mock data vì cần fetch từ skills
-        const techStack = [
-          { skill: 'React', level: 85 },
-          { skill: 'Node.js', level: 80 },
-          { skill: 'PostgreSQL', level: 70 },
-          { skill: 'DevOps', level: 65 },
-          { skill: 'Testing', level: 75 }
-        ];
+        // Build tech stack từ talent skills
+        let techStack = talentSkills
+          .map((ts: TalentSkill) => {
+            const skill = allSkills.find((s: Skill) => s.id === ts.skillId);
+            if (!skill || !skill.name) return null;
+            
+            return {
+              skill: skill.name,
+              level: levelToNumber(ts.level)
+            };
+          })
+          .filter((item): item is { skill: string; level: number } => item !== null && item.skill && item.level !== undefined)
+          .slice(0, 10); // Giới hạn tối đa 10 skills để radar chart không quá đông
+        
+        // Đảm bảo có ít nhất 3 skills để radar chart hiển thị đẹp
+        if (techStack.length < 3 && techStack.length > 0) {
+          // Nếu có ít hơn 3 skills, có thể thêm placeholder hoặc giữ nguyên
+          console.warn('Tech Stack có ít hơn 3 skills, radar chart có thể không hiển thị tối ưu');
+        }
+        
+        console.log('Tech Stack data:', techStack);
+        console.log('Talent Skills count:', talentSkills.length);
+        console.log('All Skills count:', allSkills.length);
 
         setStats({
           currentAssignments,
           utilizationRate,
           hoursThisMonth,
           totalEarnings,
-          velocity,
-          weeklyHours,
           monthlyEarnings,
           techStack
         });
@@ -247,27 +264,70 @@ export default function DeveloperDashboard() {
         ) : (
           <div className="space-y-6">
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <KpiCard
-                label="Hợp đồng đang thực hiện"
-                value={stats.currentAssignments.toString()}
-                icon={<ClipboardList className="w-6 h-6 text-blue-600" />}
-              />
-              <KpiCard
-                label="Tỷ lệ sử dụng"
-                value={formatPercent(stats.utilizationRate)}
-                icon={<Timer className="w-6 h-6 text-amber-600" />}
-              />
-              <KpiCard
-                label="Giờ làm trong tháng"
-                value={formatHours(stats.hoursThisMonth)}
-                icon={<Code2 className="w-6 h-6 text-violet-600" />}
-              />
-              <KpiCard
-                label="Tổng thu nhập"
-                value={formatVND(stats.totalEarnings)}
-                icon={<DollarSign className="w-6 h-6 text-green-600" />}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Hợp đồng đang thực hiện</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stats.currentAssignments}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-primary-100 text-primary-600 group-hover:bg-primary-200 transition-all duration-300">
+                    <ClipboardList className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                  Hợp đồng đang active
+                </p>
+              </div>
+
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Tỷ lệ sử dụng</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{formatPercent(stats.utilizationRate)}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-warning-100 text-warning-600 group-hover:bg-warning-200 transition-all duration-300">
+                    <Timer className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                  Dựa trên 160 giờ/tháng
+                </p>
+              </div>
+
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Giờ làm trong tháng</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{formatHours(stats.hoursThisMonth)}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-accent-100 text-accent-600 group-hover:bg-accent-200 transition-all duration-300">
+                    <Code2 className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                  Tổng giờ đã làm việc
+                </p>
+              </div>
+
+              <div className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">Tổng thu nhập</p>
+                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300 break-words leading-tight">{formatVND(stats.totalEarnings)}</p>
+                  </div>
+                  <div className="p-3 rounded-full bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200 transition-all duration-300">
+                    <DollarSign className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+                  </div>
+                </div>
+                <p className="text-sm text-secondary-600 mt-4 flex items-center group-hover:text-secondary-700 transition-colors duration-300">
+                  <TrendingUp className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                  Tổng số tiền đã nhận
+                </p>
+              </div>
             </div>
 
             {/* Charts */}
@@ -287,50 +347,48 @@ export default function DeveloperDashboard() {
               </div>
 
               <div className="bg-white rounded-2xl shadow-soft p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Giờ làm theo tuần</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={stats.weeklyHours}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis />
-                    <Tooltip formatter={(v: number) => formatHours(v)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="hours" name="Tổng giờ" stroke="#6366f1" />
-                    <Line type="monotone" dataKey="billable" name="Giờ thanh toán" stroke="#0ea5e9" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-soft p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Velocity theo sprint</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={stats.velocity}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="sprint" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="points" name="Story Points" fill="#22c55e" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-soft p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Kỹ năng chuyên môn</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart data={stats.techStack}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="skill" />
-                    <PolarRadiusAxis />
-                    <Radar name="Level" dataKey="level" fill="#14b8a6" fillOpacity={0.6} />
-                    <Legend />
-                  </RadarChart>
-                </ResponsiveContainer>
-                <p className="mt-2 text-sm text-gray-500 inline-flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> Thang điểm 0–100
-                </p>
+                {stats.techStack && stats.techStack.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RadarChart data={stats.techStack} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                        <PolarGrid />
+                        <PolarAngleAxis 
+                          dataKey="skill" 
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => value.length > 10 ? `${value.substring(0, 10)}...` : value}
+                        />
+                        <PolarRadiusAxis 
+                          angle={90} 
+                          domain={[0, 100]} 
+                          tick={{ fontSize: 10 }}
+                        />
+                        <Radar 
+                          name="Mức độ" 
+                          dataKey="level" 
+                          stroke="#14b8a6" 
+                          fill="#14b8a6" 
+                          fillOpacity={0.6}
+                          strokeWidth={2}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => [`${value}/100`, 'Mức độ']}
+                          labelFormatter={(label) => `Kỹ năng: ${label}`}
+                        />
+                        <Legend />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                    <p className="mt-2 text-sm text-gray-500 inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Thang điểm 0–100 (Beginner: 25, Intermediate: 50, Advanced: 75, Expert: 100)
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
+                    <Code2 className="w-12 h-12 mb-4 text-gray-400" />
+                    <p className="text-center">Chưa có kỹ năng nào được đăng ký</p>
+                    <p className="text-sm text-gray-400 mt-2">Vui lòng liên hệ HR để thêm kỹ năng vào hồ sơ</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -340,30 +398,3 @@ export default function DeveloperDashboard() {
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  icon,
-  badge
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  badge?: { dir: 'up' | 'down'; text: string };
-}) {
-  return (
-    <div className="bg-white rounded-2xl shadow-soft p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="p-3 bg-primary-100 rounded-xl">{icon}</div>
-        {badge && (
-          <span className={`${badge.dir === 'up' ? 'text-green-600' : 'text-red-600'} flex items-center`}>
-            {badge.dir === 'up' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            {badge.text}
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-gray-600 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-    </div>
-  );
-}
