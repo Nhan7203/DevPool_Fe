@@ -209,7 +209,7 @@ function TalentCertificateCreatePage() {
       return;
     }
 
-    if (!talentId || talentId === 0) {
+    if (!talentId || talentId === '0' || Number(talentId) === 0) {
       alert("⚠️ Không tìm thấy ID nhân sự.");
       return;
     }

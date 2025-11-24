@@ -462,6 +462,9 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
         return;
       }
 
+      // Suppress unused variable warning - developerName may be used in future
+      void developerName;
+
       // Lấy tên HR từ user context thay vì email
       const hrStaffName = user?.name || 'HR Staff';
 

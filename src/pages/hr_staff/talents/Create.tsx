@@ -1159,6 +1159,8 @@ export default function CreateTalent() {
       if (field === 'version' && typeof value === 'number') {
         const currentCV = updated[index];
         const error = validateCVVersion(value, currentCV.jobRoleLevelId, index, updated);
+        // Suppress unused variable warning - error may be used in future
+        void error;
         // Có thể lưu error vào state nếu cần hiển thị
       }
       

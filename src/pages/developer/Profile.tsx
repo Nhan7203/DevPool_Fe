@@ -606,7 +606,7 @@ export default function DeveloperProfilePage() {
                     name="phoneNumber"
                     value={formData.phoneNumber}
                     onChange={handleChange}
-                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
+                    disabled={!!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.phoneNumber ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
                     } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
@@ -628,7 +628,7 @@ export default function DeveloperProfilePage() {
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleChange}
-                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
+                    disabled={!!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.dateOfBirth ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
                     } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
@@ -676,7 +676,7 @@ export default function DeveloperProfilePage() {
                     name="bio"
                     value={formData.bio}
                     onChange={handleChange}
-                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
+                    disabled={!!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                     rows={4}
                     className={`w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''
@@ -696,7 +696,7 @@ export default function DeveloperProfilePage() {
                     name="githubUrl"
                     value={formData.githubUrl}
                     onChange={handleChange}
-                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
+                    disabled={!!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.githubUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
                     } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
@@ -718,7 +718,7 @@ export default function DeveloperProfilePage() {
                     name="portfolioUrl"
                     value={formData.portfolioUrl}
                     onChange={handleChange}
-                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
+                    disabled={!!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.portfolioUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
                     } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
@@ -749,7 +749,7 @@ export default function DeveloperProfilePage() {
               <div className="flex justify-end pt-6 mt-6 border-neutral-200">
                 <button
                   type="submit"
-                  disabled={saving || (talent && (talent.status === "Applying" || talent.status === "Working"))}
+                  disabled={saving || !!(talent && (talent.status === "Applying" || talent.status === "Working"))}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (

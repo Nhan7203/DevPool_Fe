@@ -54,6 +54,7 @@ const refreshToken = async (): Promise<string | null> => {
 	}
 };
 
+// Function kept for potential future use
 const getAccessToken = async (): Promise<string> => {
 	let token = getTokenFromStorage() ?? '';
 	
@@ -68,6 +69,9 @@ const getAccessToken = async (): Promise<string> => {
 	
 	return token;
 };
+
+// Suppress unused function warning - may be used in future
+void getAccessToken;
 
 export const createNotificationConnection = (): HubConnection => {
 	if (connection) return connection;
