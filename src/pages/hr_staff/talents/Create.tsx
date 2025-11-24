@@ -67,7 +67,7 @@ export default function CreateTalent() {
 
   const [formData, setFormData] = useState<Partial<TalentWithRelatedDataCreateModel>>({
     currentPartnerId: 1,
-    userId: undefined,
+    userId: null,
     fullName: "",
     email: "",
     phone: undefined,
@@ -1093,11 +1093,77 @@ export default function CreateTalent() {
   //   setInitialCVs(initialCVs.filter((_, i) => i !== index));
   // };
 
+  // Validate version không trùng và phải lớn hơn version cao nhất của cùng jobRoleLevelId
+  const validateCVVersion = (version: number, jobRoleLevelId: number | undefined, cvIndex: number, allCVs: Partial<TalentCVCreateModel>[]): string => {
+    if (version <= 0) {
+      return "Version phải lớn hơn 0";
+    }
+    
+    if (!jobRoleLevelId || jobRoleLevelId === 0) {
+      return "";
+    }
+    
+    // Lấy danh sách CV cùng jobRoleLevelId (trừ CV hiện tại)
+    const cvsSameJobRoleLevel = allCVs.filter((cv, i) => 
+      i !== cvIndex && cv.jobRoleLevelId === jobRoleLevelId && cv.version && cv.version > 0
+    );
+    
+    // Nếu chưa có CV nào cho jobRoleLevelId này, chỉ cho phép version = 1
+    if (cvsSameJobRoleLevel.length === 0) {
+      if (version !== 1) {
+        return "Chưa có CV nào cho vị trí công việc này. Vui lòng tạo version 1 trước.";
+      }
+      return "";
+    }
+    
+    // Tìm version cao nhất trong danh sách CV cùng jobRoleLevelId
+    const maxVersion = Math.max(...cvsSameJobRoleLevel.map(cv => cv.version || 0));
+    
+    // Kiểm tra trùng với các CV cùng jobRoleLevelId
+    const duplicateCV = cvsSameJobRoleLevel.find((cv) => cv.version === version);
+    
+    if (duplicateCV) {
+      const suggestedVersion = maxVersion + 1;
+      return `Version ${version} đã tồn tại cho vị trí công việc này. Vui lòng chọn version khác (ví dụ: ${suggestedVersion}).`;
+    }
+    
+    // Kiểm tra version phải lớn hơn version cao nhất đã tồn tại
+    if (version <= maxVersion) {
+      const suggestedVersion = maxVersion + 1;
+      return `Version ${version} không hợp lệ. Version phải lớn hơn version cao nhất hiện có (${maxVersion}). Vui lòng chọn version ${suggestedVersion} hoặc cao hơn.`;
+    }
+    
+    return "";
+  };
+
   // Update initial CV
   const updateInitialCV = (index: number, field: keyof TalentCVCreateModel, value: string | number | boolean | undefined) => {
-    setInitialCVs(prev => prev.map((cv, i) =>
-      i === index ? { ...cv, [field]: value } : cv
-    ));
+    setInitialCVs(prev => {
+      const updated = prev.map((cv, i) =>
+        i === index ? { ...cv, [field]: value } : cv
+      );
+      
+      // Nếu thay đổi jobRoleLevelId, tự động set version = 1 nếu đây là CV đầu tiên cho jobRoleLevelId đó
+      if (field === 'jobRoleLevelId' && value && typeof value === 'number') {
+        const cvsSameJobRoleLevel = updated.filter((cv, i) => 
+          i !== index && cv.jobRoleLevelId === value
+        );
+        
+        // Nếu đây là CV đầu tiên cho jobRoleLevelId này, tự động set version = 1
+        if (cvsSameJobRoleLevel.length === 0) {
+          updated[index] = { ...updated[index], version: 1 };
+        }
+      }
+      
+      // Nếu thay đổi version, validate
+      if (field === 'version' && typeof value === 'number') {
+        const currentCV = updated[index];
+        const error = validateCVVersion(value, currentCV.jobRoleLevelId, index, updated);
+        // Có thể lưu error vào state nếu cần hiển thị
+      }
+      
+      return updated;
+    });
   };
 
   // Clean phone number to digits only
@@ -2632,6 +2698,14 @@ export default function CreateTalent() {
                                             updateInitialCV(index, 'jobRoleLevelId', jobRoleLevel.id);
                                             setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
                                             setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                            
+                                            // Tự động set version = 1 nếu đây là CV đầu tiên cho jobRoleLevelId này
+                                            const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
+                                              i !== index && c.jobRoleLevelId === jobRoleLevel.id
+                                            );
+                                            if (cvsSameJobRoleLevel.length === 0) {
+                                              updateInitialCV(index, 'version', 1);
+                                            }
                                           }}
                                           className={`w-full text-left px-4 py-2.5 text-sm ${
                                             cv.jobRoleLevelId === jobRoleLevel.id
@@ -2662,28 +2736,59 @@ export default function CreateTalent() {
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">
                               Version <span className="text-red-500">*</span>
                             </label>
-                            <input
-                              type="number"
-                              value={cv.version || 1}
-                              onChange={(e) => updateInitialCV(index, 'version', Number(e.target.value))}
-                              placeholder="1"
-                              min="1"
-                              step="1"
-                              required={cvFile ? true : false}
-                              disabled={isUploadedFromFirebase}
-                              className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : ''
-                                }`}
-                            />
-                            {isUploadedFromFirebase && (
-                              <p className="text-xs text-green-600 mt-1">
-                                File đã được upload lên Firebase, không thể thay đổi version CV
-                              </p>
-                            )}
-                            {cvFile && !isUploadedFromFirebase && (
-                              <p className="text-xs text-neutral-500 mt-1">
-                                Bắt buộc nhập để upload CV
-                              </p>
-                            )}
+                            {(() => {
+                              // Kiểm tra xem đây có phải là CV đầu tiên cho jobRoleLevelId này không
+                              const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
+                                i !== index && c.jobRoleLevelId === cv.jobRoleLevelId
+                              );
+                              const isFirstCVForJobRoleLevel = Boolean(cv.jobRoleLevelId && cv.jobRoleLevelId > 0 && cvsSameJobRoleLevel.length === 0);
+                              const versionError = cv.jobRoleLevelId && cv.version ? validateCVVersion(cv.version, cv.jobRoleLevelId, index, initialCVs) : "";
+                              
+                              return (
+                                <>
+                                  <input
+                                    type="number"
+                                    value={cv.version || 1}
+                                    onChange={(e) => {
+                                      const newVersion = Number(e.target.value);
+                                      updateInitialCV(index, 'version', newVersion);
+                                    }}
+                                    placeholder="1"
+                                    min="1"
+                                    step="1"
+                                    required={cvFile ? true : false}
+                                    disabled={isUploadedFromFirebase || isFirstCVForJobRoleLevel}
+                                    className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
+                                      isUploadedFromFirebase || isFirstCVForJobRoleLevel
+                                        ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75'
+                                        : versionError
+                                          ? 'border-red-500 focus:border-red-500'
+                                          : ''
+                                    }`}
+                                  />
+                                  {(isUploadedFromFirebase || isFirstCVForJobRoleLevel) && (
+                                    <p className="text-xs text-green-600 mt-1">
+                                      {isUploadedFromFirebase 
+                                        ? "File đã được upload lên Firebase, không thể thay đổi version CV"
+                                        : "Đây là CV đầu tiên cho vị trí công việc này, version mặc định là 1 và không thể thay đổi"}
+                                    </p>
+                                  )}
+                                  {versionError && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && (
+                                    <p className="text-xs text-red-500 mt-1">{versionError}</p>
+                                  )}
+                                  {cvFile && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && !versionError && (
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                      Bắt buộc nhập để upload CV
+                                    </p>
+                                  )}
+                                  {cv.jobRoleLevelId && cvsSameJobRoleLevel.length > 0 && !isUploadedFromFirebase && (
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                      Các version hiện có cho vị trí này: {cvsSameJobRoleLevel.map(c => c.version || 'N/A').join(', ')}
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                           <div className="md:col-span-2">
                             <label className="block text-sm font-semibold text-neutral-700 mb-2">

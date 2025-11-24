@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   User, Mail, Phone, Save, AlertCircle, CheckCircle, Calendar, MapPin,
   Briefcase, Award, FileText, Clock, Building2, Eye, Download,
-  Code, Target, Star, Edit
+  Code, Target, Star, Edit, Upload, ChevronDown, ChevronUp, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import Sidebar from '../../components/common/Sidebar';
 import { sidebarItems } from '../../components/developer/SidebarItems';
@@ -53,6 +54,11 @@ export default function DeveloperProfilePage() {
     portfolioUrl: '',
   });
 
+  // CV pagination and grouping
+  const [pageCVs, setPageCVs] = useState(1);
+  const itemsPerPageCVs = 5;
+  const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const fetchData = async () => {
       if (!authUser) return;
@@ -87,6 +93,15 @@ export default function DeveloperProfilePage() {
         const currentTalent = allTalents.find(t => t.userId === userId);
 
         if (currentTalent) {
+          // Xử lý trường hợp API trả về cVs (chữ V hoa) thay vì cvs (chữ v thường)
+          if ((currentTalent as any).cVs && Array.isArray((currentTalent as any).cVs)) {
+            currentTalent.cvs = (currentTalent as any).cVs;
+          }
+          // Đảm bảo cvs là mảng nếu undefined hoặc null
+          if (!currentTalent.cvs) {
+            currentTalent.cvs = [];
+          }
+          
           setTalent(currentTalent);
 
           // Fetch basic talent info to get githubUrl and portfolioUrl
@@ -173,6 +188,45 @@ export default function DeveloperProfilePage() {
               certificateTypesMapData.set(ct.id, ct.typeName);
             });
             setCertificateTypesMap(certificateTypesMapData);
+            
+            // Map CVs with job role level names và sắp xếp sau khi có jobRoleLevels
+            if (currentTalent.cvs && currentTalent.cvs.length > 0) {
+              const jobRoleLevelsArray = Array.isArray(jobRoleLevels) ? jobRoleLevels : [];
+              const cvsWithJobRoleLevelNames = currentTalent.cvs.map((cv: any) => {
+                const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: any) => jrl.id === cv.jobRoleLevelId);
+                return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
+              });
+              
+              // Sắp xếp CV: nhóm theo jobRoleLevelName, active trước, sau đó theo version giảm dần
+              const sortedCVs = cvsWithJobRoleLevelNames.sort((a: any, b: any) => {
+                // Ưu tiên 1: Sắp xếp theo jobRoleLevelName
+                const nameA = a.jobRoleLevelName || "";
+                const nameB = b.jobRoleLevelName || "";
+                if (nameA !== nameB) {
+                  return nameA.localeCompare(nameB);
+                }
+                // Ưu tiên 2: Active trước, inactive sau
+                if (a.isActive !== b.isActive) {
+                  return a.isActive ? -1 : 1;
+                }
+                // Ưu tiên 3: Version giảm dần (mới nhất trước)
+                return (b.version || 0) - (a.version || 0);
+              });
+              
+              // Cập nhật talent với CVs đã sắp xếp
+              currentTalent.cvs = sortedCVs;
+              
+              // Thu gọn tất cả các nhóm CV không hoạt động mặc định
+              const inactiveGroups = new Set<string>();
+              sortedCVs.forEach((cv: any) => {
+                if (!cv.isActive && cv.jobRoleLevelName) {
+                  inactiveGroups.add(cv.jobRoleLevelName);
+                }
+              });
+              setCollapsedInactiveCVGroups(inactiveGroups);
+              
+              setTalent({ ...currentTalent });
+            }
           } catch (err) {
             console.error('❌ Lỗi tải lookup data:', err);
           }
@@ -251,6 +305,12 @@ export default function DeveloperProfilePage() {
       return;
     }
 
+    // Không cho phép sửa khi đang ứng tuyển hoặc đang làm việc
+    if (talent.status === "Applying" || talent.status === "Working") {
+      setError('Không thể cập nhật thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ HR.');
+      return;
+    }
+
     // Validate all fields before submit
     const newErrors: Record<string, string> = {};
 
@@ -317,6 +377,51 @@ export default function DeveloperProfilePage() {
       const allTalents = await talentService.getAllDetailed({ excludeDeleted: true });
       const updatedTalent = allTalents.find(t => t.userId === userId);
       if (updatedTalent) {
+        // Xử lý trường hợp API trả về cVs (chữ V hoa) thay vì cvs (chữ v thường)
+        if ((updatedTalent as any).cVs && Array.isArray((updatedTalent as any).cVs)) {
+          updatedTalent.cvs = (updatedTalent as any).cVs;
+        }
+        // Đảm bảo cvs là mảng nếu undefined hoặc null
+        if (!updatedTalent.cvs) {
+          updatedTalent.cvs = [];
+        }
+        
+        // Map CVs with job role level names và sắp xếp
+        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+        const cvsWithJobRoleLevelNames = updatedTalent.cvs.map((cv: any) => {
+          const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: any) => jrl.id === cv.jobRoleLevelId);
+          return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
+        });
+        
+        // Sắp xếp CV: nhóm theo jobRoleLevelName, active trước, sau đó theo version giảm dần
+        const sortedCVs = cvsWithJobRoleLevelNames.sort((a: any, b: any) => {
+          // Ưu tiên 1: Sắp xếp theo jobRoleLevelName
+          const nameA = a.jobRoleLevelName || "";
+          const nameB = b.jobRoleLevelName || "";
+          if (nameA !== nameB) {
+            return nameA.localeCompare(nameB);
+          }
+          // Ưu tiên 2: Active trước, inactive sau
+          if (a.isActive !== b.isActive) {
+            return a.isActive ? -1 : 1;
+          }
+          // Ưu tiên 3: Version giảm dần (mới nhất trước)
+          return (b.version || 0) - (a.version || 0);
+        });
+        
+        // Cập nhật talent với CVs đã sắp xếp
+        updatedTalent.cvs = sortedCVs;
+        
+        // Thu gọn tất cả các nhóm CV không hoạt động mặc định
+        const inactiveGroups = new Set<string>();
+        sortedCVs.forEach((cv: any) => {
+          if (!cv.isActive && cv.jobRoleLevelName) {
+            inactiveGroups.add(cv.jobRoleLevelName);
+          }
+        });
+        setCollapsedInactiveCVGroups(inactiveGroups);
+        
         setTalent(updatedTalent);
 
         // Fetch basic talent info to get githubUrl and portfolioUrl
@@ -449,6 +554,14 @@ export default function DeveloperProfilePage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
+              {talent && (talent.status === "Applying" || talent.status === "Working") && (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  <p className="text-yellow-800 font-medium">
+                    Không thể chỉnh sửa thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ HR nếu cần thay đổi.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Họ tên */}
                 <div>
@@ -493,9 +606,10 @@ export default function DeveloperProfilePage() {
                     name="phoneNumber"
                     value={formData.phoneNumber}
                     onChange={handleChange}
+                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.phoneNumber ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
-                    }`}
+                    } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
                     placeholder="Nhập số điện thoại"
                   />
                   {errors.phoneNumber && (
@@ -514,9 +628,10 @@ export default function DeveloperProfilePage() {
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleChange}
+                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.dateOfBirth ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
-                    }`}
+                    } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
                   />
                   {errors.dateOfBirth && (
                     <p className="mt-1 text-sm text-red-500">{errors.dateOfBirth}</p>
@@ -561,8 +676,11 @@ export default function DeveloperProfilePage() {
                     name="bio"
                     value={formData.bio}
                     onChange={handleChange}
+                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
                     rows={4}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className={`w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
+                      talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''
+                    }`}
                     placeholder="Nhập giới thiệu ngắn về bản thân"
                   />
                 </div>
@@ -578,9 +696,10 @@ export default function DeveloperProfilePage() {
                     name="githubUrl"
                     value={formData.githubUrl}
                     onChange={handleChange}
+                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.githubUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
-                    }`}
+                    } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
                     placeholder="https://github.com/username"
                   />
                   {errors.githubUrl && (
@@ -599,9 +718,10 @@ export default function DeveloperProfilePage() {
                     name="portfolioUrl"
                     value={formData.portfolioUrl}
                     onChange={handleChange}
+                    disabled={talent && (talent.status === "Applying" || talent.status === "Working")}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all ${
                       errors.portfolioUrl ? 'border-red-500 focus:border-red-500' : 'border-neutral-300'
-                    }`}
+                    } ${talent && (talent.status === "Applying" || talent.status === "Working") ? 'bg-neutral-50 cursor-not-allowed' : ''}`}
                     placeholder="https://yourportfolio.com"
                   />
                   {errors.portfolioUrl && (
@@ -629,7 +749,7 @@ export default function DeveloperProfilePage() {
               <div className="flex justify-end pt-6 mt-6 border-neutral-200">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || (talent && (talent.status === "Applying" || talent.status === "Working"))}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (
@@ -651,6 +771,214 @@ export default function DeveloperProfilePage() {
           {/* 2. Thông tin chuyên môn */}
           {talent && (
             <>
+              {/* (f) CVs */}
+              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <FileText className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Hồ Sơ (CVs)</h2>
+                        <p className="text-sm text-neutral-600">Danh sách CV của bạn</p>
+                      </div>
+                    </div>
+                    {talent && (
+                      <Link to={`/developer/cv/create?talentId=${talent.id}`}>
+                        <button
+                          className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                        >
+                          <Upload className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Tải lên CV
+                        </button>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {talent.cvs && Array.isArray(talent.cvs) && talent.cvs.length > 0 ? (
+                    <>
+                      <div className="space-y-4">
+                        {(() => {
+                          // Nhóm CV theo jobRoleLevelName
+                          const groupedCVs = new Map<string, any[]>();
+                          talent.cvs.forEach((cv: any) => {
+                            const key = cv.jobRoleLevelName || "Chưa xác định";
+                            if (!groupedCVs.has(key)) {
+                              groupedCVs.set(key, []);
+                            }
+                            groupedCVs.get(key)!.push(cv);
+                          });
+
+                          // Lấy danh sách các nhóm đã sắp xếp
+                          const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+                          // Tính toán phân trang
+                          const startIndex = (pageCVs - 1) * itemsPerPageCVs;
+                          const endIndex = startIndex + itemsPerPageCVs;
+                          const paginatedGroups = sortedGroups.slice(startIndex, endIndex);
+
+                          return paginatedGroups.map(([jobRoleLevelName, cvs]) => {
+                            // Tách CV active và inactive
+                            const activeCVs = cvs.filter((cv: any) => cv.isActive);
+                            const inactiveCVs = cvs.filter((cv: any) => !cv.isActive);
+                            const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
+
+                            return (
+                              <div key={jobRoleLevelName} className="mb-6 last:mb-0">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                  <FileText className="w-5 h-5 text-primary-600" />
+                                  {jobRoleLevelName}
+                                </h3>
+                                <div className="space-y-3">
+                                  {/* CV đang hoạt động */}
+                                  {activeCVs.map((cv: any) => {
+                                    const jrlInfo = jobRoleLevelsMap.get(cv.jobRoleLevelId);
+                                    return (
+                                      <div key={cv.id} className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors duration-200">
+                                        <div className="flex items-center gap-3 flex-1">
+                                          <FileText className="w-5 h-5 text-primary-600" />
+                                          <div>
+                                            <p className="font-medium text-gray-900">
+                                              Version {cv.version}
+                                            </p>
+                                            {jrlInfo && (
+                                              <p className="text-sm text-neutral-600">{jrlInfo.name}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
+                                          <a
+                                            href={cv.cvFileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
+                                          >
+                                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                            <span className="text-sm font-medium">Xem PDF</span>
+                                          </a>
+                                          <a
+                                            href={cv.cvFileUrl}
+                                            download
+                                            className="group flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-all duration-300"
+                                          >
+                                            <Download className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                            <span className="text-sm font-medium">Tải</span>
+                                          </a>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+
+                                  {/* CV không hoạt động - Thu gọn */}
+                                  {inactiveCVs.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-neutral-200">
+                                      {/* Nút toggle để expand/collapse */}
+                                      <button
+                                        onClick={() => {
+                                          setCollapsedInactiveCVGroups(prev => {
+                                            const newSet = new Set(prev);
+                                            if (newSet.has(jobRoleLevelName)) {
+                                              newSet.delete(jobRoleLevelName);
+                                            } else {
+                                              newSet.add(jobRoleLevelName);
+                                            }
+                                            return newSet;
+                                          });
+                                        }}
+                                        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors duration-200 border border-neutral-200 bg-neutral-50/50"
+                                      >
+                                        <span className="flex items-center gap-2">
+                                          <FileText className="w-4 h-4 text-neutral-500" />
+                                          <span>
+                                            {inactiveCVs.length} phiên bản cũ ({jobRoleLevelName})
+                                          </span>
+                                        </span>
+                                        {isCollapsed ? (
+                                          <ChevronDown className="w-4 h-4 text-neutral-500" />
+                                        ) : (
+                                          <ChevronUp className="w-4 h-4 text-neutral-500" />
+                                        )}
+                                      </button>
+
+                                      {/* Danh sách CV không hoạt động */}
+                                      {!isCollapsed && (
+                                        <div className="mt-3 space-y-2 pl-2">
+                                          {inactiveCVs.map((cv: any) => {
+                                            const jrlInfo = jobRoleLevelsMap.get(cv.jobRoleLevelId);
+                                            return (
+                                              <div key={cv.id} className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-neutral-200 hover:border-neutral-300 hover:shadow-sm transition-all duration-200">
+                                                <div className="flex items-center gap-3 flex-1">
+                                                  <FileText className="w-4 h-4 text-neutral-500" />
+                                                  <div>
+                                                    <p className="text-sm font-medium text-neutral-700">
+                                                      Version {cv.version}
+                                                    </p>
+                                                    {jrlInfo && (
+                                                      <p className="text-xs text-neutral-600">{jrlInfo.name}</p>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Không hoạt động</span>
+                                                  <a
+                                                    href={cv.cvFileUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                                  >
+                                                    <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                    <span>Xem PDF</span>
+                                                  </a>
+                                                  <a
+                                                    href={cv.cvFileUrl}
+                                                    download
+                                                    className="group flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-all duration-300 text-sm font-medium"
+                                                  >
+                                                    <Download className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                                    <span>Tải</span>
+                                                  </a>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                      <SectionPagination
+                        currentPage={pageCVs}
+                        totalItems={(() => {
+                          // Đếm số nhóm CV
+                          const groupedCVs = new Map<string, any[]>();
+                          talent.cvs.forEach((cv: any) => {
+                            const key = cv.jobRoleLevelName || "Chưa xác định";
+                            if (!groupedCVs.has(key)) {
+                              groupedCVs.set(key, []);
+                            }
+                            groupedCVs.get(key)!.push(cv);
+                          });
+                          return groupedCVs.size;
+                        })()}
+                        itemsPerPage={itemsPerPageCVs}
+                        onPageChange={setPageCVs}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-neutral-500 text-center py-8">Chưa có CV nào</p>
+                  )}
+                </div>
+              </div>
+
               {/* (a) Skills */}
               <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
                 <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
@@ -876,81 +1204,6 @@ export default function DeveloperProfilePage() {
                 </div>
               </div>
 
-              {/* (f) CVs */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <FileText className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Hồ Sơ (CVs)</h2>
-                      <p className="text-sm text-neutral-600">Danh sách CV của bạn</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  {talent.cvs && talent.cvs.length > 0 ? (
-                    <div className="space-y-4">
-                      {talent.cvs.map((cv) => {
-                        const jrlInfo = jobRoleLevelsMap.get(cv.jobRoleLevelId);
-                        return (
-                          <div key={cv.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h3 className="font-semibold text-gray-900">
-                                    Phiên bản {cv.version}
-                                  </h3>
-                                  {cv.isActive && (
-                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                      Đang hoạt động
-                                    </span>
-                                  )}
-                                  {cv.isGeneratedFromTemplate && (
-                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                                      Tự động tạo
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm text-neutral-600 mb-2">
-                                  <span className="font-medium">Vai trò:</span> {jrlInfo?.name || '—'}
-                                </p>
-                                {cv.summary && (
-                                  <p className="text-sm text-neutral-700 mb-2">{cv.summary}</p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={cv.cvFileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-2 px-3 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Xem
-                                </a>
-                                <a
-                                  href={cv.cvFileUrl}
-                                  download
-                                  className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors"
-                                >
-                                  <Download className="w-4 h-4" />
-                                  Tải
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-neutral-500 text-center py-8">Chưa có CV nào</p>
-                  )}
-                </div>
-              </div>
-
               {/* 3. Lịch rảnh (Available Time) */}
               <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
                 <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
@@ -1018,6 +1271,57 @@ export default function DeveloperProfilePage() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Component phân trang
+function SectionPagination({
+  currentPage,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const startItem = totalItems > 0 ? startIndex + 1 : 0;
+  const endItem = endIndex;
+
+  if (totalItems <= itemsPerPage) return null;
+
+  return (
+    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200">
+      <p className="text-sm text-neutral-600">
+        {startItem}-{endItem} của {totalItems} mục
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`p-2 rounded-lg transition-all duration-200 ${currentPage === 1
+            ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+            }`}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`p-2 rounded-lg transition-all duration-200 ${currentPage === totalPages
+            ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+            }`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

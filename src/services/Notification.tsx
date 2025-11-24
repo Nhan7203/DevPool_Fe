@@ -37,11 +37,21 @@ export const NotificationType = {
 
   // Skills & CV Analysis (7xxx)
   NewSkillDetectedFromCV: 7001,
+  CVUploadedByDeveloper: 7002,
 
   // Payments (8xxx)
   PaymentDueSoon: 8001,
   PaymentOverdue: 8002,
   PaymentReceived: 8003,
+  PaymentCalculated: 8004,
+  PaymentApproved: 8005,
+  PaymentRejected: 8006,
+  PaymentMarkedAsPaid: 8007,
+  InvoiceRecorded: 8008,
+
+  // Contact Inquiries (9xxx)
+  ContactInquiryReceived: 9001,
+  ContactInquiryAssigned: 9002,
 } as const;
 
 export type NotificationType = typeof NotificationType[keyof typeof NotificationType];

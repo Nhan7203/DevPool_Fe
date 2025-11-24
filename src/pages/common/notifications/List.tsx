@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle, Filter, Loader2, RefreshCcw, Search, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle, Filter, Loader2, RefreshCcw, Search, Trash2, MessageCircle } from 'lucide-react';
 import {
   notificationService,
   type Notification,
@@ -11,6 +11,9 @@ import {
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
 import { useNotification } from '../../../contexts/NotificationContext';
+import { talentCVService } from '../../../services/TalentCV';
+import { talentService } from '../../../services/Talent';
+import { jobRoleLevelService } from '../../../services/JobRoleLevel';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 
@@ -82,12 +85,38 @@ function getTypeLabel(type: NotificationType) {
       return 'Hợp đồng hết hạn';
     case 'ContractTerminated':
       return 'Hợp đồng chấm dứt';
+    case 'ContractRejected':
+      return 'Hợp đồng bị từ chối';
     case 'TalentStatusChanged':
       return 'Trạng thái talent';
     case 'TalentHired':
       return 'Talent nhận việc';
     case 'DocumentUploaded':
       return 'Tài liệu mới';
+    case 'NewSkillDetectedFromCV':
+      return 'Kỹ năng mới từ CV';
+    case 'CVUploadedByDeveloper':
+      return 'CV được upload bởi Developer';
+    case 'PaymentDueSoon':
+      return 'Thanh toán sắp đến hạn';
+    case 'PaymentOverdue':
+      return 'Thanh toán quá hạn';
+    case 'PaymentReceived':
+      return 'Đã nhận thanh toán';
+    case 'PaymentCalculated':
+      return 'Thanh toán đã tính toán';
+    case 'PaymentApproved':
+      return 'Thanh toán đã duyệt';
+    case 'PaymentRejected':
+      return 'Thanh toán bị từ chối';
+    case 'PaymentMarkedAsPaid':
+      return 'Thanh toán đã đánh dấu';
+    case 'InvoiceRecorded':
+      return 'Hóa đơn đã ghi nhận';
+    case 'ContactInquiryReceived':
+      return 'Nhận yêu cầu liên hệ';
+    case 'ContactInquiryAssigned':
+      return 'Yêu cầu liên hệ đã được phân công';
     default:
       return entry.label;
   }
@@ -139,11 +168,28 @@ const NotificationCenterPage = () => {
       if (searchKeyword.trim()) filter.title = searchKeyword.trim();
 
       const result = (await notificationService.getAll(filter)) as NotificationListResult;
-      setNotifications(result.notifications || []);
+      const fetchedNotifications = result.notifications || [];
+      setNotifications(fetchedNotifications);
       setTotalCount(result.totalCount ?? 0);
       setUnreadCount(result.unreadCount ?? 0);
+      
+      // Giữ nguyên repliedNotificationIds đã có (không reset)
+      // Chỉ thêm các notification mới đã được phản hồi từ server nếu có
+      setRepliedNotificationIds(prev => {
+        const newSet = new Set(prev);
+        fetchedNotifications.forEach((notif) => {
+          // Nếu notification này là phản hồi (có originalNotificationId trong metaData)
+          if (notif.metaData && (notif.metaData as any).originalNotificationId) {
+            const originalId = Number((notif.metaData as any).originalNotificationId);
+            if (!isNaN(originalId)) {
+              newSet.add(originalId);
+            }
+          }
+        });
+        return newSet;
+      });
     } catch (error) {
-      console.error('Không thể tải danh sách thông báo:', error);
+      // Silent fail - user can retry
     } finally {
       setIsLoading(false);
     }
@@ -187,7 +233,6 @@ const NotificationCenterPage = () => {
       // Fetch lại để đồng bộ với server
       fetchNotifications();
     } catch (error) {
-      console.error('Không thể đánh dấu thông báo đã đọc:', error);
       // Fallback: cập nhật local state và context
       const fallbackReadAt = new Date().toISOString();
       updateItemById(notification.id, { isRead: true, readAt: fallbackReadAt });
@@ -218,7 +263,7 @@ const NotificationCenterPage = () => {
       // Fetch lại để đồng bộ với server
       fetchNotifications();
     } catch (error) {
-      console.error('Không thể đánh dấu tất cả thông báo đã đọc:', error);
+      // Silent fail
     }
   };
 
@@ -246,15 +291,157 @@ const NotificationCenterPage = () => {
         fetchNotifications();
       }
     } catch (error) {
-      console.error('Không thể xóa thông báo:', error);
       alert('Không thể xóa thông báo. Vui lòng thử lại sau.');
     }
   };
 
   const handleNavigate = async (notification: Notification) => {
-    await handleMarkAsRead(notification);
+    // Chỉ đánh dấu đã đọc nếu không phải là notification CVUploadedByDeveloper chưa được phản hồi
+    // Để giữ nút phản hồi hiển thị sau khi xem chi tiết
+    const isCVUploadNotification = (notification.type === NotificationType.CVUploadedByDeveloper || 
+      (notification.type as number) === 7002) && 
+      notification.entityType === 'TalentCV' && 
+      notification.entityId;
+    
+    if (!isCVUploadNotification || notification.isRead) {
+      await handleMarkAsRead(notification);
+    }
+    
     if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+      // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
+      let targetUrl = notification.actionUrl;
+      if (targetUrl.startsWith('/hr/talents/')) {
+        targetUrl = targetUrl.replace('/hr/talents/', '/hr/developers/');
+      }
+      navigate(targetUrl);
+    }
+  };
+
+  const [replyingToNotificationId, setReplyingToNotificationId] = useState<number | null>(null);
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
+  const [replyNotification, setReplyNotification] = useState<Notification | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [repliedNotificationIds, setRepliedNotificationIds] = useState<Set<number>>(new Set());
+
+  const openReplyModal = async (notification: Notification) => {
+    setReplyNotification(notification);
+    setReplyMessage('HR sẽ sử dụng CV này để cập nhật hồ sơ talent trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
+    setReplyModalOpen(true);
+  };
+
+  const handleSendReply = async () => {
+    if (!replyNotification) return;
+    
+    setReplyingToNotificationId(replyNotification.id);
+    
+    try {
+      let developerId: string | null = null;
+      let talentName = '';
+      let cvVersion = '';
+      let jobRoleLevelName = '';
+      
+      // Ưu tiên lấy từ metaData
+      if (replyNotification.metaData) {
+        developerId = (replyNotification.metaData as any)?.developerId || 
+                      (replyNotification.metaData as any)?.userId ||
+                      (replyNotification.metaData as any)?.talentUserId ||
+                      null;
+        talentName = (replyNotification.metaData as any)?.talentName || '';
+        cvVersion = (replyNotification.metaData as any)?.cvVersion || '';
+        jobRoleLevelName = (replyNotification.metaData as any)?.jobRoleLevelName || '';
+      }
+      
+      // Fallback: Lấy từ entityId nếu là TalentCV
+      if (!developerId && replyNotification.entityType === 'TalentCV' && replyNotification.entityId) {
+        try {
+          const talentCV = await talentCVService.getById(replyNotification.entityId);
+          if (talentCV?.talentId) {
+            const talent = await talentService.getById(talentCV.talentId);
+            if (talent?.userId) {
+              developerId = talent.userId;
+              talentName = talent.fullName || '';
+              cvVersion = String(talentCV.version || '');
+              
+              // Lấy jobRoleLevel name
+              if (talentCV.jobRoleLevelId) {
+                try {
+                  const jobRoleLevel = await jobRoleLevelService.getById(talentCV.jobRoleLevelId);
+                  jobRoleLevelName = jobRoleLevel?.name || '';
+                } catch (err) {
+                  // Silent fail
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // Silent fail, sẽ alert sau
+        }
+      }
+      
+      if (!developerId) {
+        alert('Không tìm thấy thông tin developer để phản hồi.');
+        return;
+      }
+
+      // Lấy tên HR từ user context thay vì email
+      const hrStaffName = user?.name || 'HR Staff';
+
+      // Tạo title với jobRoleLevel name
+      const title = jobRoleLevelName 
+        ? `[Phản hồi] ${hrStaffName} đã nhận CV (Version ${cvVersion}) mới - ${jobRoleLevelName}`
+        : `[Phản hồi] ${hrStaffName} đã nhận CV mới của bạn`;
+
+      await notificationService.create({
+        title: title,
+        message: `${replyMessage}`,
+        type: NotificationType.DocumentUploaded,
+        priority: NotificationPriority.Low,
+        userIds: [String(developerId)],
+        entityType: replyNotification.entityType || null,
+        entityId: replyNotification.entityId || null,
+        actionUrl: '/developer/profile', // Developer nên vào trang profile của họ
+        metaData: {
+          originalNotificationId: String(replyNotification.id),
+          cvVersion: cvVersion,
+          talentName: talentName,
+          hrStaffName: hrStaffName,
+          jobRoleLevelName: jobRoleLevelName,
+          replyTo: 'cv-upload',
+        },
+      });
+
+      // Đánh dấu đã đọc sau khi phản hồi thành công
+      try {
+        await notificationService.markAsRead(replyNotification.id);
+        // Cập nhật local state
+        updateItemById(replyNotification.id, { isRead: true, readAt: new Date().toISOString() });
+        setUnreadCount((prev) => Math.max(prev - 1, 0));
+      } catch (markReadError) {
+        // Silent fail - đã phản hồi thành công rồi
+      }
+
+      // Đánh dấu notification này đã được phản hồi
+      setRepliedNotificationIds(prev => new Set(prev).add(replyNotification.id));
+      
+      // Cập nhật local state để ẩn nút phản hồi ngay lập tức
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === replyNotification.id
+            ? { ...item, isRead: true, readAt: new Date().toISOString() }
+            : item
+        )
+      );
+      
+      alert('✅ Đã gửi thông báo phản hồi đến developer thành công!');
+      setReplyModalOpen(false);
+      setReplyNotification(null);
+      setReplyMessage('');
+      // KHÔNG refresh notifications để giữ state repliedNotificationIds
+      // Nút phản hồi đã được ẩn ngay lập tức qua setRepliedNotificationIds và setNotifications
+    } catch (error) {
+      alert('Không thể gửi thông báo phản hồi. Vui lòng thử lại.');
+    } finally {
+      setReplyingToNotificationId(null);
     }
   };
 
@@ -448,14 +635,14 @@ const NotificationCenterPage = () => {
               </div>
             </div>
 
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-neutral-100 min-h-[400px]">
               {isLoading ? (
                 <div className="flex items-center justify-center py-16 text-neutral-500">
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   Đang tải dữ liệu...
                 </div>
               ) : notifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-neutral-500">
                   <Bell className="w-10 h-10 text-neutral-300 mb-3" />
                   <p className="text-sm">Không có thông báo nào phù hợp với bộ lọc hiện tại.</p>
                 </div>
@@ -517,6 +704,32 @@ const NotificationCenterPage = () => {
                             Xem chi tiết
                           </button>
                         )}
+                        {/* Nút phản hồi cho thông báo CV mới từ developer */}
+                        {/* Hiển thị nút phản hồi cho CVUploadedByDeveloper chưa được phản hồi */}
+                        {(notification.type === NotificationType.CVUploadedByDeveloper || 
+                          (notification.type as number) === 7002) && 
+                         notification.entityType === 'TalentCV' && 
+                         notification.entityId &&
+                         !repliedNotificationIds.has(notification.id) && (
+                          <button
+                            onClick={() => openReplyModal(notification)}
+                            disabled={replyingToNotificationId === notification.id}
+                            className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent-600 text-white text-sm font-medium hover:bg-accent-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Gửi thông báo phản hồi đến developer"
+                          >
+                            {replyingToNotificationId === notification.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Đang gửi...
+                              </>
+                            ) : (
+                              <>
+                                <MessageCircle className="w-4 h-4" />
+                                Phản hồi Developer
+                              </>
+                            )}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteNotification(notification)}
                           className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-error-200 text-sm font-medium text-error-600 hover:bg-error-50 transition-all"
@@ -531,34 +744,101 @@ const NotificationCenterPage = () => {
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-t border-neutral-200 bg-neutral-50">
-              <div className="text-sm text-neutral-500">
-                Hiển thị {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + 1)}-
-                {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + notifications.length)} trong tổng số {totalCount} thông báo
+            {totalCount > 0 && (
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-t border-neutral-200 bg-neutral-50">
+                <div className="text-sm text-neutral-500">
+                  Hiển thị {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + 1)}-
+                  {(notifications.length === 0 ? 0 : (pageNumber - 1) * pageSize + notifications.length)} trong tổng số {totalCount} thông báo
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
+                    disabled={pageNumber === 1}
+                    className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
+                  >
+                    Trước
+                  </button>
+                  <span className="text-sm text-neutral-600">
+                    Trang {pageNumber} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPageNumber((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={pageNumber === totalPages}
+                    className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
+                  >
+                    Sau
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
-                  disabled={pageNumber === 1}
-                  className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
-                >
-                  Trước
-                </button>
-                <span className="text-sm text-neutral-600">
-                  Trang {pageNumber} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPageNumber((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={pageNumber === totalPages}
-                  className="px-3 py-2 rounded-lg border border-neutral-200 text-sm text-neutral-600 disabled:text-neutral-300 disabled:border-neutral-100"
-                >
-                  Sau
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Modal chỉnh sửa tin nhắn phản hồi */}
+      {replyModalOpen && replyNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-soft border border-neutral-200 overflow-hidden animate-slide-up">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-neutral-900">Phản hồi Developer</p>
+                <p className="text-xs text-neutral-500">Chỉnh sửa nội dung tin nhắn trước khi gửi</p>
+              </div>
+              <button
+                onClick={() => {
+                  setReplyModalOpen(false);
+                  setReplyNotification(null);
+                  setReplyMessage('');
+                }}
+                className="text-neutral-400 hover:text-neutral-600 transition-colors text-xl leading-none"
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  Nội dung tin nhắn
+                </label>
+                <textarea
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  rows={6}
+                  className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none text-sm"
+                  placeholder="Nhập nội dung tin nhắn phản hồi..."
+                />
+              </div>
+            </div>
+            <div className="px-6 py-3 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setReplyModalOpen(false);
+                  setReplyNotification(null);
+                  setReplyMessage('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSendReply}
+                disabled={!replyMessage.trim() || replyingToNotificationId === replyNotification.id}
+                className="px-4 py-2 bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {replyingToNotificationId === replyNotification.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                    Đang gửi...
+                  </>
+                ) : (
+                  'Gửi phản hồi'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
