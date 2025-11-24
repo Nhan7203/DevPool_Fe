@@ -41,7 +41,7 @@ export default function PartnerContractDetailPage() {
     const [calculateError, setCalculateError] = useState<string | null>(null);
     const [calculateSuccess, setCalculateSuccess] = useState(false);
     
-    // Document state cho tính toán (Acceptance - bắt buộc)
+    // Document state cho tính toán (Acceptant - bắt buộc)
     const [acceptantFile, setAcceptantFile] = useState<File | null>(null);
     const [acceptantUploadProgress, setAcceptantUploadProgress] = useState(0);
     const [acceptantDocumentFormData, setAcceptantDocumentFormData] = useState<Partial<PartnerDocumentCreate>>({
@@ -49,7 +49,7 @@ export default function PartnerContractDetailPage() {
         fileName: "",
         filePath: "",
         description: "",
-        source: "Accountant",
+        source: "Accountance",
         referencedClientDocumentId: null,
     });
     const [acceptantDocumentTypesList, setAcceptantDocumentTypesList] = useState<DocumentType[]>([]);
@@ -126,7 +126,8 @@ export default function PartnerContractDetailPage() {
                 setError('');
                 
                 // Fetch payment detail
-                let paymentData = await partnerContractPaymentService.getById(Number(id));
+                const paymentData = await partnerContractPaymentService.getById(Number(id));
+                setPayment(paymentData);
                 
                 // Fetch related data in parallel
                 const [contractData, periodData] = await Promise.all([
@@ -136,32 +137,6 @@ export default function PartnerContractDetailPage() {
                 
                 setContract(contractData);
                 setPeriod(periodData);
-                
-                // Kiểm tra và tự động chuyển thành Cancelled nếu contract Terminated và payment chưa Paid
-                if (contractData.status === 'Terminated' && paymentData.status !== 'Paid') {
-                    try {
-                        await partnerContractPaymentService.update(paymentData.id, {
-                            partnerPeriodId: paymentData.partnerPeriodId,
-                            partnerContractId: paymentData.partnerContractId,
-                            talentId: paymentData.talentId,
-                            actualWorkHours: paymentData.actualWorkHours,
-                            otHours: paymentData.otHours ?? null,
-                            calculatedAmount: paymentData.calculatedAmount ?? null,
-                            paidAmount: paymentData.paidAmount ?? null,
-                            paymentDate: paymentData.paymentDate ?? null,
-                            status: 'Cancelled',
-                            notes: paymentData.notes ?? null
-                        });
-                        // Reload payment với status mới
-                        paymentData = await partnerContractPaymentService.getById(Number(id));
-                    } catch (updateErr) {
-                        console.error("Lỗi khi tự động chuyển payment thành Cancelled:", updateErr);
-                        // Vẫn tiếp tục load dữ liệu bình thường
-                    }
-                }
-                
-                // Set payment sau khi đã xử lý logic tự động chuyển thành Cancelled
-                setPayment(paymentData);
                 
                 // Fetch partner
                 try {
@@ -304,10 +279,7 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal tính toán
     const handleOpenCalculateModal = async () => {
-        if (!payment || !contract) return;
-        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
-        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
-        if (payment.status !== 'PendingCalculation' && payment.status !== 'Rejected') return;
+        if (!payment || payment.status !== 'PendingCalculation') return;
 
         setShowCalculateModal(true);
         setCalculateError(null);
@@ -337,14 +309,14 @@ export default function PartnerContractDetailPage() {
             const types = Array.isArray(typesData) ? typesData : (typesData?.items || []);
             setAcceptantDocumentTypesList(types);
             
-            // Tìm và set Acceptance làm mặc định (bắt buộc)
-            const acceptanceType = types.find((t: DocumentType) => {
+            // Tìm và set Acceptant làm mặc định (bắt buộc)
+            const acceptantType = types.find((t: DocumentType) => {
                 const name = t.typeName.toLowerCase().trim();
                 return name === 'acceptance' || name.includes('acceptance') || name.includes('chấp nhận') || name.includes('chap nhan');
             });
             
-            if (acceptanceType) {
-                setAcceptantDocumentFormData(prev => ({ ...prev, documentTypeId: acceptanceType.id }));
+            if (acceptantType) {
+                setAcceptantDocumentFormData(prev => ({ ...prev, documentTypeId: acceptantType.id }));
             } else {
                 console.warn("Không tìm thấy document type 'Acceptance'. Các loại tài liệu có sẵn:", types.map((t: DocumentType) => t.typeName));
             }
@@ -379,7 +351,7 @@ export default function PartnerContractDetailPage() {
         });
     };
 
-    // Hàm xử lý file upload cho Acceptance
+    // Hàm xử lý file upload cho Acceptant
     const onAcceptantFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0] || null;
         if (f && f.size > 10 * 1024 * 1024) {
@@ -393,7 +365,7 @@ export default function PartnerContractDetailPage() {
         }
     };
 
-    // Hàm xử lý thay đổi form document cho Acceptance
+    // Hàm xử lý thay đổi form document cho Acceptant
     const handleAcceptantDocumentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setAcceptantDocumentFormData(prev => ({
@@ -404,7 +376,7 @@ export default function PartnerContractDetailPage() {
         }));
     };
 
-    // Hàm tính toán (bắt buộc phải có Acceptance document)
+    // Hàm tính toán (bắt buộc phải có Acceptant document)
     const handleCalculateAndSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!payment) return;
@@ -414,9 +386,9 @@ export default function PartnerContractDetailPage() {
             return;
         }
 
-        // Validate: Acceptance document là bắt buộc
+        // Validate: Acceptant document là bắt buộc
         if (!acceptantFile || !acceptantDocumentFormData.documentTypeId) {
-            setCreateAcceptantDocumentError("Vui lòng tải lên file Acceptance (bắt buộc)");
+            setCreateAcceptantDocumentError("Vui lòng tải lên file Acceptant (bắt buộc)");
             return;
         }
 
@@ -427,7 +399,7 @@ export default function PartnerContractDetailPage() {
         setCreateAcceptantDocumentSuccess(false);
 
         try {
-            // Bước 1: Tạo Acceptance document (bắt buộc)
+            // Bước 1: Tạo Acceptant document (bắt buộc)
             try {
                 // Lấy userId từ token hoặc user context
                 let uploadedByUserId: string | null = null;
@@ -508,10 +480,7 @@ export default function PartnerContractDetailPage() {
 
     // Hàm mở modal đánh dấu đã thanh toán
     const handleOpenMarkAsPaidModal = async () => {
-        if (!payment || !contract) return;
-        // Không cho phép nếu payment đã Cancelled hoặc contract đã Terminated
-        if (payment.status === 'Cancelled' || contract.status === 'Terminated') return;
-        if (payment.status !== 'Approved') return;
+        if (!payment || payment.status !== 'Approved') return;
 
         setShowMarkAsPaidModal(true);
         setMarkAsPaidError(null);
@@ -874,37 +843,24 @@ export default function PartnerContractDetailPage() {
                                 {getStatusText(payment.status)}
                             </span>
                             {/* Nút thao tác */}
-                            {(() => {
-                                // Không cho phép thao tác nếu payment đã Cancelled hoặc contract đã Terminated
-                                const isCancelled = payment.status === 'Cancelled';
-                                const isContractTerminated = contract?.status === 'Terminated';
-                                const canPerformActions = !isCancelled && !isContractTerminated;
-                                
-                                if (!canPerformActions) return null;
-                                
-                                return (
-                                    <>
-                                        {(payment.status === 'PendingCalculation' || payment.status === 'Rejected') && (
-                                            <button
-                                                onClick={handleOpenCalculateModal}
-                                                className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                            >
-                                                <Calculator className="w-4 h-4" />
-                                                Tính toán
-                                            </button>
-                                        )}
-                                        {payment.status === 'Approved' && (
-                                            <button
-                                                onClick={handleOpenMarkAsPaidModal}
-                                                className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
-                                            >
-                                                <CheckCircle className="w-4 h-4" />
-                                                Đã thanh toán
-                                            </button>
-                                        )}
-                                    </>
-                                );
-                            })()}
+                            {payment.status === 'PendingCalculation' && (
+                                <button
+                                    onClick={handleOpenCalculateModal}
+                                    className="px-4 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                >
+                                    <Calculator className="w-4 h-4" />
+                                    Tính toán
+                                </button>
+                            )}
+                            {payment.status === 'Approved' && (
+                                <button
+                                    onClick={handleOpenMarkAsPaidModal}
+                                    className="px-4 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex items-center gap-2 transition-all whitespace-nowrap"
+                                >
+                                    <CheckCircle className="w-4 h-4" />
+                                    Đã thanh toán
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -942,17 +898,13 @@ export default function PartnerContractDetailPage() {
                                     <FileText className="w-4 h-4 text-neutral-400" />
                                     <label className="text-xs font-medium text-neutral-600">Hợp đồng</label>
                                 </div>
-                                {contract ? (
-                                    <Link
-                                        to={`/accountant/contracts/partners/${contract.id}`}
-                                        state={{ from: location.pathname }}
-                                        className="text-base font-semibold text-primary-600 hover:text-primary-800 hover:underline transition-colors"
-                                    >
-                                        {contract.contractNumber || '—'}
-                                    </Link>
-                                ) : (
-                                    <p className="text-base font-semibold text-gray-900">—</p>
-                                )}
+                                <Link
+                                    to={`/accountant/contracts/partners/${contract.id}`}
+                                    state={{ from: location.pathname }}
+                                    className="text-base font-semibold text-primary-600 hover:text-primary-800 hover:underline transition-colors"
+                                >
+                                    {contract.contractNumber || '—'}
+                                </Link>
                             </div>
 
                             {/* Nhân sự */}
@@ -1309,7 +1261,7 @@ export default function PartnerContractDetailPage() {
                                     />
                                 </div>
 
-                                {/* Upload Acceptance Document (Bắt buộc) */}
+                                {/* Upload Acceptant Document (Bắt buộc) */}
                                 <div className="border-t pt-6 space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
                                         <FileText className="w-5 h-5 text-primary-600" />
@@ -1345,7 +1297,7 @@ export default function PartnerContractDetailPage() {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            File Acceptance <span className="text-red-500">*</span>
+                                            File Acceptant <span className="text-red-500">*</span>
                                         </label>
                                         <div className="mt-1 flex items-center gap-2">
                                             <label className="flex-1 cursor-pointer">
@@ -1432,9 +1384,9 @@ export default function PartnerContractDetailPage() {
 
                 {/* Modal đánh dấu đã thanh toán */}
                 {showMarkAsPaidModal && payment && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-2xl shadow-soft border border-gray-100 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-                            {/* Header - Cố định */}
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-2xl shadow-soft border border-gray-100 max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+                            {/* Header cố định */}
                             <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
                                 <h2 className="text-xl font-semibold text-gray-900">Đánh dấu đã thanh toán</h2>
                                 <button
@@ -1444,53 +1396,52 @@ export default function PartnerContractDetailPage() {
                                     <X className="w-5 h-5 text-gray-500" />
                                 </button>
                             </div>
-                            
-                            {/* Body - Có thể scroll */}
+
+                            {/* Body scrollable */}
                             <div className="flex-1 overflow-y-auto p-6">
+                                {markAsPaidSuccess && (
+                                    <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                        <p className="text-green-700 font-medium">✅ Đánh dấu đã thanh toán thành công! Modal sẽ tự động đóng sau 2 giây.</p>
+                                    </div>
+                                )}
 
-                            {markAsPaidSuccess && (
-                                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                    <p className="text-green-700 font-medium">✅ Đánh dấu đã thanh toán thành công! Modal sẽ tự động đóng sau 2 giây.</p>
-                                </div>
-                            )}
+                                {createInvoiceDocumentSuccess && (
+                                    <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                        <p className="text-green-700 font-medium">✅ Đã tạo tài liệu Invoice thành công!</p>
+                                    </div>
+                                )}
 
-                            {createInvoiceDocumentSuccess && (
-                                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                    <p className="text-green-700 font-medium">✅ Đã tạo tài liệu Invoice thành công!</p>
-                                </div>
-                            )}
+                                {createReceiptDocumentSuccess && (
+                                    <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
+                                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                        <p className="text-green-700 font-medium">✅ Đã tạo tài liệu Receipt thành công!</p>
+                                    </div>
+                                )}
 
-                            {createReceiptDocumentSuccess && (
-                                <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                    <p className="text-green-700 font-medium">✅ Đã tạo tài liệu Receipt thành công!</p>
-                                </div>
-                            )}
+                                {createInvoiceDocumentError && (
+                                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                                        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                                        <p className="text-red-700 font-medium">{createInvoiceDocumentError}</p>
+                                    </div>
+                                )}
 
-                            {createInvoiceDocumentError && (
-                                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                                    <p className="text-red-700 font-medium">{createInvoiceDocumentError}</p>
-                                </div>
-                            )}
+                                {createReceiptDocumentError && (
+                                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                                        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                                        <p className="text-red-700 font-medium">{createReceiptDocumentError}</p>
+                                    </div>
+                                )}
 
-                            {createReceiptDocumentError && (
-                                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                                    <p className="text-red-700 font-medium">{createReceiptDocumentError}</p>
-                                </div>
-                            )}
+                                {markAsPaidError && (
+                                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
+                                        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                                        <p className="text-red-700 font-medium">{markAsPaidError}</p>
+                                    </div>
+                                )}
 
-                            {markAsPaidError && (
-                                <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                                    <p className="text-red-700 font-medium">{markAsPaidError}</p>
-                                </div>
-                            )}
-
-                            <form id="markAsPaidForm" onSubmit={handleMarkAsPaid} className="space-y-6">
+                                <form id="markAsPaidForm" onSubmit={handleMarkAsPaid} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1725,11 +1676,11 @@ export default function PartnerContractDetailPage() {
                                     </div>
                                 </div>
 
-                            </form>
+                                </form>
                             </div>
-                            
-                            {/* Footer - Cố định */}
-                            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3 flex-shrink-0">
+
+                            {/* Footer cố định */}
+                            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 flex-shrink-0">
                                 <button
                                     type="button"
                                     onClick={handleCloseMarkAsPaidModal}
