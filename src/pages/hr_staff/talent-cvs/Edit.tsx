@@ -253,9 +253,6 @@ export default function TalentCVEditPage() {
                     Đã chọn: <span className="font-medium text-neutral-700">
                       {allJobRoleLevels.find(jrl => jrl.id === formData.jobRoleLevelId)?.name || "Không xác định"}
                     </span>
-                    <span className="block mt-1 text-amber-600">
-                      ⚠️ Không thể thay đổi vị trí công việc khi chỉnh sửa CV
-                    </span>
                   </p>
                 )}
               </div>
@@ -279,9 +276,6 @@ export default function TalentCVEditPage() {
                     disabled
                     className="w-full border-neutral-300 bg-neutral-50 rounded-xl cursor-not-allowed opacity-75"
                   />
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠️ Không thể thay đổi version CV khi chỉnh sửa
-                  </p>
                 </div>
 
                 {/* URL file CV */}
@@ -299,9 +293,6 @@ export default function TalentCVEditPage() {
                     disabled
                     className="w-full border-neutral-300 bg-neutral-50 rounded-xl cursor-not-allowed opacity-75"
                   />
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠️ Không thể thay đổi URL file CV khi chỉnh sửa
-                  </p>
                   {formData.cvFileUrl && (
                     <div className="mt-2">
                       <a
@@ -332,9 +323,6 @@ export default function TalentCVEditPage() {
                   rows={4}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
-                  💡 Tóm tắt nên bao gồm: Tên ứng viên, Vị trí công việc, Kinh nghiệm làm việc, Kỹ năng chính, Dự án nổi bật, Chứng chỉ (nếu có). Có thể để trống nếu chưa cập nhật.
-                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -356,9 +344,6 @@ export default function TalentCVEditPage() {
                       {formData.isActive ? "Đang hoạt động" : "Không hoạt động"}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Đánh dấu nếu CV này đang được sử dụng
-                  </p>
                 </div>
 
                 {/* Được tạo từ template */}
@@ -379,9 +364,6 @@ export default function TalentCVEditPage() {
                       {formData.isGeneratedFromTemplate ? "Có" : "Không"}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Đánh dấu nếu CV được tạo từ template
-                  </p>
                 </div>
               </div>
             </div>

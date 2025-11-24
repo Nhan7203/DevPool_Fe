@@ -9,9 +9,63 @@ const HUB_URL = `${HUB_BASE}/notificationHub`;
 
 let connection: HubConnection | null = null;
 let isStarting = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
 
-const getAccessToken = (): string => {
-	const token = getTokenFromStorage() ?? '';
+// Hàm refresh token (sử dụng cùng logic như axios config)
+const refreshToken = async (): Promise<string | null> => {
+	try {
+		const refreshTokenValue = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+		if (!refreshTokenValue) return null;
+
+		const rememberMe = localStorage.getItem('remember_me') === 'true';
+		const storage = rememberMe ? localStorage : sessionStorage;
+
+		const response = await fetch(`${RAW_API_URL}/auth/refresh-token`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			credentials: 'include',
+			body: JSON.stringify({ refreshToken: refreshTokenValue }),
+		});
+
+		if (!response.ok) {
+			// Nếu refresh thất bại, xóa tokens
+			localStorage.removeItem('accessToken');
+			localStorage.removeItem('refreshToken');
+			sessionStorage.removeItem('accessToken');
+			sessionStorage.removeItem('refreshToken');
+			return null;
+		}
+
+		const data = await response.json();
+		if (data.accessToken) {
+			// Lưu token mới vào storage
+			storage.setItem('accessToken', data.accessToken);
+			if (data.refreshToken) {
+				storage.setItem('refreshToken', data.refreshToken);
+			}
+			return data.accessToken;
+		}
+		return null;
+	} catch (error) {
+		return null;
+	}
+};
+
+const getAccessToken = async (): Promise<string> => {
+	let token = getTokenFromStorage() ?? '';
+	
+	// Luôn thử refresh token để đảm bảo token còn hiệu lực
+	// Nếu không có token hoặc token có thể đã hết hạn, refresh
+	if (!token) {
+		const newToken = await refreshToken();
+		if (newToken) {
+			token = newToken;
+		}
+	}
+	
 	return token;
 };
 
@@ -20,28 +74,66 @@ export const createNotificationConnection = (): HubConnection => {
 
 	connection = new HubConnectionBuilder()
 		.withUrl(HUB_URL, {
-			accessTokenFactory: getAccessToken,
+			accessTokenFactory: async () => {
+				// Luôn lấy token mới nhất từ storage
+				const token = getTokenFromStorage() ?? '';
+				if (!token) {
+					// Nếu không có token, thử refresh
+					const newToken = await refreshToken();
+					return newToken || '';
+				}
+				return token;
+			},
 			withCredentials: true,
 		})
-		.withAutomaticReconnect()
-		.configureLogging(LogLevel.Information)
+		.withAutomaticReconnect({
+			nextRetryDelayInMilliseconds: (retryContext) => {
+				// Exponential backoff: 0s, 2s, 10s, 30s
+				if (retryContext.previousRetryCount === 0) return 0;
+				if (retryContext.previousRetryCount === 1) return 2000;
+				if (retryContext.previousRetryCount === 2) return 10000;
+				return 30000;
+			},
+		})
+		.configureLogging(LogLevel.Warning)
 		.build();
 
 	// Optional: lắng nghe sự kiện hệ thống để debug
 	connection.onreconnecting(() => {
-		console.info('[SignalR] Reconnecting to notification hub...');
+		reconnectAttempts++;
 	});
 	connection.onreconnected(() => {
-		console.info('[SignalR] Reconnected to notification hub');
+		reconnectAttempts = 0;
 	});
-	connection.onclose(() => {
-		console.warn('[SignalR] Connection to notification hub closed');
+	connection.onclose(async (error) => {
+		// Nếu lỗi 401 và chưa vượt quá số lần thử, thử refresh token và reconnect
+		if (error && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+			const newToken = await refreshToken();
+			if (newToken) {
+				// Tạo lại connection với token mới
+				connection = null;
+				setTimeout(() => {
+					startNotificationConnection(true).catch(() => {});
+				}, 2000);
+			}
+		}
 	});
 
 	return connection;
 };
 
 export const startNotificationConnection = async (forceRestart: boolean = false): Promise<void> => {
+	// Kiểm tra và refresh token trước khi kết nối
+	let token = getTokenFromStorage();
+	if (!token) {
+		// Thử refresh token nếu không có token
+		token = await refreshToken();
+		if (!token) {
+			// Không có token và không thể refresh, không kết nối
+			return;
+		}
+	}
+
 	// Nếu force restart, dừng connection cũ trước
 	if (forceRestart && connection && connection.state !== 'Disconnected') {
 		try {
@@ -55,14 +147,43 @@ export const startNotificationConnection = async (forceRestart: boolean = false)
 	const newConn = createNotificationConnection();
 	if (newConn.state === 'Connected' || isStarting) return;
 	isStarting = true;
+	
 	try {
 		await newConn.start();
-	} catch (err) {
-		// Retry đơn giản sau 2s
-		setTimeout(() => {
+		reconnectAttempts = 0; // Reset counter khi kết nối thành công
+	} catch (err: any) {
+		const errorMessage = err?.message || '';
+		const statusCode = err?.statusCode || err?.status;
+		
+		// Nếu lỗi 401, thử refresh token và reconnect
+		if (statusCode === 401 || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+			const newToken = await refreshToken();
+			if (newToken && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				// Tạo lại connection với token mới
+				connection = null;
+				reconnectAttempts++;
+				setTimeout(() => {
+					isStarting = false;
+					startNotificationConnection(true).catch(() => {});
+				}, 1000);
+				return;
+			} else {
+				// Không thể refresh token, dừng kết nối
+				isStarting = false;
+				return;
+			}
+		}
+		
+		// Retry đơn giản sau 2s cho các lỗi khác (nếu chưa vượt quá số lần thử)
+		if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+			reconnectAttempts++;
+			setTimeout(() => {
+				isStarting = false;
+				startNotificationConnection(forceRestart).catch(() => {});
+			}, 2000);
+		} else {
 			isStarting = false;
-			startNotificationConnection(forceRestart).catch(() => {});
-		}, 2000);
+		}
 		return;
 	} finally {
 		isStarting = false;

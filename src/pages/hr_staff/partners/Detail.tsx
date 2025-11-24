@@ -21,6 +21,8 @@ import {
   Calendar,
   DollarSign,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ROUTES } from "../../../router/routes";
 
@@ -30,6 +32,12 @@ export default function PartnerDetailPage() {
   const [partner, setPartner] = useState<PartnerDetailedModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [talentDetails, setTalentDetails] = useState<Record<number, Talent>>({});
+  
+  // Pagination states
+  const [pageContracts, setPageContracts] = useState(1);
+  const [pageTalents, setPageTalents] = useState(1);
+  const itemsPerPageContracts = 3;
+  const itemsPerPageTalents = 2;
 
   useEffect(() => {
     const fetchPartner = async () => {
@@ -304,36 +312,50 @@ export default function PartnerDetailPage() {
             </div>
             <div className="p-6">
               {partner.contracts && partner.contracts.length > 0 ? (
-                <div className="space-y-4">
-                  {partner.contracts.map((contract) => (
-                    <div key={contract.id} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-neutral-600">Mã hợp đồng</p>
-                          <p className="text-base font-semibold text-gray-900">{contract.contractNumber}</p>
+                <>
+                  <div className="space-y-4">
+                    {(() => {
+                      const startIndex = (pageContracts - 1) * itemsPerPageContracts;
+                      const endIndex = startIndex + itemsPerPageContracts;
+                      const paginatedContracts = partner.contracts.slice(startIndex, endIndex);
+                      
+                      return paginatedContracts.map((contract) => (
+                        <div key={contract.id} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-neutral-600">Mã hợp đồng</p>
+                              <p className="text-base font-semibold text-gray-900">{contract.contractNumber}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-neutral-600">Trạng thái</p>
+                              <span className={`inline-flex items-center mt-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(contract.status)}`}>
+                                {getStatusText(contract.status)}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm text-neutral-600">Mức giá</p>
+                              <p className="text-base font-semibold text-gray-900">
+                                {contract.devRate ? `${contract.devRate.toLocaleString('vi-VN')} ${contract.rateType}` : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-neutral-600">Thời gian</p>
+                              <p className="text-base font-semibold text-gray-900">
+                                {new Date(contract.startDate).toLocaleDateString('vi-VN')} - {contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Đang hoạt động'}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-neutral-600">Trạng thái</p>
-                          <span className={`inline-flex items-center mt-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(contract.status)}`}>
-                            {getStatusText(contract.status)}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm text-neutral-600">Mức giá</p>
-                          <p className="text-base font-semibold text-gray-900">
-                            {contract.devRate ? `${contract.devRate.toLocaleString('vi-VN')} ${contract.rateType}` : '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-neutral-600">Thời gian</p>
-                          <p className="text-base font-semibold text-gray-900">
-                            {new Date(contract.startDate).toLocaleDateString('vi-VN')} - {contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Đang hoạt động'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      ));
+                    })()}
+                  </div>
+                  <SectionPagination
+                    currentPage={pageContracts}
+                    totalItems={partner.contracts.length}
+                    itemsPerPage={itemsPerPageContracts}
+                    onPageChange={setPageContracts}
+                  />
+                </>
               ) : (
                 <div className="text-center py-8">
                   <FileCheck className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
@@ -357,92 +379,106 @@ export default function PartnerDetailPage() {
             </div>
             <div className="p-6">
               {partner.talents && partner.talents.length > 0 ? (
-                <div className="space-y-4">
-                  {partner.talents.map((talent) => {
-                    const talentInfo = talentDetails[talent.talentId];
-                    return (
-                      <div key={talent.id} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <User className="w-4 h-4" />
-                              Họ và tên
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-base font-semibold text-gray-900">
-                                {talentInfo?.fullName || `Talent #${talent.talentId}`}
-                              </p>
-                              {talentInfo && (
-                                <Link
-                                  to={`/hr/developers/${talent.talentId}`}
-                                  className="text-primary-600 hover:text-primary-800 transition-colors"
-                                  title="Xem chi tiết"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </Link>
+                <>
+                  <div className="space-y-4">
+                    {(() => {
+                      const startIndex = (pageTalents - 1) * itemsPerPageTalents;
+                      const endIndex = startIndex + itemsPerPageTalents;
+                      const paginatedTalents = partner.talents.slice(startIndex, endIndex);
+                      
+                      return paginatedTalents.map((talent) => {
+                        const talentInfo = talentDetails[talent.talentId];
+                        return (
+                          <div key={talent.id} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <User className="w-4 h-4" />
+                                  Họ và tên
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-base font-semibold text-gray-900">
+                                    {talentInfo?.fullName || `Talent #${talent.talentId}`}
+                                  </p>
+                                  {talentInfo && (
+                                    <Link
+                                      to={`/hr/developers/${talent.talentId}`}
+                                      className="text-primary-600 hover:text-primary-800 transition-colors"
+                                      title="Xem chi tiết"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </Link>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <Mail className="w-4 h-4" />
+                                  Email
+                                </p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {talentInfo?.email || '—'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <Phone className="w-4 h-4" />
+                                  Số điện thoại
+                                </p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {talentInfo?.phone || '—'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <FileText className="w-4 h-4" />
+                                  Trạng thái hợp đồng
+                                </p>
+                                {talent.status ? (
+                                  <span className={`inline-flex items-center mt-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(talent.status)}`}>
+                                    {getStatusText(talent.status)}
+                                  </span>
+                                ) : (
+                                  <p className="text-base font-semibold text-gray-900">—</p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <Calendar className="w-4 h-4" />
+                                  Ngày bắt đầu
+                                </p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {new Date(talent.startDate).toLocaleDateString('vi-VN')}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-neutral-600 flex items-center gap-2">
+                                  <Calendar className="w-4 h-4" />
+                                  Ngày kết thúc
+                                </p>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {talent.endDate ? new Date(talent.endDate).toLocaleDateString('vi-VN') : 'Đang hoạt động'}
+                                </p>
+                              </div>
+                              {talent.notes && (
+                                <div className="md:col-span-2">
+                                  <p className="text-sm text-neutral-600">Ghi chú</p>
+                                  <p className="text-base text-gray-900">{talent.notes}</p>
+                                </div>
                               )}
                             </div>
                           </div>
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <Mail className="w-4 h-4" />
-                              Email
-                            </p>
-                            <p className="text-base font-semibold text-gray-900">
-                              {talentInfo?.email || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <Phone className="w-4 h-4" />
-                              Số điện thoại
-                            </p>
-                            <p className="text-base font-semibold text-gray-900">
-                              {talentInfo?.phone || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              Trạng thái hợp đồng
-                            </p>
-                            {talent.status ? (
-                              <span className={`inline-flex items-center mt-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(talent.status)}`}>
-                                {getStatusText(talent.status)}
-                              </span>
-                            ) : (
-                              <p className="text-base font-semibold text-gray-900">—</p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <Calendar className="w-4 h-4" />
-                              Ngày bắt đầu
-                            </p>
-                            <p className="text-base font-semibold text-gray-900">
-                              {new Date(talent.startDate).toLocaleDateString('vi-VN')}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-neutral-600 flex items-center gap-2">
-                              <Calendar className="w-4 h-4" />
-                              Ngày kết thúc
-                            </p>
-                            <p className="text-base font-semibold text-gray-900">
-                              {talent.endDate ? new Date(talent.endDate).toLocaleDateString('vi-VN') : 'Đang hoạt động'}
-                            </p>
-                          </div>
-                          {talent.notes && (
-                            <div className="md:col-span-2">
-                              <p className="text-sm text-neutral-600">Ghi chú</p>
-                              <p className="text-base text-gray-900">{talent.notes}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <SectionPagination
+                    currentPage={pageTalents}
+                    totalItems={partner.talents.length}
+                    itemsPerPage={itemsPerPageTalents}
+                    onPageChange={setPageTalents}
+                  />
+                </>
               ) : (
                 <div className="text-center py-8">
                   <Users className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
@@ -487,3 +523,55 @@ export default function PartnerDetailPage() {
   );
 }
 
+// Component phân trang
+function SectionPagination({
+  currentPage,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const startItem = totalItems > 0 ? startIndex + 1 : 0;
+  const endItem = endIndex;
+
+  if (totalItems <= itemsPerPage) return null;
+
+  return (
+    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200">
+      <p className="text-sm text-neutral-600">
+        {startItem}-{endItem} của {totalItems} mục
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`p-2 rounded-lg transition-all duration-200 ${
+            currentPage === 1
+              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+              : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+          }`}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`p-2 rounded-lg transition-all duration-200 ${
+            currentPage === totalPages
+              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+              : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-primary-600"
+          }`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}

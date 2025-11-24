@@ -526,19 +526,28 @@ export default function TalentWorkExperienceCreatePage() {
                     <Calendar className="w-4 h-4" />
                     Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    name="startDate"
-                    value={form.startDate}
-                    onChange={handleChange}
-                    required
-                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
-                      fieldErrors.startDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
-                  />
-                  {fieldErrors.startDate && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.startDate}</p>
-                  )}
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    const maxDate = today.toISOString().split('T')[0];
+                    
+                    const hundredYearsAgo = new Date();
+                    hundredYearsAgo.setFullYear(today.getFullYear() - 100);
+                    const minDate = hundredYearsAgo.toISOString().split('T')[0];
+                    
+                    return (
+                      <input
+                        type="date"
+                        name="startDate"
+                        value={form.startDate}
+                        onChange={handleChange}
+                        min={minDate}
+                        max={maxDate}
+                        required
+                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                      />
+                    );
+                  })()}
                 </div>
 
                 {/* Ngày kết thúc */}
@@ -547,18 +556,26 @@ export default function TalentWorkExperienceCreatePage() {
                     <Calendar className="w-4 h-4" />
                     Ngày kết thúc (tùy chọn)
                   </label>
-                  <input
-                    type="date"
-                    name="endDate"
-                    value={form.endDate}
-                    onChange={handleChange}
-                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
-                      fieldErrors.endDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
-                  />
-                  {fieldErrors.endDate && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.endDate}</p>
-                  )}
+                  {(() => {
+                    // Tính ngày tối thiểu là ngày sau ngày bắt đầu
+                    let minEndDate = '';
+                    if (form.startDate) {
+                      const startDate = new Date(form.startDate);
+                      startDate.setDate(startDate.getDate() + 1); // Ngày sau ngày bắt đầu
+                      minEndDate = startDate.toISOString().split('T')[0];
+                    }
+                    
+                    return (
+                      <input
+                        type="date"
+                        name="endDate"
+                        value={form.endDate}
+                        onChange={handleChange}
+                        min={minEndDate || undefined}
+                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                      />
+                    );
+                  })()}
                   <p className="text-xs text-neutral-500 mt-1">
                     Để trống nếu vẫn đang làm việc
                   </p>
@@ -578,10 +595,7 @@ export default function TalentWorkExperienceCreatePage() {
                   placeholder="Mô tả chi tiết về công việc, trách nhiệm và thành tựu..."
                   rows={4}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
-                />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Có thể để trống nếu chưa muốn ghi chú chi tiết.
-                </p>
+                />               
               </div>
             </div>
           </div>

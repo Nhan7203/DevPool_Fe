@@ -37,7 +37,7 @@ export interface TalentFilter {
 
 export interface TalentCreate {
   currentPartnerId: number;
-  userId: string;
+  userId?: string | null;
   fullName: string;
   email: string;
   phone: string;
@@ -103,7 +103,7 @@ export interface TalentCVCreateModel {
 export interface TalentWithRelatedDataCreateModel {
   // Thông tin cơ bản của Talent
   currentPartnerId: number;
-  userId?: string;
+  userId?: string | null;
   fullName: string;
   email: string;
   phone?: string;

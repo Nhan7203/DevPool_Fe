@@ -307,18 +307,12 @@ export default function TalentAvailableTimeEditPage() {
                     value={formData.startTime}
                     onChange={handleChange}
                     required
-                    className={`w-full focus:ring-primary-500 rounded-xl ${
-                      errors.startTime ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
+                    min={new Date().toISOString().slice(0, 16)}
+                    className="w-full focus:ring-primary-500 rounded-xl border-neutral-200 focus:border-primary-500"
                   />
-                  {errors.startTime && (
-                    <p className="mt-1 text-xs text-red-500">{errors.startTime}</p>
-                  )}
-                  {!errors.startTime && (
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Chọn ngày và giờ bắt đầu có sẵn (phải lớn hơn thời điểm hiện tại)
-                    </p>
-                  )}
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Chọn ngày và giờ bắt đầu có sẵn (phải lớn hơn thời điểm hiện tại)
+                  </p>
                 </div>
 
                 {/* Thời gian kết thúc */}
@@ -332,18 +326,16 @@ export default function TalentAvailableTimeEditPage() {
                     name="endTime"
                     value={formData.endTime}
                     onChange={handleChange}
-                    className={`w-full focus:ring-primary-500 rounded-xl ${
-                      errors.endTime ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
+                    min={formData.startTime ? (() => {
+                      const startDate = new Date(formData.startTime);
+                      startDate.setMinutes(startDate.getMinutes() + 1);
+                      return startDate.toISOString().slice(0, 16);
+                    })() : undefined}
+                    className="w-full focus:ring-primary-500 rounded-xl border-neutral-200 focus:border-primary-500"
                   />
-                  {errors.endTime && (
-                    <p className="mt-1 text-xs text-red-500">{errors.endTime}</p>
-                  )}
-                  {!errors.endTime && (
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Để trống nếu không có thời gian kết thúc cụ thể
-                    </p>
-                  )}
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Để trống nếu không có thời gian kết thúc cụ thể
+                  </p>
                 </div>
               </div>
 

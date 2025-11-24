@@ -82,9 +82,7 @@ export default function TalentDetailPage() {
   const [analysisResultCVId, setAnalysisResultCVId] = useState<number | null>(null);
   type SuggestionCategory = "skill" | "jobRoleLevel" | "certificate";
   const [adminUserIds, setAdminUserIds] = useState<string[]>([]);
-  const [pendingSuggestionNotifications, setPendingSuggestionNotifications] = useState<
-    Record<string, { ids: number[]; readMap: Record<number, boolean>; category: SuggestionCategory }>
-  >({});
+  const [sentSuggestionKeys, setSentSuggestionKeys] = useState<Set<string>>(new Set());
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisLoadingId, setAnalysisLoadingId] = useState<number | null>(null);
   type PrefillType = "projects" | "jobRoleLevels" | "skills" | "certificates" | "experiences";
@@ -156,6 +154,9 @@ export default function TalentDetailPage() {
   const [isJobRoleLevelsExpanded, setIsJobRoleLevelsExpanded] = useState(true);
   const [isCertificatesExpanded, setIsCertificatesExpanded] = useState(true);
   const [isAvailableTimesExpanded, setIsAvailableTimesExpanded] = useState(true);
+  // State để quản lý việc collapse/expand CV không hoạt động theo từng jobRoleLevelName
+  // Mặc định tất cả các nhóm CV không hoạt động đều được thu gọn
+  const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
 
   const talentName = talent?.fullName ?? "";
 
@@ -214,7 +215,31 @@ export default function TalentDetailPage() {
           const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
           return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
         });
-        setTalentCVs(cvsWithJobRoleLevelNames);
+        // Sắp xếp CV: nhóm theo jobRoleLevelName, active trước, sau đó theo version giảm dần
+        const sortedCVs = cvsWithJobRoleLevelNames.sort((a: TalentCV & { jobRoleLevelName?: string }, b: TalentCV & { jobRoleLevelName?: string }) => {
+          // Ưu tiên 1: Sắp xếp theo jobRoleLevelName
+          const nameA = a.jobRoleLevelName || "";
+          const nameB = b.jobRoleLevelName || "";
+          if (nameA !== nameB) {
+            return nameA.localeCompare(nameB);
+          }
+          // Ưu tiên 2: Active trước, inactive sau
+          if (a.isActive !== b.isActive) {
+            return a.isActive ? -1 : 1;
+          }
+          // Ưu tiên 3: Version giảm dần (mới nhất trước)
+          return (b.version || 0) - (a.version || 0);
+        });
+        setTalentCVs(sortedCVs);
+        
+        // Thu gọn tất cả các nhóm CV không hoạt động mặc định
+        const inactiveGroups = new Set<string>();
+        sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
+          if (!cv.isActive && cv.jobRoleLevelName) {
+            inactiveGroups.add(cv.jobRoleLevelName);
+          }
+        });
+        setCollapsedInactiveCVGroups(inactiveGroups);
 
         // Fetch skill names
         const allSkills = await skillService.getAll();
@@ -391,7 +416,31 @@ export default function TalentDetailPage() {
         const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
         return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
       });
-      setTalentCVs(cvsWithJobRoleLevelNames);
+      // Sắp xếp CV: nhóm theo jobRoleLevelName, active trước, sau đó theo version giảm dần
+      const sortedCVs = cvsWithJobRoleLevelNames.sort((a: TalentCV & { jobRoleLevelName?: string }, b: TalentCV & { jobRoleLevelName?: string }) => {
+        // Ưu tiên 1: Sắp xếp theo jobRoleLevelName
+        const nameA = a.jobRoleLevelName || "";
+        const nameB = b.jobRoleLevelName || "";
+        if (nameA !== nameB) {
+          return nameA.localeCompare(nameB);
+        }
+        // Ưu tiên 2: Active trước, inactive sau
+        if (a.isActive !== b.isActive) {
+          return a.isActive ? -1 : 1;
+        }
+        // Ưu tiên 3: Version giảm dần (mới nhất trước)
+        return (b.version || 0) - (a.version || 0);
+      });
+      setTalentCVs(sortedCVs);
+      
+      // Thu gọn tất cả các nhóm CV không hoạt động mặc định
+      const inactiveGroups = new Set<string>();
+      sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
+        if (!cv.isActive && cv.jobRoleLevelName) {
+          inactiveGroups.add(cv.jobRoleLevelName);
+        }
+      });
+      setCollapsedInactiveCVGroups(inactiveGroups);
     } catch (err) {
       console.error("❌ Lỗi khi xóa CV:", err);
       alert("Không thể xóa CV!");
@@ -484,11 +533,9 @@ export default function TalentDetailPage() {
   const isSuggestionPending = useCallback(
     (key: string) => {
       if (!key) return false;
-      const entry = pendingSuggestionNotifications[key];
-      if (!entry) return false;
-      return entry.ids.some((notificationId) => !entry.readMap[notificationId]);
+      return sentSuggestionKeys.has(key);
     },
-    [pendingSuggestionNotifications]
+    [sentSuggestionKeys]
   );
 
   const handleSuggestionRequest = useCallback(
@@ -547,7 +594,7 @@ export default function TalentDetailPage() {
         const requesterName = decoded?.unique_name || decoded?.email || decoded?.name || "HR Staff";
         const messageLines = displayItems.map((item, idx) => `${idx + 1}. ${item}`).join("\n");
 
-        const response = await notificationService.create({
+        await notificationService.create({
           title: config.title,
           message: `${requesterName} đề xuất thêm ${config.label} cho nhân sự ${talentName}:\n${messageLines}`,
           type: NotificationType.DocumentUploaded,
@@ -564,26 +611,10 @@ export default function TalentDetailPage() {
           },
         });
 
-        const notifications = Array.isArray(response) ? response : [response];
-        const ids = notifications
-          .map((notification) => notification.id)
-          .filter((notificationId): notificationId is number => typeof notificationId === "number");
+        // Đánh dấu đã gửi đề xuất này
+        setSentSuggestionKeys((prev) => new Set(prev).add(suggestionKey));
 
-        if (ids.length) {
-          setPendingSuggestionNotifications((prev) => ({
-            ...prev,
-            [suggestionKey]: {
-              ids,
-              readMap: ids.reduce<Record<number, boolean>>((acc, notificationId) => {
-                acc[notificationId] = false;
-                return acc;
-              }, {}),
-              category,
-            },
-          }));
-        }
-
-        alert("Đã gửi đề xuất tới Admin. Bạn sẽ được thông báo khi Admin xử lý.");
+        alert("Đã gửi đề xuất tới Admin thành công!");
       } catch (error) {
         console.error("Không thể gửi đề xuất tới Admin:", error);
         alert("Không thể gửi đề xuất tới Admin.");
@@ -592,64 +623,6 @@ export default function TalentDetailPage() {
     [adminUserIds, id, isSuggestionPending, talentName]
   );
 
-  useEffect(() => {
-    const entries = Object.entries(pendingSuggestionNotifications).filter(([_, entry]) =>
-      entry.ids.some((notificationId) => !entry.readMap[notificationId])
-    );
-
-    if (!entries.length) return;
-
-    let cancelled = false;
-
-    const checkStatuses = async () => {
-      if (cancelled) return;
-      const updates: Array<{ key: string; notificationId: number }> = [];
-
-      for (const [key, entry] of entries) {
-        for (const notificationId of entry.ids) {
-          if (entry.readMap[notificationId]) continue;
-          try {
-            const notification = await notificationService.getById(notificationId);
-            if (notification?.isRead) {
-              updates.push({ key, notificationId });
-            }
-          } catch (error) {
-            console.error("Không thể kiểm tra trạng thái thông báo đề xuất:", error);
-          }
-        }
-      }
-
-      if (!updates.length || cancelled) return;
-
-      setPendingSuggestionNotifications((prev) => {
-        let changed = false;
-        const next = { ...prev };
-
-        updates.forEach(({ key, notificationId }) => {
-          const entry = next[key];
-          if (!entry) return;
-          if (entry.readMap[notificationId]) return;
-          changed = true;
-          const newReadMap = { ...entry.readMap, [notificationId]: true };
-          if (Object.values(newReadMap).every(Boolean)) {
-            delete next[key];
-          } else {
-            next[key] = { ...entry, readMap: newReadMap };
-          }
-        });
-
-        return changed ? next : prev;
-      });
-    };
-
-    checkStatuses();
-    const intervalId = window.setInterval(checkStatuses, 20000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [pendingSuggestionNotifications]);
 
   // Helper function để lưu CV ID đang được phân tích vào sessionStorage
   const saveAnalysisCVId = () => {
@@ -1277,7 +1250,7 @@ export default function TalentDetailPage() {
   };
 
   const statusConfig = getStatusConfig(talent.status);
-  const isDisabled = false;
+  const isDisabled = talent.status === "Applying" || talent.status === "Working";
   const formatLinkDisplay = (url?: string) => {
     if (!url) return "—";
     try {
@@ -1331,6 +1304,7 @@ export default function TalentDetailPage() {
               <Button
                 onClick={handleEdit}
                 disabled={isDisabled}
+                title={isDisabled ? "Không thể sửa khi nhân sự đang ứng tuyển hoặc đang làm việc" : ""}
                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isDisabled
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
@@ -1342,6 +1316,7 @@ export default function TalentDetailPage() {
               <Button
                 onClick={handleDelete}
                 disabled={isDisabled}
+                title={isDisabled ? "Không thể xóa khi nhân sự đang ứng tuyển hoặc đang làm việc" : ""}
                 className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isDisabled
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
@@ -1455,23 +1430,21 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
                   <Button
-                    className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    title="Tải lên CV"
                   >
-                    <Upload className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Tải lên CV
+                    <Upload className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleDeleteCVs}
-                  disabled={selectedCVs.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedCVs.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa CV ({selectedCVs.length})
-                </Button>
+                {selectedCVs.length > 0 && (
+                  <Button
+                    onClick={handleDeleteCVs}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa CV ({selectedCVs.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1480,98 +1453,197 @@ export default function TalentDetailPage() {
               {talentCVs.length > 0 ? (
                 <>
                   <div className="space-y-4">
-                    {talentCVs
-                      .slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage)
-                      .map((cv) => {
-                        const isLoading = analysisLoadingId === cv.id;
-                        const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
-                        // Chỉ cho phép phân tích CV active khác khi không có kết quả phân tích nào đang hiển thị
-                        const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
-                        const canAnalyze = !hasOtherAnalysis;
-                        const analysisControls = cv.isActive
-                          ? isCurrentAnalysis
-                            ? (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelAnalysis();
-                                }}
-                                className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
-                              >
-                                <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                Hủy phân tích
-                              </Button>
-                            )
-                            : (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAnalyzeCVFromUrl(cv);
-                                }}
-                                disabled={isLoading || !canAnalyze}
-                                className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                  isLoading || !canAnalyze
-                                    ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                    : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                                }`}
-                                title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
-                              >
-                                <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                {isLoading ? "Đang phân tích..." : "Phân tích CV"}
-                              </Button>
-                            )
-                          : null;
+                    {(() => {
+                      // Nhóm CV theo jobRoleLevelName
+                      const groupedCVs = new Map<string, (TalentCV & { jobRoleLevelName?: string })[]>();
+                      talentCVs.forEach((cv) => {
+                        const key = cv.jobRoleLevelName || "Chưa xác định";
+                        if (!groupedCVs.has(key)) {
+                          groupedCVs.set(key, []);
+                        }
+                        groupedCVs.get(key)!.push(cv);
+                      });
+
+                      // Lấy danh sách các nhóm đã sắp xếp
+                      const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+                      return sortedGroups.map(([jobRoleLevelName, cvs]) => {
+                        // Tách CV active và inactive
+                        const activeCVs = cvs.filter(cv => cv.isActive);
+                        const inactiveCVs = cvs.filter(cv => !cv.isActive);
+                        const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
 
                         return (
-                          <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
-                          <div className="flex items-center gap-3 flex-1">
-                            <input
-                              type="checkbox"
-                              checked={selectedCVs.includes(cv.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                if (e.target.checked) {
-                                  setSelectedCVs([...selectedCVs, cv.id]);
-                                } else {
-                                  setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
-                                }
-                              }}
-                              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                            />
-                            <div
-                              className="flex items-center gap-3 flex-1 cursor-pointer"
-                              onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
-                            >
-                              <FileText className="w-5 h-5 text-primary-600" />
-                              <div>
-                                <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
-                                  {cv.jobRoleLevelName ? `${cv.jobRoleLevelName} v${cv.version}` : `v${cv.version}`}
-                                </p>
+                          <div key={jobRoleLevelName} className="space-y-2">
+                            {/* CV đang hoạt động */}
+                            {activeCVs.map((cv) => {
+                              const isLoading = analysisLoadingId === cv.id;
+                              const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
+                              const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
+                              const canAnalyze = !hasOtherAnalysis;
+                              const analysisControls = isCurrentAnalysis
+                                ? (
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCancelAnalysis();
+                                    }}
+                                    className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
+                                  >
+                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                    Hủy phân tích
+                                  </Button>
+                                )
+                                : (
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAnalyzeCVFromUrl(cv);
+                                    }}
+                                    disabled={isLoading || !canAnalyze}
+                                    className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
+                                      isLoading || !canAnalyze
+                                        ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                                    }`}
+                                    title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
+                                  >
+                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                    {isLoading ? "Đang phân tích..." : "Phân tích CV"}
+                                  </Button>
+                                );
+
+                              return (
+                                <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedCVs.includes(cv.id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedCVs([...selectedCVs, cv.id]);
+                                        } else {
+                                          setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                    />
+                                    <div
+                                      className="flex items-center gap-3 flex-1 cursor-pointer"
+                                      onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
+                                    >
+                                      <FileText className="w-5 h-5 text-primary-600" />
+                                      <div>
+                                        <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
+                                          {cv.jobRoleLevelName ? `${cv.jobRoleLevelName} v${cv.version}` : `v${cv.version}`}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
+                                    <a
+                                      href={cv.cvFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
+                                    >
+                                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                      <span className="text-sm font-medium">Xem PDF</span>
+                                    </a>
+                                    {analysisControls}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* CV không hoạt động - Thu gọn */}
+                            {inactiveCVs.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-neutral-200">
+                                {/* Nút toggle để expand/collapse */}
+                                <button
+                                  onClick={() => {
+                                    setCollapsedInactiveCVGroups(prev => {
+                                      const newSet = new Set(prev);
+                                      if (newSet.has(jobRoleLevelName)) {
+                                        newSet.delete(jobRoleLevelName);
+                                      } else {
+                                        newSet.add(jobRoleLevelName);
+                                      }
+                                      return newSet;
+                                    });
+                                  }}
+                                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors duration-200 border border-neutral-200 bg-neutral-50/50"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-neutral-500" />
+                                    <span>
+                                      {inactiveCVs.length} phiên bản cũ ({jobRoleLevelName})
+                                    </span>
+                                  </span>
+                                  {isCollapsed ? (
+                                    <ChevronDown className="w-4 h-4 text-neutral-500" />
+                                  ) : (
+                                    <ChevronUp className="w-4 h-4 text-neutral-500" />
+                                  )}
+                                </button>
+
+                                {/* Danh sách CV không hoạt động */}
+                                {!isCollapsed && (
+                                  <div className="mt-3 space-y-2 pl-2">
+                                    {inactiveCVs.map((cv) => (
+                                      <div key={cv.id} className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-neutral-200 hover:border-neutral-300 hover:shadow-sm transition-all duration-200">
+                                        <div className="flex items-center gap-3 flex-1">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedCVs.includes(cv.id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              if (e.target.checked) {
+                                                setSelectedCVs([...selectedCVs, cv.id]);
+                                              } else {
+                                                setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
+                                              }
+                                            }}
+                                            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                          />
+                                          <div
+                                            className="flex items-center gap-2 flex-1 cursor-pointer"
+                                            onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
+                                          >
+                                            <FileText className="w-4 h-4 text-neutral-500" />
+                                            <p className="text-sm font-medium text-neutral-700 hover:text-primary-700 transition-colors duration-200">
+                                              Version {cv.version}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Không hoạt động</span>
+                                          <a
+                                            href={cv.cvFileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                          >
+                                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                            <span>Xem PDF</span>
+                                          </a>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {cv.isActive ? (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
-                            ) : (
-                              <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">Không hoạt động</span>
                             )}
-                            <a
-                              href={cv.cvFileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
-                            >
-                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                              <span className="text-sm font-medium">Xem PDF</span>
-                            </a>
-                            {analysisControls}
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                   <SectionPagination
                     currentPage={pageCVs}
@@ -1731,22 +1803,20 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Button
                   onClick={() => handleNavigateToCreate(`/hr/talent-projects/create?talentId=${id}`)}
-                  className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  title="Tạo dự án"
                 >
-                  <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Tạo dự án
+                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 </Button>
-                <Button
-                  onClick={handleDeleteProjects}
-                  disabled={selectedProjects.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedProjects.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa dự án ({selectedProjects.length})
-                </Button>
+                {selectedProjects.length > 0 && (
+                  <Button
+                    onClick={handleDeleteProjects}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa dự án ({selectedProjects.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1865,23 +1935,21 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Link to={`/hr/talent-job-role-levels/create?talentId=${id}`}>
                   <Button
-                    className="group flex items-center gap-2 bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    className="group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    title="Thêm vị trí"
                   >
-                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Thêm vị trí
+                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleDeleteJobRoleLevels}
-                  disabled={selectedJobRoleLevels.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedJobRoleLevels.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa vị trí ({selectedJobRoleLevels.length})
-                </Button>
+                {selectedJobRoleLevels.length > 0 && (
+                  <Button
+                    onClick={handleDeleteJobRoleLevels}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa vị trí ({selectedJobRoleLevels.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -2068,23 +2136,21 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Link to={`/hr/talent-skills/create?talentId=${id}`}>
                   <Button
-                    className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    title="Thêm kỹ năng"
                   >
-                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Thêm kỹ năng
+                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleDeleteSkills}
-                  disabled={selectedSkills.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedSkills.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa kỹ năng ({selectedSkills.length})
-                </Button>
+                {selectedSkills.length > 0 && (
+                  <Button
+                    onClick={handleDeleteSkills}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa kỹ năng ({selectedSkills.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -2249,23 +2315,21 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
                   <Button
-                    className="group flex items-center gap-2 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    title="Thêm thời gian"
                   >
-                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Thêm thời gian
+                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleDeleteAvailableTimes}
-                  disabled={selectedAvailableTimes.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedAvailableTimes.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa thời gian ({selectedAvailableTimes.length})
-                </Button>
+                {selectedAvailableTimes.length > 0 && (
+                  <Button
+                    onClick={handleDeleteAvailableTimes}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa thời gian ({selectedAvailableTimes.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -2353,23 +2417,21 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Link to={`/hr/talent-certificates/create?talentId=${id}`}>
                   <Button
-                    className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                    title="Thêm chứng chỉ"
                   >
-                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Thêm chứng chỉ
+                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleDeleteCertificates}
-                  disabled={selectedCertificates.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedCertificates.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa chứng chỉ ({selectedCertificates.length})
-                </Button>
+                {selectedCertificates.length > 0 && (
+                  <Button
+                    onClick={handleDeleteCertificates}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa chứng chỉ ({selectedCertificates.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -2564,22 +2626,20 @@ export default function TalentDetailPage() {
               <div className="flex gap-2">
                 <Button
                   onClick={() => handleNavigateToCreate(`/hr/talent-work-experiences/create?talentId=${id}`)}
-                  className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                  title="Thêm kinh nghiệm"
                 >
-                  <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Thêm kinh nghiệm
+                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 </Button>
-                <Button
-                  onClick={handleDeleteExperiences}
-                  disabled={selectedExperiences.length === 0}
-                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${selectedExperiences.length === 0
-                    ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                    }`}
-                >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Xóa kinh nghiệm ({selectedExperiences.length})
-                </Button>
+                {selectedExperiences.length > 0 && (
+                  <Button
+                    onClick={handleDeleteExperiences}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    Xóa kinh nghiệm ({selectedExperiences.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -2651,10 +2711,6 @@ export default function TalentDetailPage() {
                                 </p>
                               </div>
                             </div>
-                          </div>
-                          <div className="mt-3">
-                            <p className="text-sm text-gray-600 font-medium mb-1">Mô tả công việc:</p>
-                            <p className="text-sm text-gray-700">{exp.description}</p>
                           </div>
                         </div>
                       ))}

@@ -438,19 +438,28 @@ export default function TalentWorkExperienceEditPage() {
                     <Calendar className="w-4 h-4" />
                     Ngày bắt đầu <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    type="date"
-                    name="startDate"
-                    value={formData.startDate}
-                    onChange={handleChange}
-                    required
-                    className={`w-full focus:ring-primary-500 rounded-xl ${
-                      fieldErrors.startDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
-                  />
-                  {fieldErrors.startDate && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.startDate}</p>
-                  )}
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    const maxDate = today.toISOString().split('T')[0];
+                    
+                    const hundredYearsAgo = new Date();
+                    hundredYearsAgo.setFullYear(today.getFullYear() - 100);
+                    const minDate = hundredYearsAgo.toISOString().split('T')[0];
+                    
+                    return (
+                      <Input
+                        type="date"
+                        name="startDate"
+                        value={formData.startDate}
+                        onChange={handleChange}
+                        min={minDate}
+                        max={maxDate}
+                        required
+                        className="w-full focus:ring-primary-500 focus:border-primary-500 rounded-xl border-neutral-200"
+                      />
+                    );
+                  })()}
                 </div>
 
                 {/* Ngày kết thúc */}
@@ -459,18 +468,26 @@ export default function TalentWorkExperienceEditPage() {
                     <Calendar className="w-4 h-4" />
                     Ngày kết thúc (tùy chọn)
                   </label>
-                  <Input
-                    type="date"
-                    name="endDate"
-                    value={formData.endDate}
-                    onChange={handleChange}
-                    className={`w-full focus:ring-primary-500 rounded-xl ${
-                      fieldErrors.endDate ? 'border-red-500 focus:border-red-500' : 'border-neutral-200 focus:border-primary-500'
-                    }`}
-                  />
-                  {fieldErrors.endDate && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.endDate}</p>
-                  )}
+                  {(() => {
+                    // Tính ngày tối thiểu là ngày sau ngày bắt đầu
+                    let minEndDate = '';
+                    if (formData.startDate) {
+                      const startDate = new Date(formData.startDate);
+                      startDate.setDate(startDate.getDate() + 1); // Ngày sau ngày bắt đầu
+                      minEndDate = startDate.toISOString().split('T')[0];
+                    }
+                    
+                    return (
+                      <Input
+                        type="date"
+                        name="endDate"
+                        value={formData.endDate}
+                        onChange={handleChange}
+                        min={minEndDate || undefined}
+                        className="w-full focus:ring-primary-500 focus:border-primary-500 rounded-xl border-neutral-200"
+                      />
+                    );
+                  })()}
                   <p className="text-xs text-neutral-500 mt-1">
                     Để trống nếu vẫn đang làm việc
                   </p>
@@ -491,9 +508,6 @@ export default function TalentWorkExperienceEditPage() {
                   rows={4}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Có thể để trống nếu chưa muốn ghi chú chi tiết.
-                </p>
               </div>
             </div>
           </div>
