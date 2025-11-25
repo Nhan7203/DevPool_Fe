@@ -202,7 +202,7 @@ export default function CreateTalent() {
           skillService.getAll({ excludeDeleted: true }),
           jobRoleService.getAll({ excludeDeleted: true }),
           certificateTypeService.getAll({ excludeDeleted: true }),
-          jobRoleLevelService.getAll({ excludeDeleted: true })
+          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true })
         ]);
         // Xử lý dữ liệu - đảm bảo là array
         const partnersArray = Array.isArray(partnersData) ? partnersData : (Array.isArray((partnersData as any)?.items) ? (partnersData as any).items : (Array.isArray((partnersData as any)?.data) ? (partnersData as any).data : []));
@@ -1510,8 +1510,45 @@ export default function CreateTalent() {
             setUnmatchedData(prev => ({ ...prev, skills: unmatchedSkills.length > 0 ? unmatchedSkills : undefined }));
           }
 
-          // Không tự động thêm work experiences từ CV vào form (người dùng sẽ nhập thủ công)
-          // Work experiences vẫn được hiển thị trong sidebar "Dữ Liệu Đã Trích Xuất" để tham khảo
+          // Auto-add work experiences from CV to form
+          let addedWorkExperiencesCount = 0;
+          if (parsedData.workExperiences && Array.isArray(parsedData.workExperiences) && parsedData.workExperiences.length > 0) {
+            const newWorkExperiences: TalentWorkExperienceCreateModel[] = parsedData.workExperiences.map((exp: any) => {
+              // Convert date format: YYYY-MM -> YYYY-MM-DD (thêm -01 cho ngày đầu tháng)
+              const formatDateForInput = (dateStr: string | null | undefined): string | undefined => {
+                if (!dateStr) return undefined;
+                // Nếu là 'Present', trả về undefined
+                if (dateStr.toLowerCase() === 'present' || dateStr.toLowerCase() === 'hiện tại') {
+                  return undefined;
+                }
+                // Nếu đã có format YYYY-MM-DD, giữ nguyên
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+                // Nếu có format YYYY-MM, thêm -01
+                if (/^\d{4}-\d{2}$/.test(dateStr)) return `${dateStr}-01`;
+                // Nếu có format khác, thử parse
+                try {
+                  const date = new Date(dateStr);
+                  if (!isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                  }
+                } catch {
+                  // Nếu không parse được, trả về undefined
+                }
+                return undefined;
+              };
+
+              return {
+                company: exp.company || "",
+                position: exp.position || "",
+                startDate: formatDateForInput(exp.startDate) || "",
+                endDate: formatDateForInput(exp.endDate),
+                description: exp.description || ""
+              };
+            });
+            addedWorkExperiencesCount = newWorkExperiences.length;
+            // Thêm vào đầu danh sách (giữ lại các work experiences đã có)
+            setTalentWorkExperiences(prev => [...newWorkExperiences, ...prev]);
+          }
 
           // Auto-add projects from CV to form
           let addedProjectsCount = 0;
@@ -1761,6 +1798,9 @@ export default function CreateTalent() {
               : ''
             }${addedSkillsCount > 0
               ? `\nĐã tự động thêm ${addedSkillsCount} kỹ năng vào form.`
+              : ''
+            }${addedWorkExperiencesCount > 0
+              ? `\nĐã tự động thêm ${addedWorkExperiencesCount} kinh nghiệm làm việc vào form.`
               : ''
             }${addedProjectsCount > 0
               ? `\nĐã tự động thêm ${addedProjectsCount} dự án vào form.`
