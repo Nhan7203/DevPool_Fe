@@ -198,7 +198,7 @@ export default function JobRequestCreatePage() {
         const [skills, projectsData, jobRoleLevelsData, jobRolesData, locs, apts, skillGroupsData] = await Promise.all([
           skillService.getAll(),
           projectService.getAll(),
-          jobRoleLevelService.getAll(),
+          jobRoleLevelService.getAll({ distinctByName: true }),
           jobRoleService.getAll(),
           locationService.getAll(),
           applyProcessTemplateService.getAll(),
