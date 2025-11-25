@@ -180,7 +180,7 @@ export default function JobRequestEditPage() {
       try {
         const [projectsData, jobPosData, locs, apts, roles] = await Promise.all([
           projectService.getAll(),
-          jobRoleLevelService.getAll(),
+          jobRoleLevelService.getAll({ distinctByName: true }),
           locationService.getAll(),
           applyProcessTemplateService.getAll(),
           jobRoleService.getAll(),

@@ -101,7 +101,16 @@ const calculateMatchScore = async (
     const talentSkillNames = talentSkills.map(ts => skillMap.get(ts.skillId) || "").filter(Boolean);
     
     // Lấy danh sách skill names yêu cầu từ job request
-    const requiredSkillNames = jobReq.jobSkills?.map(js => js.skillName) || [];
+    // jobReq.jobSkills có cấu trúc {id, jobRequestId, skillsId} - cần map skillsId -> skillName
+    const requiredSkillNames = jobReq.jobSkills?.map(js => {
+        // Nếu có skillName thì dùng, nếu không thì map từ skillsId
+        if ((js as any).skillName) {
+            return (js as any).skillName;
+        } else if ((js as any).skillsId) {
+            return skillMap.get((js as any).skillsId) || "";
+        }
+        return "";
+    }).filter(Boolean) || [];
     
     // So sánh skills
     const matchedSkills: string[] = [];
@@ -204,6 +213,8 @@ export default function CVMatchingPage() {
                 // Fetch job request details
                 const jobReq = await jobRequestService.getById(Number(jobRequestId));
                 console.log("✅ Job Request loaded:", jobReq);
+                console.log("📋 Job Skills:", jobReq.jobSkills);
+                console.log("📋 Job Skills count:", jobReq.jobSkills?.length || 0);
                 setJobRequest(jobReq);
 
                 // Fetch job role level to get level information
@@ -270,11 +281,23 @@ export default function CVMatchingPage() {
                 });
                 console.log("📉 Số CV có điểm số sau khi loại trừ đã ứng tuyển:", matchMap.size);
 
+                // Fetch skillMap một lần để dùng cho tất cả CV
+                const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
+                const skillMap = new Map<number, string>();
+                allSkills.forEach(skill => {
+                    skillMap.set(skill.id, skill.name);
+                });
+
                 // Enrich tất cả CV với talent information và tính điểm
                 const enrichedCVs = await Promise.all(
-                    availableCVs.map(async (cv: TalentCV): Promise<EnrichedMatchResult | EnrichedCVWithoutScore> => {
+                    availableCVs.map(async (cv: TalentCV): Promise<EnrichedMatchResult | EnrichedCVWithoutScore | null> => {
                         try {
                             const talent = await talentService.getById(cv.talentId);
+                            
+                            // Lọc bỏ talent có trạng thái "Applying" hoặc "Working"
+                            if (talent.status === "Applying" || talent.status === "Working") {
+                                return null; // Trả về null để filter sau
+                            }
                             
                             let talentLocationName: string | null = null;
                             if (talent.locationId) {
@@ -293,9 +316,47 @@ export default function CVMatchingPage() {
                             
                             if (match) {
                                 // CV có điểm số từ backend
+                                // Tính toán lại missingSkills từ jobReq.jobSkills và matchedSkills
+                                const matchedSkills = match.matchedSkills || [];
+                                let missingSkills: string[] = [];
+                                
+                                // Luôn tính toán lại missingSkills từ jobReq.jobSkills để đảm bảo đầy đủ
+                                if (jobReq.jobSkills && jobReq.jobSkills.length > 0) {
+                                    // jobReq.jobSkills có cấu trúc {id, jobRequestId, skillsId}
+                                    // skillMap đã được fetch trước vòng lặp
+                                    const requiredSkillNames = jobReq.jobSkills.map((js: any) => {
+                                        if (js.skillName) {
+                                            return js.skillName;
+                                        } else if (js.skillsId) {
+                                            return skillMap.get(js.skillsId) || "";
+                                        }
+                                        return "";
+                                    }).filter(Boolean);
+                                    
+                                    // So sánh case-insensitive để đảm bảo chính xác
+                                    const matchedSkillsLower = matchedSkills.map(s => s.toLowerCase().trim());
+                                    missingSkills = requiredSkillNames.filter((skillName: string) => {
+                                        const skillNameLower = skillName.toLowerCase().trim();
+                                        return !matchedSkillsLower.includes(skillNameLower);
+                                    });
+                                    
+                                    console.log(`🔍 CV ${cv.id} - Tính toán missingSkills:`, {
+                                        requiredSkills: requiredSkillNames,
+                                        matchedSkills: matchedSkills,
+                                        missingSkills: missingSkills,
+                                        count: missingSkills.length
+                                    });
+                                } else {
+                                    // Nếu không có jobSkills, dùng missingSkills từ backend (nếu có)
+                                    missingSkills = match.missingSkills || [];
+                                    console.log(`⚠️ CV ${cv.id} - Không có jobSkills, dùng missingSkills từ backend:`, missingSkills);
+                                }
+                                
                                 return {
                                     ...match,
                                     talentInfo: talentInfo,
+                                    matchedSkills: matchedSkills,
+                                    missingSkills: missingSkills,
                                 };
                             } else {
                                 // CV không có điểm số - tính điểm chi tiết
@@ -306,6 +367,13 @@ export default function CVMatchingPage() {
                                         jobReq,
                                         level
                                     );
+                                    
+                                    console.log(`🔍 CV ${cv.id} - calculateMatchScore result:`, {
+                                        matchedSkills: calculatedMatch.matchedSkills,
+                                        missingSkills: calculatedMatch.missingSkills,
+                                        missingCount: calculatedMatch.missingSkills?.length || 0
+                                    });
+                                    
                                     return {
                                         ...calculatedMatch,
                                         talentInfo: talentInfo,
@@ -326,28 +394,17 @@ export default function CVMatchingPage() {
                             }
                         } catch (err) {
                             console.warn("⚠️ Failed to load talent info for ID:", cv.talentId, err);
-                            // Nếu không load được talent info, kiểm tra xem có match từ backend không
-                            const match = matchMap.get(cv.id);
-                            if (match) {
-                                return { ...match, talentInfo: undefined };
-                            } else {
-                                // Nếu không có match và không load được talent, không thể tính điểm
-                                return {
-                                    talentCV: cv,
-                                    talentInfo: undefined,
-                                    matchScore: 0,
-                                    matchedSkills: [],
-                                    missingSkills: jobReq.jobSkills?.map((skill: { skillName: string }) => skill.skillName) || [],
-                                    levelMatch: false,
-                                    matchSummary: "Không thể tính điểm matching - thiếu thông tin talent",
-                                };
-                            }
+                            // Nếu không load được talent info, không thể kiểm tra trạng thái nên loại bỏ
+                            return null;
                         }
                     })
                 );
 
+                // Lọc bỏ các CV null (talent có trạng thái không phù hợp)
+                const filteredEnrichedCVs = enrichedCVs.filter((cv): cv is EnrichedMatchResult | EnrichedCVWithoutScore => cv !== null);
+                
                 // Sắp xếp theo điểm từ cao xuống thấp
-                const sortedCVs = enrichedCVs.sort((a, b) => {
+                const sortedCVs = filteredEnrichedCVs.sort((a, b) => {
                     const scoreA = a.matchScore ?? 0;
                     const scoreB = b.matchScore ?? 0;
                     return scoreB - scoreA;
@@ -852,6 +909,14 @@ export default function CVMatchingPage() {
                             // CV có điểm số - hiển thị đầy đủ thông tin
                             if (!match) return null; // Safety check
                             
+                            // Debug: Log missingSkills trước khi render
+                            console.log(`🎨 Rendering CV ${match.talentCV.id}:`, {
+                                matchedSkills: match.matchedSkills,
+                                missingSkills: match.missingSkills,
+                                missingCount: match.missingSkills?.length || 0,
+                                hasMissing: match.missingSkills && match.missingSkills.length > 0
+                            });
+                            
                             const totalRequiredSkills = (match.matchedSkills?.length || 0) + (match.missingSkills?.length || 0);
                             const skillMatchPercent = totalRequiredSkills > 0
                                 ? Math.round(((match.matchedSkills?.length || 0) / totalRequiredSkills) * 100)
@@ -1162,17 +1227,22 @@ export default function CVMatchingPage() {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {match.missingSkills.length > 0 && (
+                                                        {match.missingSkills && 
+                                                         Array.isArray(match.missingSkills) && 
+                                                         match.missingSkills.length > 0 && (
                                                             <div className="pt-2 border-t border-gray-200">
                                                                 <p className="text-xs font-medium text-red-600 mb-1">❌ Còn thiếu:</p>
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    {match.missingSkills.slice(0, 5).map((skill, idx) => (
+                                                                    {match.missingSkills
+                                                                        .filter((skill: string) => skill && typeof skill === 'string' && skill.trim().length > 0)
+                                                                        .slice(0, 5)
+                                                                        .map((skill: string, idx: number) => (
                                                                         <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-800 border border-red-200">
                                                                             {skill}
                                                                         </span>
                                                                     ))}
-                                                                    {match.missingSkills.length > 5 && (
-                                                                        <span className="text-xs text-gray-500">+{match.missingSkills.length - 5} kỹ năng khác</span>
+                                                                    {match.missingSkills.filter((skill: string) => skill && typeof skill === 'string' && skill.trim().length > 0).length > 5 && (
+                                                                        <span className="text-xs text-gray-500">+{match.missingSkills.filter((skill: string) => skill && typeof skill === 'string' && skill.trim().length > 0).length - 5} kỹ năng khác</span>
                                                                     )}
                                                                 </div>
                                                             </div>
