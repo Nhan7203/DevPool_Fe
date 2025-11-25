@@ -14,7 +14,6 @@ export default function ListPartner() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [filterCompany, setFilterCompany] = useState('');
   const [filterTaxCode, setFilterTaxCode] = useState('');
   
   // Pagination
@@ -70,11 +69,10 @@ export default function ListPartner() {
   useEffect(() => {
     let filtered = [...partners];
     if (searchTerm) filtered = filtered.filter((p) => p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (filterCompany) filtered = filtered.filter((p) => p.companyName?.toLowerCase().includes(filterCompany.toLowerCase()));
     if (filterTaxCode) filtered = filtered.filter((p) => p.taxCode?.includes(filterTaxCode));
     setFilteredPartners(filtered);
     setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
-  }, [searchTerm, filterCompany, filterTaxCode, partners]);
+  }, [searchTerm, filterTaxCode, partners]);
   
   // Tính toán pagination
   const totalPages = Math.ceil(filteredPartners.length / itemsPerPage);
@@ -86,7 +84,6 @@ export default function ListPartner() {
 
   const handleResetFilters = () => {
     setSearchTerm("");
-    setFilterCompany("");
     setFilterTaxCode("");
   };
 
@@ -172,17 +169,7 @@ export default function ListPartner() {
 
             {showFilters && (
               <div className="mt-6 pt-6 border-t border-neutral-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Tên công ty"
-                      className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
-                      value={filterCompany}
-                      onChange={(e) => setFilterCompany(e.target.value)}
-                    />
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative">
                     <input
                       type="text"

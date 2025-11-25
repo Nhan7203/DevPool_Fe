@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Mail, Phone, MapPin, User, FileText } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerService, type PartnerPayload } from '../../../services/Partner';
+import { partnerService, type Partner, type PartnerPayload } from '../../../services/Partner';
 import { ROUTES } from '../../../router/routes';
 
 export default function CreatePartner() {
@@ -29,6 +29,25 @@ export default function CreatePartner() {
     return phoneRegex.test(phone.replace(/\D/g, ''));
   };
 
+  const validateTaxCode = (taxCode: string): boolean => {
+    const cleanedTaxCode = taxCode.replace(/\D/g, '');
+    return cleanedTaxCode.length === 10 || cleanedTaxCode.length === 13;
+  };
+
+  const checkDuplicateTaxCode = async (taxCode: string): Promise<boolean> => {
+    try {
+      const partners = await partnerService.getAll();
+      const cleanedTaxCode = taxCode.replace(/\D/g, '');
+      return partners.some((partner: Partner) => {
+        const partnerTaxCode = partner.taxCode?.replace(/\D/g, '') || '';
+        return partnerTaxCode === cleanedTaxCode;
+      });
+    } catch (error) {
+      console.error('Error checking duplicate tax code:', error);
+      return false;
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const newErrors = { ...errors };
@@ -40,10 +59,31 @@ export default function CreatePartner() {
       }
     }
 
-    // Validate taxCode
+    // Validate taxCode - chỉ cho phép nhập số
     if (name === 'taxCode') {
+      // Chỉ lấy số, loại bỏ tất cả ký tự khác
+      const numericValue = value.replace(/\D/g, '');
+      if (numericValue !== value) {
+        // Nếu có ký tự không phải số, cập nhật giá trị chỉ với số
+        setFormData((prev) => ({ ...prev, [name]: numericValue }));
+        // Validate với giá trị đã lọc
+        if (numericValue && numericValue.trim() !== '') {
+          if (validateTaxCode(numericValue)) {
+            delete newErrors.taxCode;
+          } else {
+            newErrors.taxCode = 'Mã số thuế phải có đúng 10 hoặc 13 chữ số';
+          }
+        }
+        setErrors(newErrors);
+        return;
+      }
+      // Nếu chỉ có số, validate bình thường
       if (value && value.trim() !== '') {
-        delete newErrors.taxCode;
+        if (validateTaxCode(value)) {
+          delete newErrors.taxCode;
+        } else {
+          newErrors.taxCode = 'Mã số thuế phải có đúng 10 hoặc 13 chữ số';
+        }
       }
     }
 
@@ -88,6 +128,8 @@ export default function CreatePartner() {
 
     if (!formData.taxCode || formData.taxCode.trim() === '') {
       newErrors.taxCode = 'Mã số thuế là bắt buộc';
+    } else if (!validateTaxCode(formData.taxCode)) {
+      newErrors.taxCode = 'Mã số thuế phải có đúng 10 hoặc 13 chữ số';
     }
 
     if (!formData.contactPerson || formData.contactPerson.trim() === '') {
@@ -100,6 +142,14 @@ export default function CreatePartner() {
 
     if (!formData.phone || !validatePhone(formData.phone)) {
       newErrors.phone = 'Số điện thoại phải có đúng 10 chữ số';
+    }
+
+    // Check duplicate tax code if tax code is valid
+    if (!newErrors.taxCode && formData.taxCode) {
+      const isDuplicate = await checkDuplicateTaxCode(formData.taxCode);
+      if (isDuplicate) {
+        newErrors.taxCode = 'Mã số thuế đã tồn tại trong hệ thống';
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -182,9 +232,11 @@ export default function CreatePartner() {
                       name="taxCode"
                       value={formData.taxCode}
                       onChange={handleChange}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       required
                       className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.taxCode ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
-                      placeholder="Nhập mã số thuế"
+                      placeholder="Nhập mã số thuế (10 hoặc 13 chữ số)"
                     />
                   </div>
                   {errors.taxCode && (
