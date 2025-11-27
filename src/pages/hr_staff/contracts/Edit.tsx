@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContract, type PartnerContractUpdatePayload } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
@@ -70,7 +71,7 @@ export default function EditPartnerContractPage() {
                 if (contractData.status.toLowerCase() !== 'draft') {
                     setError("Chỉ có thể chỉnh sửa hợp đồng khi ở trạng thái 'Bản nháp'");
                     setTimeout(() => {
-                        navigate(`/hr/contracts/${id}`);
+                        navigate(`/ta/contracts/${id}`);
                     }, 2000);
                     return;
                 }
@@ -286,7 +287,7 @@ export default function EditPartnerContractPage() {
             setSuccess(true);
             setContractFile(null);
             setTimeout(() => {
-                navigate(`/hr/contracts/${id}`);
+                navigate(`/ta/contracts/${id}`);
             }, 1500);
         } catch (err: any) {
             console.error("❌ Lỗi cập nhật hợp đồng:", err);
@@ -300,7 +301,7 @@ export default function EditPartnerContractPage() {
     if (loading) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -314,7 +315,7 @@ export default function EditPartnerContractPage() {
     if (error && !contract) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -323,7 +324,7 @@ export default function EditPartnerContractPage() {
                         <p className="text-red-500 text-lg font-medium mb-2">Lỗi</p>
                         <p className="text-gray-500 mb-4">{error}</p>
                         <Link
-                            to="/hr/contracts"
+                            to="/ta/contracts"
                             className="text-primary-600 hover:text-primary-800 text-sm"
                         >
                             ← Quay lại danh sách
@@ -336,20 +337,18 @@ export default function EditPartnerContractPage() {
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
 
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
-                    <div className="flex items-center gap-4 mb-6">
-                        <Link
-                            to={`/hr/contracts/${id}`}
-                            className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="font-medium">Quay lại chi tiết</span>
-                        </Link>
-                    </div>
+                    <Breadcrumb
+                        items={[
+                            { label: "Hợp đồng", to: "/ta/contracts" },
+                            { label: contract ? `Hợp đồng #${contract.contractNumber}` : "Chi tiết", to: `/ta/contracts/${id}` },
+                            { label: "Chỉnh sửa" }
+                        ]}
+                    />
 
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">Chỉnh Sửa Hợp Đồng Đối Tác</h1>
@@ -613,7 +612,7 @@ export default function EditPartnerContractPage() {
                     {/* Submit Button */}
                     <div className="flex items-center justify-end gap-4">
                         <Link
-                            to={`/hr/contracts/${id}`}
+                            to={`/ta/contracts/${id}`}
                             className="px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 font-medium transition-all duration-300"
                         >
                             Hủy

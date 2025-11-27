@@ -3,106 +3,52 @@ import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase} from "
 export const sidebarItems = [
   {
     label: 'Tổng Quan',
-    href: '/hr/dashboard',
+    href: '/ta/dashboard',
     icon: BarChart3
   },
   {
-    label: 'Quản Lý Nhân Sự',
-    href: '/hr/developers',
+    label: 'Hợp Đồng Nhân Sự',
+    href: '/ta/contracts',
+    icon: FileText,
+  },
+  {
+    label: 'Nhân Sự',
+    href: '/ta/developers',
     icon: Users,
     // subItems: [
-    //   { label: 'Danh sách nhân sự', href: '/hr/developers' },
-    //   { label: 'Tạo nhân sự', href: '/hr/developers/create' },
+    //   { label: 'Danh sách nhân sự', href: '/ta/developers' },
+    //   { label: 'Tạo nhân sự', href: '/ta/developers/create' },
 
     // ]
-  },
-  {
-    label: 'Quản Lý Đối Tác',
-    href: '/hr/partners',
-    icon: Building2,
-    // subItems: [
-    //   { label: 'Danh Sách Đối Tác', href: '/hr/partners' },
-    //   { label: 'Tạo Đối Tác', href: '/hr/partners/create' },
-    // ]
-  },
-  // {
-  //   label: 'Quản Lý CV',
-  //   href: '/hr/cvs',
-  //   icon: Users,
-  //   subItems: [
-  //     { label: 'Danh Sách CV', href: '/hr/cvs' },
-  //     { label: 'Upload CV', href: '/hr/cvs/upload' },
-  //     { label: 'Matching CV', href: '/hr/cvs/matching' },
-  //   ]
-  // },
+  }, 
   {
     label: 'Yêu Cầu Tuyển Dụng',
-    href: '/hr/job-requests',
+    href: '/ta/job-requests',
     icon: Briefcase,
     // subItems: [
-    //   { label: 'Danh Sách Yêu Cầu', href: '/hr/job-requests' },
+    //   { label: 'Danh Sách Yêu Cầu', href: '/ta/job-requests' },
     // ]
   },
   {
-    label: 'Hồ Sơ Ứng Tuyển',
-    href: '/hr/applications',
-    icon: ClipboardList,
-  },
-  {
-    label: 'Hợp Đồng Nhân Sự',
-    href: '/hr/contracts',
-    icon: FileText,
-    // subItems: [
-    //   { label: 'Danh Sách Hợp Đồng', href: '/hr/contracts' },
-    //   { label: 'Tạo Hợp Đồng', href: '/hr/contracts/create' },
-    // ]
+    label: 'Đối Tác',
+    href: '/ta/partners',
+    icon: Building2,
   },
   // {
   //   label: 'Tạo tài liệu nhân sự',
-  //   href: '/hr/payment-periods/partners',
+  //   href: '/ta/payment-periods/partners',
   //   icon: FileUp
   // },
 
   // {
   //   label: 'Quản lý Template CV',
-  //   href: '/hr/templates',
+  //   href: '/ta/templates',
   //   icon: Users,
   //   subItems: [
-  //     { label: 'Danh Sách Template', href: '/hr/templates' },
-  //     { label: 'Tạo Template', href: '/hr/templates/create' },
-  //     { label: 'Gán Template KH', href: '/hr/templates/assign' },
+  //     { label: 'Danh Sách Template', href: '/ta/templates' },
+  //     { label: 'Tạo Template', href: '/ta/templates/create' },
+  //     { label: 'Gán Template KH', href: '/ta/templates/assign' },
   //   ]
   // },
   // {
-  //   label: 'Quản Lý ST Assignment',
-  //   href: '/hr/assignments',
-  //   icon: Users,
-  //   subItems: [
-  //     { label: 'Danh Sách ST Assignment', href: '/hr/assignments' },
-  //   ]
-  // },
-  // {
-  //   label: 'Phỏng Vấn',
-  //   href: '/hr/interviews',
-  //   icon: Calendar,
-  //   subItems: [
-  //     { label: 'Danh sách Phỏng Vấn', href: '/hr/interviews' },
-  //     { label: 'Lịch Phỏng Vấn', href: '/hr/interviews/schedule' },
-  //     { label: 'Lịch Sử Phỏng Vấn', href: '/hr/interviews/history' }
-  //   ]
-  // },
-  // {
-  //   label: 'Báo Cáo',
-  //   href: '/hr/reports',
-  //   icon: Building,
-  //   subItems: [
-  //     { label: 'Tỷ Lệ PV Thành Công', href: '/hr/reports/interview-success' },
-  //     { label: 'Trạng Thái Dev', href: '/hr/reports/developer-status' },
-  //   ]
-  // },
-  // {
-  //   label: 'Cài Đặt',
-  //   href: '/hr/settings',
-  //   icon: Settings
-  // }
 ];

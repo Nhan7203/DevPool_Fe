@@ -133,7 +133,7 @@ export default function CreatePartner() {
     }
 
     if (!formData.contactPerson || formData.contactPerson.trim() === '') {
-      newErrors.contactPerson = 'Người liên hệ là bắt buộc';
+      newErrors.contactPerson = 'Người đại diện là bắt buộc';
     }
 
     if (!formData.email || !validateEmail(formData.email)) {
@@ -179,7 +179,7 @@ export default function CreatePartner() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/30 to-secondary-50/30">
         <div className="max-w-4xl mx-auto px-4 py-8">
@@ -219,7 +219,7 @@ export default function CreatePartner() {
                 )}
               </div>
 
-              {/* Grid: Mã số thuế + Người liên hệ */}
+              {/* Grid: Mã số thuế + Người đại diện */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
@@ -246,7 +246,7 @@ export default function CreatePartner() {
 
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                    Người liên hệ <span className="text-red-500">*</span>
+                    Người đại diện <span className="text-red-500">*</span>
                   </label>
                   <div className="relative group">
                     <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
@@ -257,7 +257,7 @@ export default function CreatePartner() {
                       onChange={handleChange}
                       required
                       className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.contactPerson ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
-                      placeholder="Tên người liên hệ"
+                      placeholder="Tên người đại diện"
                     />
                   </div>
                   {errors.contactPerson && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { partnerService, type Partner, type PartnerPayload } from "../../../services/Partner";
 import { Button } from "../../../components/ui/button";
@@ -177,7 +178,7 @@ export default function PartnerEditPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -191,7 +192,7 @@ export default function PartnerEditPage() {
   if (!partner) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -212,19 +213,17 @@ export default function PartnerEditPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to={`${ROUTES.HR_STAFF.PARTNERS.LIST}/${id}`}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Đối tác", to: ROUTES.HR_STAFF.PARTNERS.LIST },
+              { label: partner ? partner.companyName || "Chi tiết đối tác" : "Chi tiết đối tác", to: `${ROUTES.HR_STAFF.PARTNERS.LIST}/${id}` },
+              { label: "Chỉnh sửa" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -294,17 +293,17 @@ export default function PartnerEditPage() {
                   )}
         </div>
 
-                {/* Người liên hệ */}
+                {/* Người đại diện */}
         <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Người liên hệ
+                    Người đại diện
                   </label>
                   <Input
             name="contactPerson"
                     value={formData.contactPerson}
             onChange={handleChange}
-                    placeholder="Nhập người liên hệ..."
+                    placeholder="Nhập người đại diện..."
                     className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
           />
         </div>

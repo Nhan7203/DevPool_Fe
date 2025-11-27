@@ -358,7 +358,7 @@ export default function HRDashboard() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -371,12 +371,12 @@ export default function HRDashboard() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, HR Staff</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, TA Staff</h1>
           <p className="text-neutral-600 mt-1">Quản lý tuyển dụng và nhân sự hiệu quả</p>
         </div>
 
@@ -412,7 +412,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/job-requests')}
+                  onClick={() => navigate('/ta/job-requests')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -432,7 +432,7 @@ export default function HRDashboard() {
                   {recentJobRequests.map((jr) => (
                     <div
                       key={jr.id}
-                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
+                      onClick={() => navigate(`/ta/job-requests/${jr.id}`)}
                       className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
                     >
                       <div className="flex-1">
@@ -470,7 +470,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/contracts')}
+                  onClick={() => navigate('/ta/contracts')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -490,7 +490,7 @@ export default function HRDashboard() {
                   {recentContracts.map((contract) => (
                     <div
                       key={contract.id}
-                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
+                      onClick={() => navigate(`/ta/contracts/${contract.id}`)}
                       className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
                     >
                       <div className="flex-1">
@@ -555,7 +555,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Ứng Tuyển Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/applications')}
+                  onClick={() => navigate('/ta/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -575,7 +575,7 @@ export default function HRDashboard() {
                   {recentApplications.map((app) => (
                     <div
                       key={app.id}
-                      onClick={() => navigate(`/hr/applications/${app.id}`)}
+                      onClick={() => navigate(`/ta/applications/${app.id}`)}
                       className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
                     >
                       <div className="flex-1">
@@ -609,7 +609,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Hoạt Động Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/applications')}
+                  onClick={() => navigate('/ta/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -669,21 +669,21 @@ export default function HRDashboard() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao Tác Nhanh</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
-                onClick={() => navigate('/hr/developers/create')}
+                onClick={() => navigate('/ta/developers/create')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
               >
                 <UserPlus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 <span>Thêm nhân sự mới</span>
               </button>
               <button
-                onClick={() => navigate('/hr/applications')}
+                onClick={() => navigate('/ta/applications')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-secondary-600 to-secondary-700 text-white px-6 py-3 rounded-xl hover:from-secondary-700 hover:to-secondary-800 transition-all duration-300 shadow-soft hover:shadow-glow-green transform hover:scale-105"
               >
                 <Calendar className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 <span>Xem Ứng Tuyển</span>
               </button>
               <button
-                onClick={() => navigate('/hr/job-requests')}
+                onClick={() => navigate('/ta/job-requests')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-accent-600 to-accent-700 text-white px-6 py-3 rounded-xl hover:from-accent-700 hover:to-accent-800 transition-all duration-300 shadow-soft hover:shadow-glow-purple transform hover:scale-105"
               >
                 <FileText className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />

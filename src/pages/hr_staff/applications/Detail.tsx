@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyService, type Apply } from "../../../services/Apply";
+import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { projectService } from "../../../services/Project";
 import { clientCompanyService } from "../../../services/ClientCompany";
@@ -12,7 +14,6 @@ import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { userService } from "../../../services/User";
 import { applyActivityService, type ApplyActivity, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
-import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { locationService } from "../../../services/location";
 import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
@@ -597,7 +598,7 @@ export default function TalentCVApplicationDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -611,7 +612,7 @@ export default function TalentCVApplicationDetailPage() {
   if (!application) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -619,7 +620,7 @@ export default function TalentCVApplicationDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy hồ sơ ứng tuyển</p>
             <Link
-              to="/hr/applications"
+              to="/ta/applications"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách
@@ -695,25 +696,27 @@ export default function TalentCVApplicationDetailPage() {
     // Chuyển đến trang tạo hợp đồng với query params
     // talentApplicationId: để pre-fill vào form
     // applicationId: để quay lại trang detail sau khi tạo
-    navigate(`/hr/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
+    navigate(`/ta/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
   };
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to="/hr/applications"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              ...(jobRequest ? [
+                { label: "Yêu cầu tuyển dụng", to: "/ta/job-requests" },
+                { label: jobRequest.title || "Chi tiết yêu cầu", to: `/ta/job-requests/${jobRequest.id}` }
+              ] : [
+                { label: "Hồ sơ ứng tuyển", to: "/ta/applications" }
+              ]),
+              { label: application ? `Hồ sơ #${application.id}` : "Chi tiết hồ sơ" }
+            ]}
+          />
 
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
@@ -789,7 +792,7 @@ export default function TalentCVApplicationDetailPage() {
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoRow label="Mã hồ sơ" value={`#${application.id}`} icon={<FileText className="w-4 h-4" />} />
-                <InfoRow label="HR phụ trách" value={submitterName || application.submittedBy} icon={<UserIcon className="w-4 h-4" />} />
+                <InfoRow label="TA phụ trách" value={submitterName || application.submittedBy} icon={<UserIcon className="w-4 h-4" />} />
                 <InfoRow label="Thời gian nộp hồ sơ" value={new Date(application.createdAt).toLocaleString('vi-VN')} icon={<Calendar className="w-4 h-4" />} />
               </div>
             </div>
@@ -885,7 +888,7 @@ export default function TalentCVApplicationDetailPage() {
                   {canCreateNextActivity && (
                     <div className="flex gap-3">
                       <Button
-                        onClick={() => navigate(`/hr/apply-activities/create?applyId=${application.id}`)}
+                        onClick={() => navigate(`/ta/apply-activities/create?applyId=${application.id}`)}
                         disabled={!statusAllowsActivityCreation}
                         className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"}`}
                       >
@@ -916,7 +919,7 @@ export default function TalentCVApplicationDetailPage() {
                         : null;
 
                       return (
-                        <Link key={activity.id} to={`/hr/apply-activities/${activity.id}`} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
+                        <Link key={activity.id} to={`/ta/apply-activities/${activity.id}`} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">{index + 1}</span>

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon, Edit, Trash2, Send, RotateCcw, FileCheck, Clock, StickyNote } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
@@ -159,7 +160,7 @@ export default function ContractDetailPage() {
                 user?.name ||
                 decoded?.unique_name ||
                 decoded?.email ||
-                "Nhân viên HR";
+                "Nhân viên TA";
 
             // Chuyển status từ Draft sang Pending sử dụng API changeStatus
             const result = await partnerContractService.changeStatus(Number(id), {
@@ -241,7 +242,7 @@ export default function ContractDetailPage() {
             setIsDeleting(true);
             await partnerContractService.delete(Number(id));
             alert("✅ Xóa hợp đồng thành công!");
-            navigate("/hr/contracts");
+            navigate("/ta/contracts");
         } catch (err: any) {
             console.error("❌ Lỗi khi xóa hợp đồng:", err);
             alert(err?.message || "Không thể xóa hợp đồng. Vui lòng thử lại.");
@@ -268,7 +269,7 @@ export default function ContractDetailPage() {
                 user?.name ||
                 decoded?.unique_name ||
                 decoded?.email ||
-                "Nhân viên HR";
+                "Nhân viên TA";
 
             const result = await partnerContractService.changeStatus(Number(id), {
                 newStatus: "Draft",
@@ -295,7 +296,7 @@ export default function ContractDetailPage() {
     if (loading) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -309,7 +310,7 @@ export default function ContractDetailPage() {
     if (error || !contract) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -319,7 +320,7 @@ export default function ContractDetailPage() {
                             {error || "Không tìm thấy hợp đồng"}
                         </p>
                         <Link 
-                            to="/hr/contracts"
+                            to="/ta/contracts"
                             className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
                         >
                             ← Quay lại danh sách
@@ -334,20 +335,17 @@ export default function ContractDetailPage() {
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
 
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
-                    <div className="flex items-center gap-4 mb-6">
-                        <Link 
-                            to="/hr/contracts"
-                            className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="font-medium">Quay lại danh sách</span>
-                        </Link>
-                    </div>
+                    <Breadcrumb
+                        items={[
+                            { label: "Hợp đồng", to: "/ta/contracts" },
+                            { label: contract ? `Hợp đồng #${contract.contractNumber}` : "Chi tiết hợp đồng" }
+                        ]}
+                    />
 
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -370,7 +368,7 @@ export default function ContractDetailPage() {
                         {contract.status?.toLowerCase() === 'draft' && (
                             <div className="flex gap-3">
                                 <button
-                                    onClick={() => navigate(`/hr/contracts/edit/${id}`)}
+                                    onClick={() => navigate(`/ta/contracts/edit/${id}`)}
                                     className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                                 >
                                     <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
@@ -468,7 +466,7 @@ export default function ContractDetailPage() {
                                         label="Đơn ứng tuyển" 
                                         value={
                                             <Link 
-                                                to={`/hr/applications/${contract.talentApplicationId}`}
+                                                to={`/ta/applications/${contract.talentApplicationId}`}
                                                 className="text-primary-600 hover:text-primary-800 underline"
                                             >
                                                 Xem đơn #{contract.talentApplicationId}

@@ -113,7 +113,7 @@ export default function HRStaffProfilePage() {
     if (loading) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -126,7 +126,7 @@ export default function HRStaffProfilePage() {
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
             
             <div className="flex-1 p-8">
                 <div className="max-w-4xl mx-auto">
@@ -215,7 +215,7 @@ export default function HRStaffProfilePage() {
                                     </label>
                                     <input
                                         type="text"
-                                        value={authUser?.role || 'Staff HR'}
+                                        value={authUser?.role || 'Staff TA'}
                                         disabled
                                         className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-lg text-neutral-500 cursor-not-allowed"
                                     />

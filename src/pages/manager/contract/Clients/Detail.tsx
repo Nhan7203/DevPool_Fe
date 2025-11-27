@@ -630,7 +630,7 @@ export default function ClientDetailPage() {
                     label="Đơn ứng tuyển"
                     value={
                       <Link
-                        to={`/hr/applications/${contract.talentApplicationId}`}
+                        to={`/ta/applications/${contract.talentApplicationId}`}
                         className="text-primary-600 hover:text-primary-800 underline"
                       >
                         Xem đơn #{contract.talentApplicationId}

@@ -127,9 +127,9 @@ export default function JobRequestCreatePage() {
 
   const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
     try {
-      const hrUsersResponse = await userService.getAll({ role: "HR", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+      const hrUsersResponse = await userService.getAll({ role: "TA", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
       const hrUserIds = (hrUsersResponse.items || [])
-        .filter((u) => (u.roles || []).some((role) => role === "HR" || role === "Staff HR"))
+        .filter((u) => (u.roles || []).some((role) => role === "TA" || role === "Staff TA"))
         .map((u) => u.id)
         .filter(Boolean);
 
@@ -149,7 +149,7 @@ export default function JobRequestCreatePage() {
         userIds: hrUserIds,
         entityType: "JobRequest",
         entityId: jobRequestId ?? undefined,
-        actionUrl: jobRequestId ? `/hr/job-requests/${jobRequestId}` : undefined,
+        actionUrl: jobRequestId ? `/ta/job-requests/${jobRequestId}` : undefined,
         metaData: {
           jobTitle,
           createdBy: creatorName?.toString() ?? "Sales",
@@ -157,7 +157,7 @@ export default function JobRequestCreatePage() {
       });
       console.log("✅ Notification created:", notification);
     } catch (notifyError) {
-      console.error("Không thể gửi thông báo tới HR:", notifyError);
+      console.error("Không thể gửi thông báo tới TA:", notifyError);
     }
   }, [user]);
 

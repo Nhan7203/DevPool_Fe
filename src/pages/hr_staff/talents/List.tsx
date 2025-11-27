@@ -6,7 +6,6 @@ import {
   Users,
   Briefcase,
   MapPin,
-  Globe,
   Eye,
   Plus,
   ChevronLeft,
@@ -23,15 +22,6 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { Button } from "../../../components/ui/button";
 import { talentService, type Talent, type CreateDeveloperAccountModel } from "../../../services/Talent";
 import { WorkingMode } from "../../../types/WorkingMode";
-
-// Mapping WorkingMode values to Vietnamese names
-const workingModeLabels: Record<number, string> = {
-  [WorkingMode.None]: "Không xác định",
-  [WorkingMode.Onsite]: "Tại văn phòng",
-  [WorkingMode.Remote]: "Từ xa",
-  [WorkingMode.Hybrid]: "Kết hợp",
-  [WorkingMode.Flexible]: "Linh hoạt",
-};
 
 const statusLabels: Record<string, { label: string; badgeClass: string }> = {
   Available: {
@@ -56,12 +46,14 @@ const statusLabels: Record<string, { label: string; badgeClass: string }> = {
   },
 };
 import { locationService, type Location } from "../../../services/location";
+import { partnerService, type Partner } from "../../../services/Partner";
 
 export default function ListDev() {
   const [loading, setLoading] = useState(true);
   const [talents, setTalents] = useState<Talent[]>([]);
   const [filteredTalents, setFilteredTalents] = useState<Talent[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [isCreatingAccount, setIsCreatingAccount] = useState<number | null>(null);
 
   // Bộ lọc
@@ -124,14 +116,15 @@ export default function ListDev() {
     setStatsStartIndex((prev) => Math.min(prev, maxIndex));
   }, [stats.length, statsPageSize]);
 
-  // Lấy dữ liệu talent + location
+  // Lấy dữ liệu talent + location + partners
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [talentData, locationData] = await Promise.all([
+        const [talentData, locationData, partnerData] = await Promise.all([
           talentService.getAll(),
           locationService.getAll({ excludeDeleted: true }),
+          partnerService.getAll(),
         ]);
         const sortedTalents = [...talentData].sort((a, b) => {
           const createdAtA = (a as { createdAt?: string }).createdAt;
@@ -150,6 +143,7 @@ export default function ListDev() {
         setTalents(sortedTalents);
         setFilteredTalents(sortedTalents);
         setLocations(locationData);
+        setPartners(partnerData);
       } catch (err) {
         console.error("❌ Không thể tải dữ liệu:", err);
       } finally {
@@ -291,7 +285,7 @@ export default function ListDev() {
   if (loading)
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -303,7 +297,7 @@ export default function ListDev() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
       <div className="flex-1 p-8">
         {/* Tiêu đề */}
         <div className="mb-8 animate-slide-up">
@@ -316,7 +310,7 @@ export default function ListDev() {
                 Quản lý và theo dõi developer trong hệ thống DevPool
               </p>
             </div>
-            <Link to="/hr/developers/create">
+            <Link to="/ta/developers/create">
               <Button className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105">
                 <Plus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
                 Tạo nhân sự mới
@@ -547,6 +541,9 @@ export default function ListDev() {
                     #
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
+                    đối tác
+                  </th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
                     Họ và tên
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
@@ -554,9 +551,6 @@ export default function ListDev() {
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
                     Khu vực
-                  </th>
-                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
-                    Hình thức
                   </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
                     Trạng thái
@@ -587,12 +581,20 @@ export default function ListDev() {
                     const locationName =
                       locations.find((loc) => loc.id === t.locationId)?.name ||
                       "—";
+                    const partnerName =
+                      partners.find((p) => p.id === t.currentPartnerId)?.companyName ||
+                      "—";
                     return (
                       <tr
                         key={t.id}
                         className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                       >
                         <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-neutral-700">
+                            {partnerName}
+                          </div>
+                        </td>
                         <td className="py-4 px-6">
                           <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                             {t.fullName}
@@ -608,12 +610,6 @@ export default function ListDev() {
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-neutral-400" />
                             <span className="text-sm text-neutral-700">{locationName}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <Globe className="w-4 h-4 text-neutral-400" />
-                            <span className="text-sm text-neutral-700">{workingModeLabels[t.workingMode] || "Không xác định"}</span>
                           </div>
                         </td>
                         <td className="py-4 px-6 text-center">
@@ -647,7 +643,7 @@ export default function ListDev() {
                         <td className="py-4 px-6 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <Link
-                              to={`/hr/developers/${t.id}`}
+                              to={`/ta/developers/${t.id}`}
                               className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                             >
                               <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

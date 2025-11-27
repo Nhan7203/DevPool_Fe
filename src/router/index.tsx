@@ -106,7 +106,7 @@ const SkillGroupEditPage = React.lazy(() => import('../pages/admin/Categories/sk
 const SkillGroupListPage = React.lazy(() => import('../pages/admin/Categories/skill-groups/List'));
 
 // ========================================
-// HR STAFF PAGES - Lazy Loading
+// TA STAFF PAGES - Lazy Loading
 // ========================================
 // Dashboard
 const HRDashboard = React.lazy(() => import('../pages/hr_staff/dashboard/Dashboard'));
@@ -323,10 +323,10 @@ const AppRouter: React.FC = () => {
           </Route>
 
           {/* ======================================== */}
-          {/* HR STAFF ROUTES (với HrLayout) */}
+          {/* TA STAFF ROUTES (với HrLayout) */}
           {/* ======================================== */}
           <Route element={<HrLayout />}>
-            <Route element={<ProtectedRoute requiredRole="Staff HR"><Outlet /></ProtectedRoute>}>
+            <Route element={<ProtectedRoute requiredRole="Staff TA"><Outlet /></ProtectedRoute>}>
               <Route path={ROUTES.HR_STAFF.DASHBOARD} element={<HRDashboard />} />
               <Route path={ROUTES.HR_STAFF.PROFILE} element={<HRStaffProfile />} />
               
@@ -384,7 +384,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.HR_STAFF.CONTRACTS.EDIT} element={<EditPartnerContractPage />} />
 
               {/* Payment Periods */}
-              <Route path="/hr/payment-periods/partners" element={<HRPartnerPeriods />} />
+              <Route path="/ta/payment-periods/partners" element={<HRPartnerPeriods />} />
               
               {/* Reports */}
               <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />

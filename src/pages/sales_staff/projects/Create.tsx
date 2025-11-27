@@ -16,6 +16,7 @@ import {
   Layers
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectPayload } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -207,15 +208,12 @@ export default function ProjectCreatePage() {
       <div className="flex-1 p-8">
           {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to="/sales/projects"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Dự án", to: "/sales/projects" },
+              { label: "Tạo dự án mới" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">

@@ -227,7 +227,7 @@ export default function DevDetailPage() {
     }
 
     const confirmReject = window.confirm(
-      `⚠️ Bạn có chắc muốn từ chối hợp đồng "${contract.contractNumber}"?\n\nLý do: ${trimmedReason}\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã từ chối" và HR sẽ nhận được thông báo.`
+      `⚠️ Bạn có chắc muốn từ chối hợp đồng "${contract.contractNumber}"?\n\nLý do: ${trimmedReason}\n\nHành động này sẽ chuyển hợp đồng sang trạng thái "Đã từ chối" và TA sẽ nhận được thông báo.`
     );
     if (!confirmReject) return;
 
@@ -257,7 +257,7 @@ export default function DevDetailPage() {
 
       try {
         const hrResponse = await userService.getAll({
-          role: "HR",
+          role: "TA",
           excludeDeleted: true,
           pageNumber: 1,
           pageSize: 100,
@@ -277,7 +277,7 @@ export default function DevDetailPage() {
             userIds: hrIds,
             entityType: "PartnerContract",
             entityId: contract.id,
-            actionUrl: `/hr/contracts/${contract.id}`,
+            actionUrl: `/ta/contracts/${contract.id}`,
             metaData: {
               contractNumber: contract.contractNumber,
               reason: trimmedReason,
@@ -286,7 +286,7 @@ export default function DevDetailPage() {
           });
         }
       } catch (notifyError) {
-        console.error("⚠️ Không thể gửi thông báo tới HR:", notifyError);
+        console.error("⚠️ Không thể gửi thông báo tới TA:", notifyError);
       }
 
       setTimeout(() => setUpdateSuccess(false), 3000);
@@ -573,7 +573,7 @@ export default function DevDetailPage() {
                     label="Đơn ứng tuyển"
                     value={
                       <Link
-                        to={`/hr/applications/${contract.talentApplicationId}`}
+                        to={`/ta/applications/${contract.talentApplicationId}`}
                         className="text-primary-600 hover:text-primary-800 underline"
                       >
                         Xem đơn #{contract.talentApplicationId}

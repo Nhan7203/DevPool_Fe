@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, UserCheck, Building2, DollarSign, Save, AlertCircle, CheckCircle, Upload, Search, FileCheck, Clock, StickyNote } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerContractService, type PartnerContractPayload, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
@@ -312,9 +313,9 @@ export default function CreatePartnerContractPage() {
             const applicationId = searchParams.get('applicationId');
             setTimeout(() => {
                 if (applicationId) {
-                    navigate(`/hr/applications/${applicationId}`);
+                    navigate(`/ta/applications/${applicationId}`);
                 } else {
-                    navigate("/hr/contracts");
+                    navigate("/ta/contracts");
                 }
             }, 1500);
         } catch (err: unknown) {
@@ -328,20 +329,17 @@ export default function CreatePartnerContractPage() {
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
 
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
-                    <div className="flex items-center gap-4 mb-6">
-                        <Link
-                            to="/hr/contracts"
-                            className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                            <span className="font-medium">Quay lại danh sách</span>
-                        </Link>
-                    </div>
+                    <Breadcrumb
+                        items={[
+                            { label: "Hợp đồng", to: "/ta/contracts" },
+                            { label: "Tạo hợp đồng mới" }
+                        ]}
+                    />
 
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">Tạo Hợp Đồng Nhân Sự Mới</h1>
@@ -746,7 +744,7 @@ export default function CreatePartnerContractPage() {
                     {/* Submit Button */}
                     <div className="flex items-center justify-end gap-4">
                         <Link
-                            to="/hr/contracts"
+                            to="/ta/contracts"
                             className="px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 font-medium transition-all duration-300"
                         >
                             Hủy

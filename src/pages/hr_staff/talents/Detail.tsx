@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentService, type Talent } from "../../../services/Talent";
 import { locationService } from "../../../services/location";
@@ -100,6 +101,7 @@ export default function TalentDetailPage() {
     });
   };
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences">("projects");
 
   // Chỉ khôi phục kết quả phân tích CV sau khi đã load danh sách CVs và xác nhận CV ID tồn tại
   useEffect(() => {
@@ -148,14 +150,7 @@ export default function TalentDetailPage() {
 
   // Collapse/Expand states for each section
   const [isCVsExpanded, setIsCVsExpanded] = useState(true);
-  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
-  const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
-  const [isExperiencesExpanded, setIsExperiencesExpanded] = useState(true);
-  const [isJobRoleLevelsExpanded, setIsJobRoleLevelsExpanded] = useState(true);
-  const [isCertificatesExpanded, setIsCertificatesExpanded] = useState(true);
-  const [isAvailableTimesExpanded, setIsAvailableTimesExpanded] = useState(true);
   // State để quản lý việc collapse/expand CV không hoạt động theo từng jobRoleLevelName
-  // Mặc định tất cả các nhóm CV không hoạt động đều được thu gọn
   const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
 
   const talentName = talent?.fullName ?? "";
@@ -235,13 +230,12 @@ export default function TalentDetailPage() {
         // Thu gọn tất cả các nhóm CV không hoạt động mặc định
         const inactiveGroups = new Set<string>();
         sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
-          if (!cv.isActive && cv.jobRoleLevelName) {
-            inactiveGroups.add(cv.jobRoleLevelName);
-          }
-        });
-        setCollapsedInactiveCVGroups(inactiveGroups);
+        if (!cv.isActive && cv.jobRoleLevelName) {
+          inactiveGroups.add(cv.jobRoleLevelName);
+        }
+      });
 
-        // Fetch skill names
+      // Fetch skill names
         const allSkills = await skillService.getAll();
         setLookupSkills(allSkills);
         const skillsWithNames = skills.map((skill: TalentSkill) => {
@@ -332,30 +326,6 @@ export default function TalentDetailPage() {
     setIsCVsExpanded(talentCVs.length > 0);
   }, [talentCVs.length]);
 
-  useEffect(() => {
-    setIsProjectsExpanded(talentProjects.length > 0);
-  }, [talentProjects.length]);
-
-  useEffect(() => {
-    setIsSkillsExpanded(talentSkills.length > 0);
-  }, [talentSkills.length]);
-
-  useEffect(() => {
-    setIsExperiencesExpanded(workExperiences.length > 0);
-  }, [workExperiences.length]);
-
-  useEffect(() => {
-    setIsJobRoleLevelsExpanded(jobRoleLevels.length > 0);
-  }, [jobRoleLevels.length]);
-
-  useEffect(() => {
-    setIsCertificatesExpanded(certificates.length > 0);
-  }, [certificates.length]);
-
-  useEffect(() => {
-    setIsAvailableTimesExpanded(availableTimes.length > 0);
-  }, [availableTimes.length]);
-
   // 🗑️ Xóa nhân sự
   const handleDelete = async () => {
     if (!id) return;
@@ -365,7 +335,7 @@ export default function TalentDetailPage() {
     try {
       await talentService.deleteById(Number(id));
       alert("✅ Đã xóa nhân sự thành công!");
-      navigate("/hr/developers");
+      navigate("/ta/developers");
     } catch (err) {
       console.error("❌ Lỗi khi xóa:", err);
       alert("Không thể xóa nhân sự!");
@@ -374,7 +344,7 @@ export default function TalentDetailPage() {
 
   // ✏️ Chuyển sang trang sửa
   const handleEdit = () => {
-    navigate(`/hr/developers/edit/${id}`);
+    navigate(`/ta/developers/edit/${id}`);
   };
 
   // 🗑️ Delete handlers for each section
@@ -440,7 +410,6 @@ export default function TalentDetailPage() {
           inactiveGroups.add(cv.jobRoleLevelName);
         }
       });
-      setCollapsedInactiveCVGroups(inactiveGroups);
     } catch (err) {
       console.error("❌ Lỗi khi xóa CV:", err);
       alert("Không thể xóa CV!");
@@ -591,7 +560,7 @@ export default function TalentDetailPage() {
       try {
         const token = localStorage.getItem("accessToken");
         const decoded = token ? decodeJWT(token) : null;
-        const requesterName = decoded?.unique_name || decoded?.email || decoded?.name || "HR Staff";
+        const requesterName = decoded?.unique_name || decoded?.email || decoded?.name || "TA Staff";
         const messageLines = displayItems.map((item, idx) => `${idx + 1}. ${item}`).join("\n");
 
         await notificationService.create({
@@ -1168,7 +1137,7 @@ export default function TalentDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -1182,7 +1151,7 @@ export default function TalentDetailPage() {
   if (!talent) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1190,7 +1159,7 @@ export default function TalentDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy nhân sự</p>
             <Link
-              to="/hr/developers"
+              to="/ta/developers"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách
@@ -1267,22 +1236,17 @@ export default function TalentDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to={returnTo || "/hr/developers"}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">
-                {returnTo ? "Quay lại màn Matching" : "Quay lại danh sách"}
-              </span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Nhân sự", to: returnTo || "/ta/developers" },
+              { label: talent?.fullName || "Chi tiết nhân sự" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -1410,7 +1374,252 @@ export default function TalentDetailPage() {
           </div>
         </div>
 
-        {/* CV của nhân sự */}
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="sticky top-0 z-50 border-b border-neutral-200 bg-white shadow-sm rounded-t-2xl">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <style>{`
+                .scrollbar-hide::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              <button
+                type="button"
+                onClick={() => setActiveTab("projects")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "projects"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Briefcase className="w-4 h-4" />
+                Dự án
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("cvs")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "cvs"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                CV
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("jobRoleLevels")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "jobRoleLevels"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Target className="w-4 h-4" />
+                Vị trí & Lương
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("skills")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "skills"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Star className="w-4 h-4" />
+                Kỹ năng
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("availableTimes")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "availableTimes"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                Lịch sẵn sàng
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("certificates")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "certificates"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Award className="w-4 h-4" />
+                Chứng chỉ
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("experiences")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "experiences"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Workflow className="w-4 h-4" />
+                Kinh nghiệm
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {/* Tab: Dự án */}
+            {activeTab === "projects" && (
+              <div className="space-y-6">
+                {analysisResult && (analysisResult.projects.newEntries.length > 0 || analysisResult.projects.potentialDuplicates.length > 0) && (
+                  <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50/80 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Gợi ý từ CV mới</h3>
+                      <span className="text-xs text-purple-700">{analysisResult.projects.newEntries.length} dự án mới · {analysisResult.projects.potentialDuplicates.length} dự án có thể trùng</span>
+                    </div>
+                    {analysisResult.projects.newEntries.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-purple-700 font-medium">Đề xuất thêm dự án:</p>
+                        {analysisResult.projects.newEntries.map((project, index) => (
+                          <div key={`suggested-project-${index}`} className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-purple-900 shadow-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{project.projectName}</span>
+                              {project.position && <span className="text-xs text-purple-700">Vai trò: {project.position}</span>}
+                            </div>
+                            {project.technologies && (
+                              <p className="mt-1 text-xs text-purple-600">Công nghệ: {project.technologies}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {analysisResult.projects.potentialDuplicates.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                        <p className="font-medium mb-1">Kiểm tra trùng lặp:</p>
+                        <ul className="space-y-1">
+                          {analysisResult.projects.potentialDuplicates.map((dup, index) => (
+                            <li key={`dup-project-${index}`}>
+                              - {dup.fromCV.projectName} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Danh sách dự án</h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleNavigateToCreate(`/ta/talent-projects/create?talentId=${id}`)}
+                      className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                      title="Tạo dự án"
+                    >
+                      <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                    </Button>
+                    {selectedProjects.length > 0 && (
+                      <Button
+                        onClick={handleDeleteProjects}
+                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                      >
+                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                        Xóa dự án ({selectedProjects.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {talentProjects.length > 0 ? (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-neutral-50 border-b border-neutral-200">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                              <input
+                                type="checkbox"
+                                checked={selectedProjects.length === talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).length && talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const currentPageItems = talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).map(project => project.id);
+                                    setSelectedProjects([...new Set([...selectedProjects, ...currentPageItems])]);
+                                  } else {
+                                    const currentPageItems = talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).map(project => project.id);
+                                    setSelectedProjects(selectedProjects.filter(id => !currentPageItems.includes(id)));
+                                  }
+                                }}
+                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                              />
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tên dự án</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Công nghệ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-neutral-200">
+                          {talentProjects
+                            .slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage)
+                            .map((project) => (
+                              <tr 
+                                key={project.id} 
+                                className="hover:bg-primary-50 transition-colors duration-200 cursor-pointer"
+                                onClick={() => navigate(`/ta/talent-projects/edit/${project.id}`)}
+                              >
+                                <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProjects.includes(project.id)}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      if (e.target.checked) {
+                                        setSelectedProjects([...selectedProjects, project.id]);
+                                      } else {
+                                        setSelectedProjects(selectedProjects.filter(id => id !== project.id));
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-primary-800">{project.projectName}</div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-primary-700">{project.position}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="text-sm text-primary-600">{project.technologies}</div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <SectionPagination
+                      currentPage={pageProjects}
+                      totalItems={talentProjects.length}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setPageProjects}
+                    />
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Briefcase className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
+                    <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa tham gia dự án</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: CV */}
+            {activeTab === "cvs" && (
+              <div className="space-y-6">
+                {/* CV của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -1428,7 +1637,7 @@ export default function TalentDetailPage() {
                 <h2 className="text-xl font-semibold text-gray-900">CV của nhân sự</h2>
               </div>
               <div className="flex gap-2">
-                <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
+                <Link to={`/ta/talent-cvs/create?talentId=${id}`}>
                   <Button
                     className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
                     title="Tải lên CV"
@@ -1452,155 +1661,201 @@ export default function TalentDetailPage() {
             <div className="p-6">
               {talentCVs.length > 0 ? (
                 <>
-                  <div className="space-y-4">
-                    {(() => {
-                      // Nhóm CV theo jobRoleLevelName
-                      const groupedCVs = new Map<string, (TalentCV & { jobRoleLevelName?: string })[]>();
-                      talentCVs.forEach((cv) => {
-                        const key = cv.jobRoleLevelName || "Chưa xác định";
-                        if (!groupedCVs.has(key)) {
-                          groupedCVs.set(key, []);
-                        }
-                        groupedCVs.get(key)!.push(cv);
-                      });
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-50 border-b border-neutral-200">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                            <input
+                              type="checkbox"
+                              checked={selectedCVs.length === talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).length && talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const currentPageItems = talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).map(cv => cv.id);
+                                  setSelectedCVs([...new Set([...selectedCVs, ...currentPageItems])]);
+                                } else {
+                                  const currentPageItems = talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).map(cv => cv.id);
+                                  setSelectedCVs(selectedCVs.filter(id => !currentPageItems.includes(id)));
+                                }
+                              }}
+                              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Phiên bản</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trạng thái</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Hành động</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-neutral-200">
+                        {(() => {
+                          // Nhóm CV theo jobRoleLevelName
+                          const groupedCVs = new Map<string, (TalentCV & { jobRoleLevelName?: string })[]>();
+                          talentCVs.forEach((cv) => {
+                            const key = cv.jobRoleLevelName || "Chưa xác định";
+                            if (!groupedCVs.has(key)) {
+                              groupedCVs.set(key, []);
+                            }
+                            groupedCVs.get(key)!.push(cv);
+                          });
 
-                      // Lấy danh sách các nhóm đã sắp xếp
-                      const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                          // Lấy danh sách các nhóm đã sắp xếp
+                          const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-                      return sortedGroups.map(([jobRoleLevelName, cvs]) => {
-                        // Tách CV active và inactive
-                        const activeCVs = cvs.filter(cv => cv.isActive);
-                        const inactiveCVs = cvs.filter(cv => !cv.isActive);
-                        const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
+                          // Lấy CV cho trang hiện tại
+                          const startIndex = (pageCVs - 1) * itemsPerPage;
+                          const endIndex = startIndex + itemsPerPage;
+                          let currentIndex = 0;
+                          const rows: React.ReactNode[] = [];
 
-                        return (
-                          <div key={jobRoleLevelName} className="space-y-2">
-                            {/* CV đang hoạt động */}
-                            {activeCVs.map((cv) => {
-                              const isLoading = analysisLoadingId === cv.id;
-                              const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
-                              const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
-                              const canAnalyze = !hasOtherAnalysis;
-                              const analysisControls = isCurrentAnalysis
-                                ? (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCancelAnalysis();
-                                    }}
-                                    className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
-                                  >
-                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    Hủy phân tích
-                                  </Button>
-                                )
-                                : (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAnalyzeCVFromUrl(cv);
-                                    }}
-                                    disabled={isLoading || !canAnalyze}
-                                    className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                      isLoading || !canAnalyze
-                                        ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                                    }`}
-                                    title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
-                                  >
-                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    {isLoading ? "Đang phân tích..." : "Phân tích CV"}
-                                  </Button>
-                                );
+                          sortedGroups.forEach(([jobRoleLevelName, cvs]) => {
+                            // Sắp xếp CV: active trước (version giảm dần), inactive sau (version giảm dần)
+                            const sortedCVs = [...cvs].sort((a, b) => {
+                              if (a.isActive !== b.isActive) {
+                                return a.isActive ? -1 : 1; // Active trước
+                              }
+                              return b.version - a.version; // Version giảm dần
+                            });
 
-                              return (
-                                <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedCVs.includes(cv.id)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) => {
+                            const activeCVs = sortedCVs.filter(cv => cv.isActive);
+                            const inactiveCVs = sortedCVs.filter(cv => !cv.isActive);
+                            const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
+
+                            // Hiển thị CV active
+                            activeCVs.forEach((cv, index) => {
+                              if (currentIndex >= startIndex && currentIndex < endIndex) {
+                                const isLoading = analysisLoadingId === cv.id;
+                                const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
+                                const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
+                                const canAnalyze = !hasOtherAnalysis;
+                                const analysisControls = isCurrentAnalysis
+                                  ? (
+                                    <Button
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        if (e.target.checked) {
-                                          setSelectedCVs([...selectedCVs, cv.id]);
-                                        } else {
-                                          setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
-                                        }
+                                        handleCancelAnalysis();
                                       }}
-                                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                                    />
-                                    <div
-                                      className="flex items-center gap-3 flex-1 cursor-pointer"
-                                      onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
+                                      className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white text-xs"
                                     >
-                                      <FileText className="w-5 h-5 text-primary-600" />
-                                      <div>
-                                        <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
-                                          {cv.jobRoleLevelName ? `${cv.jobRoleLevelName} v${cv.version}` : `v${cv.version}`}
-                                        </p>
+                                      <Workflow className="w-3 h-3" />
+                                      Hủy
+                                    </Button>
+                                  )
+                                  : (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAnalyzeCVFromUrl(cv);
+                                      }}
+                                      disabled={isLoading || !canAnalyze}
+                                      className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 text-xs ${
+                                        isLoading || !canAnalyze
+                                          ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                          : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                                      }`}
+                                      title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
+                                    >
+                                      <Workflow className="w-3 h-3" />
+                                      {isLoading ? "Đang phân tích..." : "Phân tích"}
+                                    </Button>
+                                  );
+
+                                // Thêm nút collapse/expand vào phiên bản mới nhất (đầu tiên) nếu có phiên bản cũ
+                                const isNewestVersion = index === 0 && inactiveCVs.length > 0;
+                                const collapseButton = isNewestVersion ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCollapsedInactiveCVGroups(prev => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(jobRoleLevelName)) {
+                                          newSet.delete(jobRoleLevelName);
+                                        } else {
+                                          newSet.add(jobRoleLevelName);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors duration-200"
+                                    title={isCollapsed ? `Hiển thị ${inactiveCVs.length} phiên bản cũ` : `Ẩn ${inactiveCVs.length} phiên bản cũ`}
+                                  >
+                                    {isCollapsed ? (
+                                      <ChevronDown className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronUp className="w-4 h-4" />
+                                    )}
+                                    <span className="text-xs">({inactiveCVs.length})</span>
+                                  </button>
+                                ) : null;
+
+                                rows.push(
+                                  <tr 
+                                    key={cv.id} 
+                                    className="hover:bg-accent-50 transition-colors duration-200 cursor-pointer"
+                                    onClick={() => navigate(`/ta/talent-cvs/edit/${cv.id}`)}
+                                  >
+                                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCVs.includes(cv.id)}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          if (e.target.checked) {
+                                            setSelectedCVs([...selectedCVs, cv.id]);
+                                          } else {
+                                            setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
+                                          }
+                                        }}
+                                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="text-sm font-medium text-accent-800">{cv.jobRoleLevelName || "Chưa xác định"}</div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="text-sm text-accent-700">v{cv.version}</div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                        Đang hoạt động
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex items-center gap-2">
+                                        <a
+                                          href={cv.cvFileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                          Xem PDF
+                                        </a>
+                                        {analysisControls}
+                                        {collapseButton}
                                       </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
-                                    <a
-                                      href={cv.cvFileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
-                                    >
-                                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                      <span className="text-sm font-medium">Xem PDF</span>
-                                    </a>
-                                    {analysisControls}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                              currentIndex++;
+                            });
 
-                            {/* CV không hoạt động - Thu gọn */}
-                            {inactiveCVs.length > 0 && (
-                              <div className="mt-4 pt-4 border-t border-neutral-200">
-                                {/* Nút toggle để expand/collapse */}
-                                <button
-                                  onClick={() => {
-                                    setCollapsedInactiveCVGroups(prev => {
-                                      const newSet = new Set(prev);
-                                      if (newSet.has(jobRoleLevelName)) {
-                                        newSet.delete(jobRoleLevelName);
-                                      } else {
-                                        newSet.add(jobRoleLevelName);
-                                      }
-                                      return newSet;
-                                    });
-                                  }}
-                                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors duration-200 border border-neutral-200 bg-neutral-50/50"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-neutral-500" />
-                                    <span>
-                                      {inactiveCVs.length} phiên bản cũ ({jobRoleLevelName})
-                                    </span>
-                                  </span>
-                                  {isCollapsed ? (
-                                    <ChevronDown className="w-4 h-4 text-neutral-500" />
-                                  ) : (
-                                    <ChevronUp className="w-4 h-4 text-neutral-500" />
-                                  )}
-                                </button>
-
-                                {/* Danh sách CV không hoạt động */}
-                                {!isCollapsed && (
-                                  <div className="mt-3 space-y-2 pl-2">
-                                    {inactiveCVs.map((cv) => (
-                                      <div key={cv.id} className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-neutral-200 hover:border-neutral-300 hover:shadow-sm transition-all duration-200">
-                                        <div className="flex items-center gap-3 flex-1">
+                            // Hiển thị các phiên bản cũ nếu không bị collapse
+                            if (inactiveCVs.length > 0) {
+                              if (!isCollapsed) {
+                                inactiveCVs.forEach((cv) => {
+                                  if (currentIndex >= startIndex && currentIndex < endIndex) {
+                                    rows.push(
+                                      <tr 
+                                        key={cv.id} 
+                                        className="hover:bg-neutral-50 transition-colors duration-200 cursor-pointer bg-neutral-50/50"
+                                        onClick={() => navigate(`/ta/talent-cvs/edit/${cv.id}`)}
+                                      >
+                                        <td className="px-4 py-3 whitespace-nowrap pl-8" onClick={(e) => e.stopPropagation()}>
                                           <input
                                             type="checkbox"
                                             checked={selectedCVs.includes(cv.id)}
-                                            onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               if (e.target.checked) {
@@ -1611,39 +1866,48 @@ export default function TalentDetailPage() {
                                             }}
                                             className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                                           />
-                                          <div
-                                            className="flex items-center gap-2 flex-1 cursor-pointer"
-                                            onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
-                                          >
-                                            <FileText className="w-4 h-4 text-neutral-500" />
-                                            <p className="text-sm font-medium text-neutral-700 hover:text-primary-700 transition-colors duration-200">
-                                              Version {cv.version}
-                                            </p>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <div className="text-sm font-medium text-neutral-600">{cv.jobRoleLevelName || "Chưa xác định"}</div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <div className="text-sm text-neutral-500">v{cv.version}</div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                                            Không hoạt động
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                          <div className="flex items-center gap-2">
+                                            <a
+                                              href={cv.cvFileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                              Xem PDF
+                                            </a>
+                                            {/* Không hiển thị nút phân tích cho CV không hoạt động */}
                                           </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Không hoạt động</span>
-                                          <a
-                                            href={cv.cvFileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
-                                          >
-                                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                            <span>Xem PDF</span>
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      });
-                    })()}
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+                                  currentIndex++;
+                                });
+                              } else {
+                                // Nếu bị collapse, vẫn đếm số lượng để pagination đúng
+                                currentIndex += inactiveCVs.length;
+                              }
+                            }
+                          });
+
+                          return rows;
+                        })()}
+                      </tbody>
+                    </table>
                   </div>
                   <SectionPagination
                     currentPage={pageCVs}
@@ -1782,957 +2046,886 @@ export default function TalentDetailPage() {
             </div>
           </div>
         )}
+              </div>
+            )}
 
-        {/* Dự án của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isProjectsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Dự án của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleNavigateToCreate(`/hr/talent-projects/create?talentId=${id}`)}
-                  className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                  title="Tạo dự án"
-                >
-                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                {selectedProjects.length > 0 && (
-                  <Button
-                    onClick={handleDeleteProjects}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa dự án ({selectedProjects.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isProjectsExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.projects.newEntries.length > 0 || analysisResult.projects.potentialDuplicates.length > 0) && (
-                <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Gợi ý từ CV mới</h3>
-                    <span className="text-xs text-purple-700">{analysisResult.projects.newEntries.length} dự án mới · {analysisResult.projects.potentialDuplicates.length} dự án có thể trùng</span>
-                  </div>
-                  {analysisResult.projects.newEntries.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-purple-700 font-medium">Đề xuất thêm dự án:</p>
-                      {analysisResult.projects.newEntries.map((project, index) => (
-                        <div key={`suggested-project-${index}`} className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-purple-900 shadow-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold">{project.projectName}</span>
-                            {project.position && <span className="text-xs text-purple-700">Vai trò: {project.position}</span>}
-                          </div>
-                          {project.technologies && (
-                            <p className="mt-1 text-xs text-purple-600">Công nghệ: {project.technologies}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {analysisResult.projects.potentialDuplicates.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                      <p className="font-medium mb-1">Kiểm tra trùng lặp:</p>
-                      <ul className="space-y-1">
-                        {analysisResult.projects.potentialDuplicates.map((dup, index) => (
-                          <li key={`dup-project-${index}`}>
-                            - {dup.fromCV.projectName} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {talentProjects.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {talentProjects
-                      .slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage)
-                      .map((project) => (
-                        <div key={project.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-projects/edit/${project.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedProjects.includes(project.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedProjects([...selectedProjects, project.id]);
-                                  } else {
-                                    setSelectedProjects(selectedProjects.filter(id => id !== project.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{project.projectName}</h3>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-2">
-                            <p className="text-sm text-primary-700">
-                              <span className="font-medium">Vị trí:</span> {project.position}
-                            </p>
-                            <p className="text-sm text-primary-600">
-                              <span className="font-medium">Công nghệ:</span> {project.technologies}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageProjects}
-                    totalItems={talentProjects.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageProjects}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Briefcase className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa tham gia dự án</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Vị trí và mức lương */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsJobRoleLevelsExpanded(!isJobRoleLevelsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isJobRoleLevelsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-warning-100 rounded-lg">
-                  <Target className="w-5 h-5 text-warning-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Vị trí và mức lương</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-job-role-levels/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm vị trí"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedJobRoleLevels.length > 0 && (
-                  <Button
-                    onClick={handleDeleteJobRoleLevels}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa vị trí ({selectedJobRoleLevels.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isJobRoleLevelsExpanded && (
-            <div className="p-6">
-              {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsMatched.length > 0 || jobRoleLevelsOnlyInTalent.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-green-200 bg-green-50/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí & mức lương</h3>
-                    <span className="text-xs text-green-700">
-                      {jobRoleLevelsRecognized.length} đề xuất thêm · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} cần tạo mới
-                    </span>
-                  </div>
-                  {jobRoleLevelsMatched.length > 0 && (
-                    <div className="rounded-lg border border-green-300 bg-white px-3 py-2 text-xs text-green-900">
-                      <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
-                      <ul className="space-y-1">
-                        {jobRoleLevelsMatched.map(({ suggestion, existing, system }, index) => {
-                          const systemLevelName = system ? getTalentLevelName(system.level) : undefined;
-                          const formattedSystemLevel = systemLevelName ? systemLevelName.charAt(0).toUpperCase() + systemLevelName.slice(1) : "—";
-                          return (
-                            <li key={`jobrole-match-${index}`} className="leading-relaxed">
-                              - {suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}: CV Level {suggestion.level ?? "—"} ({suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"}) · Hồ sơ Level {formattedSystemLevel} ({existing.yearsOfExp ?? "—"} năm) · Lương CV {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"} · Hồ sơ {existing.ratePerMonth ? `${existing.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                  {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
-                      {jobRoleLevelsRecognized.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
-                          <ul className="space-y-2">
-                            {jobRoleLevelsRecognized.map(({ suggestion, system }, index) => (
-                              <li key={`jobrole-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <span className="font-semibold text-sm">{suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}</span>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      onClick={() =>
-                                        handlePreparePrefillAndNavigate(
-                                          "jobRoleLevels",
-                                          [suggestion],
-                                          `/hr/talent-job-role-levels/create?talentId=${id}`
-                                        )
-                                      }
-                                      className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-warning-600 to-warning-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-warning-700 hover:to-warning-800"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                      Tạo nhanh
-                                    </Button>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-amber-600 mt-1">
-                                  Gợi ý CV: Level {suggestion.level ?? "—"} · {suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"} · Lương {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
-                                </p>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {jobRoleLevelsUnmatched.length > 0 && (
-                        <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {jobRoleLevelsUnmatched.map((suggestion, index) => (
-                              <li key={`jobrole-unmatched-${index}`}>
-                                - {suggestion.position ?? "Vị trí chưa rõ"}{" "}
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "jobRoleLevel",
-                                  jobRoleSuggestionRequestKey,
-                                  jobRoleSuggestionDisplayItems,
-                                  jobRoleSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(jobRoleSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm vị trí/level vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(jobRoleSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
-                              </span>
-                            )}
-                          </div>
-                        </div>
+            {/* Tab: Vị trí và mức lương */}
+            {activeTab === "jobRoleLevels" && (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Vị trí và mức lương</h3>
+                    <div className="flex gap-2">
+                      <Link to={`/ta/talent-job-role-levels/create?talentId=${id}`}>
+                        <Button
+                          className="group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                          title="Thêm vị trí"
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      </Link>
+                      {selectedJobRoleLevels.length > 0 && (
+                        <Button
+                          onClick={handleDeleteJobRoleLevels}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa vị trí ({selectedJobRoleLevels.length})
+                        </Button>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
-              {jobRoleLevels.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {jobRoleLevels
-                      .slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage)
-                      .map((jrl) => (
-                        <div key={jrl.id} className="p-4 bg-gradient-to-r from-warning-50 to-warning-100 rounded-xl border border-warning-200 hover:from-warning-100 hover:to-warning-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-job-role-levels/edit/${jrl.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedJobRoleLevels.includes(jrl.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
-                                  } else {
-                                    setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-warning-800 hover:text-warning-900 transition-colors duration-200">{jrl.jobRoleLevelName}</h3>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-warning-700">
-                              <span className="font-medium">Kinh nghiệm:</span> {jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}
-                            </p>
-                            <p className="text-sm text-warning-600">
-                              <span className="font-medium">Mức lương:</span> {jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
                   </div>
-                  <SectionPagination
-                    currentPage={pageJobRoleLevels}
-                    totalItems={jobRoleLevels.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageJobRoleLevels}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Target className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật vị trí làm việc</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Kỹ năng của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isSkillsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <Star className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-skills/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm kỹ năng"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedSkills.length > 0 && (
-                  <Button
-                    onClick={handleDeleteSkills}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kỹ năng ({selectedSkills.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isSkillsExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.skills.newFromCV.length > 0 || analysisResult.skills.matched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-amber-900 uppercase tracking-wide">Đề xuất kỹ năng</h3>
-                    <span className="text-xs text-amber-700">
-                      {skillsRecognizedForAddition.length} đề xuất thêm · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} cần tạo mới
-                    </span>
-                  </div>
-                  {(skillsRecognizedForAddition.length > 0 || unmatchedSkillSuggestions.length > 0) && (
-                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                      <p className="font-medium mb-2 text-sm text-amber-900">So sánh khác với hồ sơ hiện tại:</p>
-                      {skillsRecognizedForAddition.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
+                  {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsMatched.length > 0 || jobRoleLevelsOnlyInTalent.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-green-200 bg-green-50/80 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí & mức lương</h3>
+                        <span className="text-xs text-green-700">
+                          {jobRoleLevelsRecognized.length} đề xuất thêm · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} cần tạo mới
+                        </span>
+                      </div>
+                      {jobRoleLevelsMatched.length > 0 && (
+                        <div className="rounded-lg border border-green-300 bg-white px-3 py-2 text-xs text-green-900">
+                          <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
                           <ul className="space-y-1">
-                            {skillsRecognizedForAddition.map((skill, index) => (
-                              <li key={`missing-skill-system-${index}`} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-sm">{skill.skillName}</span>
-                                </div>
+                            {jobRoleLevelsMatched.map(({ suggestion, existing, system }, index) => {
+                              const systemLevelName = system ? getTalentLevelName(system.level) : undefined;
+                              const formattedSystemLevel = systemLevelName ? systemLevelName.charAt(0).toUpperCase() + systemLevelName.slice(1) : "—";
+                              return (
+                                <li key={`jobrole-match-${index}`} className="leading-relaxed">
+                                  - {suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}: CV Level {suggestion.level ?? "—"} ({suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"}) · Hồ sơ Level {formattedSystemLevel} ({existing.yearsOfExp ?? "—"} năm) · Lương CV {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"} · Hồ sơ {existing.ratePerMonth ? `${existing.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                      {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
+                          {jobRoleLevelsRecognized.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
+                              <ul className="space-y-2">
+                                {jobRoleLevelsRecognized.map(({ suggestion, system }, index) => (
+                                  <li key={`jobrole-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm">{suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          onClick={() =>
+                                            handlePreparePrefillAndNavigate(
+                                              "jobRoleLevels",
+                                              [suggestion],
+                                              `/ta/talent-job-role-levels/create?talentId=${id}`
+                                            )
+                                          }
+                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-warning-600 to-warning-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-warning-700 hover:to-warning-800"
+                                        >
+                                          <Plus className="w-4 h-4" />
+                                          Tạo nhanh
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <p className="text-xs text-amber-600 mt-1">
+                                      Gợi ý CV: Level {suggestion.level ?? "—"} · {suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"} · Lương {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {jobRoleLevelsUnmatched.length > 0 && (
+                            <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
+                              <ul className="mt-2 space-y-1">
+                                {jobRoleLevelsUnmatched.map((suggestion, index) => (
+                                  <li key={`jobrole-unmatched-${index}`}>
+                                    - {suggestion.position ?? "Vị trí chưa rõ"}{" "}
+                                  </li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
                                 <Button
                                   onClick={() =>
-                                    handlePreparePrefillAndNavigate(
-                                      "skills",
-                                      [skill],
-                                      `/hr/talent-skills/create?talentId=${id}`
+                                    handleSuggestionRequest(
+                                      "jobRoleLevel",
+                                      jobRoleSuggestionRequestKey,
+                                      jobRoleSuggestionDisplayItems,
+                                      jobRoleSuggestionDetailItems
                                     )
                                   }
-                                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-secondary-700 hover:to-secondary-800"
+                                  disabled={
+                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
                                 >
                                   <Plus className="w-4 h-4" />
-                                  Tạo nhanh
+                                  {isSuggestionPending(jobRoleSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm vị trí/level vào hệ thống"}
                                 </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {unmatchedSkillSuggestions.length > 0 && (
-                        <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {unmatchedSkillSuggestions.map((skill, index) => (
-                              <li key={`unmatched-skill-${index}`}>- {skill.skillName}</li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "skill",
-                                  skillSuggestionRequestKey,
-                                  skillSuggestionDisplayItems,
-                                  skillSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(skillSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm kỹ năng vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(skillSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {talentSkills.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {talentSkills
-                      .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
-                      .map((skill) => (
-                        <div key={skill.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-skills/edit/${skill.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedSkills.includes(skill.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedSkills([...selectedSkills, skill.id]);
-                                  } else {
-                                    setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-secondary-800 hover:text-secondary-900 transition-colors duration-200">{skill.skillName}</h3>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-secondary-700">
-                              <span className="font-medium">Level:</span> {skill.level}
-                            </p>
-                            <p className="text-sm text-secondary-600">
-                              <span className="font-medium">Kinh nghiệm:</span> {skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageSkills}
-                    totalItems={talentSkills.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageSkills}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Star className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Lịch sẵn sàng của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsAvailableTimesExpanded(!isAvailableTimesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isAvailableTimesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <Calendar className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm thời gian"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedAvailableTimes.length > 0 && (
-                  <Button
-                    onClick={handleDeleteAvailableTimes}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa thời gian ({selectedAvailableTimes.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isAvailableTimesExpanded && (
-            <div className="p-6">
-              {availableTimes.length > 0 ? (
-                <>
-                  <div className="space-y-4">
-                    {availableTimes
-                      .slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage)
-                      .map((time) => (
-                        <div key={time.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-available-times/edit/${time.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedAvailableTimes.includes(time.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
-                                  } else {
-                                    setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                              />
-                              <div>
-                                <p className="text-sm text-secondary-700">
-                                  <span className="font-medium">Từ:</span> {new Date(time.startTime).toLocaleDateString('vi-VN')}
-                                </p>
-                                <p className="text-sm text-secondary-600">
-                                  <span className="font-medium">Đến:</span> {time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}
-                                </p>
+                                {isSuggestionPending(jobRoleSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
                               </div>
-                            </div>
-                          </div>
-                          {time.notes && (
-                            <div className="mt-3">
-                              <p className="text-sm text-gray-600 font-medium mb-1">Ghi chú:</p>
-                              <p className="text-sm text-gray-700">{time.notes}</p>
                             </div>
                           )}
                         </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageAvailableTimes}
-                    totalItems={availableTimes.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageAvailableTimes}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật thời gian có sẵn</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Chứng chỉ */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsCertificatesExpanded(!isCertificatesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isCertificatesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Award className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Chứng chỉ</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-certificates/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm chứng chỉ"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedCertificates.length > 0 && (
-                  <Button
-                    onClick={handleDeleteCertificates}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa chứng chỉ ({selectedCertificates.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isCertificatesExpanded && (
-            <div className="p-6">
-              {(certificatesRecognized.length > 0 || certificatesMatched.length > 0 || certificatesOnlyInTalent.length > 0 || certificatesUnmatched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-rose-900 uppercase tracking-wide">Đề xuất chứng chỉ</h3>
-                    <span className="text-xs text-rose-700">
-                      {certificatesRecognized.length} đề xuất thêm · {certificatesMatched.length} trùng CV · {certificatesUnmatched.length} cần tạo mới
-                    </span>
-                  </div>
-                  {certificatesMatched.length > 0 && (
-                    <div className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-900">
-                      <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
-                      <ul className="space-y-1">
-                        {certificatesMatched.map(({ suggestion, existing }, index) => (
-                          <li key={`certificate-match-${index}`} className="leading-relaxed">
-                            - {suggestion.certificateName}: CV ngày cấp {suggestion.issuedDate ?? "Chưa rõ"} · Hồ sơ ngày cấp {existing.issuedDate ? new Date(existing.issuedDate).toLocaleDateString("vi-VN") : "Chưa rõ"} · Trạng thái {existing.isVerified ? "đã xác thực" : "chưa xác thực"}
-                          </li>
-                        ))}
-                      </ul>
+                      )}
                     </div>
                   )}
-                  {(certificatesRecognized.length > 0 || certificatesUnmatched.length > 0) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
-                      {certificatesRecognized.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
-                          <ul className="space-y-2">
-                            {certificatesRecognized.map(({ suggestion }, index) => (
-                              <li key={`certificate-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <span className="font-semibold text-sm">{suggestion.certificateName}</span>
-                                  <div className="flex items-center gap-2">
+                  {jobRoleLevels.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedJobRoleLevels.length === jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).length && jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).map(jrl => jrl.id);
+                                      setSelectedJobRoleLevels([...new Set([...selectedJobRoleLevels, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).map(jrl => jrl.id);
+                                      setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Mức lương</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {jobRoleLevels
+                              .slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage)
+                              .map((jrl) => (
+                                <tr 
+                                  key={jrl.id} 
+                                  className="hover:bg-warning-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-job-role-levels/edit/${jrl.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedJobRoleLevels.includes(jrl.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
+                                        } else {
+                                          setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-warning-800">{jrl.jobRoleLevelName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-warning-700">{jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-warning-600">{jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageJobRoleLevels}
+                        totalItems={jobRoleLevels.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageJobRoleLevels}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Target className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật vị trí làm việc</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Kỹ năng của nhân sự */}
+            {activeTab === "skills" && (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Kỹ năng của nhân sự</h3>
+                    <div className="flex gap-2">
+                      <Link to={`/ta/talent-skills/create?talentId=${id}`}>
+                        <Button
+                          className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                          title="Thêm kỹ năng"
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      </Link>
+                      {selectedSkills.length > 0 && (
+                        <Button
+                          onClick={handleDeleteSkills}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa kỹ năng ({selectedSkills.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {analysisResult && (analysisResult.skills.newFromCV.length > 0 || analysisResult.skills.matched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-amber-900 uppercase tracking-wide">Đề xuất kỹ năng</h3>
+                        <span className="text-xs text-amber-700">
+                          {skillsRecognizedForAddition.length} đề xuất thêm · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} cần tạo mới
+                        </span>
+                      </div>
+                      {(skillsRecognizedForAddition.length > 0 || unmatchedSkillSuggestions.length > 0) && (
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                          <p className="font-medium mb-2 text-sm text-amber-900">So sánh khác với hồ sơ hiện tại:</p>
+                          {skillsRecognizedForAddition.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
+                              <ul className="space-y-1">
+                                {skillsRecognizedForAddition.map((skill, index) => (
+                                  <li key={`missing-skill-system-${index}`} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-sm">{skill.skillName}</span>
+                                    </div>
                                     <Button
                                       onClick={() =>
                                         handlePreparePrefillAndNavigate(
-                                          "certificates",
-                                          [suggestion],
-                                          `/hr/talent-certificates/create?talentId=${id}`
+                                          "skills",
+                                          [skill],
+                                          `/ta/talent-skills/create?talentId=${id}`
                                         )
                                       }
-                                      className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
+                                      className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-secondary-700 hover:to-secondary-800"
                                     >
                                       <Plus className="w-4 h-4" />
                                       Tạo nhanh
                                     </Button>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-amber-600 mt-1">Gợi ý CV: Ngày cấp {suggestion.issuedDate ?? "Chưa rõ"}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {unmatchedSkillSuggestions.length > 0 && (
+                            <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
+                              <ul className="mt-2 space-y-1">
+                                {unmatchedSkillSuggestions.map((skill, index) => (
+                                  <li key={`unmatched-skill-${index}`}>- {skill.skillName}</li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
+                                <Button
+                                  onClick={() =>
+                                    handleSuggestionRequest(
+                                      "skill",
+                                      skillSuggestionRequestKey,
+                                      skillSuggestionDisplayItems,
+                                      skillSuggestionDetailItems
+                                    )
+                                  }
+                                  disabled={
+                                    !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  {isSuggestionPending(skillSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm kỹ năng vào hệ thống"}
+                                </Button>
+                                {isSuggestionPending(skillSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {talentSkills.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSkills.length === talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length && talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
+                                      setSelectedSkills([...new Set([...selectedSkills, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
+                                      setSelectedSkills(selectedSkills.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kỹ năng</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trình độ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {talentSkills
+                              .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
+                              .map((skill) => (
+                                <tr 
+                                  key={skill.id} 
+                                  className="hover:bg-secondary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-skills/edit/${skill.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSkills.includes(skill.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedSkills([...selectedSkills, skill.id]);
+                                        } else {
+                                          setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-secondary-800">{skill.skillName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-700">{skill.level}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-600">{skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageSkills}
+                        totalItems={talentSkills.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageSkills}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Star className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Lịch sẵn sàng của nhân sự */}
+            {activeTab === "availableTimes" && (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h3>
+                    <div className="flex gap-2">
+                      <Link to={`/ta/talent-available-times/create?talentId=${id}`}>
+                        <Button
+                          className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                          title="Thêm thời gian"
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      </Link>
+                      {selectedAvailableTimes.length > 0 && (
+                        <Button
+                          onClick={handleDeleteAvailableTimes}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa thời gian ({selectedAvailableTimes.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {availableTimes.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAvailableTimes.length === availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).length && availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).map(time => time.id);
+                                      setSelectedAvailableTimes([...new Set([...selectedAvailableTimes, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).map(time => time.id);
+                                      setSelectedAvailableTimes(selectedAvailableTimes.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Từ ngày</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Đến ngày</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Ghi chú</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {availableTimes
+                              .slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage)
+                              .map((time) => (
+                                <tr 
+                                  key={time.id} 
+                                  className="hover:bg-secondary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-available-times/edit/${time.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAvailableTimes.includes(time.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
+                                        } else {
+                                          setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-secondary-700">{new Date(time.startTime).toLocaleDateString('vi-VN')}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-600">{time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}</div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="text-sm text-gray-700">{time.notes || '—'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageAvailableTimes}
+                        totalItems={availableTimes.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageAvailableTimes}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Calendar className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật thời gian có sẵn</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Chứng chỉ */}
+            {activeTab === "certificates" && (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Chứng chỉ</h3>
+                    <div className="flex gap-2">
+                      <Link to={`/ta/talent-certificates/create?talentId=${id}`}>
+                        <Button
+                          className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                          title="Thêm chứng chỉ"
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      </Link>
+                      {selectedCertificates.length > 0 && (
+                        <Button
+                          onClick={handleDeleteCertificates}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa chứng chỉ ({selectedCertificates.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {(certificatesRecognized.length > 0 || certificatesMatched.length > 0 || certificatesOnlyInTalent.length > 0 || certificatesUnmatched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-rose-900 uppercase tracking-wide">Đề xuất chứng chỉ</h3>
+                        <span className="text-xs text-rose-700">
+                          {certificatesRecognized.length} đề xuất thêm · {certificatesMatched.length} trùng CV · {certificatesUnmatched.length} cần tạo mới
+                        </span>
+                      </div>
+                      {certificatesMatched.length > 0 && (
+                        <div className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-900">
+                          <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
+                          <ul className="space-y-1">
+                            {certificatesMatched.map(({ suggestion, existing }, index) => (
+                              <li key={`certificate-match-${index}`} className="leading-relaxed">
+                                - {suggestion.certificateName}: CV ngày cấp {suggestion.issuedDate ?? "Chưa rõ"} · Hồ sơ ngày cấp {existing.issuedDate ? new Date(existing.issuedDate).toLocaleDateString("vi-VN") : "Chưa rõ"} · Trạng thái {existing.isVerified ? "đã xác thực" : "chưa xác thực"}
                               </li>
                             ))}
                           </ul>
                         </div>
                       )}
-                      {certificatesUnmatched.length > 0 && (
-                        <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {certificatesUnmatched.map((suggestion, index) => (
-                              <li key={`certificate-unmatched-${index}`}>- {suggestion.certificateName}</li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "certificate",
-                                  certificateSuggestionRequestKey,
-                                  certificateSuggestionDisplayItems,
-                                  certificateSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !certificateSuggestionDisplayItems.length ||
-                                isSuggestionPending(certificateSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !certificateSuggestionDisplayItems.length ||
-                                isSuggestionPending(certificateSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(certificateSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm chứng chỉ vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(certificateSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
-                              </span>
-                            )}
-                          </div>
+                      {(certificatesRecognized.length > 0 || certificatesUnmatched.length > 0) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
+                          {certificatesRecognized.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
+                              <ul className="space-y-2">
+                                {certificatesRecognized.map(({ suggestion }, index) => (
+                                  <li key={`certificate-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm">{suggestion.certificateName}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          onClick={() =>
+                                            handlePreparePrefillAndNavigate(
+                                              "certificates",
+                                              [suggestion],
+                                              `/ta/talent-certificates/create?talentId=${id}`
+                                            )
+                                          }
+                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
+                                        >
+                                          <Plus className="w-4 h-4" />
+                                          Tạo nhanh
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <p className="text-xs text-amber-600 mt-1">Gợi ý CV: Ngày cấp {suggestion.issuedDate ?? "Chưa rõ"}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {certificatesUnmatched.length > 0 && (
+                            <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
+                              <ul className="mt-2 space-y-1">
+                                {certificatesUnmatched.map((suggestion, index) => (
+                                  <li key={`certificate-unmatched-${index}`}>- {suggestion.certificateName}</li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
+                                <Button
+                                  onClick={() =>
+                                    handleSuggestionRequest(
+                                      "certificate",
+                                      certificateSuggestionRequestKey,
+                                      certificateSuggestionDisplayItems,
+                                      certificateSuggestionDetailItems
+                                    )
+                                  }
+                                  disabled={
+                                    !certificateSuggestionDisplayItems.length ||
+                                    isSuggestionPending(certificateSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !certificateSuggestionDisplayItems.length ||
+                                    isSuggestionPending(certificateSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  {isSuggestionPending(certificateSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm chứng chỉ vào hệ thống"}
+                                </Button>
+                                {isSuggestionPending(certificateSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   )}
-                </div>
-              )}
-              {certificates.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {certificates
-                      .slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage)
-                      .map((cert) => (
-                        <div key={cert.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-certificates/edit/${cert.id}`)}>
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedCertificates.includes(cert.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedCertificates([...selectedCertificates, cert.id]);
-                                  } else {
-                                    setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{cert.certificateTypeName}</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-primary-700">
-                              <span className="font-medium">Ngày cấp:</span> {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}
-                            </p>
-                          </div>
-                          {cert.imageUrl && (
-                            <a
-                              href={cert.imageUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                              Xem chứng chỉ
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageCertificates}
-                    totalItems={certificates.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageCertificates}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Award className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload chứng chỉ</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Kinh nghiệm làm việc */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsExperiencesExpanded(!isExperiencesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isExperiencesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  {certificates.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCertificates.length === certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).length && certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).map(cert => cert.id);
+                                      setSelectedCertificates([...new Set([...selectedCertificates, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).map(cert => cert.id);
+                                      setSelectedCertificates(selectedCertificates.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Chứng chỉ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Ngày cấp</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trạng thái</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {certificates
+                              .slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage)
+                              .map((cert) => (
+                                <tr 
+                                  key={cert.id} 
+                                  className="hover:bg-primary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-certificates/edit/${cert.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedCertificates.includes(cert.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedCertificates([...selectedCertificates, cert.id]);
+                                        } else {
+                                          setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-primary-800">{cert.certificateTypeName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-primary-700">{cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                      {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    {cert.imageUrl && (
+                                      <a
+                                        href={cert.imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Xem
+                                      </a>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageCertificates}
+                        totalItems={certificates.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageCertificates}
+                      />
+                    </>
                   ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Award className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload chứng chỉ</p>
+                    </div>
                   )}
-                </button>
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <Workflow className="w-5 h-5 text-accent-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kinh nghiệm làm việc</h2>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleNavigateToCreate(`/hr/talent-work-experiences/create?talentId=${id}`)}
-                  className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                  title="Thêm kinh nghiệm"
-                >
-                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                {selectedExperiences.length > 0 && (
-                  <Button
-                    onClick={handleDeleteExperiences}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kinh nghiệm ({selectedExperiences.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isExperiencesExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.workExperiences.newEntries.length > 0 || analysisResult.workExperiences.potentialDuplicates.length > 0) && (
-                <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">Đề xuất kinh nghiệm làm việc</h3>
-                    <span className="text-xs text-blue-700">{analysisResult.workExperiences.newEntries.length} mục mới · {analysisResult.workExperiences.potentialDuplicates.length} mục có thể trùng</span>
+            )}
+
+            {/* Tab: Kinh nghiệm làm việc */}
+            {activeTab === "experiences" && (
+              <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Kinh nghiệm làm việc</h3>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleNavigateToCreate(`/ta/talent-work-experiences/create?talentId=${id}`)}
+                        className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                        title="Thêm kinh nghiệm"
+                      >
+                        <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                      </Button>
+                      {selectedExperiences.length > 0 && (
+                        <Button
+                          onClick={handleDeleteExperiences}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa kinh nghiệm ({selectedExperiences.length})
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  {analysisResult.workExperiences.newEntries.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-blue-700 font-medium">Kinh nghiệm mới nên thêm:</p>
-                      {analysisResult.workExperiences.newEntries.map((exp, index) => (
-                        <div key={`suggested-exp-${index}`} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm">
-                          <p className="font-semibold">{exp.position}</p>
-                          <p className="text-xs text-blue-700">{exp.company}</p>
-                          <p className="text-xs text-blue-600">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
-                          {exp.description && <p className="mt-1 text-xs text-blue-700 line-clamp-2">{exp.description}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {analysisResult.workExperiences.potentialDuplicates.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                      <p className="font-medium mb-1">Mục cần rà soát trùng lặp:</p>
-                      <ul className="space-y-1">
-                        {analysisResult.workExperiences.potentialDuplicates.map((dup, index) => (
-                          <li key={`dup-exp-${index}`}>
-                            - {dup.fromCV.position} tại {dup.fromCV.company} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {workExperiences.length > 0 ? (
-                <>
-                  <div className="space-y-6">
-                    {workExperiences
-                      .slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage)
-                      .map((exp) => (
-                        <div key={exp.id} className="p-4 bg-gradient-to-r from-accent-50 to-accent-100 rounded-xl border border-accent-200 hover:from-accent-100 hover:to-accent-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-work-experiences/edit/${exp.id}`)}>
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedExperiences.includes(exp.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedExperiences([...selectedExperiences, exp.id]);
-                                  } else {
-                                    setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
-                              />
-                              <div>
-                                <h3 className="font-semibold text-accent-800 hover:text-accent-900 transition-colors duration-200">{exp.position}</h3>
-                                <p className="text-sm text-accent-700">
-                                  <span className="font-medium">Công ty:</span> {exp.company}
-                                </p>
-                                <p className="text-sm text-accent-600">
-                                  <span className="font-medium">Thời gian:</span> {new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
-                                </p>
-                              </div>
+                  {analysisResult && (analysisResult.workExperiences.newEntries.length > 0 || analysisResult.workExperiences.potentialDuplicates.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/80 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">Đề xuất kinh nghiệm làm việc</h3>
+                        <span className="text-xs text-blue-700">{analysisResult.workExperiences.newEntries.length} mục mới · {analysisResult.workExperiences.potentialDuplicates.length} mục có thể trùng</span>
+                      </div>
+                      {analysisResult.workExperiences.newEntries.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-blue-700 font-medium">Kinh nghiệm mới nên thêm:</p>
+                          {analysisResult.workExperiences.newEntries.map((exp, index) => (
+                            <div key={`suggested-exp-${index}`} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm">
+                              <p className="font-semibold">{exp.position}</p>
+                              <p className="text-xs text-blue-700">{exp.company}</p>
+                              <p className="text-xs text-blue-600">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
+                              {exp.description && <p className="mt-1 text-xs text-blue-700 line-clamp-2">{exp.description}</p>}
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageExperiences}
-                    totalItems={workExperiences.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageExperiences}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Workflow className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kinh nghiệm</p>
-                </div>
-              )}
-            </div>
-          )}
+                      )}
+                      {analysisResult.workExperiences.potentialDuplicates.length > 0 && (
+                        <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                          <p className="font-medium mb-1">Mục cần rà soát trùng lặp:</p>
+                          <ul className="space-y-1">
+                            {analysisResult.workExperiences.potentialDuplicates.map((dup, index) => (
+                              <li key={`dup-exp-${index}`}>
+                                - {dup.fromCV.position} tại {dup.fromCV.company} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {workExperiences.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedExperiences.length === workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).length && workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).map(exp => exp.id);
+                                      setSelectedExperiences([...new Set([...selectedExperiences, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).map(exp => exp.id);
+                                      setSelectedExperiences(selectedExperiences.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Công ty</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Thời gian</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {workExperiences
+                              .slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage)
+                              .map((exp) => (
+                                <tr 
+                                  key={exp.id} 
+                                  className="hover:bg-accent-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-work-experiences/edit/${exp.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExperiences.includes(exp.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedExperiences([...selectedExperiences, exp.id]);
+                                        } else {
+                                          setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-accent-800">{exp.position}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-accent-700">{exp.company}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-accent-600">{new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageExperiences}
+                        totalItems={workExperiences.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageExperiences}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Workflow className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kinh nghiệm</p>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

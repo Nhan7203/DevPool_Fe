@@ -50,7 +50,7 @@ const HRPartnerPeriods: React.FC = () => {
     fileName: "",
     filePath: "",
     description: "",
-    source: "HR",
+    source: "TA",
     referencedClientDocumentId: 0
   });
 
@@ -153,7 +153,7 @@ const HRPartnerPeriods: React.FC = () => {
       fileName: "",
       filePath: "",
       description: "",
-      source: "HR",
+      source: "TA",
       referencedClientDocumentId: 0
     });
 
@@ -211,7 +211,7 @@ const HRPartnerPeriods: React.FC = () => {
       fileName: "",
       filePath: "",
       description: "",
-      source: "HR",
+      source: "TA",
       referencedClientDocumentId: 0
     });
   };
@@ -356,7 +356,7 @@ const HRPartnerPeriods: React.FC = () => {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Staff HR" />
+      <Sidebar items={sidebarItems} title="Staff TA" />
 
       <div className="flex-1 p-8">
         <div className="mb-6">
@@ -536,7 +536,7 @@ const HRPartnerPeriods: React.FC = () => {
                           <td className="p-3">
                             {contract ? (
                               <Link
-                                to={`/hr/contracts/${p.partnerContractId}`}
+                                to={`/ta/contracts/${p.partnerContractId}`}
                                 className="text-primary-600 hover:text-primary-800 hover:underline font-medium transition-colors"
                               >
                                 {contract.contractNumber || p.partnerContractId}
@@ -688,7 +688,7 @@ const HRPartnerPeriods: React.FC = () => {
                       value={documentFormData.source}
                       onChange={handleDocumentFormChange}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-primary-500"
-                      placeholder="HR / Email / Portal ..."
+                      placeholder="TA / Email / Portal ..."
                     />
                   </div>
                 </div>

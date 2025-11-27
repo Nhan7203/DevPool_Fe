@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
@@ -77,6 +78,7 @@ export default function ApplyActivityDetailPage() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [jobRequest, setJobRequest] = useState<any>(null);
   
   const quickRejectNotes = [
     "Ứng viên không đáp ứng yêu cầu kỹ năng kỹ thuật.",
@@ -113,10 +115,11 @@ export default function ApplyActivityDetailPage() {
 
         let resolvedSteps: ApplyProcessStep[] = [];
         try {
-          const jobRequest = await jobRequestService.getById(app.jobRequestId);
-          if (jobRequest?.applyProcessTemplateId) {
+          const jobReq = await jobRequestService.getById(app.jobRequestId);
+          setJobRequest(jobReq);
+          if (jobReq?.applyProcessTemplateId) {
             const stepsResponse = await applyProcessStepService.getAll({
-              templateId: jobRequest.applyProcessTemplateId,
+              templateId: jobReq.applyProcessTemplateId,
               excludeDeleted: true
             });
             resolvedSteps = Array.isArray(stepsResponse)
@@ -188,7 +191,7 @@ export default function ApplyActivityDetailPage() {
       return;
     }
 
-    navigate(`/hr/apply-activities/edit/${id}`);
+    navigate(`/ta/apply-activities/edit/${id}`);
   };
 
   // Kiểm tra xem bước trước đã pass chưa
@@ -399,7 +402,7 @@ export default function ApplyActivityDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -413,7 +416,7 @@ export default function ApplyActivityDetailPage() {
   if (!activity) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -421,7 +424,7 @@ export default function ApplyActivityDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy hoạt động</p>
             <Link
-              to="/hr/applications"
+              to="/ta/applications"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách hồ sơ
@@ -446,20 +449,22 @@ export default function ApplyActivityDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to={`/hr/applications/${activity.applyId}`}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết hồ sơ</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              ...(jobRequest ? [
+                { label: "Yêu cầu tuyển dụng", to: "/ta/job-requests" },
+                { label: jobRequest.title || "Chi tiết yêu cầu", to: `/ta/job-requests/${jobRequest.id}` }
+              ] : []),
+              { label: "Hồ sơ ứng tuyển", to: "/ta/applications" },
+              { label: activity?.applyId ? `Hồ sơ #${activity.applyId}` : "Chi tiết", to: `/ta/applications/${activity?.applyId}` },
+              { label: activity ? `Hoạt động #${activity.id}` : "Chi tiết hoạt động" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">

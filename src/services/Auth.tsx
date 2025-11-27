@@ -11,10 +11,11 @@ import { db } from "../configs/firebase";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 // Role từ backend (số)
+// Lưu ý: Backend vẫn trả về HR (chưa đổi), nhưng frontend hiển thị là TA
 export const BackendRole = {
   Admin: 1,
   Manager: 2,
-  HR: 3,
+  HR: 3, // Backend vẫn trả về HR (chưa đổi), frontend sẽ map thành Staff TA
   Accountant: 4,
   Sale: 5,
   Dev: 6,
@@ -26,7 +27,7 @@ export type BackendRole = typeof BackendRole[keyof typeof BackendRole];
 export type FrontendRole =
   | "Admin"
   | "Manager"
-  | "Staff HR"
+  | "Staff TA"
   | "Staff Accountant"
   | "Staff Sales"
   | "Developer";
@@ -43,7 +44,7 @@ export interface RegisterPayload {
   avatarUrl?: string | null;
   address?: string | null;
   phoneNumber: string;
-  role: string; // ví dụ: "HR", "Admin", ...
+  role: string; // ví dụ: "TA", "Admin", ...
 }
 
 export interface LoginResponse {
@@ -97,14 +98,16 @@ export function getRoleFromToken(token: string): FrontendRole | null {
   const role = Array.isArray(roles) ? roles[0] : roles;
 
   // Map role từ backend sang frontend
-  // Backend roles: "Admin", "Manager", "HR", "Accountant", "Sale", "Dev"
+  // Backend roles: "Admin", "Manager", "HR" (sẽ đổi thành "TA" sau), "Accountant", "Sale", "Dev"
+  // Frontend hiển thị "TA" nhưng backend vẫn trả về "HR" (chưa đổi)
   switch (role) {
     case 'Admin':
       return 'Admin';
     case 'Manager':
       return 'Manager';
     case 'HR':
-      return 'Staff HR';
+    case 'TA': // Hỗ trợ cả HR (backend cũ) và TA (backend mới)
+      return 'Staff TA';
     case 'Accountant':
       return 'Staff Accountant';
     case 'Sale':
@@ -123,8 +126,8 @@ export function mapBackendRoleToFrontend(role: BackendRole): FrontendRole {
       return "Admin";
     case BackendRole.Manager:
       return "Manager";
-    case BackendRole.HR:
-      return "Staff HR";
+    case BackendRole.HR: // Backend vẫn trả về HR (số 3), frontend hiển thị là Staff TA
+      return "Staff TA";
     case BackendRole.Accountant:
       return "Staff Accountant";
     case BackendRole.Sale:

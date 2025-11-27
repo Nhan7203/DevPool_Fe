@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { User, Mail, Phone, Link, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow, Search, Filter, Layers } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { User, Mail, Phone, Link as LinkIcon, Github, Upload, FileText, Calendar, Globe, Plus, X, Award, MapPin, Eye, Target, Star, Building2, Workflow, Search, Filter, Layers, Briefcase, FolderOpen } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import {
@@ -102,6 +102,20 @@ export default function CreateTalent() {
     generatedForJobRequestId: undefined
   }]); // Tự động tạo CV mặc định vì bắt buộc
   const [uploadingCVIndex, setUploadingCVIndex] = useState<number | null>(null);
+  
+  // State cho modal trích xuất CV
+  const [showExtractCVModal, setShowExtractCVModal] = useState(false);
+  const [useExtractCV, setUseExtractCV] = useState(false); // Checkbox "Trích xuất thông tin từ CV"
+  const [createCVFromExtract, setCreateCVFromExtract] = useState(true); // Checkbox "Tạo CV luôn" trong modal (mặc định checked)
+  const [modalCVFile, setModalCVFile] = useState<File | null>(null); // CV file trong modal
+  const [modalCVPreviewUrl, setModalCVPreviewUrl] = useState<string | null>(null); // Preview URL trong modal
+  
+  // State cho tab navigation
+  const [activeTab, setActiveTab] = useState<string>("required");
+  // State cho tab navigation trong sidebar
+  const [activeSidebarTab, setActiveSidebarTab] = useState<string>("overview");
+  // State cho popup xem CV
+  const [showCVViewerModal, setShowCVViewerModal] = useState(false);
 
   // Danh sách vị trí công việc cho Kinh Nghiệm
   const workExperiencePositions = [
@@ -287,8 +301,11 @@ export default function CreateTalent() {
       if (cvPreviewUrl) {
         URL.revokeObjectURL(cvPreviewUrl);
       }
+      if (modalCVPreviewUrl) {
+        URL.revokeObjectURL(modalCVPreviewUrl);
+      }
     };
-  }, [cvPreviewUrl]);
+  }, [cvPreviewUrl, modalCVPreviewUrl]);
 
   // Cảnh báo khi reload trang sau khi đã upload CV lên Firebase
   useEffect(() => {
@@ -389,7 +406,7 @@ export default function CreateTalent() {
     }
 
     const token = localStorage.getItem("accessToken");
-    let requesterName = "HR Staff";
+    let requesterName = "TA Staff";
     try {
       const decoded = token ? decodeJWT(token) : null;
       requesterName =
@@ -648,6 +665,22 @@ export default function CreateTalent() {
         ? Number(value) || undefined
         : value,
     }));
+  };
+
+  // Handle file change trong modal
+  const handleModalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Revoke old URL if exists
+      if (modalCVPreviewUrl) {
+        URL.revokeObjectURL(modalCVPreviewUrl);
+      }
+
+      setModalCVFile(file);
+      // Create preview URL for PDF
+      const url = URL.createObjectURL(file);
+      setModalCVPreviewUrl(url);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1246,12 +1279,8 @@ export default function CreateTalent() {
     return parts.join('. ') + '.';
   };
 
-  const handleExtractCV = async () => {
-    if (!cvFile) {
-      alert("Vui lòng chọn file CV trước!");
-      return;
-    }
-
+  // Helper function để extract và fill data từ CV
+  const extractAndFillDataFromCV = async (file: File, shouldCreateCV: boolean = false) => {
     try {
       setExtractingCV(true);
 
@@ -1260,25 +1289,18 @@ export default function CreateTalent() {
       setUnmatchedData({});
 
       // Clear các dữ liệu đã tự động thêm từ CV cũ (nếu có)
-      // Note: KHÔNG clear formData cơ bản (fullName, email, etc.) vì user có thể đã điền thủ công
-      // Chỉ clear các mảng dữ liệu liên quan đến CV để tránh lẫn lộn với CV mới
-      // User có thể giữ lại dữ liệu đã điền hoặc để CV mới ghi đè
       setTalentSkills([]);
       setTalentWorkExperiences([]);
       setTalentProjects([]);
       setTalentCertificates([]);
       // Reset job role levels về mặc định (bắt buộc phải có ít nhất 1)
-      // CV có thể tự động thêm job role levels sau đó
       setTalentJobRoleLevels([{
         jobRoleLevelId: 0,
         yearsOfExp: 0,
         ratePerMonth: undefined
       }]);
 
-      // Note: formData cơ bản (fullName, email, phone, etc.) sẽ được ghi đè bởi CV mới
-      // nếu CV mới có dữ liệu, hoặc giữ nguyên nếu user đã điền thủ công và CV không có
-
-      const result: TalentCVExtractResponse = await talentCVService.extractFromPDFWithOllama(cvFile);
+      const result: TalentCVExtractResponse = await talentCVService.extractFromPDFWithOllama(file);
 
       if (result.isSuccess && result.generateText) {
         try {
@@ -1490,10 +1512,13 @@ export default function CreateTalent() {
                     mappedLevel = "Intermediate"; // Default if invalid
                   }
 
+                  // Tự động set yearsExp = 1 nếu đang là 0
+                  const yearsExp = (skillYearsExp && skillYearsExp > 0) ? skillYearsExp : 1;
+                  
                   newSkills.push({
                     skillId: matchedSkill.id,
                     level: mappedLevel,
-                    yearsExp: skillYearsExp || 0
+                    yearsExp: yearsExp
                   });
                 }
               } else {
@@ -1688,21 +1713,25 @@ export default function CreateTalent() {
                 }
               }
 
-              // Tự động điền: certificateTypeId (nếu match được), certificateName, certificateDescription, imageUrl
-              newCertificates.push({
-                certificateTypeId: matchedCertificateTypeId, // Tự động match nếu tìm thấy, 0 nếu không
-                certificateName: certificateName,
-                certificateDescription: cert.certificateDescription || "",
-                issuedDate: formatDateForInput(cert.issuedDate),
-                isVerified: false,
-                imageUrl: cert.imageUrl || ""
-              });
+              // Chỉ tự động thêm vào form nếu đã match được loại chứng chỉ (certificateTypeId > 0)
+              if (matchedCertificateTypeId > 0) {
+                // Tự động điền: certificateTypeId (đã match được), certificateName, certificateDescription, imageUrl
+                newCertificates.push({
+                  certificateTypeId: matchedCertificateTypeId,
+                  certificateName: certificateName,
+                  certificateDescription: cert.certificateDescription || "",
+                  issuedDate: formatDateForInput(cert.issuedDate),
+                  isVerified: false,
+                  imageUrl: cert.imageUrl || ""
+                });
+              }
             });
 
             addedCertificatesCount = newCertificates.length;
-            // Đếm số lượng chứng chỉ đã tự động match loại
-            matchedCertificatesCount = newCertificates.filter((cert: TalentCertificateCreateModel) => cert.certificateTypeId > 0).length;
-            unmatchedCertificatesCount = newCertificates.filter((cert: TalentCertificateCreateModel) => cert.certificateTypeId === 0).length;
+            // Đếm số lượng chứng chỉ đã tự động match loại (tất cả đều đã match vì chỉ thêm khi match được)
+            matchedCertificatesCount = newCertificates.length;
+            // Đếm số lượng chứng chỉ không match được (không được thêm vào form)
+            unmatchedCertificatesCount = parsedData.certificates.length - matchedCertificatesCount;
             // Thêm vào đầu danh sách (giữ lại các certificates đã có)
             if (newCertificates.length > 0) {
               setTalentCertificates(prev => [...newCertificates, ...prev]);
@@ -1717,8 +1746,9 @@ export default function CreateTalent() {
           // Auto-add job role levels from CV to form
           let addedJobRoleLevelsCount = 0;
           const unmatchedJobRoles: string[] = [];
+          let newJobRoleLevels: TalentJobRoleLevelCreateModel[] = []; // Lưu vào biến scope lớn hơn để dùng cho shouldCreateCV
           if (parsedData.jobRoleLevels && Array.isArray(parsedData.jobRoleLevels) && parsedData.jobRoleLevels.length > 0) {
-            const newJobRoleLevels: TalentJobRoleLevelCreateModel[] = parsedData.jobRoleLevels.map((jrl: any) => {
+            newJobRoleLevels = parsedData.jobRoleLevels.map((jrl: any) => {
               // Tìm job role level trong hệ thống dựa trên position và level
               // Position format: "Frontend Developer", level: "Junior/Middle/Senior/Lead"
               let matchedJobRoleLevel = jobRoleLevels.find(jrLevel => {
@@ -1767,9 +1797,12 @@ export default function CreateTalent() {
                 matchedJobRoleLevel = jobRoleLevels.find(jrLevel => fuzzyMatch(jrl.position, jrLevel.name));
               }
 
+              // Tự động set yearsOfExp = 1 nếu đang là 0
+              const yearsOfExp = (jrl.yearsOfExp && jrl.yearsOfExp > 0) ? jrl.yearsOfExp : 1;
+              
               return {
                 jobRoleLevelId: matchedJobRoleLevel ? matchedJobRoleLevel.id : 0,
-                yearsOfExp: jrl.yearsOfExp || 0,
+                yearsOfExp: yearsOfExp,
                 ratePerMonth: jrl.ratePerMonth || undefined
               };
             });
@@ -1790,6 +1823,65 @@ export default function CreateTalent() {
             console.error("Lỗi khi tạo tóm tắt CV:", summaryError);
           }
 
+          // Nếu shouldCreateCV = true, upload CV lên Firebase và lưu vào initialCVs
+          if (shouldCreateCV && file) {
+            try {
+              // Tìm jobRoleLevelId từ newJobRoleLevels đã tạo ở trên (nếu có)
+              let jobRoleLevelIdForCV = 0;
+              
+              if (newJobRoleLevels.length > 0) {
+                // Lấy jobRoleLevelId đầu tiên từ newJobRoleLevels đã match được
+                const firstMatchedJRL = newJobRoleLevels.find(jrl => jrl.jobRoleLevelId > 0);
+                if (firstMatchedJRL) {
+                  jobRoleLevelIdForCV = firstMatchedJRL.jobRoleLevelId;
+                }
+              }
+
+              // Upload CV lên Firebase
+              const timestamp = Date.now();
+              const sanitizedVersionName = `v1`.replace(/[^a-zA-Z0-9-_]/g, '_');
+              const fileExtension = file.name.split('.').pop();
+              const fileName = `temp_${sanitizedVersionName}_${timestamp}.${fileExtension}`;
+              const filePath = `temp-talents/${fileName}`;
+
+              const downloadURL = await uploadFile(
+                file,
+                filePath,
+                () => {} // Không cần progress trong modal
+              );
+
+              // Tạo summary từ extracted data (đã tạo ở trên)
+              const summary = generateSummaryFromExtractedData(parsedData);
+
+              // Lưu CV vào initialCVs
+              // Nếu chưa có jobRoleLevelId, vẫn lưu CV nhưng user sẽ phải chọn sau
+              setInitialCVs(prev => prev.map((cv, index) =>
+                index === 0 ? {
+                  ...cv,
+                  jobRoleLevelId: jobRoleLevelIdForCV > 0 ? jobRoleLevelIdForCV : undefined,
+                  version: 1,
+                  cvFileUrl: downloadURL,
+                  summary: summary,
+                  isActive: true
+                } : cv
+              ));
+
+              // Đánh dấu đã upload
+              setIsUploadedFromFirebase(true);
+              setUploadedCVUrl(downloadURL);
+              setCvFile(file);
+              const previewUrl = URL.createObjectURL(file);
+              setCvPreviewUrl(previewUrl);
+
+              if (jobRoleLevelIdForCV === 0) {
+                alert("⚠️ CV đã được upload nhưng chưa có vị trí công việc. Vui lòng chọn vị trí công việc cho CV sau.");
+              }
+            } catch (uploadError: any) {
+              console.error("Lỗi upload CV:", uploadError);
+              alert(`⚠️ Đã trích xuất thông tin nhưng không thể upload CV: ${uploadError.message || 'Vui lòng thử lại.'}`);
+            }
+          }
+
           const successMessage = `✅ Trích xuất thông tin CV thành công!${matchedLocationId !== undefined
             ? `\nĐã tự động chọn khu vực làm việc.`
             : ''
@@ -1806,12 +1898,15 @@ export default function CreateTalent() {
               ? `\nĐã tự động thêm ${addedProjectsCount} dự án vào form.`
               : ''
             }${addedCertificatesCount > 0
-              ? `\nĐã tự động thêm ${addedCertificatesCount} chứng chỉ vào form.${matchedCertificatesCount > 0 ? `\n  - ${matchedCertificatesCount} chứng chỉ đã tự động match loại.` : ''}${unmatchedCertificatesCount > 0 ? `\n  - ${unmatchedCertificatesCount} chứng chỉ chưa match được loại (cần chọn thủ công).` : ''}`
+              ? `\nĐã tự động thêm ${addedCertificatesCount} chứng chỉ vào form (chỉ những chứng chỉ đã match được loại chứng chỉ trong hệ thống).`
+              : ''
+            }${unmatchedCertificatesCount > 0
+              ? `\n⚠️ Có ${unmatchedCertificatesCount} chứng chỉ không match được loại chứng chỉ trong hệ thống, không được tự động thêm vào form. Xem phần "Cảnh báo" để gửi đề xuất thêm loại chứng chỉ.`
               : ''
             }${addedJobRoleLevelsCount > 0
               ? `\nĐã tự động thêm ${addedJobRoleLevelsCount} vị trí công việc vào form.`
               : ''
-            }`;
+            }${shouldCreateCV ? `\n✅ Đã tạo CV và upload lên Firebase.` : ''}`;
           alert(successMessage);
         } catch (parseError) {
           console.error("Lỗi parse JSON:", parseError);
@@ -1826,6 +1921,43 @@ export default function CreateTalent() {
     } finally {
       setExtractingCV(false);
     }
+  };
+
+  // Handle extract CV từ modal
+  const handleExtractCVFromModal = async () => {
+    if (!modalCVFile) {
+      alert("Vui lòng chọn file CV trước!");
+      return;
+    }
+
+    // Gọi hàm extract và fill data
+    await extractAndFillDataFromCV(modalCVFile, createCVFromExtract);
+
+    // Copy file và preview URL sang trang chính để có thể xem CV sau khi trích xuất
+    setCvFile(modalCVFile);
+    if (modalCVPreviewUrl) {
+      // Tạo URL mới từ file để dùng ở trang chính (không revoke URL cũ vì đang dùng trong modal)
+      const newPreviewUrl = URL.createObjectURL(modalCVFile);
+      setCvPreviewUrl(newPreviewUrl);
+    }
+
+    // Đóng modal sau khi extract thành công
+    setShowExtractCVModal(false);
+    setModalCVFile(null);
+    if (modalCVPreviewUrl) {
+      URL.revokeObjectURL(modalCVPreviewUrl);
+      setModalCVPreviewUrl(null);
+    }
+  };
+
+  // Handle extract CV từ form (giữ lại để tương thích)
+  const handleExtractCV = async () => {
+    if (!cvFile) {
+      alert("Vui lòng chọn file CV trước!");
+      return;
+    }
+
+    await extractAndFillDataFromCV(cvFile, false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2040,7 +2172,7 @@ export default function CreateTalent() {
 
       await talentService.createWithRelatedData(payload);
       alert("✅ Tạo nhân sự thành công!");
-      navigate('/hr/developers');
+      navigate('/ta/developers');
     } catch (error: any) {
       console.error(error);
       // Thu thập thông điệp lỗi từ mọi trường khả dĩ (kể cả objecterror)
@@ -2097,6 +2229,14 @@ export default function CreateTalent() {
   const updateSkill = (index: number, field: keyof TalentSkillCreateModel, value: string | number) => {
     const updated = [...talentSkills];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Tự động set yearsExp = 1 nếu đang là 0 khi chọn skillId
+    if (field === 'skillId' && value && typeof value === 'number' && value > 0) {
+      if (updated[index].yearsExp === 0 || updated[index].yearsExp === undefined) {
+        updated[index].yearsExp = 1;
+      }
+    }
+    
     setTalentSkills(updated);
   };
 
@@ -2188,6 +2328,14 @@ export default function CreateTalent() {
   const updateJobRoleLevel = (index: number, field: keyof TalentJobRoleLevelCreateModel, value: string | number | undefined) => {
     const updated = [...talentJobRoleLevels];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Tự động set yearsOfExp = 1 nếu đang là 0 khi chọn jobRoleLevelId
+    if (field === 'jobRoleLevelId' && value && typeof value === 'number' && value > 0) {
+      if (updated[index].yearsOfExp === 0 || updated[index].yearsOfExp === undefined) {
+        updated[index].yearsOfExp = 1;
+      }
+    }
+    
     setTalentJobRoleLevels(updated);
   };
 
@@ -2208,123 +2356,153 @@ export default function CreateTalent() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 min-h-screen bg-gradient-to-br from-neutral-50 via-primary-50/30 to-secondary-50/30">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto">
           {/* Header */}
-          {formError && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3">
-              {formError}
+          <div className="border-b border-neutral-200 bg-white">
+            <div className="px-6 py-4">
+              {formError && (
+                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+                  {formError}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm text-neutral-600 mb-2">
+                <Link to="/ta/developers" className="text-primary-600 hover:text-primary-700 cursor-pointer transition-colors">
+                  Nhân sự
+                </Link>
+                <span>/</span>
+                <span className="text-neutral-900 font-semibold">Tạo nhân sự mới</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-semibold text-neutral-900 mb-1">Tạo nhân sự mới</h1>
+                  <p className="text-sm text-neutral-600">
+                    Thêm nhân sự (developer) mới vào hệ thống DevPool
+                  </p>
+                </div>
+              </div>
             </div>
-          )}
-          <div className="text-center mb-8 animate-fade-in-up">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl mb-4 shadow-glow-green animate-float">
-              <User className="text-white font-bold text-2xl" />
-            </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-neutral-900 via-primary-700 to-secondary-700 bg-clip-text text-transparent">
-              Tạo nhân sự mới
-            </h1>
-            <p className="text-neutral-600 mt-2">
-              Thêm nhân sự (developer) mới vào hệ thống DevPool
-            </p>
           </div>
 
           {/* Form with Extracted Data Sidebar */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-6 py-6">
             {/* Main Form */}
-            <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* CV Extraction Section */}
-                <div className="bg-gradient-to-br from-primary-50 via-primary-50/80 to-secondary-50 rounded-2xl p-8 border border-primary-200/50 shadow-soft">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-xl flex items-center justify-center shadow-glow">
-                      <FileText className="w-7 h-7 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-primary-900">Trích xuất thông tin từ CV</h3>
-                      <p className="text-sm text-primary-700 mt-1">Tải lên file PDF để tự động điền thông tin vào form</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 mb-4">
-                    <div>
-                      <label className="block mb-2 text-sm font-semibold text-primary-800">Chọn file CV (PDF)</label>
-                      <div className="flex gap-4 items-center">
-                        <div className="flex-1">
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            onChange={handleFileChange}
-                            className={`w-full px-4 py-3.5 border-2 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all shadow-sm hover:shadow-md ${isUploadedFromFirebase
-                              ? 'border-green-300 bg-green-50'
-                              : 'border-primary-300'
-                              }`}
-                          />
-                          {isUploadedFromFirebase && (
-                            <p className="text-xs text-green-600 mt-2">
-                              ⚠️ File đã được upload lên Firebase. Nếu chọn file CV mới, bạn sẽ cần upload lại lên Firebase.
-                            </p>
-                          )}
+            <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft border border-neutral-200/50">
+              <form onSubmit={handleSubmit}>
+                {/* Checkbox "Trích xuất thông tin từ CV" ở đầu form */}
+                <div className="p-6 border-b border-neutral-200">
+                  <div className="bg-gradient-to-br from-primary-50 via-primary-50/80 to-secondary-50 rounded-2xl p-6 border border-primary-200/50 shadow-soft">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useExtractCV}
+                        onChange={(e) => {
+                          setUseExtractCV(e.target.checked);
+                          if (e.target.checked) {
+                            setShowExtractCVModal(true);
+                          } else {
+                            // Khi uncheck, đóng modal và reset
+                            setShowExtractCVModal(false);
+                            setModalCVFile(null);
+                            if (modalCVPreviewUrl) {
+                              URL.revokeObjectURL(modalCVPreviewUrl);
+                              setModalCVPreviewUrl(null);
+                            }
+                          }
+                        }}
+                        className="w-5 h-5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
+                      />
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-6 h-6 text-primary-600" />
+                        <div>
+                          <h3 className="text-lg font-bold text-primary-900">Trích xuất thông tin từ CV</h3>
+                          <p className="text-sm text-primary-700 mt-1">Tải lên file PDF để tự động điền thông tin vào form</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleExtractCV}
-                          disabled={!cvFile || extractingCV}
-                          className="px-8 py-3.5 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-xl hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-md hover:shadow-lg transform hover:scale-105 disabled:transform-none font-semibold h-[52px]"
-                        >
-                          {extractingCV ? (
-                            <>
-                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                              Đang trích xuất...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="w-5 h-5" />
-                              Trích xuất CV
-                            </>
-                          )}
-                        </button>
                       </div>
-                    </div>
-                    {cvFile && (
-                      <div className="flex items-center gap-2 text-xs text-primary-600">
-                        <FileText className="w-3 h-3" />
-                        <span>Đã chọn: <span className="font-medium">{cvFile.name}</span></span>
-                      </div>
-                    )}
+                    </label>
                   </div>
-
-                  {/* CV Preview */}
-                  {cvPreviewUrl && (
-                    <div className="mt-6 border-2 border-primary-200 rounded-2xl overflow-hidden bg-white shadow-md">
-                      <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-5 py-3 flex items-center justify-between border-b border-primary-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                            <Eye className="w-4 h-4 text-primary-600" />
-                          </div>
-                          <span className="text-sm font-semibold text-primary-800">Xem trước CV</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => window.open(cvPreviewUrl, '_blank')}
-                          className="px-3 py-1.5 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1.5 transition-all font-medium"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          Mở toàn màn hình
-                        </button>
-                      </div>
-                      <div className="w-full" style={{ height: '450px' }}>
-                        <iframe
-                          src={cvPreviewUrl}
-                          className="w-full h-full border-0"
-                          title="CV Preview"
-                        />
-                      </div>
-                    </div>
-                  )}              
                 </div>
-                {/* Họ tên */}
+
+                {/* Tab Navigation - Sticky */}
+                <div className="sticky top-16 z-50 border-b border-neutral-200 bg-white shadow-sm">
+                  <div className="flex overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <style>{`
+                      .scrollbar-hide::-webkit-scrollbar {
+                        display: none;
+                      }
+                    `}</style>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("required")}
+                      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                        activeTab === "required"
+                          ? "border-primary-500 text-primary-600 bg-white"
+                          : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                      }`}
+                    >
+                      <User className="w-4 h-4" />
+                      Thông tin cơ bản
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("skills")}
+                      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                        activeTab === "skills"
+                          ? "border-primary-500 text-primary-600 bg-white"
+                          : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                      }`}
+                    >
+                      <Star className="w-4 h-4" />
+                      Kỹ năng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("experience")}
+                      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                        activeTab === "experience"
+                          ? "border-primary-500 text-primary-600 bg-white"
+                          : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                      }`}
+                    >
+                      <Briefcase className="w-4 h-4" />
+                      Kinh nghiệm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("projects")}
+                      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                        activeTab === "projects"
+                          ? "border-primary-500 text-primary-600 bg-white"
+                          : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                      }`}
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Dự án
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("certificates")}
+                      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                        activeTab === "certificates"
+                          ? "border-primary-500 text-primary-600 bg-white"
+                          : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                      }`}
+                    >
+                      <Award className="w-4 h-4" />
+                      Chứng chỉ
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-8">
+                  <div className="space-y-6">
+                    {/* Tab: Thông tin bắt buộc (gồm: Thông tin cơ bản, CV, Vị trí & Mức lương) */}
+                    {activeTab === "required" && (
+                      <>
+                        {/* Họ tên */}
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Họ và tên <span className="text-red-500">*</span>
@@ -2586,7 +2764,7 @@ export default function CreateTalent() {
                   <div>
                     <label className="block text-sm font-semibold text-neutral-700 mb-2">Portfolio URL</label>
                     <div className="relative group">
-                      <Link className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                      <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                       <input
                         type="url"
                         name="portfolioUrl"
@@ -2599,16 +2777,16 @@ export default function CreateTalent() {
                   </div>
                 </div>
 
-                {/* Initial CV Section - Bắt buộc */}
-                <div className="pt-6 border-t border-neutral-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-primary-600" />
-                      <h3 className="text-lg font-semibold text-neutral-800">
-                        CV Ban Đầu <span className="text-red-500">*</span>
-                      </h3>
-                    </div>
-                  </div>
+                    {/* Phần CV trong tab bắt buộc */}
+                    <div className="pt-6 border-t border-neutral-200 mt-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <FileText className="w-5 h-5 text-primary-600" />
+                        <h3 className="text-lg font-semibold text-neutral-800">
+                          CV Ban Đầu <span className="text-red-500">*</span>
+                        </h3>
+                      </div>
+                      {/* Initial CV Section - Bắt buộc */}
+                      <div className="pt-6 border-t border-neutral-200">
 
                   <div className="space-y-6">
                     {initialCVs.map((cv, index) => (
@@ -2902,24 +3080,26 @@ export default function CreateTalent() {
                   </div>
                 </div>
 
-                {/* Job Role Levels Section - Bắt buộc */}
-                <div className="pt-6 border-t border-neutral-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Target className="w-5 h-5 text-primary-600" />
-                      <h3 className="text-lg font-semibold text-neutral-800">
-                        Vị Trí & Mức Lương <span className="text-red-500">*</span>
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addJobRoleLevel}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Thêm
-                    </button>
-                  </div>
+                    {/* Phần Vị trí & Mức lương trong tab bắt buộc */}
+                    <div className="pt-6 border-t border-neutral-200 mt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <Target className="w-5 h-5 text-primary-600" />
+                          <h3 className="text-lg font-semibold text-neutral-800">
+                            Vị Trí & Mức Lương <span className="text-red-500">*</span>
+                          </h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addJobRoleLevel}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Thêm
+                        </button>
+                      </div>
+                      {/* Job Role Levels Section - Bắt buộc */}
+                      <div className="pt-6 border-t border-neutral-200">
                   {talentJobRoleLevels.map((jrl, index) => (
                     <div key={index} className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
                       <div className="flex justify-between items-center mb-3">
@@ -3048,8 +3228,15 @@ export default function CreateTalent() {
                     </div>
                   ))}
                 </div>
+                      </div>
+                    </div>
+                      </>
+                    )}
 
-                {/* Projects Section */}
+                    {/* Tab: Dự án */}
+                    {activeTab === "projects" && (
+                      <>
+                        {/* Projects Section */}
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -3145,8 +3332,13 @@ export default function CreateTalent() {
                     </div>
                   ))}
                 </div>
+                      </>
+                    )}
 
-                {/* Skills Section */}
+                    {/* Tab: Kỹ năng */}
+                    {activeTab === "skills" && (
+                      <>
+                        {/* Skills Section */}
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -3382,8 +3574,13 @@ export default function CreateTalent() {
                     </div>
                   ))}
                 </div>
+                      </>
+                    )}
 
-                {/* Certificates Section */}
+                    {/* Tab: Chứng chỉ */}
+                    {activeTab === "certificates" && (
+                      <>
+                        {/* Certificates Section */}
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -3684,8 +3881,13 @@ export default function CreateTalent() {
                     </div>
                   ))}
                 </div>
+                      </>
+                    )}
 
-                {/* Work Experiences Section */}
+                    {/* Tab: Kinh nghiệm */}
+                    {activeTab === "experience" && (
+                      <>
+                        {/* Work Experiences Section */}
                 <div className="pt-6 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -3886,9 +4088,11 @@ export default function CreateTalent() {
                     </div>
                   ))}
                 </div>
+                      </>
+                    )}
 
-                {/* Submit */}
-                <div className="pt-6">
+                    {/* Submit Button - Hiển thị ở tất cả các tab */}
+                    <div className="pt-6 border-t border-neutral-200 mt-8">
                   <button
                     type="submit"
                     disabled={loading}
@@ -3903,400 +4107,755 @@ export default function CreateTalent() {
                       "Tạo nhân sự"
                     )}
                   </button>
+                    </div>
+                  </div>
                 </div>
               </form>
+
+              {/* Modal Trích xuất CV */}
+              {showExtractCVModal && (
+                <div 
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+                  style={{ paddingTop: '10vh' }}
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setShowExtractCVModal(false);
+                      setModalCVFile(null);
+                      if (modalCVPreviewUrl) {
+                        URL.revokeObjectURL(modalCVPreviewUrl);
+                        setModalCVPreviewUrl(null);
+                      }
+                      if (!extractedData) {
+                        setUseExtractCV(false);
+                      }
+                    }
+                  }}
+                >
+                  <div 
+                    className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col mb-8" 
+                    style={{ maxHeight: '80vh' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header - Sticky */}
+                    <div className="sticky top-0 bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-neutral-900">Trích xuất thông tin từ CV</h3>
+                          <p className="text-xs text-neutral-600 mt-0.5">Tải lên file PDF để tự động điền thông tin</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowExtractCVModal(false);
+                          setModalCVFile(null);
+                          if (modalCVPreviewUrl) {
+                            URL.revokeObjectURL(modalCVPreviewUrl);
+                            setModalCVPreviewUrl(null);
+                          }
+                          // Nếu chưa extract, uncheck checkbox
+                          if (!extractedData) {
+                            setUseExtractCV(false);
+                          }
+                        }}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Content - Scrollable */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                      {/* Upload CV */}
+                      <div>
+                        <label className="block mb-2 text-sm font-semibold text-neutral-700">Chọn file CV (PDF)</label>
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleModalFileChange}
+                          className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                        />
+                        {modalCVFile && (
+                          <div className="flex items-center gap-2 text-xs text-neutral-600 mt-2">
+                            <FileText className="w-3 h-3" />
+                            <span>Đã chọn: <span className="font-medium text-neutral-900">{modalCVFile.name}</span></span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CV Preview trong modal */}
+                      {modalCVPreviewUrl && (
+                        <div className="border-2 border-primary-200 rounded-xl overflow-hidden bg-white shadow-md">
+                          <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-5 py-3 flex items-center justify-between border-b border-primary-200">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
+                                <Eye className="w-4 h-4 text-primary-600" />
+                              </div>
+                              <span className="text-sm font-semibold text-primary-800">Xem trước CV</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => window.open(modalCVPreviewUrl, '_blank')}
+                              className="px-3 py-1.5 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1.5 transition-all font-medium"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Mở toàn màn hình
+                            </button>
+                          </div>
+                          <div className="w-full bg-white" style={{ height: '450px' }}>
+                            <iframe
+                              src={modalCVPreviewUrl}
+                              className="w-full h-full border-0"
+                              title="CV Preview"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Checkbox "Tạo CV luôn" */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={createCVFromExtract}
+                            onChange={(e) => setCreateCVFromExtract(e.target.checked)}
+                            className="w-5 h-5 mt-0.5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
+                          />
+                          <div>
+                            <span className="text-sm font-semibold text-blue-900 block">Tạo CV luôn</span>
+                            <p className="text-xs text-blue-700 mt-1">
+                              Tự động tạo CV mới cho nhân sự từ file CV đã upload. Nếu không chọn, chỉ lấy thông tin để điền vào form.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Footer - Sticky */}
+                    <div className="sticky bottom-0 bg-white border-t border-neutral-200 px-6 py-4 flex gap-3 rounded-b-2xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowExtractCVModal(false);
+                          setModalCVFile(null);
+                          if (modalCVPreviewUrl) {
+                            URL.revokeObjectURL(modalCVPreviewUrl);
+                            setModalCVPreviewUrl(null);
+                          }
+                          // Nếu chưa extract, uncheck checkbox
+                          if (!extractedData) {
+                            setUseExtractCV(false);
+                          }
+                        }}
+                        className="flex-1 px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-all font-medium text-sm"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleExtractCVFromModal}
+                        disabled={!modalCVFile || extractingCV}
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-lg hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-semibold text-sm"
+                      >
+                        {extractingCV ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Đang trích xuất...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            Xác nhận & Trích xuất
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Xem CV */}
+              {showCVViewerModal && cvPreviewUrl && (
+                <div
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setShowCVViewerModal(false);
+                    }
+                  }}
+                >
+                  <div
+                    className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full flex flex-col"
+                    style={{ maxHeight: '90vh' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="sticky top-0 bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-lg flex items-center justify-center">
+                          <Eye className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-neutral-900">Xem CV</h3>
+                          <p className="text-xs text-neutral-600 mt-0.5">Đối chiếu CV với dữ liệu đã trích xuất</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCVViewerModal(false)}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Content - CV Preview */}
+                    <div className="flex-1 overflow-hidden p-6">
+                      <div className="w-full h-full border-2 border-primary-200 rounded-xl overflow-hidden bg-white shadow-md">
+                        <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-5 py-3 flex items-center justify-between border-b border-primary-200">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
+                              <FileText className="w-4 h-4 text-primary-600" />
+                            </div>
+                            <span className="text-sm font-semibold text-primary-800">CV Preview</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => window.open(cvPreviewUrl, '_blank')}
+                            className="px-3 py-1.5 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1.5 transition-all font-medium"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Mở toàn màn hình
+                          </button>
+                        </div>
+                        <div className="w-full bg-white" style={{ height: 'calc(90vh - 200px)' }}>
+                          <iframe
+                            src={cvPreviewUrl}
+                            className="w-full h-full border-0"
+                            title="CV Preview"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Extracted Data Sidebar - Sticky */}
+            {/* Extracted Data Sidebar - Sticky với Tab Navigation Dọc */}
             {extractedData && (
               <div className="lg:col-span-1">
-                <div className="sticky top-4 bg-gradient-to-br from-green-50 via-emerald-50/30 to-green-50 backdrop-blur-sm rounded-2xl shadow-soft p-6 border-2 border-green-200/50 max-h-[calc(100vh-1rem)] overflow-y-auto">
-                  <div className="flex items-center gap-3 mb-5 pb-5 border-b border-green-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
-                      <FileText className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-green-800">
-                        Dữ Liệu Đã Trích Xuất
-                      </h3>
-                      <p className="text-xs text-green-600 mt-0.5">Tham khảo khi điền form</p>
+                <div className="sticky top-4 bg-white rounded-2xl shadow-lg border border-neutral-200 max-h-[calc(100vh-1rem)] flex flex-col overflow-hidden">
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-neutral-200 bg-gradient-to-r from-primary-50 to-secondary-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-lg flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-neutral-900">
+                          Dữ Liệu Đã Trích Xuất
+                        </h3>
+                        <p className="text-xs text-neutral-600">Tham khảo khi điền form</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Display extracted information */}
-                  <div className="space-y-4">
-                    {/* Thông tin chung */}
-                    {(extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
-                      <div className="bg-white/70 rounded-xl p-4 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-200">
-                          <User className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Thông tin chung</span>
-                        </div>
-                        <div className="space-y-3 ml-2">
-                          {extractedData.fullName && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <User className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Họ và tên</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5">{extractedData.fullName}</p>
+                  {/* CV Viewer Button - Mở popup xem CV */}
+                  {cvPreviewUrl && (
+                    <div className="border-b border-neutral-200 bg-white">
+                      <div className="p-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowCVViewerModal(true)}
+                          className="w-full flex items-center justify-between gap-3 p-3 bg-gradient-to-r from-primary-50 to-secondary-50 hover:from-primary-100 hover:to-secondary-100 border border-primary-200 rounded-lg transition-all group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                              <Eye className="w-4 h-4 text-primary-600" />
                             </div>
-                          )}
-                          {extractedData.email && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Mail className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Email</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5 break-all">{extractedData.email}</p>
+                            <div className="text-left">
+                              <h4 className="text-sm font-semibold text-neutral-900">Xem CV</h4>
+                              <p className="text-xs text-neutral-600">Đối chiếu CV với dữ liệu đã trích xuất</p>
                             </div>
-                          )}
-                          {extractedData.phone && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Phone className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Số điện thoại</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5">{extractedData.phone}</p>
-                            </div>
-                          )}
-                          {extractedData.dateOfBirth && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Calendar className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Ngày sinh</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5">{extractedData.dateOfBirth}</p>
-                            </div>
-                          )}
-                          {extractedData.locationName && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <MapPin className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Khu vực làm việc</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5">{extractedData.locationName}</p>
-                            </div>
-                          )}
-                          {extractedData.workingMode && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Globe className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Chế độ làm việc</span>
-                              </div>
-                              <p className="text-sm font-medium text-green-900 ml-5">
-                                {extractedData.workingMode === 'Remote' ? 'Từ xa' :
-                                  extractedData.workingMode === 'Onsite' ? 'Tại văn phòng' :
-                                    extractedData.workingMode === 'Hybrid' ? 'Kết hợp' :
-                                      extractedData.workingMode === 'Flexible' ? 'Linh hoạt' :
-                                        extractedData.workingMode}
-                              </p>
-                            </div>
-                          )}
-                          {extractedData.githubUrl && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Github className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Github URL</span>
-                              </div>
-                              <a
-                                href={extractedData.githubUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-medium text-green-900 ml-5 break-all hover:text-green-700 underline block"
-                              >
-                                {extractedData.githubUrl}
-                              </a>
-                            </div>
-                          )}
-                          {extractedData.portfolioUrl && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Link className="w-3.5 h-3.5 text-green-600" />
-                                <span className="text-xs font-semibold text-green-700">Portfolio URL</span>
-                              </div>
-                              <a
-                                href={extractedData.portfolioUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-medium text-green-900 ml-5 break-all hover:text-green-700 underline block"
-                              >
-                                {extractedData.portfolioUrl}
-                              </a>
-                            </div>
-                          )}       
-                        </div>
-                      </div>
-                    )}
-                    {/* Dự án */}
-                    {extractedData.projects && extractedData.projects.length > 0 && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Layers className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dự án</span>
-                        </div>
-                        <div className="ml-6 space-y-2">
-                          {extractedData.projects.map((project, index: number) => (
-                            <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-700">Tên dự án: <span className="text-neutral-900">{project.projectName || 'N/A'}</span></p>
-                              {project.technologies && (
-                                <p className="text-green-700">Tech: <span className="text-neutral-900">{project.technologies}</span></p>
-                              )}
-                              {project.description && (
-                                <p className="text-green-600 text-xs mt-1">Mô tả: <span className="text-neutral-900">{project.description}</span></p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Vị trí & mức lương */}
-                    {extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Target className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Vị trí & mức lương</span>
-                        </div>
-                        <div className="ml-6 space-y-2">
-                          {extractedData.jobRoleLevels.map((jrl, index: number) => (
-                            <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-700">Vị trí: <span className="text-neutral-900">{jrl.position || 'N/A'}</span></p>
-                              {jrl.level && (
-                                <p className="text-green-700">Cấp độ: <span className="text-neutral-900">{jrl.level}</span></p>
-                              )}
-                              {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
-                                <p className="text-green-700">Kinh nghiệm: <span className="text-neutral-900">{jrl.yearsOfExp} năm</span></p>
-                              )}
-                              {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
-                                <p className="text-green-600">Mức lương: <span className="text-neutral-900">{jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</span></p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Kỹ năng của nhân sự */}
-                    {extractedData.skills && extractedData.skills.length > 0 && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Star className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Kỹ năng</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 ml-6">
-                          {extractedData.skills.map((skill, index: number) => {
-                            const skillName = typeof skill === 'string' ? skill : skill.skillName;
-                            return (
-                              <span key={index} className="px-2.5 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-medium shadow-sm">
-                                {skillName}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Chứng chỉ */}
-                    {extractedData.certificates && extractedData.certificates.length > 0 && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Award className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Chứng Chỉ</span>
-                        </div>
-                        <div className="ml-6 space-y-2">
-                          {extractedData.certificates.map((cert, index: number) => (
-                            <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="font-semibold text-green-700">Tên chứng chỉ: <span className="text-neutral-900">{cert.certificateName || 'N/A'}</span></p>
-                              {cert.certificateDescription && (
-                                <p className="text-green-700">Mô tả: <span className="text-neutral-900">{cert.certificateDescription}</span></p>
-                              )}
-                              {cert.issuedDate && (
-                                <p className="text-green-700">Ngày cấp: <span className="text-neutral-900">{cert.issuedDate}</span></p>
-                              )}
-                              {cert.imageUrl && (
-                                <a
-                                  href={cert.imageUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-green-600 hover:text-green-800 underline text-xs"
-                                >
-                                  Xem hình ảnh →
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Kinh nghiệm làm việc */}
-                    {extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
-                      <div className="bg-white/70 rounded-xl p-3 border border-green-200 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Workflow className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Kinh nghiệm</span>
-                        </div>
-                        <div className="ml-6 space-y-2">
-                          {extractedData.workExperiences.map((exp, index: number) => (
-                            <div key={index} className="text-xs text-green-800 bg-green-50/50 rounded-lg p-2 border border-green-100">
-                              <p className="text-green-700">Công ty: <span className="text-neutral-900">{exp.company || 'N/A'}</span></p>
-                              <p className="font-semibold text-green-700">Vị trí: <span className="text-neutral-900">{exp.position || 'N/A'}</span></p>
-                              <p className="text-green-600">Ngày bắt đầu: <span className="text-neutral-900">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</span></p>
-                              
-                              {exp.description && (
-                                <p className="text-neutral-900 text-xs mt-1 italic">{exp.description}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Unmatched Data Warnings - Hệ thống thiếu dữ liệu */}
-                    {(unmatchedData.location ||
-                      (unmatchedData.skills && unmatchedData.skills.length > 0) ||
-                      (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) ||
-                      (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) && (
-                        <div className="mt-4 pt-4 border-t border-orange-300">
-                          <div className="flex items-center gap-2 mb-3">
-                            <X className="w-4 h-4 text-orange-600" />
-                            <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">⚠️ Hệ thống thiếu dữ liệu</span>
                           </div>
-                          <div className="space-y-3">
-                            {unmatchedData.location && (
-                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <MapPin className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-semibold text-orange-700">Khu vực làm việc</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendSuggestion("location", "/admin/categories/locations/create")}
-                                    disabled={suggestionLoading === "location" || isSuggestionPending("location")}
-                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                  >
-                                    {suggestionLoading === "location"
-                                      ? "Đang gửi..."
-                                      : isSuggestionPending("location")
-                                        ? "Đã gửi (chờ Admin)"
-                                        : "Gửi đề xuất cho Admin"}
-                                  </button>
+                          <Eye className="w-4 h-4 text-primary-600 group-hover:text-primary-700 transition-colors" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Layout với Content bên trái và Tab dọc bên phải */}
+                  <div className="flex flex-1 overflow-hidden">
+                    {/* Tab Content - Scrollable bên trái */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <div className="space-y-4">
+                      {/* Tab: Tổng quan */}
+                      {activeSidebarTab === "overview" && (extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
+                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="space-y-2.5">
+                            {extractedData.fullName && (
+                              <div className="flex items-start gap-2">
+                                <User className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Họ và tên</p>
+                                  <p className="text-sm font-medium text-neutral-900 break-words">{extractedData.fullName}</p>
                                 </div>
-                                <p className="text-xs text-orange-800 ml-5 mb-1">
-                                  CV có: <span className="font-medium">"{unmatchedData.location}"</span>
-                                </p>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Thêm khu vực này vào hệ thống trước khi tạo nhân sự để tự động điền.
-                                </p>
                               </div>
                             )}
-                            {unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0 && (
-                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Target className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-semibold text-orange-700">Vị trí công việc</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendSuggestion("jobRole", "/admin/categories/job-roles/create")}
-                                    disabled={suggestionLoading === "jobRole" || isSuggestionPending("jobRole")}
-                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                  >
-                                    {suggestionLoading === "jobRole"
-                                      ? "Đang gửi..."
-                                      : isSuggestionPending("jobRole")
-                                        ? "Đã gửi (chờ Admin)"
-                                        : "Gửi đề xuất cho Admin"}
-                                  </button>
+                            {extractedData.email && (
+                              <div className="flex items-start gap-2">
+                                <Mail className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Email</p>
+                                  <a href={`mailto:${extractedData.email}`} className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all">{extractedData.email}</a>
                                 </div>
-                                <p className="text-xs text-orange-800 ml-5 mb-1">
-                                  CV có {unmatchedData.jobRoles.length} vị trí công việc không tìm thấy trong hệ thống:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 ml-5 mb-2">
-                                  {unmatchedData.jobRoles.map((jobRole, index) => (
-                                    <span key={index} className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                      {jobRole}
-                                    </span>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Thêm các vị trí công việc này vào hệ thống trước khi tạo nhân sự để tự động điền.
-                                </p>
                               </div>
                             )}
-                            {unmatchedData.skills && unmatchedData.skills.length > 0 && (
-                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Star className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-semibold text-orange-700">Kỹ năng</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendSuggestion("skill", "/admin/categories/skills/create")}
-                                    disabled={suggestionLoading === "skill" || isSuggestionPending("skill")}
-                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                  >
-                                    {suggestionLoading === "skill"
-                                      ? "Đang gửi..."
-                                      : isSuggestionPending("skill")
-                                        ? "Đã gửi (chờ Admin)"
-                                        : "Gửi đề xuất cho Admin"}
-                                  </button>
+                            {extractedData.phone && (
+                              <div className="flex items-start gap-2">
+                                <Phone className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Số điện thoại</p>
+                                  <p className="text-sm font-medium text-neutral-900">{extractedData.phone}</p>
                                 </div>
-                                <p className="text-xs text-orange-800 ml-5 mb-1">
-                                  CV có {unmatchedData.skills.length} kỹ năng không tìm thấy trong hệ thống:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 ml-5 mb-2">
-                                  {unmatchedData.skills.map((skill, index) => (
-                                    <span key={index} className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Thêm các kỹ năng này vào hệ thống trước khi tạo nhân sự để tự động điền.
-                                </p>
                               </div>
                             )}
-                            {unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0 && (
-                              <div className="bg-orange-50/70 rounded-lg p-3 border border-orange-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Award className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-semibold text-orange-700">Tên chứng chỉ</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendSuggestion("certificateType", "/admin/categories/certificate-types/create")}
-                                    disabled={suggestionLoading === "certificateType" || isSuggestionPending("certificateType")}
-                                    className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                  >
-                                    {suggestionLoading === "certificateType"
-                                      ? "Đang gửi..."
-                                      : isSuggestionPending("certificateType")
-                                        ? "Đã gửi (chờ Admin)"
-                                        : "Gửi đề xuất cho Admin"}
-                                  </button>
+                            {extractedData.dateOfBirth && (
+                              <div className="flex items-start gap-2">
+                                <Calendar className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Ngày sinh</p>
+                                  <p className="text-sm font-medium text-neutral-900">{extractedData.dateOfBirth}</p>
                                 </div>
-                                <p className="text-xs text-orange-800 ml-5 mb-1">
-                                  CV có {unmatchedData.certificateTypes.length} tên chứng chỉ có loại chứng chỉ không có trong hệ thống:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 ml-5 mb-2">
-                                  {unmatchedData.certificateTypes.map((certName, index) => (
-                                    <span key={index} className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                      {certName}
-                                    </span>
-                                  ))}
+                              </div>
+                            )}
+                            {extractedData.locationName && (
+                              <div className="flex items-start gap-2">
+                                <MapPin className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Khu vực làm việc</p>
+                                  <p className="text-sm font-medium text-neutral-900">{extractedData.locationName}</p>
                                 </div>
-                                <p className="text-xs text-orange-700 ml-5 italic">
-                                  💡 Đề xuất: Các tên chứng chỉ này có loại chứng chỉ không có trong hệ thống. Vui lòng thêm loại chứng chỉ tương ứng vào hệ thống hoặc chọn loại chứng chỉ thủ công.
-                                </p>
+                              </div>
+                            )}
+                            {extractedData.workingMode && (
+                              <div className="flex items-start gap-2">
+                                <Globe className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Chế độ làm việc</p>
+                                  <p className="text-sm font-medium text-neutral-900">
+                                    {extractedData.workingMode === 'Remote' ? 'Từ xa' :
+                                      extractedData.workingMode === 'Onsite' ? 'Tại văn phòng' :
+                                        extractedData.workingMode === 'Hybrid' ? 'Kết hợp' :
+                                          extractedData.workingMode === 'Flexible' ? 'Linh hoạt' :
+                                            extractedData.workingMode}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            {extractedData.githubUrl && (
+                              <div className="flex items-start gap-2">
+                                <Github className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Github URL</p>
+                                  <a href={extractedData.githubUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline">
+                                    {extractedData.githubUrl}
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+                            {extractedData.portfolioUrl && (
+                              <div className="flex items-start gap-2">
+                                <LinkIcon className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Portfolio URL</p>
+                                  <a href={extractedData.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline">
+                                    {extractedData.portfolioUrl}
+                                  </a>
+                                </div>
                               </div>
                             )}
                           </div>
                         </div>
                       )}
+
+                      {/* Tab: Kỹ năng */}
+                      {activeSidebarTab === "skills" && extractedData.skills && extractedData.skills.length > 0 && (
+                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Star className="w-4 h-4 text-primary-600" />
+                            <span className="text-sm font-semibold text-neutral-900">Kỹ năng ({extractedData.skills.length})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {extractedData.skills.map((skill, index: number) => {
+                              const skillName = typeof skill === 'string' ? skill : skill.skillName;
+                              const skillLevel = typeof skill === 'object' ? skill.level : null;
+                              return (
+                                <div key={index} className="px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-medium text-neutral-900 shadow-sm">
+                                  <span>{skillName}</span>
+                                  {skillLevel && <span className="text-primary-600 ml-1">({skillLevel})</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tab: Kinh nghiệm */}
+                      {activeSidebarTab === "experience" && extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
+                        <div className="space-y-3">
+                          {extractedData.workExperiences.map((exp, index: number) => (
+                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                              <div className="flex items-start gap-2 mb-2">
+                                <Briefcase className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-neutral-900">{exp.position || 'N/A'}</p>
+                                  <p className="text-xs text-neutral-600">{exp.company || 'N/A'}</p>
+                                  <p className="text-xs text-neutral-500 mt-1">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</p>
+                                  {exp.description && (
+                                    <p className="text-xs text-neutral-700 mt-2 italic line-clamp-2">{exp.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Tab: Dự án */}
+                      {activeSidebarTab === "projects" && extractedData.projects && extractedData.projects.length > 0 && (
+                        <div className="space-y-3">
+                          {extractedData.projects.map((project, index: number) => (
+                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                              <div className="flex items-start gap-2 mb-2">
+                                <FolderOpen className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-neutral-900">{project.projectName || 'N/A'}</p>
+                                  {project.technologies && (
+                                    <p className="text-xs text-neutral-600 mt-1">Tech: {project.technologies}</p>
+                                  )}
+                                  {project.description && (
+                                    <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{project.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Tab: Chứng chỉ */}
+                      {activeSidebarTab === "certificates" && extractedData.certificates && extractedData.certificates.length > 0 && (
+                        <div className="space-y-3">
+                          {extractedData.certificates.map((cert, index: number) => (
+                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                              <div className="flex items-start gap-2 mb-2">
+                                <Award className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-neutral-900">{cert.certificateName || 'N/A'}</p>
+                                  {cert.issuedDate && (
+                                    <p className="text-xs text-neutral-600 mt-1">Ngày cấp: {cert.issuedDate}</p>
+                                  )}
+                                  {cert.certificateDescription && (
+                                    <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{cert.certificateDescription}</p>
+                                  )}
+                                  {cert.imageUrl && (
+                                    <a href={cert.imageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 hover:text-primary-700 underline mt-1 inline-block">
+                                      Xem hình ảnh →
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Tab: Vị trí */}
+                      {activeSidebarTab === "jobRole" && extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
+                        <div className="space-y-3">
+                          {extractedData.jobRoleLevels.map((jrl, index: number) => (
+                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                              <div className="flex items-start gap-2 mb-2">
+                                <Target className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-neutral-900">{jrl.position || 'N/A'}</p>
+                                  {jrl.level && (
+                                    <p className="text-xs text-neutral-600 mt-1">Cấp độ: {jrl.level}</p>
+                                  )}
+                                  {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
+                                    <p className="text-xs text-neutral-600">Kinh nghiệm: {jrl.yearsOfExp} năm</p>
+                                  )}
+                                  {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
+                                    <p className="text-xs text-primary-600 font-medium mt-1">Mức lương: {jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Tab: Cảnh báo */}
+                      {activeSidebarTab === "warnings" && (unmatchedData.location ||
+                        (unmatchedData.skills && unmatchedData.skills.length > 0) ||
+                        (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) ||
+                        (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <X className="w-4 h-4 text-orange-600" />
+                            <span className="text-sm font-semibold text-orange-700">⚠️ Hệ thống thiếu dữ liệu</span>
+                          </div>
+                          {unmatchedData.location && (
+                            <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="w-4 h-4 text-orange-600" />
+                                  <span className="text-sm font-semibold text-orange-700">Khu vực làm việc</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendSuggestion("location", "/admin/categories/locations/create")}
+                                  disabled={suggestionLoading === "location" || isSuggestionPending("location")}
+                                  className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {suggestionLoading === "location"
+                                    ? "Đang gửi..."
+                                    : isSuggestionPending("location")
+                                      ? "Đã gửi (chờ Admin)"
+                                      : "Gửi đề xuất"}
+                                </button>
+                              </div>
+                              <p className="text-sm text-orange-800 mb-1">
+                                CV có: <span className="font-medium">"{unmatchedData.location}"</span>
+                              </p>
+                              <p className="text-xs text-orange-700 italic">
+                                💡 Đề xuất: Thêm khu vực này vào hệ thống trước khi tạo nhân sự để tự động điền.
+                              </p>
+                            </div>
+                          )}
+                          {unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0 && (
+                            <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Target className="w-4 h-4 text-orange-600" />
+                                  <span className="text-sm font-semibold text-orange-700">Vị trí công việc</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendSuggestion("jobRole", "/admin/categories/job-roles/create")}
+                                  disabled={suggestionLoading === "jobRole" || isSuggestionPending("jobRole")}
+                                  className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {suggestionLoading === "jobRole"
+                                    ? "Đang gửi..."
+                                    : isSuggestionPending("jobRole")
+                                      ? "Đã gửi (chờ Admin)"
+                                      : "Gửi đề xuất"}
+                                </button>
+                              </div>
+                              <p className="text-sm text-orange-800 mb-2">
+                                CV có {unmatchedData.jobRoles.length} vị trí công việc không tìm thấy trong hệ thống:
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {unmatchedData.jobRoles.map((jobRole, index) => (
+                                  <span key={index} className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                    {jobRole}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-orange-700 italic">
+                                💡 Đề xuất: Thêm các vị trí công việc này vào hệ thống trước khi tạo nhân sự để tự động điền.
+                              </p>
+                            </div>
+                          )}
+                          {unmatchedData.skills && unmatchedData.skills.length > 0 && (
+                            <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Star className="w-4 h-4 text-orange-600" />
+                                  <span className="text-sm font-semibold text-orange-700">Kỹ năng</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendSuggestion("skill", "/admin/categories/skills/create")}
+                                  disabled={suggestionLoading === "skill" || isSuggestionPending("skill")}
+                                  className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {suggestionLoading === "skill"
+                                    ? "Đang gửi..."
+                                    : isSuggestionPending("skill")
+                                      ? "Đã gửi (chờ Admin)"
+                                      : "Gửi đề xuất"}
+                                </button>
+                              </div>
+                              <p className="text-sm text-orange-800 mb-2">
+                                CV có {unmatchedData.skills.length} kỹ năng không tìm thấy trong hệ thống:
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {unmatchedData.skills.map((skill, index) => (
+                                  <span key={index} className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-orange-700 italic">
+                                💡 Đề xuất: Thêm các kỹ năng này vào hệ thống trước khi tạo nhân sự để tự động điền.
+                              </p>
+                            </div>
+                          )}
+                          {unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0 && (
+                            <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Award className="w-4 h-4 text-orange-600" />
+                                  <span className="text-sm font-semibold text-orange-700">Tên chứng chỉ</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendSuggestion("certificateType", "/admin/categories/certificate-types/create")}
+                                  disabled={suggestionLoading === "certificateType" || isSuggestionPending("certificateType")}
+                                  className="text-xs text-orange-600 hover:text-orange-800 underline font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {suggestionLoading === "certificateType"
+                                    ? "Đang gửi..."
+                                    : isSuggestionPending("certificateType")
+                                      ? "Đã gửi (chờ Admin)"
+                                      : "Gửi đề xuất"}
+                                </button>
+                              </div>
+                              <p className="text-sm text-orange-800 mb-2">
+                                CV có {unmatchedData.certificateTypes.length} tên chứng chỉ có loại chứng chỉ không có trong hệ thống:
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {unmatchedData.certificateTypes.map((certName, index) => (
+                                  <span key={index} className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                    {certName}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-orange-700 italic">
+                                💡 Đề xuất: Các tên chứng chỉ này có loại chứng chỉ không có trong hệ thống. Vui lòng thêm loại chứng chỉ tương ứng vào hệ thống hoặc chọn loại chứng chỉ thủ công.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    </div>
+
+                    {/* Tab Navigation - Dọc bên phải */}
+                    <div className="w-16 border-l border-neutral-200 bg-neutral-50/50 flex flex-col overflow-y-auto flex-shrink-0">
+                      {(extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("overview")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "overview"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Tổng quan"
+                        >
+                          <User className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Tổng quan</span>
+                        </button>
+                      )}
+                      {extractedData.skills && extractedData.skills.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("skills")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "skills"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Kỹ năng"
+                        >
+                          <Star className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Kỹ năng</span>
+                        </button>
+                      )}
+                      {extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("experience")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "experience"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Kinh nghiệm"
+                        >
+                          <Briefcase className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Kinh nghiệm</span>
+                        </button>
+                      )}
+                      {extractedData.projects && extractedData.projects.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("projects")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "projects"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Dự án"
+                        >
+                          <FolderOpen className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Dự án</span>
+                        </button>
+                      )}
+                      {extractedData.certificates && extractedData.certificates.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("certificates")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "certificates"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Chứng chỉ"
+                        >
+                          <Award className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Chứng chỉ</span>
+                        </button>
+                      )}
+                      {extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("jobRole")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "jobRole"
+                              ? "border-primary-500 text-primary-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Vị trí"
+                        >
+                          <Target className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Vị trí</span>
+                        </button>
+                      )}
+                      {(unmatchedData.location || (unmatchedData.skills && unmatchedData.skills.length > 0) || (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) || (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarTab("warnings")}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium border-l-2 transition-all w-full ${
+                            activeSidebarTab === "warnings"
+                              ? "border-orange-500 text-orange-600 bg-white"
+                              : "border-transparent text-neutral-600 hover:text-orange-600 hover:bg-neutral-100/50"
+                          }`}
+                          title="Cảnh báo"
+                        >
+                          <X className="w-4 h-4" />
+                          <span className="text-[10px] leading-tight text-center">Cảnh báo</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

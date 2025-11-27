@@ -314,7 +314,7 @@ export default function ListContract() {
     if (loading) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -328,7 +328,7 @@ export default function ListContract() {
     if (error) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -344,7 +344,7 @@ export default function ListContract() {
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
 
             <div className="flex-1 p-4 sm:p-8">
                 {/* Header */}
@@ -354,7 +354,7 @@ export default function ListContract() {
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">Hợp đồng nhân sự</h1>
                             <p className="text-neutral-600 mt-1">Quản lý và theo dõi các hợp đồng nhân sự</p>
                         </div>
-                        <Link to="/hr/contracts/create" className="flex-shrink-0">
+                        <Link to="/ta/contracts/create" className="flex-shrink-0">
                             <button className="group flex items-center gap-2 px-4 sm:px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 w-full sm:w-auto">
                                 <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                                 <span className="whitespace-nowrap">Tạo hợp đồng mới</span>
@@ -820,7 +820,7 @@ export default function ListContract() {
                                             </td>
                                             <td className="py-3 px-3 text-center">
                                                 <Link
-                                                    to={`/hr/contracts/${contract.id}`}
+                                                    to={`/ta/contracts/${contract.id}`}
                                                     className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                                                 >
                                                     <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

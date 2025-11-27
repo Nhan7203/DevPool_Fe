@@ -82,7 +82,7 @@ export default function DeveloperDashboard() {
         if (talent) {
           setCurrentTalentId(talent.id);
         } else {
-          setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ HR.');
+          setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ TA.');
           setLoading(false);
         }
       } catch (err: any) {
@@ -386,7 +386,7 @@ export default function DeveloperDashboard() {
                   <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
                     <Code2 className="w-12 h-12 mb-4 text-gray-400" />
                     <p className="text-center">Chưa có kỹ năng nào được đăng ký</p>
-                    <p className="text-sm text-gray-400 mt-2">Vui lòng liên hệ HR để thêm kỹ năng vào hồ sơ</p>
+                    <p className="text-sm text-gray-400 mt-2">Vui lòng liên hệ TA để thêm kỹ năng vào hồ sơ</p>
                   </div>
                 )}
               </div>

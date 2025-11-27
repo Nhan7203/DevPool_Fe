@@ -200,7 +200,7 @@ const stats = [
                 setRequests(mapped);
                 setFilteredRequests(mapped);
             } catch (err) {
-                console.error("❌ Lỗi tải danh sách yêu cầu HR:", err);
+                console.error("❌ Lỗi tải danh sách yêu cầu TA:", err);
             } finally {
                 setLoading(false);
             }
@@ -276,7 +276,7 @@ const stats = [
     if (loading)
         return (
             <div className="flex bg-gray-50 min-h-screen">
-                <Sidebar items={sidebarItems} title="HR Staff" />
+                <Sidebar items={sidebarItems} title="TA Staff" />
                 <div className="flex-1 flex justify-center items-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -288,7 +288,7 @@ const stats = [
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
-            <Sidebar items={sidebarItems} title="HR Staff" />
+            <Sidebar items={sidebarItems} title="TA Staff" />
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
@@ -574,7 +574,7 @@ const stats = [
                                             </td>
                                             <td className="py-4 px-6 text-center">
                                                 <Link
-                                                    to={`/hr/applications?jobRequestId=${req.id}`}
+                                                    to={`/ta/applications?jobRequestId=${req.id}`}
                                                     className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 hover:scale-105 transform ${req.applicationCount > 0
                                                             ? 'bg-primary-100 text-primary-700 hover:bg-primary-200'
                                                             : 'bg-neutral-100 text-neutral-500'
@@ -603,7 +603,7 @@ const stats = [
                                             <td className="py-4 px-6 text-center">
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Link
-                                                        to={`/hr/job-requests/${req.id}`}
+                                                        to={`/ta/job-requests/${req.id}`}
                                                         className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                                                     >
                                                         <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

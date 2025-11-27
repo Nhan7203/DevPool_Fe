@@ -308,10 +308,10 @@ const NotificationCenterPage = () => {
     }
     
     if (notification.actionUrl) {
-      // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
+      // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
       let targetUrl = notification.actionUrl;
-      if (targetUrl.startsWith('/hr/talents/')) {
-        targetUrl = targetUrl.replace('/hr/talents/', '/hr/developers/');
+      if (targetUrl.startsWith('/ta/talents/')) {
+        targetUrl = targetUrl.replace('/ta/talents/', '/ta/developers/');
       }
       navigate(targetUrl);
     }
@@ -325,7 +325,7 @@ const NotificationCenterPage = () => {
 
   const openReplyModal = async (notification: Notification) => {
     setReplyNotification(notification);
-    setReplyMessage('HR sẽ sử dụng CV này để cập nhật hồ sơ talent trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
+    setReplyMessage('TA sẽ sử dụng CV này để cập nhật hồ sơ talent trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
     setReplyModalOpen(true);
   };
 
@@ -383,8 +383,8 @@ const NotificationCenterPage = () => {
         return;
       }
 
-      // Lấy tên HR từ user context thay vì email
-      const hrStaffName = user?.name || 'HR Staff';
+      // Lấy tên TA từ user context thay vì email
+      const hrStaffName = user?.name || 'TA Staff';
 
       // Tạo title với jobRoleLevel name
       const title = jobRoleLevelName 
