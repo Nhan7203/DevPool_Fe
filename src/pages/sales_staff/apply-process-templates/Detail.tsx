@@ -23,6 +23,7 @@ export default function SalesApplyProcessTemplateDetailPage() {
   const [steps, setSteps] = useState<ApplyProcessStep[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>('info');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -205,66 +206,92 @@ export default function SalesApplyProcessTemplateDetailPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem label="Tên Template" value={template.name} icon={<FileText className="w-4 h-4" />} />
-              {template.description && (
-                <div className="md:col-span-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-neutral-400" />
-                    <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
-                  </div>
-                  <p className="text-gray-700 leading-relaxed">{template.description}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <ListTodo className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Các bước quy trình</h2>
-                {selectedSteps.length > 0 && (
-                  <span className="ml-4 px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
-                    Đã chọn: {selectedSteps.length}
+        {/* Content with Tabs */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveTab('info')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'info'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Thông tin chung
+              </button>
+              <button
+                onClick={() => setActiveTab('steps')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'steps'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <ListTodo className="w-4 h-4" />
+                Các bước quy trình
+                {steps.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                    {steps.length}
                   </span>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedSteps.length > 0 && (
-                  <button
-                    onClick={handleDeleteSelectedSteps}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white transform hover:scale-105"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa đã chọn
-                  </button>
-                )}
-                <Link
-                  to={`/sales/apply-process-steps/create?templateId=${template.id}`}
-                  className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transform hover:scale-105"
-                >
-                  <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  Thêm bước
-                </Link>
-              </div>
+              </button>
             </div>
           </div>
+
+          {/* Tab Content */}
           <div className="p-6">
+            {/* Tab: Thông tin chung */}
+            {activeTab === 'info' && (
+              <div className="animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InfoItem label="Tên Template" value={template.name} icon={<FileText className="w-4 h-4" />} />
+                  {template.description && (
+                    <div className="md:col-span-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <p className="text-neutral-500 text-sm font-medium">Mô tả</p>
+                      </div>
+                      <p className="text-gray-700 leading-relaxed">{template.description}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Các bước quy trình */}
+            {activeTab === 'steps' && (
+              <div className="animate-fade-in">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-semibold text-gray-900">Danh sách các bước quy trình</h3>
+                    {selectedSteps.length > 0 && (
+                      <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+                        Đã chọn: {selectedSteps.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedSteps.length > 0 && (
+                      <button
+                        onClick={handleDeleteSelectedSteps}
+                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white transform hover:scale-105"
+                      >
+                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                        Xóa đã chọn
+                      </button>
+                    )}
+                    <Link
+                      to={`/sales/apply-process-steps/create?templateId=${template.id}`}
+                      className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transform hover:scale-105"
+                    >
+                      <Plus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                      Thêm bước
+                    </Link>
+                  </div>
+                </div>
             {steps.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -318,6 +345,8 @@ export default function SalesApplyProcessTemplateDetailPage() {
                       )}
                     </div>
                   ))}
+              </div>
+            )}
               </div>
             )}
           </div>

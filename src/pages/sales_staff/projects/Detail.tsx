@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -38,6 +39,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showDescription, setShowDescription] = useState(false);
   const [showCompanyInfo, setShowCompanyInfo] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('info');
   
   // Job Requests search, filter, pagination
   const [jobRequestSearch, setJobRequestSearch] = useState("");
@@ -223,15 +225,12 @@ export default function ProjectDetailPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to="/sales/projects"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Dự án", to: "/sales/projects" },
+              { label: project ? project.name : "Chi tiết dự án" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -268,19 +267,89 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* Content */}
-        <div className="space-y-8 animate-fade-in">
-          {/* Project Information */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Layers className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Thông tin dự án</h2>
-              </div>
+        {/* Content with Tabs */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveTab('info')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'info'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Thông tin dự án
+              </button>
+              <button
+                onClick={() => setActiveTab('job-requests')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'job-requests'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <Briefcase className="w-4 h-4" />
+                Yêu cầu tuyển dụng
+                {project.jobRequests && project.jobRequests.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                    {project.jobRequests.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('contracts')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'contracts'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <FileCheck className="w-4 h-4" />
+                Hợp đồng khách hàng
+                {project.clientContracts && project.clientContracts.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                    {project.clientContracts.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('staff')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'staff'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                Nhân sự tham gia
+                {project.staffAssignments && project.staffAssignments.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                    {project.staffAssignments.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('timeline')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'timeline'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                Dòng thời gian
+              </button>
             </div>
-            <div className="p-6">
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {/* Tab: Thông tin dự án */}
+            {activeTab === 'info' && (
+              <div className="animate-fade-in">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem 
                   label="Tên dự án" 
@@ -353,23 +422,18 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Job Requests */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <Layers className="w-5 h-5 text-accent-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Danh sách yêu cầu tuyển dụng</h2>
-                <span className="ml-auto text-sm text-neutral-500">
-                  ({filteredJobRequests.length} / {project.jobRequests?.length || 0} yêu cầu)
-                </span>
               </div>
-            </div>
-            <div className="p-6">
+            )}
+
+            {/* Tab: Yêu cầu tuyển dụng */}
+            {activeTab === 'job-requests' && (
+              <div className="animate-fade-in">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Danh sách yêu cầu tuyển dụng</h3>
+                  <span className="text-sm text-neutral-500">
+                    ({filteredJobRequests.length} / {project.jobRequests?.length || 0} yêu cầu)
+                  </span>
+                </div>
               {/* Search and Filter */}
               <div className="mb-4 flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
@@ -490,23 +554,18 @@ export default function ProjectDetailPage() {
                   <p>{filteredJobRequests.length === 0 && (jobRequestSearch || jobRequestStatusFilter) ? "Không tìm thấy kết quả" : "Chưa có yêu cầu tuyển dụng nào"}</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Client Contracts */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-warning-100 rounded-lg">
-                  <FileCheck className="w-5 h-5 text-warning-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Danh sách hợp đồng khách hàng</h2>
-                <span className="ml-auto text-sm text-neutral-500">
-                  ({filteredContracts.length} / {project.clientContracts?.length || 0} hợp đồng)
-                </span>
               </div>
-            </div>
-            <div className="p-6">
+            )}
+
+            {/* Tab: Hợp đồng khách hàng */}
+            {activeTab === 'contracts' && (
+              <div className="animate-fade-in">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Danh sách hợp đồng khách hàng</h3>
+                  <span className="text-sm text-neutral-500">
+                    ({filteredContracts.length} / {project.clientContracts?.length || 0} hợp đồng)
+                  </span>
+                </div>
               {/* Search and Filter */}
               <div className="mb-4 flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
@@ -647,23 +706,18 @@ export default function ProjectDetailPage() {
                   <p>{filteredContracts.length === 0 && (contractSearch || contractStatusFilter) ? "Không tìm thấy kết quả" : "Chưa có hợp đồng nào"}</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Staff Assignments */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-info-100 rounded-lg">
-                  <UserCheck className="w-5 h-5 text-info-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Danh sách nhân sự tham gia</h2>
-                <span className="ml-auto text-sm text-neutral-500">
-                  ({project.staffAssignments?.length || 0} nhân sự)
-                </span>
               </div>
-            </div>
-            <div className="p-6">
+            )}
+
+            {/* Tab: Nhân sự tham gia */}
+            {activeTab === 'staff' && (
+              <div className="animate-fade-in">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Danh sách nhân sự tham gia</h3>
+                  <span className="text-sm text-neutral-500">
+                    ({project.staffAssignments?.length || 0} nhân sự)
+                  </span>
+                </div>
               {project.staffAssignments && project.staffAssignments.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -711,51 +765,45 @@ export default function ProjectDetailPage() {
                   <p>Chưa có nhân sự nào được gán</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Clock className="w-5 h-5 text-purple-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Dòng thời gian hoạt động</h2>
               </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Tạo dự án */}
-                <div className="flex items-start gap-4 pb-4 border-b border-neutral-100">
-                  <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary-600 mt-2"></div>
-                  <div className="flex-1">
-                    <p className="text-sm text-neutral-600">
-                      {formatViDateTime(project.createdAt)} - Tạo dự án
-                    </p>
-                  </div>
-                </div>
+            )}
 
-                {/* Cập nhật dự án */}
-                {project.updatedAt && project.updatedAt !== project.createdAt && (
+            {/* Tab: Dòng thời gian */}
+            {activeTab === 'timeline' && (
+              <div className="animate-fade-in">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Dòng thời gian hoạt động</h3>
+                <div className="space-y-4">
+                  {/* Tạo dự án */}
                   <div className="flex items-start gap-4 pb-4 border-b border-neutral-100">
-                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-secondary-600 mt-2"></div>
+                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary-600 mt-2"></div>
                     <div className="flex-1">
                       <p className="text-sm text-neutral-600">
-                        {formatViDateTime(project.updatedAt)} - Cập nhật dự án
+                        {formatViDateTime(project.createdAt)} - Tạo dự án
                       </p>
                     </div>
                   </div>
-                )}
 
-                {/* Các hoạt động khác có thể thêm sau */}
-                {(!project.updatedAt || project.updatedAt === project.createdAt) && (
-                  <div className="text-center py-4 text-neutral-400 text-sm">
-                    Chưa có hoạt động nào khác
-                  </div>
-                )}
+                  {/* Cập nhật dự án */}
+                  {project.updatedAt && project.updatedAt !== project.createdAt && (
+                    <div className="flex items-start gap-4 pb-4 border-b border-neutral-100">
+                      <div className="flex-shrink-0 w-2 h-2 rounded-full bg-secondary-600 mt-2"></div>
+                      <div className="flex-1">
+                        <p className="text-sm text-neutral-600">
+                          {formatViDateTime(project.updatedAt)} - Cập nhật dự án
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Các hoạt động khác có thể thêm sau */}
+                  {(!project.updatedAt || project.updatedAt === project.createdAt) && (
+                    <div className="text-center py-4 text-neutral-400 text-sm">
+                      Chưa có hoạt động nào khác
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

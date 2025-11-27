@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { jobRequestService } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -13,6 +14,10 @@ import { applyProcessTemplateService } from "../../../services/ApplyProcessTempl
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
+import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
+import { talentCVService, type TalentCV } from "../../../services/TalentCV";
+import { talentService, type Talent } from "../../../services/Talent";
+import { userService } from "../../../services/User";
 import { 
   ArrowLeft, 
   Edit, 
@@ -28,7 +33,14 @@ import {
   XCircle,
   AlertCircle,
   Layers,
-  Star
+  Star,
+  Eye,
+  Search,
+  UserStar,
+  FileUser,
+  User,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface JobRequestDetail {
@@ -58,6 +70,15 @@ export default function JobRequestDetailPage() {
   const [locationName, setLocationName] = useState<string>("—");
   const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("general");
+  
+  // Applications state
+  const [applications, setApplications] = useState<any[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Status and labels
 
@@ -68,6 +89,22 @@ export default function JobRequestDetailPage() {
     2: "Từ xa",
     4: "Kết hợp",
     8: "Linh hoạt",
+  };
+
+  const statusLabels: Record<string, string> = {
+    Submitted: "Đã nộp hồ sơ",
+    Interviewing: "Đang xem xét phỏng vấn",
+    Hired: "Đã tuyển",
+    Rejected: "Đã từ chối",
+    Withdrawn: "Đã rút",
+  };
+
+  const statusColors: Record<string, string> = {
+    Submitted: "bg-sky-100 text-sky-800",
+    Interviewing: "bg-cyan-100 text-cyan-800",
+    Hired: "bg-purple-100 text-purple-800",
+    Rejected: "bg-red-100 text-red-800",
+    Withdrawn: "bg-gray-100 text-gray-800",
   };
 
   useEffect(() => {
@@ -154,6 +191,43 @@ export default function JobRequestDetailPage() {
 
     fetchData();
   }, [id]);
+
+  // Fetch applications when applications tab is active
+  useEffect(() => {
+    const fetchApplications = async () => {
+      if (activeTab !== "applications" || !id) return;
+      
+      try {
+        setApplicationsLoading(true);
+        const response = await talentApplicationService.getByJobRequest(Number(id));
+        
+        if (response?.success && response?.data?.applications) {
+          // Map applications with talent and submitter info from response
+          const enrichedApplications = response.data.applications.map((app: any) => {
+            const talentName = app.talent?.fullName || "—";
+            const submitterName = app.submitter?.fullName || app.submittedBy?.toString() || "—";
+            
+            return {
+              ...app,
+              talentName,
+              submitterName,
+            };
+          });
+          
+          setApplications(enrichedApplications);
+        } else {
+          setApplications([]);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải danh sách hồ sơ:", err);
+        setApplications([]);
+      } finally {
+        setApplicationsLoading(false);
+      }
+    };
+
+    fetchApplications();
+  }, [activeTab, id]);
 
   // 🗑️ Xóa yêu cầu tuyển dụng
   const handleDelete = async () => {
@@ -263,15 +337,12 @@ export default function JobRequestDetailPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to="/sales/job-requests"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Yêu cầu tuyển dụng", to: "/sales/job-requests" },
+              { label: jobRequest?.title || "Chi tiết yêu cầu" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -318,143 +389,340 @@ export default function JobRequestDetailPage() {
           </div>
         </div>
 
-        {/* Thông tin chung */}
+        {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveTab("general")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "general"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Thông tin chung
+              </button>
+              <button
+                onClick={() => setActiveTab("description")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "description"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Mô tả công việc
+              </button>
+              <button
+                onClick={() => setActiveTab("requirements")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "requirements"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <Briefcase className="w-4 h-4" />
+                Yêu cầu ứng viên
+              </button>
+              <button
+                onClick={() => setActiveTab("skills")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "skills"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <Star className="w-4 h-4" />
+                Kỹ năng yêu cầu
+              </button>
+              <button
+                onClick={() => setActiveTab("applications")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "applications"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileUser className="w-4 h-4" />
+                Danh sách hồ sơ
+              </button>
             </div>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem 
-                label="Công ty khách hàng" 
-                value={jobRequest.clientCompanyName ?? "—"} 
-                icon={<Building2 className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Dự án" 
-                value={jobRequest.projectName ?? "—"} 
-                icon={<Layers className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Loại vị trí tuyển dụng" 
-                value={jobRoleName} 
-                icon={<Users className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Vị trí tuyển dụng" 
-                value={jobRequest.jobPositionName ?? "—"} 
-                icon={<Users className="w-4 h-4" />}
-              />            
-              <InfoItem 
-                label="Số lượng tuyển dụng" 
-                value={jobRequest.quantity?.toString() || "—"} 
-                icon={<Users className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Ngân sách/tháng (VND)" 
-                value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
-                icon={<DollarSign className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Khu vực làm việc" 
-                value={locationName} 
-                icon={<Building2 className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Chế độ làm việc" 
-                value={workingModeLabels[Number(jobRequest.workingMode ?? 0)] ?? "—"} 
-                icon={<Target className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Mẫu CV khách hàng" 
-                value={jobRequest.clientCompanyCVTemplateName ?? "—"} 
-                icon={<FileText className="w-4 h-4" />}
-              />
-              <InfoItem 
-                label="Mẫu quy trình ứng tuyển" 
-                value={applyProcessTemplateName} 
-                icon={<FileText className="w-4 h-4" />}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Mô tả & Yêu cầu & Kỹ năng */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-          {/* Mô tả công việc */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Mô tả công việc</h3>
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === "general" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                <InfoItem 
+                  label="Công ty khách hàng" 
+                  value={jobRequest.clientCompanyName ?? "—"} 
+                  icon={<Building2 className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Dự án" 
+                  value={jobRequest.projectName ?? "—"} 
+                  icon={<Layers className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Loại vị trí tuyển dụng" 
+                  value={jobRoleName} 
+                  icon={<Users className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Vị trí tuyển dụng" 
+                  value={jobRequest.jobPositionName ?? "—"} 
+                  icon={<Users className="w-4 h-4" />}
+                />            
+                <InfoItem 
+                  label="Số lượng tuyển dụng" 
+                  value={jobRequest.quantity?.toString() || "—"} 
+                  icon={<Users className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Ngân sách/tháng (VND)" 
+                  value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
+                  icon={<DollarSign className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Khu vực làm việc" 
+                  value={locationName} 
+                  icon={<Building2 className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Chế độ làm việc" 
+                  value={workingModeLabels[Number(jobRequest.workingMode ?? 0)] ?? "—"} 
+                  icon={<Target className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Mẫu CV khách hàng" 
+                  value={jobRequest.clientCompanyCVTemplateName ?? "—"} 
+                  icon={<FileText className="w-4 h-4" />}
+                />
+                <InfoItem 
+                  label="Mẫu quy trình ứng tuyển" 
+                  value={applyProcessTemplateName} 
+                  icon={<FileText className="w-4 h-4" />}
+                />
               </div>
-            </div>
-            <div className="p-6">
-              <div className="prose prose-sm max-w-none">
+            )}
+
+            {activeTab === "description" && (
+              <div className="prose prose-sm max-w-none animate-fade-in">
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">
                   {jobRequest.description || "Chưa có mô tả công việc cụ thể"}
                 </p>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Yêu cầu ứng viên */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-accent-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Yêu cầu ứng viên</h3>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="prose prose-sm max-w-none">
+            {activeTab === "requirements" && (
+              <div className="prose prose-sm max-w-none animate-fade-in">
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">
                   {jobRequest.requirements || "Chưa có yêu cầu cụ thể cho ứng viên"}
                 </p>
               </div>
-            </div>
-          </div>
-        </div>
+            )}
 
-        {/* Kỹ năng yêu cầu */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mt-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-warning-100 rounded-lg">
-                <Star className="w-5 h-5 text-warning-600" />
+            {activeTab === "skills" && (
+              <div className="animate-fade-in">
+                {jobSkills.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {jobSkills.map((skill) => (
+                      <span
+                        key={skill.id}
+                        className="group inline-flex items-center gap-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 px-4 py-2 rounded-xl text-sm font-medium border border-primary-200 hover:from-primary-200 hover:to-primary-300 transition-all duration-300 hover:scale-105 transform"
+                      >
+                        <Target className="w-3 h-3 group-hover:scale-110 transition-transform duration-300" />
+                        {skill.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Briefcase className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng yêu cầu</p>
+                    <p className="text-neutral-400 text-sm mt-1">Thêm kỹ năng để tìm ứng viên phù hợp</p>
+                  </div>
+                )}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">Kỹ năng yêu cầu</h3>
-            </div>
-          </div>
-          <div className="p-6">
-            {jobSkills.length > 0 ? (
-              <div className="flex flex-wrap gap-3">
-                {jobSkills.map((skill) => (
-                  <span
-                    key={skill.id}
-                    className="group inline-flex items-center gap-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 px-4 py-2 rounded-xl text-sm font-medium border border-primary-200 hover:from-primary-200 hover:to-primary-300 transition-all duration-300 hover:scale-105 transform"
-                  >
-                    <Target className="w-3 h-3 group-hover:scale-110 transition-transform duration-300" />
-                    {skill.name}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Briefcase className="w-8 h-8 text-neutral-400" />
+            )}
+
+            {activeTab === "applications" && (
+              <div className="animate-fade-in">
+                {/* Search & Filter */}
+                <div className="mb-6 space-y-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="relative flex-1 min-w-[300px]">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm theo tên ứng viên, người nộp..."
+                        className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
+                    >
+                      <option value="">Tất cả trạng thái</option>
+                      <option value="Submitted">Đã nộp hồ sơ</option>
+                      <option value="Interviewing">Đang xem xét phỏng vấn</option>
+                      <option value="Hired">Đã tuyển</option>
+                      <option value="Rejected">Đã từ chối</option>
+                      <option value="Withdrawn">Đã rút</option>
+                    </select>
+                  </div>
                 </div>
-                <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng yêu cầu</p>
-                <p className="text-neutral-400 text-sm mt-1">Thêm kỹ năng để tìm ứng viên phù hợp</p>
+
+                {/* Applications Table */}
+                {applicationsLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Đang tải danh sách hồ sơ...</p>
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      let filtered = [...applications];
+                      if (searchTerm) {
+                        const lowerSearch = searchTerm.toLowerCase();
+                        filtered = filtered.filter((a) => 
+                          a.submitterName?.toLowerCase().includes(lowerSearch) ||
+                          a.talentName?.toLowerCase().includes(lowerSearch)
+                        );
+                      }
+                      if (filterStatus) {
+                        filtered = filtered.filter((a) => a.status === filterStatus);
+                      }
+                      
+                      const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const paginatedApplications = filtered.slice(startIndex, endIndex);
+                      const startItem = filtered.length > 0 ? startIndex + 1 : 0;
+                      const endItem = Math.min(endIndex, filtered.length);
+
+                      return (
+                        <>
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+                                <tr>
+                                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người nộp</th>
+                                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên ứng viên</th>
+                                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Phiên bản CV</th>
+                                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
+                                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngày nộp</th>
+                                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-200">
+                                {filtered.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={7} className="text-center py-12">
+                                      <div className="flex flex-col items-center justify-center">
+                                        <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
+                                          <FileText className="w-8 h-8 text-neutral-400" />
+                                        </div>
+                                        <p className="text-neutral-500 text-lg font-medium">Không có hồ sơ nào</p>
+                                        <p className="text-neutral-400 text-sm mt-1">Chưa có hồ sơ ứng tuyển cho yêu cầu này</p>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  paginatedApplications.map((app, i) => (
+                                    <tr
+                                      key={app.id}
+                                      className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
+                                    >
+                                      <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                                      <td className="py-4 px-6">
+                                        <div className="flex items-center gap-2">
+                                          <User className="w-4 h-4 text-neutral-400" />
+                                          <span className="text-sm font-medium text-neutral-700">{app.submitterName || app.submittedBy}</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <div className="flex items-center gap-2">
+                                          <UserStar className="w-4 h-4 text-neutral-400" />
+                                          <span className="text-sm text-neutral-700">{app.talentName ?? "—"}</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <span className="text-sm text-neutral-700">{app.talentCV?.version ? `v${app.talentCV.version}` : "—"}</span>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                                          {statusLabels[app.status] ?? app.status}
+                                        </span>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <span className="text-sm text-neutral-700">{new Date(app.createdAt).toLocaleDateString('vi-VN')}</span>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <Link
+                                          to={`/sales/applications/${app.id}`}
+                                          className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                                        >
+                                          <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                                          <span className="text-sm font-medium">Xem</span>
+                                        </Link>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          {/* Pagination */}
+                          {filtered.length > 0 && (
+                            <div className="mt-6 flex items-center justify-between">
+                              <div className="text-sm text-neutral-600">
+                                Hiển thị {startItem}-{endItem} trong số {filtered.length} hồ sơ
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                  disabled={currentPage === 1}
+                                  className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                                    currentPage === 1
+                                      ? 'text-neutral-300 cursor-not-allowed'
+                                      : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                  }`}
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <span className="text-sm text-neutral-600 px-2">
+                                  Trang {currentPage}/{totalPages}
+                                </span>
+                                <button
+                                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                  disabled={currentPage === totalPages}
+                                  className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                                    currentPage === totalPages
+                                      ? 'text-neutral-300 cursor-not-allowed'
+                                      : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                                  }`}
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
             )}
           </div>
