@@ -10,7 +10,6 @@ import { uploadFile } from "../../../utils/firebaseStorage";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "../../../configs/firebase";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Award, 

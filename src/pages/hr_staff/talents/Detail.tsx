@@ -22,7 +22,6 @@ import { decodeJWT } from "../../../services/Auth";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { Button } from "../../../components/ui/button";
 import {
-  ArrowLeft,
   Edit,
   Trash2,
   Briefcase,

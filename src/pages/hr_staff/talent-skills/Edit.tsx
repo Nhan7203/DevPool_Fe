@@ -9,7 +9,6 @@ import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
-  ArrowLeft, 
   Save, 
   X, 
   Star, 

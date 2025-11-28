@@ -13,12 +13,11 @@ import { applyProcessTemplateService } from "../../../services/ApplyProcessTempl
 import { Button } from "../../../components/ui/button";
 import { jobSkillService, type JobSkill } from "../../../services/JobSkill";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
-import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
+import { talentApplicationService } from "../../../services/TalentApplication";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { talentService, type Talent } from "../../../services/Talent";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { 
-  ArrowLeft, 
   CheckCircle, 
   XCircle, 
   Building2, 

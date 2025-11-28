@@ -9,7 +9,6 @@ import { marketService, type Market } from "../../../services/Market";
 import { industryService, type Industry } from "../../../services/Industry";
 import {
   Briefcase,
-  ArrowLeft,
   Save,
   FileText,
   CalendarDays,

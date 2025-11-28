@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, UserCheck, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon, Edit, Trash2, Send, RotateCcw, FileCheck, Clock, StickyNote } from 'lucide-react';
+import { FileText, Calendar, UserCheck, DollarSign, Building2, CheckCircle, AlertCircle, Clock as ClockIcon, Edit, Trash2, Send, RotateCcw, FileCheck, Clock, StickyNote } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';

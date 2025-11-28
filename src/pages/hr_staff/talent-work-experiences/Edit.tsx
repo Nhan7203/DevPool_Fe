@@ -8,7 +8,6 @@ import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
-  ArrowLeft, 
   Save, 
   X, 
   Workflow, 

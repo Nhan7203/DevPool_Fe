@@ -172,7 +172,7 @@ export default function SalesApplicationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [application, setApplication] = useState<TalentApplicationDetailed | null>(null);
   const [jobInfo, setJobInfo] = useState<JobDisplayInfo | null>(null);
-  const [jobRequest, setJobRequest] = useState<any>(null);
+  const [jobRequest] = useState<any>(null);
   const [talentLocationName, setTalentLocationName] = useState<string>("—");
   const [activities, setActivities] = useState<SalesActivity[]>([]);
   const [showDob, setShowDob] = useState(false);

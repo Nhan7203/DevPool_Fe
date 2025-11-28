@@ -7,7 +7,6 @@ import { partnerService, type Partner, type PartnerPayload } from "../../../serv
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
-  ArrowLeft, 
   Save, 
   Building2, 
   Mail, 

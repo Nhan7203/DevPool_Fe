@@ -7,7 +7,6 @@ import { partnerService, type PartnerDetailedModel, type PartnerTalentModel } fr
 import { talentService, type Talent } from "../../../services/Talent";
 import { Button } from "../../../components/ui/button";
 import { 
-  ArrowLeft, 
   Edit, 
   Trash2, 
   Building2, 
@@ -21,7 +20,6 @@ import {
   Users,
   Calendar,
   DollarSign,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";

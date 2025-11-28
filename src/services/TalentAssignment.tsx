@@ -195,5 +195,25 @@ export const talentAssignmentService = {
       throw { message: "Lỗi không xác định khi gia hạn phân công nhân sự" };
     }
   },
+
+  async getActiveByProject(projectId: number) {
+    try {
+      const response = await axios.get(`/talentassignment/project/${projectId}/active`);
+      const data = response.data;
+      if (Array.isArray(data)) {
+        return data as TalentAssignmentModel[];
+      } else if (data && Array.isArray(data.data)) {
+        return data.data as TalentAssignmentModel[];
+      } else {
+        console.warn("⚠️ Response không phải là mảng:", data);
+        return [] as TalentAssignmentModel[];
+      }
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        throw error.response?.data || { message: "Không thể tải danh sách phân công đang hoạt động" };
+      }
+      throw { message: "Lỗi không xác định khi tải danh sách phân công đang hoạt động" };
+    }
+  },
 };
 

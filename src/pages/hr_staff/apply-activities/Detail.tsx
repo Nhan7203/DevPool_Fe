@@ -9,7 +9,6 @@ import { applyService } from "../../../services/Apply";
 import { jobRequestService } from "../../../services/JobRequest";
 import { Button } from "../../../components/ui/button";
 import {
-  ArrowLeft,
   Edit,
   FileText,
   Calendar,

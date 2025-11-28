@@ -72,7 +72,7 @@ export default function SearchableSelect<T = any>({
     const queryLower = query.toLowerCase();
     return (
       option.name.toLowerCase().includes(queryLower) ||
-      (option.description && option.description.toLowerCase().includes(queryLower))
+      Boolean(option.description && option.description.toLowerCase().includes(queryLower))
     );
   };
 

@@ -7,7 +7,6 @@ import { talentProjectService, type TalentProjectCreate } from "../../../service
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { type ExtractedProject } from "../../../services/TalentCV";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Briefcase, 

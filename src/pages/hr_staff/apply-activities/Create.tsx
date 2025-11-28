@@ -8,7 +8,6 @@ import { applyProcessStepService, type ApplyProcessStep } from "../../../service
 import { applyService } from "../../../services/Apply";
 import { jobRequestService } from "../../../services/JobRequest";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Calendar, 

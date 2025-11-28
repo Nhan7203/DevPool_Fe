@@ -12,7 +12,6 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { decodeJWT } from "../../../services/Auth";
 import { ROUTES } from "../../../router/routes";
   import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   FileText, 

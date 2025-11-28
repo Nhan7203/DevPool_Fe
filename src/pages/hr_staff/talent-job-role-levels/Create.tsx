@@ -7,7 +7,6 @@ import { talentJobRoleLevelService, type TalentJobRoleLevelCreate, type TalentJo
 import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum } from "../../../services/JobRoleLevel";
 import { type ExtractedJobRoleLevel } from "../../../services/TalentCV";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Target, 

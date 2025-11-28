@@ -5,7 +5,6 @@ import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentAvailableTimeService, type TalentAvailableTimeCreate, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Calendar, 

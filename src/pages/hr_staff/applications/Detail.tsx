@@ -20,7 +20,6 @@ import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
 import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
 import { Button } from "../../../components/ui/button";
 import {
-  ArrowLeft,
   XCircle,
   FileText,
   User as UserIcon,

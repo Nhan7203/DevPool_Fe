@@ -8,7 +8,6 @@ import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { type ExtractedSkill } from "../../../services/TalentCV";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Star, 

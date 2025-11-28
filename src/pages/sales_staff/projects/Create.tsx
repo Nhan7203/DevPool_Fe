@@ -7,7 +7,6 @@ import {
   Globe2,
   Factory,
   CheckCircle,
-  ArrowLeft,
   Plus,
   Save,
   AlertCircle,

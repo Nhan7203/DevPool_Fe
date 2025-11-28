@@ -7,7 +7,6 @@ import { talentWorkExperienceService, type TalentWorkExperienceCreate } from "..
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { type ExtractedWorkExperience } from "../../../services/TalentCV";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Workflow, 

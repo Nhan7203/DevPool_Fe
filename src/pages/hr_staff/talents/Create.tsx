@@ -683,80 +683,6 @@ export default function CreateTalent() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Cảnh báo nếu đã upload CV lên Firebase
-      if (isUploadedFromFirebase) {
-        const confirmed = window.confirm(
-          "⚠️ Bạn đã upload CV lên Firebase.\n\n" +
-          "Nếu chọn file CV mới, bạn sẽ cần upload lại lên Firebase.\n\n" +
-          "Bạn có chắc chắn muốn chọn file CV mới không?"
-        );
-        if (!confirmed) {
-          // Reset input để không chọn file
-          e.target.value = '';
-          return;
-        }
-        // Reset flag khi chọn file mới
-        setIsUploadedFromFirebase(false);
-      }
-
-      // Revoke old URL if exists
-      if (cvPreviewUrl) {
-        URL.revokeObjectURL(cvPreviewUrl);
-      }
-
-      // Clear TẤT CẢ dữ liệu từ CV cũ khi chọn file mới
-      setExtractedData(null);
-      setUnmatchedData({});
-
-      // Clear tất cả dữ liệu đã điền từ CV cũ (formData và các mảng)
-      setFormData(prev => ({
-        ...prev,
-        // Reset các trường liên quan đến CV về empty/undefined
-        fullName: "",
-        email: "",
-        phone: undefined,
-        dateOfBirth: undefined,
-        locationId: undefined,
-        workingMode: WorkingMode.None,
-        githubUrl: undefined,
-        portfolioUrl: undefined,
-        // Giữ lại các trường không liên quan đến CV
-        // currentPartnerId, status, userId
-      }));
-
-      // Clear errors để đảm bảo form sạch
-      setErrors({});
-
-      // Clear tất cả các mảng dữ liệu từ CV cũ
-      setTalentSkills([]);
-      setTalentWorkExperiences([]);
-      setTalentProjects([]);
-      setTalentCertificates([]);
-      // Reset job role levels về mặc định (bắt buộc phải có ít nhất 1)
-      setTalentJobRoleLevels([{
-        jobRoleLevelId: 0,
-        yearsOfExp: 0,
-        ratePerMonth: undefined
-      }]);
-
-      // Clear CV URL trong initialCVs khi chọn file mới
-      setInitialCVs(prev => prev.map((cv, index) =>
-        index === 0 ? { ...cv, cvFileUrl: "" } : cv
-      ));
-
-      // Clear uploaded CV URL tracking
-      setUploadedCVUrl(null);
-      setIsUploadedFromFirebase(false);
-
-      setCvFile(file);
-      // Create preview URL for PDF
-      const url = URL.createObjectURL(file);
-      setCvPreviewUrl(url);
-    }
-  };
 
   // Handle CV upload to Firebase for a specific CV index
   const handleUploadCV = async (cvIndex: number) => {
@@ -1950,16 +1876,6 @@ export default function CreateTalent() {
     }
   };
 
-  // Handle extract CV từ form (giữ lại để tương thích)
-  const handleExtractCV = async () => {
-    if (!cvFile) {
-      alert("Vui lòng chọn file CV trước!");
-      return;
-    }
-
-    await extractAndFillDataFromCV(cvFile, false);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -2000,29 +1916,31 @@ export default function CreateTalent() {
       newErrors.currentPartnerId = 'Vui lòng chọn đối tác';
     }
 
-    // Validation CV bắt buộc
-    if (!isUploadedFromFirebase) {
-      alert("⚠️ Vui lòng upload CV lên Firebase trước khi tạo nhân sự!");
-      return;
-    }
+    // Validation CV - Chỉ bắt buộc nếu sử dụng trích xuất CV
+    if (useExtractCV) {
+      if (!isUploadedFromFirebase) {
+        alert("⚠️ Vui lòng upload CV lên Firebase trước khi tạo nhân sự!");
+        return;
+      }
 
-    if (initialCVs.length === 0 || !initialCVs[0]) {
-      alert("⚠️ Vui lòng thêm CV ban đầu!");
-      return;
-    }
+      if (initialCVs.length === 0 || !initialCVs[0]) {
+        alert("⚠️ Vui lòng thêm CV ban đầu!");
+        return;
+      }
 
-    const cv = initialCVs[0];
-    if (!cv.jobRoleLevelId) {
-      alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
-      return;
-    }
-    if (!cv.version || cv.version <= 0) {
-      alert("⚠️ Vui lòng nhập version CV!");
-      return;
-    }
-    if (!cv.cvFileUrl || cv.cvFileUrl.trim() === "") {
-      alert("⚠️ Vui lòng upload CV lên Firebase! CV là bắt buộc.");
-      return;
+      const cv = initialCVs[0];
+      if (!cv.jobRoleLevelId) {
+        alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
+        return;
+      }
+      if (!cv.version || cv.version <= 0) {
+        alert("⚠️ Vui lòng nhập version CV!");
+        return;
+      }
+      if (!cv.cvFileUrl || cv.cvFileUrl.trim() === "") {
+        alert("⚠️ Vui lòng upload CV lên Firebase! CV là bắt buộc khi sử dụng trích xuất CV.");
+        return;
+      }
     }
 
     // Validation cho các trường bắt buộc trong arrays
@@ -2155,18 +2073,21 @@ export default function CreateTalent() {
         certificates: talentCertificates.length > 0 ? talentCertificates : undefined,
         jobRoleLevels: talentJobRoleLevels.length > 0 ? talentJobRoleLevels : undefined,
         initialCV: (() => {
-          // CV là bắt buộc, đã được validate ở trên
-          const cv = initialCVs[0];
-          return {
-            jobRoleLevelId: cv.jobRoleLevelId!,
-            version: cv.version!,
-            cvFileUrl: cv.cvFileUrl!,
-            isActive: true, // CV mới khi tạo talent luôn mặc định active
-            generatedForJobRequestId: cv.generatedForJobRequestId,
-            summary: cv.summary || "",
-            isGeneratedFromTemplate: cv.isGeneratedFromTemplate !== undefined ? cv.isGeneratedFromTemplate : false,
-            sourceTemplateId: cv.sourceTemplateId
-          };
+          // CV chỉ bắt buộc nếu sử dụng trích xuất CV
+          if (useExtractCV && initialCVs[0]) {
+            const cv = initialCVs[0];
+            return {
+              jobRoleLevelId: cv.jobRoleLevelId!,
+              version: cv.version!,
+              cvFileUrl: cv.cvFileUrl!,
+              isActive: true, // CV mới khi tạo talent luôn mặc định active
+              generatedForJobRequestId: cv.generatedForJobRequestId,
+              summary: cv.summary || "",
+              isGeneratedFromTemplate: cv.isGeneratedFromTemplate !== undefined ? cv.isGeneratedFromTemplate : false,
+              sourceTemplateId: cv.sourceTemplateId
+            };
+          }
+          return undefined;
         })(),
       };
 
@@ -2406,10 +2327,21 @@ export default function CreateTalent() {
                             // Khi uncheck, đóng modal và reset
                             setShowExtractCVModal(false);
                             setModalCVFile(null);
+                            setCvFile(null);
                             if (modalCVPreviewUrl) {
                               URL.revokeObjectURL(modalCVPreviewUrl);
                               setModalCVPreviewUrl(null);
                             }
+                            if (cvPreviewUrl) {
+                              URL.revokeObjectURL(cvPreviewUrl);
+                              setCvPreviewUrl(null);
+                            }
+                            // Reset CV URL trong initialCVs
+                            if (initialCVs[0]) {
+                              updateInitialCV(0, 'cvFileUrl', '');
+                            }
+                            setUploadedCVUrl(null);
+                            setIsUploadedFromFirebase(false);
                           }
                         }}
                         className="w-5 h-5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
@@ -2423,6 +2355,349 @@ export default function CreateTalent() {
                       </div>
                     </label>
                   </div>
+
+                  {/* Upload CV Section - Chỉ hiển thị khi useExtractCV = true */}
+                  {useExtractCV && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Upload className="w-5 h-5 text-primary-600" />
+                        <label className="block text-sm font-semibold text-neutral-700">
+                          Chọn file CV (PDF)
+                        </label>
+                      </div>
+
+                      <div className="space-y-3">
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setCvFile(file);
+                            if (file) {
+                              const url = URL.createObjectURL(file);
+                              setCvPreviewUrl(url);
+                            } else {
+                              if (cvPreviewUrl) {
+                                URL.revokeObjectURL(cvPreviewUrl);
+                                setCvPreviewUrl(null);
+                              }
+                            }
+                          }}
+                          className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                        />
+
+                        {/* File Info */}
+                        {cvFile && (
+                          <div className="flex items-center gap-2 text-sm text-neutral-600">
+                            <FileText className="w-4 h-4" />
+                            <span>File đã chọn: <span className="font-medium">{cvFile.name}</span> ({(cvFile.size / 1024).toFixed(2)} KB)</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CV Ban Đầu Section - Chỉ hiển thị khi useExtractCV = true, nằm ngay dưới phần trích xuất */}
+                  {useExtractCV && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-3 mb-4">
+                        <FileText className="w-5 h-5 text-primary-600" />
+                        <h3 className="text-lg font-semibold text-neutral-800">
+                          CV Ban Đầu
+                        </h3>
+                      </div>
+                      <div className="space-y-6">
+                        {initialCVs.map((cv, index) => (
+                          <div key={index} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                            <div className="flex justify-between items-center mb-4">
+                              <span className="text-sm font-semibold text-neutral-700">CV Ban Đầu</span>
+                            </div>
+
+                            {/* Upload CV Section - Chỉ hiển thị khi useExtractCV = true và có file CV đã chọn */}
+                            {useExtractCV && cvFile && (
+                              <div className="mb-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Upload className="w-5 h-5 text-primary-600" />
+                                  <label className="block text-sm font-semibold text-neutral-700">
+                                    Upload CV File
+                                  </label>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {/* File Info */}
+                                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                    <FileText className="w-4 h-4" />
+                                    <span>File đã chọn: <span className="font-medium">{cvFile.name}</span> ({(cvFile.size / 1024).toFixed(2)} KB)</span>
+                                  </div>
+
+                                  {/* Upload Progress */}
+                                  {uploadingCV && uploadingCVIndex === index && (
+                                    <div className="space-y-2">
+                                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                        <div
+                                          className="bg-gradient-to-r from-primary-500 to-blue-500 h-3 rounded-full transition-all duration-300 animate-pulse"
+                                          style={{ width: `${uploadProgress}%` }}
+                                        ></div>
+                                      </div>
+                                      <p className="text-sm text-center text-primary-700 font-medium">
+                                        Đang upload... {uploadProgress}%
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Upload Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUploadCV(index)}
+                                    disabled={!cvFile || uploadingCV || !cv.version || cv.version <= 0 || !cv.jobRoleLevelId || isUploadedFromFirebase}
+                                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {uploadingCV && uploadingCVIndex === index ? (
+                                      <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Đang upload...
+                                      </>
+                                    ) : isUploadedFromFirebase ? (
+                                      <>
+                                        <Upload className="w-4 h-4" />
+                                        Đã upload lên Firebase
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload className="w-4 h-4" />
+                                        Upload CV lên Firebase
+                                      </>
+                                    )}
+                                  </button>
+                                  {isUploadedFromFirebase && (
+                                    <p className="text-xs text-green-600 italic">
+                                      ✓ File đã được upload lên Firebase, không thể upload lại
+                                    </p>
+                                  )}
+                                  {(!cv.version || cv.version <= 0) && !isUploadedFromFirebase && (
+                                    <p className="text-xs text-red-600 italic">
+                                      ⚠️ Vui lòng nhập version CV trước khi upload
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                                  Vị trí công việc <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                    disabled={isUploadedFromFirebase}
+                                    className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white/50 text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : 'border-neutral-300 focus:border-primary-500'
+                                      }`}
+                                  >
+                                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                      <Target className="w-4 h-4 text-neutral-400" />
+                                      <span>
+                                        {cv.jobRoleLevelId
+                                          ? jobRoleLevels.find(jrl => jrl.id === cv.jobRoleLevelId)?.name || "Chọn vị trí"
+                                          : "Chọn vị trí"}
+                                      </span>
+                                    </div>
+                                  </button>
+                                  {isJobRoleLevelDropdownOpen[index] && !isUploadedFromFirebase && (
+                                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                      <div className="p-3 border-b border-neutral-100">
+                                        <div className="relative">
+                                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                          <input
+                                            type="text"
+                                            value={jobRoleLevelSearch[index] || ""}
+                                            onChange={(e) => setJobRoleLevelSearch(prev => ({ ...prev, [index]: e.target.value }))}
+                                            placeholder="Tìm vị trí..."
+                                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="max-h-56 overflow-y-auto">
+                                        {(() => {
+                                          const searchTerm = jobRoleLevelSearch[index] || "";
+                                          const filtered = searchTerm
+                                            ? jobRoleLevels.filter(jrl => jrl.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                            : jobRoleLevels;
+                                          if (filtered.length === 0) {
+                                            return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                          }
+                                          return filtered.map((jobRoleLevel) => (
+                                            <button
+                                              type="button"
+                                              key={jobRoleLevel.id}
+                                              onClick={() => {
+                                                updateInitialCV(index, 'jobRoleLevelId', jobRoleLevel.id);
+                                                setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                                setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                                
+                                                // Tự động set version = 1 nếu đây là CV đầu tiên cho jobRoleLevelId này
+                                                const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
+                                                  i !== index && c.jobRoleLevelId === jobRoleLevel.id
+                                                );
+                                                if (cvsSameJobRoleLevel.length === 0) {
+                                                  updateInitialCV(index, 'version', 1);
+                                                }
+                                              }}
+                                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                                cv.jobRoleLevelId === jobRoleLevel.id
+                                                  ? "bg-primary-50 text-primary-700"
+                                                  : "hover:bg-neutral-50 text-neutral-700"
+                                              }`}
+                                            >
+                                              {jobRoleLevel.name}
+                                            </button>
+                                          ));
+                                        })()}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                {!cv.jobRoleLevelId && !isUploadedFromFirebase && (
+                                  <p className="text-xs text-orange-600 mt-1">
+                                    ⚠️ Phải chọn vị trí công việc trước khi upload CV lên Firebase
+                                  </p>
+                                )}
+                                {isUploadedFromFirebase && (
+                                  <p className="text-xs text-green-600 mt-1">
+                                    File đã được upload lên Firebase, không thể thay đổi vị trí công việc
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                                  Version <span className="text-red-500">*</span>
+                                </label>
+                                {(() => {
+                                  // Kiểm tra xem đây có phải là CV đầu tiên cho jobRoleLevelId này không
+                                  const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
+                                    i !== index && c.jobRoleLevelId === cv.jobRoleLevelId
+                                  );
+                                  const isFirstCVForJobRoleLevel = Boolean(cv.jobRoleLevelId && cv.jobRoleLevelId > 0 && cvsSameJobRoleLevel.length === 0);
+                                  const versionError = cv.jobRoleLevelId && cv.version ? validateCVVersion(cv.version, cv.jobRoleLevelId, index, initialCVs) : "";
+                                  
+                                  return (
+                                    <>
+                                      <input
+                                        type="number"
+                                        value={cv.version || 1}
+                                        onChange={(e) => {
+                                          const newVersion = Number(e.target.value);
+                                          updateInitialCV(index, 'version', newVersion);
+                                        }}
+                                        placeholder="1"
+                                        min="1"
+                                        step="1"
+                                        required={cvFile ? true : false}
+                                        disabled={isUploadedFromFirebase || isFirstCVForJobRoleLevel}
+                                        className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
+                                          isUploadedFromFirebase || isFirstCVForJobRoleLevel
+                                            ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75'
+                                            : versionError
+                                              ? 'border-red-500 focus:border-red-500'
+                                              : ''
+                                        }`}
+                                      />
+                                      {(isUploadedFromFirebase || isFirstCVForJobRoleLevel) && (
+                                        <p className="text-xs text-green-600 mt-1">
+                                          {isUploadedFromFirebase 
+                                            ? "File đã được upload lên Firebase, không thể thay đổi version CV"
+                                            : "Đây là CV đầu tiên cho vị trí công việc này, version mặc định là 1 và không thể thay đổi"}
+                                        </p>
+                                      )}
+                                      {versionError && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && (
+                                        <p className="text-xs text-red-500 mt-1">{versionError}</p>
+                                      )}
+                                      {cvFile && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && !versionError && (
+                                        <p className="text-xs text-neutral-500 mt-1">
+                                          Bắt buộc nhập để upload CV
+                                        </p>
+                                      )}
+                                      {cv.jobRoleLevelId && cvsSameJobRoleLevel.length > 0 && !isUploadedFromFirebase && (
+                                        <p className="text-xs text-neutral-500 mt-1">
+                                          Các version hiện có cho vị trí này: {cvsSameJobRoleLevel.map(c => c.version || 'N/A').join(', ')}
+                                        </p>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                                  URL file CV {useExtractCV && <span className="text-red-500">*</span>} {cv.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
+                                </label>
+
+                                {/* Warning when URL is from Firebase */}
+                                {cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl && (
+                                  <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                                    <p className="text-xs text-orange-700 flex items-center gap-1.5">
+                                      <span className="font-semibold">🔒</span>
+                                      <span>URL này đã được upload từ Firebase và đã bị khóa. Không thể chỉnh sửa trực tiếp. Để nhập URL thủ công, bạn PHẢI nhấn nút "Xóa" để xóa file trong Firebase trước.</span>
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                  <input
+                                    type="url"
+                                    value={cv.cvFileUrl || ""}
+                                    onChange={(e) => handleCVUrlChange(index, e.target.value)}
+                                    placeholder="https://... hoặc upload từ file CV đã chọn"
+                                    disabled={!!(cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl) || (uploadingCV && uploadingCVIndex === index)}
+                                    className={`flex-1 py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl
+                                        ? 'bg-gray-100 cursor-not-allowed opacity-75 border-gray-300'
+                                        : isUploadedFromFirebase
+                                          ? 'border-green-300 bg-green-50'
+                                          : ''
+                                      }`}
+                                  />
+                                  {cv.cvFileUrl && (
+                                    <>
+                                      <a
+                                        href={cv.cvFileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                        Xem
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteCVFile(index)}
+                                        disabled={uploadingCV && uploadingCVIndex === index}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={uploadedCVUrl === cv.cvFileUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                                      >
+                                        <X className="w-4 h-4" />
+                                        Xóa
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả/Tóm tắt</label>
+                                <textarea
+                                  value={cv.summary || ""}
+                                  onChange={(e) => updateInitialCV(index, 'summary', e.target.value)}
+                                  placeholder="Tóm tắt kinh nghiệm..."
+                                  rows={3}
+                                  className="w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tab Navigation - Sticky */}
@@ -2777,308 +3052,6 @@ export default function CreateTalent() {
                   </div>
                 </div>
 
-                    {/* Phần CV trong tab bắt buộc */}
-                    <div className="pt-6 border-t border-neutral-200 mt-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <FileText className="w-5 h-5 text-primary-600" />
-                        <h3 className="text-lg font-semibold text-neutral-800">
-                          CV Ban Đầu <span className="text-red-500">*</span>
-                        </h3>
-                      </div>
-                      {/* Initial CV Section - Bắt buộc */}
-                      <div className="pt-6 border-t border-neutral-200">
-
-                  <div className="space-y-6">
-                    {initialCVs.map((cv, index) => (
-                      <div key={index} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="text-sm font-semibold text-neutral-700">CV Ban Đầu</span>
-                        </div>
-
-                        {/* Upload CV Section - Hiển thị khi có file CV đã chọn */}
-                        {cvFile && (
-                          <div className="mb-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
-                            <div className="flex items-center gap-2 mb-3">
-                              <Upload className="w-5 h-5 text-primary-600" />
-                              <label className="block text-sm font-semibold text-neutral-700">
-                                Upload CV File
-                              </label>
-                            </div>
-
-                            <div className="space-y-3">
-                              {/* File Info */}
-                              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                <FileText className="w-4 h-4" />
-                                <span>File đã chọn: <span className="font-medium">{cvFile.name}</span> ({(cvFile.size / 1024).toFixed(2)} KB)</span>
-                              </div>
-
-                              {/* Upload Progress */}
-                              {uploadingCV && uploadingCVIndex === index && (
-                                <div className="space-y-2">
-                                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                                    <div
-                                      className="bg-gradient-to-r from-primary-500 to-blue-500 h-3 rounded-full transition-all duration-300 animate-pulse"
-                                      style={{ width: `${uploadProgress}%` }}
-                                    ></div>
-                                  </div>
-                                  <p className="text-sm text-center text-primary-700 font-medium">
-                                    Đang upload... {uploadProgress}%
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* Upload Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleUploadCV(index)}
-                                disabled={!cvFile || uploadingCV || !cv.version || cv.version <= 0 || !cv.jobRoleLevelId || isUploadedFromFirebase}
-                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {uploadingCV && uploadingCVIndex === index ? (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    Đang upload...
-                                  </>
-                                ) : isUploadedFromFirebase ? (
-                                  <>
-                                    <Upload className="w-4 h-4" />
-                                    Đã upload lên Firebase
-                                  </>
-                                ) : (
-                                  <>
-                                    <Upload className="w-4 h-4" />
-                                    Upload CV lên Firebase
-                                  </>
-                                )}
-                              </button>
-                              {isUploadedFromFirebase && (
-                                <p className="text-xs text-green-600 italic">
-                                  ✓ File đã được upload lên Firebase, không thể upload lại
-                                </p>
-                              )}
-                              {(!cv.version || cv.version <= 0) && !isUploadedFromFirebase && (
-                                <p className="text-xs text-red-600 italic">
-                                  ⚠️ Vui lòng nhập version CV trước khi upload
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                              Vị trí công việc <span className="text-red-500">*</span>
-                            </label>
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={() => setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
-                                disabled={isUploadedFromFirebase}
-                                className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white/50 text-left focus:ring-2 focus:ring-primary-500/20 transition-all ${isUploadedFromFirebase ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75' : 'border-neutral-300 focus:border-primary-500'
-                                  }`}
-                              >
-                                <div className="flex items-center gap-2 text-sm text-neutral-700">
-                                  <Target className="w-4 h-4 text-neutral-400" />
-                                  <span>
-                                    {cv.jobRoleLevelId
-                                      ? jobRoleLevels.find(jrl => jrl.id === cv.jobRoleLevelId)?.name || "Chọn vị trí"
-                                      : "Chọn vị trí"}
-                                  </span>
-                                </div>
-                              </button>
-                              {isJobRoleLevelDropdownOpen[index] && !isUploadedFromFirebase && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
-                                  <div className="p-3 border-b border-neutral-100">
-                                    <div className="relative">
-                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                                      <input
-                                        type="text"
-                                        value={jobRoleLevelSearch[index] || ""}
-                                        onChange={(e) => setJobRoleLevelSearch(prev => ({ ...prev, [index]: e.target.value }))}
-                                        placeholder="Tìm vị trí..."
-                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="max-h-56 overflow-y-auto">
-                                    {(() => {
-                                      const searchTerm = jobRoleLevelSearch[index] || "";
-                                      const filtered = searchTerm
-                                        ? jobRoleLevels.filter(jrl => jrl.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                                        : jobRoleLevels;
-                                      if (filtered.length === 0) {
-                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
-                                      }
-                                      return filtered.map((jobRoleLevel) => (
-                                        <button
-                                          type="button"
-                                          key={jobRoleLevel.id}
-                                          onClick={() => {
-                                            updateInitialCV(index, 'jobRoleLevelId', jobRoleLevel.id);
-                                            setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
-                                            setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
-                                            
-                                            // Tự động set version = 1 nếu đây là CV đầu tiên cho jobRoleLevelId này
-                                            const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
-                                              i !== index && c.jobRoleLevelId === jobRoleLevel.id
-                                            );
-                                            if (cvsSameJobRoleLevel.length === 0) {
-                                              updateInitialCV(index, 'version', 1);
-                                            }
-                                          }}
-                                          className={`w-full text-left px-4 py-2.5 text-sm ${
-                                            cv.jobRoleLevelId === jobRoleLevel.id
-                                              ? "bg-primary-50 text-primary-700"
-                                              : "hover:bg-neutral-50 text-neutral-700"
-                                          }`}
-                                        >
-                                          {jobRoleLevel.name}
-                                        </button>
-                                      ));
-                                    })()}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            {!cv.jobRoleLevelId && !isUploadedFromFirebase && (
-                              <p className="text-xs text-orange-600 mt-1">
-                                ⚠️ Phải chọn vị trí công việc trước khi upload CV lên Firebase
-                              </p>
-                            )}
-                            {isUploadedFromFirebase && (
-                              <p className="text-xs text-green-600 mt-1">
-                                File đã được upload lên Firebase, không thể thay đổi vị trí công việc
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                              Version <span className="text-red-500">*</span>
-                            </label>
-                            {(() => {
-                              // Kiểm tra xem đây có phải là CV đầu tiên cho jobRoleLevelId này không
-                              const cvsSameJobRoleLevel = initialCVs.filter((c, i) => 
-                                i !== index && c.jobRoleLevelId === cv.jobRoleLevelId
-                              );
-                              const isFirstCVForJobRoleLevel = Boolean(cv.jobRoleLevelId && cv.jobRoleLevelId > 0 && cvsSameJobRoleLevel.length === 0);
-                              const versionError = cv.jobRoleLevelId && cv.version ? validateCVVersion(cv.version, cv.jobRoleLevelId, index, initialCVs) : "";
-                              
-                              return (
-                                <>
-                                  <input
-                                    type="number"
-                                    value={cv.version || 1}
-                                    onChange={(e) => {
-                                      const newVersion = Number(e.target.value);
-                                      updateInitialCV(index, 'version', newVersion);
-                                    }}
-                                    placeholder="1"
-                                    min="1"
-                                    step="1"
-                                    required={cvFile ? true : false}
-                                    disabled={isUploadedFromFirebase || isFirstCVForJobRoleLevel}
-                                    className={`w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
-                                      isUploadedFromFirebase || isFirstCVForJobRoleLevel
-                                        ? 'border-green-300 bg-green-50 cursor-not-allowed opacity-75'
-                                        : versionError
-                                          ? 'border-red-500 focus:border-red-500'
-                                          : ''
-                                    }`}
-                                  />
-                                  {(isUploadedFromFirebase || isFirstCVForJobRoleLevel) && (
-                                    <p className="text-xs text-green-600 mt-1">
-                                      {isUploadedFromFirebase 
-                                        ? "File đã được upload lên Firebase, không thể thay đổi version CV"
-                                        : "Đây là CV đầu tiên cho vị trí công việc này, version mặc định là 1 và không thể thay đổi"}
-                                    </p>
-                                  )}
-                                  {versionError && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && (
-                                    <p className="text-xs text-red-500 mt-1">{versionError}</p>
-                                  )}
-                                  {cvFile && !isUploadedFromFirebase && !isFirstCVForJobRoleLevel && !versionError && (
-                                    <p className="text-xs text-neutral-500 mt-1">
-                                      Bắt buộc nhập để upload CV
-                                    </p>
-                                  )}
-                                  {cv.jobRoleLevelId && cvsSameJobRoleLevel.length > 0 && !isUploadedFromFirebase && (
-                                    <p className="text-xs text-neutral-500 mt-1">
-                                      Các version hiện có cho vị trí này: {cvsSameJobRoleLevel.map(c => c.version || 'N/A').join(', ')}
-                                    </p>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                              URL file CV <span className="text-red-500">*</span> {cv.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
-                            </label>
-
-                            {/* Warning when URL is from Firebase */}
-                            {cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl && (
-                              <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
-                                <p className="text-xs text-orange-700 flex items-center gap-1.5">
-                                  <span className="font-semibold">🔒</span>
-                                  <span>URL này đã được upload từ Firebase và đã bị khóa. Không thể chỉnh sửa trực tiếp. Để nhập URL thủ công, bạn PHẢI nhấn nút "Xóa" để xóa file trong Firebase trước.</span>
-                                </p>
-                              </div>
-                            )}
-
-                            <div className="flex gap-2">
-                              <input
-                                type="url"
-                                value={cv.cvFileUrl || ""}
-                                onChange={(e) => handleCVUrlChange(index, e.target.value)}
-                                placeholder="https://... hoặc upload từ file CV đã chọn"
-                                disabled={!!(cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl) || (uploadingCV && uploadingCVIndex === index)}
-                                className={`flex-1 py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${cv.cvFileUrl && uploadedCVUrl === cv.cvFileUrl
-                                    ? 'bg-gray-100 cursor-not-allowed opacity-75 border-gray-300'
-                                    : isUploadedFromFirebase
-                                      ? 'border-green-300 bg-green-50'
-                                      : ''
-                                  }`}
-                              />
-                              {cv.cvFileUrl && (
-                                <>
-                                  <a
-                                    href={cv.cvFileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-all"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                    Xem
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteCVFile(index)}
-                                    disabled={uploadingCV && uploadingCVIndex === index}
-                                    className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title={uploadedCVUrl === cv.cvFileUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
-                                  >
-                                    <X className="w-4 h-4" />
-                                    Xóa
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả/Tóm tắt</label>
-                            <textarea
-                              value={cv.summary || ""}
-                              onChange={(e) => updateInitialCV(index, 'summary', e.target.value)}
-                              placeholder="Tóm tắt kinh nghiệm..."
-                              rows={3}
-                              className="w-full py-2 px-4 border rounded-lg bg-white/50 border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                     {/* Phần Vị trí & Mức lương trong tab bắt buộc */}
                     <div className="pt-6 border-t border-neutral-200 mt-6">
@@ -3227,7 +3200,6 @@ export default function CreateTalent() {
                       </div>
                     </div>
                   ))}
-                </div>
                       </div>
                     </div>
                       </>

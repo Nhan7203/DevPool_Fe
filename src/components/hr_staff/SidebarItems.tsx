@@ -1,4 +1,4 @@
-import { BarChart3, Users, FileText, Building2, ClipboardList, Briefcase} from "lucide-react";
+import { BarChart3, Users, FileText, Building2, Briefcase} from "lucide-react";
 
 export const sidebarItems = [
   {
