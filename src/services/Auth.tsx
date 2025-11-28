@@ -251,10 +251,6 @@ export async function authenticateWithFirebase(
 export async function ensureFirebaseAuth(): Promise<boolean> {
   const currentUser = auth.currentUser;
   if (currentUser) {
-    console.log('Firebase auth: User already authenticated', {
-      uid: currentUser.uid,
-      email: currentUser.email
-    });
     return true;
   }
 

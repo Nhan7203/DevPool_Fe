@@ -156,6 +156,10 @@ export const ROUTES = {
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
       CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
       EDIT: '/sales/contracts/edit/:id',        // Chỉnh sửa hợp đồng
+      CLIENTS: '/sales/contracts/clients',           // Danh sách hợp đồng khách hàng
+      CLIENT_DETAIL: '/sales/contracts/clients/:id', // Chi tiết hợp đồng khách hàng
+      PARTNERS: '/sales/contracts/partners',        // Danh sách hợp đồng đối tác
+      PARTNER_DETAIL: '/sales/contracts/partners/:id', // Chi tiết hợp đồng đối tác
     },
     APPLICATIONS: {
       LIST: '/sales/applications',
@@ -322,6 +326,8 @@ export const ROUTES = {
       CLIENT_DETAIL: '/manager/contracts/clients/:id',
       DEVS: '/manager/contracts/developers',
       DEV_DETAIL: '/manager/contracts/developers/:id',
+      PARTNERS: '/manager/contracts/partners',
+      PARTNER_DETAIL: '/manager/contracts/partners/:id',
     },
     HUMAN_RESOURCES: {
       OVERVIEW: '/manager/hr/overview',

@@ -130,11 +130,13 @@ export interface SubmitContractModel {
   exchangeRate: number;
   calculationMethod: string;
   percentageValue?: number | null;
-  sowDescription?: string | null;
+  fixedAmount?: number | null;
   plannedAmount?: number | null;
-  finalAmountVND?: number | null;
+  sowDescription?: string | null;
+  sowExcelFileUrl: string;
+  monthlyRate: number;
+  standardHours: number;
   notes?: string | null;
-  // File sẽ được upload riêng, không gửi trong payload này
 }
 
 // Interface cho VerifyContractModel (Payload để verify contract)

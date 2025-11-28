@@ -159,11 +159,6 @@ const InterviewHistory = React.lazy(() => import('../pages/hr_staff/interviews/H
 const InterviewList = React.lazy(() => import('../pages/hr_staff/interviews/List'));
 const ScheduleInterview = React.lazy(() => import('../pages/hr_staff/interviews/Schedule'));
 
-// Contracts
-const ContractDetailPageHR = React.lazy(() => import('../pages/hr_staff/contracts/Detail'));
-const CreatePartnerContractPage = React.lazy(() => import('../pages/hr_staff/contracts/Create'));
-const EditPartnerContractPage = React.lazy(() => import('../pages/hr_staff/contracts/Edit'));
-const ListContract = React.lazy(() => import('../pages/hr_staff/contracts/List'));
 
 // Reports
 const DeveloperStatus = React.lazy(() => import('../pages/hr_staff/reports/Developer_status'));
@@ -197,11 +192,6 @@ const ProjectDetailPage = React.lazy(() => import('../pages/sales_staff/projects
 const ProjectEditPage = React.lazy(() => import('../pages/sales_staff/projects/Edit'));
 const ProjectListPage = React.lazy(() => import('../pages/sales_staff/projects/List'));
 
-// Contracts
-const CreateClientContractPage = React.lazy(() => import('../pages/sales_staff/contracts/Create'));
-const ContractDetailPage = React.lazy(() => import('../pages/sales_staff/contracts/Detail'));
-const EditClientContractPage = React.lazy(() => import('../pages/sales_staff/contracts/Edit'));
-const ListClientContracts = React.lazy(() => import('../pages/sales_staff/contracts/List'));
 
 // Applications
 const SalesApplicationDetailPage = React.lazy(() => import('../pages/sales_staff/applications/Detail'));
@@ -222,6 +212,10 @@ const SalesApplyProcessStepListPage = React.lazy(() => import('../pages/sales_st
 // Contact Inquiries
 const ContactInquiryListPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/List'));
 const ContactInquiryDetailPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/Detail'));
+
+// Contracts
+const SalesClientContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/clients/Detail'));
+const SalesPartnerContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/partners/Detail'));
 
 // ========================================
 // ACCOUNTANT STAFF PAGES - Lazy Loading
@@ -252,10 +246,9 @@ const ManagerDashboard = React.lazy(() => import('../pages/manager/dashboard/Das
 const ManagerProfile = React.lazy(() => import('../pages/manager/Profile'));
 
 // Contracts
-const ClientContracts = React.lazy(() => import('../pages/manager/contract/Clients/List'));
-const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/Clients/Detail'));
-const DevContracts = React.lazy(() => import('../pages/manager/contract/Devs/List'));
-const DevDetailPage = React.lazy(() => import('../pages/manager/contract/Devs/Detail'));
+const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/clients/Detail'));
+const DevDetailPage = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
+const ManagerPartnerContractDetail = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
 
 // Projects
 const ManagerProjectListPage = React.lazy(() => import('../pages/manager/projects/List'));
@@ -367,11 +360,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />
               <Route path={ROUTES.HR_STAFF.INTERVIEWS.HISTORY} element={<InterviewHistory />} />
               
-              {/* Contracts */}
-              <Route path={ROUTES.HR_STAFF.CONTRACTS.LIST} element={<ListContract />} />
-              <Route path={ROUTES.HR_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPageHR />} />
-              <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
-              <Route path={ROUTES.HR_STAFF.CONTRACTS.EDIT} element={<EditPartnerContractPage />} />
+              {/* Contracts - Removed (files deleted) */}
 
               {/* Reports */}
               <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
@@ -409,10 +398,8 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.SALES_STAFF.PROJECTS.EDIT} element={<ProjectEditPage />} />
 
               {/* Contracts */}
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.LIST} element={<ListClientContracts />} />
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.DETAIL} element={<ContractDetailPage />} />
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.CREATE} element={<CreateClientContractPage />} />
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.EDIT} element={<EditClientContractPage />} />
+              <Route path={ROUTES.SALES_STAFF.CONTRACTS.CLIENT_DETAIL} element={<SalesClientContractDetail />} />
+              <Route path={ROUTES.SALES_STAFF.CONTRACTS.PARTNER_DETAIL} element={<SalesPartnerContractDetail />} />
 
               {/* Contact Inquiries */}
               <Route path={ROUTES.SALES_STAFF.CONTACT_INQUIRIES.LIST} element={<ContactInquiryListPage />} />
@@ -477,10 +464,9 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.MANAGER.PROFILE} element={<ManagerProfile />} />
               
               {/* Contracts */}
-              <Route path={ROUTES.MANAGER.CONTRACT.CLIENTS} element={<ClientContracts />} />
               <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
-              <Route path={ROUTES.MANAGER.CONTRACT.DEVS} element={<DevContracts />} />
               <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
+              <Route path={ROUTES.MANAGER.CONTRACT.PARTNER_DETAIL} element={<ManagerPartnerContractDetail />} />
               
               {/* Projects */}
               <Route path="/manager/projects" element={<ManagerProjectListPage />} />

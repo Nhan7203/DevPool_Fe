@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   AlertCircle,
@@ -14,16 +14,16 @@ import {
   FileCheck,
   StickyNote,
   XCircle,
-  Ban,
-  Loader2,
   X,
+  Send,
+  Loader2,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
-import { sidebarItems } from "../../../../components/manager/SidebarItems";
+import { sidebarItems } from "../../../../components/sales_staff/SidebarItems";
 import {
   clientContractPaymentService,
   type ClientContractPaymentModel,
-  type RejectContractModel,
+  type SubmitContractModel,
 } from "../../../../services/ClientContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
@@ -31,7 +31,11 @@ import { projectService } from "../../../../services/Project";
 import { clientCompanyService } from "../../../../services/ClientCompany";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { clientDocumentService, type ClientDocumentCreate } from "../../../../services/ClientDocument";
+import { uploadFile } from "../../../../utils/firebaseStorage";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { decodeJWT } from "../../../../services/Auth";
+import { getAccessToken } from "../../../../utils/storage";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -171,17 +175,46 @@ export default function ClientContractDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modal states
-  const [showApproveContractModal, setShowApproveContractModal] = useState(false);
-  const [showRejectContractModal, setShowRejectContractModal] = useState(false);
+  const [showSubmitContractModal, setShowSubmitContractModal] = useState(false);
 
   // Form states
-  const [rejectForm, setRejectForm] = useState<RejectContractModel>({ rejectionReason: "" });
+  const [submitForm, setSubmitForm] = useState<Omit<SubmitContractModel, 'sowExcelFileUrl'>>({
+    unitPriceForeignCurrency: 0,
+    currencyCode: "USD",
+    exchangeRate: 1,
+    calculationMethod: "Percentage",
+    percentageValue: null,
+    fixedAmount: null,
+    plannedAmount: null,
+    sowDescription: null,
+    monthlyRate: 0,
+    standardHours: 160,
+    notes: null,
+  });
+
+  // File states
+  const [sowExcelFile, setSowExcelFile] = useState<File | null>(null);
 
   // Loading states
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Get current user
-  const { user } = useAuth();
+  const authContext = useAuth();
+  const user = authContext?.user || null;
+
+  // Helper to get current user ID from JWT
+  const getCurrentUserId = (): string | null => {
+    const token = getAccessToken();
+    if (!token) {
+      // Fallback to user.id from context if token not available
+      return user?.id || null;
+    }
+    const payload = decodeJWT(token);
+    // Try multiple possible fields in JWT payload
+    const userId = payload?.nameid || payload?.sub || payload?.userId || payload?.uid;
+    // Fallback to user.id from context if JWT doesn't have userId
+    return userId || user?.id || null;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -278,37 +311,95 @@ export default function ClientContractDetailPage() {
     }
   };
 
-  // Handler: Approve Contract
-  const handleApproveContract = async () => {
-    if (!id || !contractPayment) return;
-    try {
-      setIsProcessing(true);
-      await clientContractPaymentService.approveContract(Number(id));
-      alert("Duyệt hợp đồng thành công!");
-      await refreshContractPayment();
-      setShowApproveContractModal(false);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Lỗi khi duyệt hợp đồng");
-    } finally {
-      setIsProcessing(false);
+  // Calculate FinalAmountVND
+  const calculateFinalAmountVND = () => {
+    if (submitForm.calculationMethod === "Percentage") {
+      if (submitForm.percentageValue && submitForm.unitPriceForeignCurrency && submitForm.exchangeRate) {
+        return (submitForm.unitPriceForeignCurrency * submitForm.exchangeRate) * (submitForm.percentageValue / 100);
+      }
+      return null;
+    } else {
+      // FixedAmount - need to get from plannedAmount or calculate
+      return submitForm.plannedAmount || null;
     }
   };
 
-  // Handler: Reject Contract
-  const handleRejectContract = async () => {
-    if (!id || !contractPayment || !rejectForm.rejectionReason.trim()) {
-      alert("Vui lòng nhập lý do từ chối");
+  // Handler: Submit Contract
+  const handleSubmitContract = async () => {
+    if (!id || !contractPayment || !sowExcelFile) {
+      alert("Vui lòng upload file Excel SOW");
+      return;
+    }
+    if (!submitForm.unitPriceForeignCurrency || !submitForm.exchangeRate) {
+      alert("Vui lòng điền đầy đủ thông tin đơn giá và tỷ giá");
+      return;
+    }
+    if (submitForm.calculationMethod === "Percentage" && !submitForm.percentageValue) {
+      alert("Vui lòng nhập giá trị phần trăm");
       return;
     }
     try {
       setIsProcessing(true);
-      await clientContractPaymentService.rejectContract(Number(id), rejectForm);
-      alert("Đã từ chối hợp đồng thành công!");
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+
+      // Upload SOW Excel file first
+      const filePath = `client-sow/${contractPayment.id}/sow_${Date.now()}.${sowExcelFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(sowExcelFile, filePath);
+
+      // Prepare submit payload with all required fields
+      // Backend expects all fields with default values (0 or empty string), not null
+      const submitPayload: SubmitContractModel = {
+        unitPriceForeignCurrency: submitForm.unitPriceForeignCurrency,
+        currencyCode: submitForm.currencyCode,
+        exchangeRate: submitForm.exchangeRate,
+        calculationMethod: submitForm.calculationMethod,
+        percentageValue: submitForm.calculationMethod === "Percentage" ? (submitForm.percentageValue ?? 0) : 0,
+        fixedAmount: submitForm.calculationMethod === "FixedAmount" ? (submitForm.plannedAmount ?? 0) : 0,
+        plannedAmount: submitForm.plannedAmount ?? 0,
+        sowDescription: submitForm.sowDescription ?? "",
+        sowExcelFileUrl: fileUrl, // URL của file đã upload
+        monthlyRate: submitForm.monthlyRate,
+        standardHours: submitForm.standardHours,
+        notes: submitForm.notes ?? "",
+      };
+
+      // Create ClientDocument for SOW
+      const documentPayload: ClientDocumentCreate = {
+        clientContractPaymentId: Number(id),
+        documentTypeId: 1, // Assuming 1 is for "SOW" type
+        fileName: sowExcelFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: "Statement of Work (SOW)",
+        source: "Sales",
+      };
+      await clientDocumentService.create(documentPayload);
+
+      // Submit contract
+      await clientContractPaymentService.submitContract(Number(id), submitPayload);
+      alert("Gửi hợp đồng thành công!");
       await refreshContractPayment();
-      setShowRejectContractModal(false);
-      setRejectForm({ rejectionReason: "" });
+      setShowSubmitContractModal(false);
+      setSubmitForm({
+        unitPriceForeignCurrency: 0,
+        currencyCode: "USD",
+        exchangeRate: 1,
+        calculationMethod: "Percentage",
+        percentageValue: null,
+        fixedAmount: null,
+        plannedAmount: null,
+        sowDescription: null,
+        monthlyRate: contractPayment.monthlyRate || 0,
+        standardHours: contractPayment.standardHours || 160,
+        notes: null,
+      });
+      setSowExcelFile(null);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Lỗi khi từ chối hợp đồng");
+      alert(err instanceof Error ? err.message : "Lỗi khi gửi hợp đồng");
     } finally {
       setIsProcessing(false);
     }
@@ -317,7 +408,7 @@ export default function ClientContractDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Manager" />
+        <Sidebar items={sidebarItems} title="Sales Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -331,7 +422,7 @@ export default function ClientContractDetailPage() {
   if (error || !contractPayment) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Manager" />
+        <Sidebar items={sidebarItems} title="Sales Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center max-w-md">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -357,7 +448,7 @@ export default function ClientContractDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Manager" />
+      <Sidebar items={sidebarItems} title="Sales Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
@@ -405,24 +496,31 @@ export default function ClientContractDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Action Buttons for Manager */}
-              {user?.role === "Manager" && contractPayment.contractStatus === "Verified" && (
-                <>
-                  <button
-                    onClick={() => setShowApproveContractModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Duyệt hợp đồng
-                  </button>
-                  <button
-                    onClick={() => setShowRejectContractModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    <Ban className="w-4 h-4" />
-                    Từ chối
-                  </button>
-                </>
+              {/* Action Buttons for Sales */}
+              {user?.role === "Staff Sales" && contractPayment.contractStatus === "NeedMoreInformation" && (
+                <button
+                  onClick={() => {
+                    // Pre-fill form with contract payment data
+                    setSubmitForm({
+                      unitPriceForeignCurrency: contractPayment.unitPriceForeignCurrency || 0,
+                      currencyCode: contractPayment.currencyCode || "USD",
+                      exchangeRate: contractPayment.exchangeRate || 1,
+                      calculationMethod: contractPayment.calculationMethod || "Percentage",
+                      percentageValue: contractPayment.percentageValue ?? null,
+                      fixedAmount: null,
+                      plannedAmount: contractPayment.plannedAmount ?? null,
+                      sowDescription: contractPayment.sowDescription ?? null,
+                      monthlyRate: contractPayment.monthlyRate || 0,
+                      standardHours: contractPayment.standardHours || 160,
+                      notes: contractPayment.notes ?? null,
+                    });
+                    setShowSubmitContractModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  Gửi hợp đồng
+                </button>
               )}
             </div>
           </div>
@@ -722,75 +820,180 @@ export default function ClientContractDetailPage() {
         </div>
       </div>
 
-      {/* Modals */}
-      {/* Approve Contract Modal */}
-      {showApproveContractModal && (
+      {/* Submit Contract Modal */}
+      {showSubmitContractModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Duyệt hợp đồng</h3>
-              <button onClick={() => setShowApproveContractModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-gray-600 mb-4">Bạn có chắc chắn muốn duyệt hợp đồng này?</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowApproveContractModal(false)}
-                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleApproveContract}
-                disabled={isProcessing}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Duyệt"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Contract Modal */}
-      {showRejectContractModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Từ chối hợp đồng</h3>
-              <button onClick={() => setShowRejectContractModal(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="text-lg font-semibold">Gửi hợp đồng</h3>
+              <button onClick={() => setShowSubmitContractModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Đơn giá ngoại tệ <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={submitForm.unitPriceForeignCurrency}
+                    onChange={(e) => setSubmitForm({ ...submitForm, unitPriceForeignCurrency: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Mã tiền tệ</label>
+                  <select
+                    value={submitForm.currencyCode}
+                    onChange={(e) => setSubmitForm({ ...submitForm, currencyCode: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="VND">VND</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tỷ giá <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    value={submitForm.exchangeRate}
+                    onChange={(e) => setSubmitForm({ ...submitForm, exchangeRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Phương pháp tính</label>
+                  <select
+                    value={submitForm.calculationMethod}
+                    onChange={(e) => setSubmitForm({ ...submitForm, calculationMethod: e.target.value, percentageValue: e.target.value === "Percentage" ? submitForm.percentageValue : null })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    <option value="Percentage">Theo phần trăm</option>
+                    <option value="FixedAmount">Số tiền cố định</option>
+                  </select>
+                </div>
+                {submitForm.calculationMethod === "Percentage" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Giá trị phần trăm (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={submitForm.percentageValue || ""}
+                      onChange={(e) => setSubmitForm({ ...submitForm, percentageValue: parseFloat(e.target.value) || null })}
+                      className="w-full border rounded-lg p-2"
+                    />
+                  </div>
+                )}
+                {submitForm.calculationMethod === "FixedAmount" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Số tiền cố định (VND)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={submitForm.plannedAmount || ""}
+                      onChange={(e) => setSubmitForm({ ...submitForm, plannedAmount: parseFloat(e.target.value) || null })}
+                      className="w-full border rounded-lg p-2"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Mức lương/tháng (Monthly Rate)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={submitForm.monthlyRate}
+                    onChange={(e) => setSubmitForm({ ...submitForm, monthlyRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Số giờ tiêu chuẩn (Standard Hours)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={submitForm.standardHours}
+                    onChange={(e) => setSubmitForm({ ...submitForm, standardHours: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                  />
+                </div>
+              </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Lý do từ chối <span className="text-red-500">*</span></label>
-                <textarea
-                  value={rejectForm.rejectionReason}
-                  onChange={(e) => setRejectForm({ ...rejectForm, rejectionReason: e.target.value })}
+                <label className="block text-sm font-medium mb-2">File Excel SOW <span className="text-red-500">*</span></label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setSowExcelFile(e.target.files?.[0] || null)}
                   className="w-full border rounded-lg p-2"
-                  rows={4}
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Mô tả SOW</label>
+                <textarea
+                  value={submitForm.sowDescription || ""}
+                  onChange={(e) => setSubmitForm({ ...submitForm, sowDescription: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={submitForm.notes || ""}
+                  onChange={(e) => setSubmitForm({ ...submitForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+              {submitForm.calculationMethod === "Percentage" && submitForm.unitPriceForeignCurrency && submitForm.exchangeRate && submitForm.percentageValue && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">
+                    FinalAmountVND = ({submitForm.unitPriceForeignCurrency} × {submitForm.exchangeRate}) × ({submitForm.percentageValue} / 100) = {calculateFinalAmountVND()?.toLocaleString("vi-VN")} VND
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button
                 onClick={() => {
-                  setShowRejectContractModal(false);
-                  setRejectForm({ rejectionReason: "" });
+                  setShowSubmitContractModal(false);
+                  setSubmitForm({
+                    unitPriceForeignCurrency: 0,
+                    currencyCode: "USD",
+                    exchangeRate: 1,
+                    calculationMethod: "Percentage",
+                    percentageValue: null,
+                    fixedAmount: null,
+                    plannedAmount: null,
+                    sowDescription: null,
+                    monthlyRate: contractPayment.monthlyRate || 0,
+                    standardHours: contractPayment.standardHours || 160,
+                    notes: null,
+                  });
+                  setSowExcelFile(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
                 Hủy
               </button>
               <button
-                onClick={handleRejectContract}
-                disabled={isProcessing || !rejectForm.rejectionReason.trim()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                onClick={handleSubmitContract}
+                disabled={isProcessing || !sowExcelFile || !submitForm.unitPriceForeignCurrency || !submitForm.exchangeRate || (submitForm.calculationMethod === "Percentage" && !submitForm.percentageValue)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Từ chối"}
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Gửi hợp đồng"}
               </button>
             </div>
           </div>

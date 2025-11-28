@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Layers,
-  FileText,
   Building,
   Briefcase,
   Mail,
@@ -11,48 +10,42 @@ import {
 export const sidebarItems = [
   // Phần chính
   {
-    label: 'Tổng Quan',
-    href: '/sales/dashboard',
+    label: "Tổng Quan",
+    href: "/sales/dashboard",
     icon: BarChart3,
-    section: 'main' as const,
+    section: "main" as const,
   },
   {
-    label: 'Hợp Đồng KH',
-    href: '/sales/contracts',
-    icon: FileText,
-    section: 'main' as const,
-  },
-  {
-    label: 'Yêu Cầu Tuyển Dụng',
-    href: '/sales/job-requests',
+    label: "Yêu Cầu Tuyển Dụng",
+    href: "/sales/job-requests",
     icon: Briefcase,
-    section: 'main' as const,
+    section: "main" as const,
   },
   {
-    label: 'Dự Án',
-    href: '/sales/projects',
+    label: "Dự Án",
+    href: "/sales/projects",
     icon: Layers,
-    section: 'main' as const,
+    section: "main" as const,
   },
   {
-    label: 'Công Ty KH',
-    href: '/sales/clients',
+    label: "Công Ty KH",
+    href: "/sales/clients",
     icon: Building,
-    section: 'main' as const,
+    section: "main" as const,
   },
 
   {
-    label: 'Yêu cầu hỗ trợ',
-    href: '/sales/contact-inquiries',
+    label: "Yêu cầu hỗ trợ",
+    href: "/sales/contact-inquiries",
     icon: Mail,
-    section: 'main' as const,
+    section: "main" as const,
   },
-  
+
   // Phần cấu hình (ở dưới)
   {
-    label: 'Mẫu Quy Trình',
-    href: '/sales/apply-process-templates',
+    label: "Mẫu Quy Trình",
+    href: "/sales/apply-process-templates",
     icon: Settings,
-    section: 'config' as const,
+    section: "config" as const,
   },
 ];

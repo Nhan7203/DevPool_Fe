@@ -1,37 +1,32 @@
-import { BarChart3, Users, FileText, Building2, Briefcase} from "lucide-react";
+import { BarChart3, Users, Building2, Briefcase } from "lucide-react";
 
 export const sidebarItems = [
   {
-    label: 'Tổng Quan',
-    href: '/ta/dashboard',
-    icon: BarChart3
+    label: "Tổng Quan",
+    href: "/ta/dashboard",
+    icon: BarChart3,
   },
   {
-    label: 'Hợp Đồng Nhân Sự',
-    href: '/ta/contracts',
-    icon: FileText,
-  },
-  {
-    label: 'Nhân Sự',
-    href: '/ta/developers',
+    label: "Nhân Sự",
+    href: "/ta/developers",
     icon: Users,
     // subItems: [
     //   { label: 'Danh sách nhân sự', href: '/ta/developers' },
     //   { label: 'Tạo nhân sự', href: '/ta/developers/create' },
 
     // ]
-  }, 
+  },
   {
-    label: 'Yêu Cầu Tuyển Dụng',
-    href: '/ta/job-requests',
+    label: "Yêu Cầu Tuyển Dụng",
+    href: "/ta/job-requests",
     icon: Briefcase,
     // subItems: [
     //   { label: 'Danh Sách Yêu Cầu', href: '/ta/job-requests' },
     // ]
   },
   {
-    label: 'Đối Tác',
-    href: '/ta/partners',
+    label: "Đối Tác",
+    href: "/ta/partners",
     icon: Building2,
   },
   // {

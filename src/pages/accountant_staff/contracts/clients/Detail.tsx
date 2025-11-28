@@ -14,12 +14,25 @@ import {
   FileCheck,
   StickyNote,
   XCircle,
+  Upload,
+  X,
+  Send,
+  Calculator,
+  Receipt,
+  CreditCard,
+  Ban,
+  Loader2,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
 import {
   clientContractPaymentService,
   type ClientContractPaymentModel,
+  type VerifyContractModel,
+  type RejectContractModel,
+  type ClientContractPaymentCalculateModel,
+  type CreateInvoiceModel,
+  type RecordPaymentModel,
 } from "../../../../services/ClientContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
@@ -27,6 +40,11 @@ import { projectService } from "../../../../services/Project";
 import { clientCompanyService } from "../../../../services/ClientCompany";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { clientDocumentService, type ClientDocumentCreate } from "../../../../services/ClientDocument";
+import { uploadFile } from "../../../../utils/firebaseStorage";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { decodeJWT } from "../../../../services/Auth";
+import { getAccessToken } from "../../../../utils/storage";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -165,6 +183,40 @@ export default function ClientContractDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Modal states
+  const [showRequestMoreInfoModal, setShowRequestMoreInfoModal] = useState(false);
+  const [showVerifyContractModal, setShowVerifyContractModal] = useState(false);
+  const [showRejectContractModal, setShowRejectContractModal] = useState(false);
+  const [showStartBillingModal, setShowStartBillingModal] = useState(false);
+  const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+
+  // Form states
+  const [verifyForm, setVerifyForm] = useState<VerifyContractModel>({ notes: null });
+  const [rejectForm, setRejectForm] = useState<RejectContractModel>({ rejectionReason: "" });
+  const [billingForm, setBillingForm] = useState<ClientContractPaymentCalculateModel>({ billableHours: 0, notes: null });
+  const [invoiceForm, setInvoiceForm] = useState<CreateInvoiceModel>({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
+  const [paymentForm, setPaymentForm] = useState<RecordPaymentModel>({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
+
+  // File states
+  const [verifyContractFile, setVerifyContractFile] = useState<File | null>(null);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+
+  // Loading states for actions
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Get current user
+  const authContext = useAuth();
+  const user = authContext?.user || null;
+  
+  // Helper to get current user ID from JWT
+  const getCurrentUserId = (): string | null => {
+    const token = getAccessToken();
+    if (!token) return null;
+    const payload = decodeJWT(token);
+    return payload?.nameid || null;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -248,6 +300,181 @@ export default function ClientContractDetailPage() {
 
     fetchData();
   }, [id]);
+
+  // Refresh contract payment data
+  const refreshContractPayment = async () => {
+    if (!id) return;
+    try {
+      const paymentData = await clientContractPaymentService.getById(Number(id));
+      setContractPayment(paymentData);
+    } catch (err) {
+      console.error("❌ Lỗi refresh hợp đồng:", err);
+    }
+  };
+
+  // Handler: Request More Information
+  const handleRequestMoreInformation = async () => {
+    if (!id || !contractPayment) return;
+    try {
+      setIsProcessing(true);
+      await clientContractPaymentService.requestMoreInformation(Number(id));
+      alert("Đã yêu cầu thêm thông tin thành công!");
+      await refreshContractPayment();
+      setShowRequestMoreInfoModal(false);
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi yêu cầu thêm thông tin");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler: Verify Contract
+  const handleVerifyContract = async () => {
+    if (!id || !contractPayment || !verifyContractFile) {
+      alert("Vui lòng upload file hợp đồng chuẩn");
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+
+      // Upload verified contract file
+      const filePath = `client-contracts/${contractPayment.id}/verified-contract_${Date.now()}.${verifyContractFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(verifyContractFile, filePath);
+
+      // Create ClientDocument for verified contract
+      const documentPayload: ClientDocumentCreate = {
+        clientContractPaymentId: Number(id),
+        documentTypeId: 2, // Assuming 2 is for "Verified Contract" type
+        fileName: verifyContractFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: "Hợp đồng đã xác minh",
+        source: "Accountant",
+      };
+      await clientDocumentService.create(documentPayload);
+
+      // Verify contract
+      await clientContractPaymentService.verifyContract(Number(id), verifyForm);
+      alert("Xác minh hợp đồng thành công!");
+      await refreshContractPayment();
+      setShowVerifyContractModal(false);
+      setVerifyForm({ notes: null });
+      setVerifyContractFile(null);
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi xác minh hợp đồng");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler: Reject Contract
+  const handleRejectContract = async () => {
+    if (!id || !contractPayment || !rejectForm.rejectionReason.trim()) {
+      alert("Vui lòng nhập lý do từ chối");
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      await clientContractPaymentService.rejectContract(Number(id), rejectForm);
+      alert("Đã từ chối hợp đồng thành công!");
+      await refreshContractPayment();
+      setShowRejectContractModal(false);
+      setRejectForm({ rejectionReason: "" });
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi từ chối hợp đồng");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler: Start Billing
+  const handleStartBilling = async () => {
+    if (!id || !contractPayment || billingForm.billableHours <= 0) {
+      alert("Vui lòng nhập số giờ billable hợp lệ");
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      await clientContractPaymentService.startBilling(Number(id), billingForm);
+      alert("Bắt đầu tính toán thành công!");
+      await refreshContractPayment();
+      setShowStartBillingModal(false);
+      setBillingForm({ billableHours: 0, notes: null });
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi bắt đầu tính toán");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler: Create Invoice
+  const handleCreateInvoice = async () => {
+    if (!id || !contractPayment || !invoiceFile || !invoiceForm.invoiceNumber.trim()) {
+      alert("Vui lòng điền đầy đủ thông tin và upload file hóa đơn");
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+
+      // Upload invoice file
+      const filePath = `client-invoices/${contractPayment.id}/invoice_${Date.now()}.${invoiceFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(invoiceFile, filePath);
+
+      // Create ClientDocument for invoice
+      const documentPayload: ClientDocumentCreate = {
+        clientContractPaymentId: Number(id),
+        documentTypeId: 3, // Assuming 3 is for "Invoice" type
+        fileName: invoiceFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: `Hóa đơn số ${invoiceForm.invoiceNumber}`,
+        source: "Accountant",
+      };
+      await clientDocumentService.create(documentPayload);
+
+      // Create invoice
+      await clientContractPaymentService.createInvoice(Number(id), invoiceForm);
+      alert("Tạo hóa đơn thành công!");
+      await refreshContractPayment();
+      setShowCreateInvoiceModal(false);
+      setInvoiceForm({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
+      setInvoiceFile(null);
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi tạo hóa đơn");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handler: Record Payment
+  const handleRecordPayment = async () => {
+    if (!id || !contractPayment || paymentForm.receivedAmount <= 0) {
+      alert("Vui lòng nhập số tiền nhận được hợp lệ");
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      await clientContractPaymentService.recordPayment(Number(id), paymentForm);
+      alert("Ghi nhận thanh toán thành công!");
+      await refreshContractPayment();
+      setShowRecordPaymentModal(false);
+      setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
+    } catch (err: any) {
+      alert(err?.message || "Lỗi khi ghi nhận thanh toán");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -338,6 +565,76 @@ export default function ClientContractDetailPage() {
                   </div>
                 )}
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Action Buttons for Accountant */}
+              {user?.role === "Staff Accountant" && (
+                <>
+                  {/* Request More Information - Draft + Pending */}
+                  {contractPayment.contractStatus === "Draft" && contractPayment.paymentStatus === "Pending" && (
+                    <button
+                      onClick={() => setShowRequestMoreInfoModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Yêu cầu thêm thông tin
+                    </button>
+                  )}
+
+                  {/* Verify Contract - Submitted */}
+                  {contractPayment.contractStatus === "Submitted" && (
+                    <>
+                      <button
+                        onClick={() => setShowVerifyContractModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Xác minh hợp đồng
+                      </button>
+                      <button
+                        onClick={() => setShowRejectContractModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                      >
+                        <Ban className="w-4 h-4" />
+                        Từ chối
+                      </button>
+                    </>
+                  )}
+
+                  {/* Start Billing - Approved + Pending */}
+                  {contractPayment.contractStatus === "Approved" && contractPayment.paymentStatus === "Pending" && (
+                    <button
+                      onClick={() => setShowStartBillingModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      <Calculator className="w-4 h-4" />
+                      Bắt đầu tính toán
+                    </button>
+                  )}
+
+                  {/* Create Invoice - Processing */}
+                  {contractPayment.paymentStatus === "Processing" && (
+                    <button
+                      onClick={() => setShowCreateInvoiceModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      <Receipt className="w-4 h-4" />
+                      Tạo hóa đơn
+                    </button>
+                  )}
+
+                  {/* Record Payment - Invoiced or PartiallyPaid */}
+                  {(contractPayment.paymentStatus === "Invoiced" || contractPayment.paymentStatus === "PartiallyPaid") && (
+                    <button
+                      onClick={() => setShowRecordPaymentModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Ghi nhận thanh toán
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -635,6 +932,327 @@ export default function ClientContractDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {/* Request More Information Modal */}
+      {showRequestMoreInfoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Yêu cầu thêm thông tin</h3>
+              <button onClick={() => setShowRequestMoreInfoModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-4">Bạn có chắc chắn muốn yêu cầu thêm thông tin cho hợp đồng này?</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRequestMoreInfoModal(false)}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRequestMoreInformation}
+                disabled={isProcessing}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác nhận"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Contract Modal */}
+      {showVerifyContractModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Xác minh hợp đồng</h3>
+              <button onClick={() => setShowVerifyContractModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">File hợp đồng chuẩn <span className="text-red-500">*</span></label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => setVerifyContractFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={verifyForm.notes || ""}
+                  onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowVerifyContractModal(false);
+                  setVerifyForm({ notes: null });
+                  setVerifyContractFile(null);
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleVerifyContract}
+                disabled={isProcessing || !verifyContractFile}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác minh"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Contract Modal */}
+      {showRejectContractModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Từ chối hợp đồng</h3>
+              <button onClick={() => setShowRejectContractModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Lý do từ chối <span className="text-red-500">*</span></label>
+                <textarea
+                  value={rejectForm.rejectionReason}
+                  onChange={(e) => setRejectForm({ ...rejectForm, rejectionReason: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  rows={4}
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowRejectContractModal(false);
+                  setRejectForm({ rejectionReason: "" });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRejectContract}
+                disabled={isProcessing || !rejectForm.rejectionReason.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Từ chối"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start Billing Modal */}
+      {showStartBillingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Bắt đầu tính toán</h3>
+              <button onClick={() => setShowStartBillingModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Số giờ billable <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={billingForm.billableHours}
+                  onChange={(e) => setBillingForm({ ...billingForm, billableHours: parseFloat(e.target.value) || 0 })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={billingForm.notes || ""}
+                  onChange={(e) => setBillingForm({ ...billingForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowStartBillingModal(false);
+                  setBillingForm({ billableHours: 0, notes: null });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleStartBilling}
+                disabled={isProcessing || billingForm.billableHours <= 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bắt đầu tính toán"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Invoice Modal */}
+      {showCreateInvoiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Tạo hóa đơn</h3>
+              <button onClick={() => setShowCreateInvoiceModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Số hóa đơn <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={invoiceForm.invoiceNumber}
+                  onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ngày hóa đơn <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  value={invoiceForm.invoiceDate}
+                  onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceDate: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">File hóa đơn <span className="text-red-500">*</span></label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={invoiceForm.notes || ""}
+                  onChange={(e) => setInvoiceForm({ ...invoiceForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateInvoiceModal(false);
+                  setInvoiceForm({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
+                  setInvoiceFile(null);
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleCreateInvoice}
+                disabled={isProcessing || !invoiceFile || !invoiceForm.invoiceNumber.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tạo hóa đơn"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {showRecordPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Ghi nhận thanh toán</h3>
+              <button onClick={() => setShowRecordPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Số tiền nhận được (VND) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={paymentForm.receivedAmount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, receivedAmount: parseFloat(e.target.value) || 0 })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ngày thanh toán <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  value={paymentForm.paymentDate}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={paymentForm.notes || ""}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowRecordPaymentModal(false);
+                  setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRecordPayment}
+                disabled={isProcessing || paymentForm.receivedAmount <= 0}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ghi nhận"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
