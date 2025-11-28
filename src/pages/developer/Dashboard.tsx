@@ -133,22 +133,22 @@ export default function DeveloperDashboard() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        const thisMonthPayments = payments.filter((p: PartnerContractPayment) => {
+        const thisMonthPayments = payments.filter((p: PartnerContractPaymentModel) => {
           if (!p.paymentDate) return false;
           const paymentDate = new Date(p.paymentDate);
           return paymentDate.getMonth() === currentMonth && paymentDate.getFullYear() === currentYear;
         });
         
         const hoursThisMonth = thisMonthPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
-          return sum + (p.actualWorkHours || 0) + (p.otHours || 0);
+          return sum + (p.reportedHours || 0);
         }, 0);
 
         // 3. Total Earnings = tổng số tiền đã thanh toán
         const paidPayments = payments.filter((p: PartnerContractPaymentModel) => 
-          p.status?.toLowerCase() === 'paid'
+          p.paymentStatus?.toLowerCase() === 'paid'
         );
         const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
-          return sum + (p.paidAmount || p.calculatedAmount || 0);
+          return sum + (p.totalPaidAmount || p.finalAmount || 0);
         }, 0);
 
         // 4. Utilization Rate = (hours this month / 160) * 100 (giả sử 1 tháng = 160 giờ)
@@ -157,11 +157,11 @@ export default function DeveloperDashboard() {
         // 5. Monthly Earnings (6 tháng gần nhất)
         const monthlyEarningsMap = new Map<string, number>();
         payments.forEach((p: PartnerContractPaymentModel) => {
-          if (p.status?.toLowerCase() === 'paid' && p.paymentDate) {
+          if (p.paymentStatus?.toLowerCase() === 'paid' && p.paymentDate) {
             const date = new Date(p.paymentDate);
             const monthLabel = `T${date.getMonth() + 1}/${String(date.getFullYear()).slice(-2)}`;
             const current = monthlyEarningsMap.get(monthLabel) || 0;
-            monthlyEarningsMap.set(monthLabel, current + (p.paidAmount || p.calculatedAmount || 0));
+            monthlyEarningsMap.set(monthLabel, current + (p.totalPaidAmount || p.finalAmount || 0));
           }
         });
         

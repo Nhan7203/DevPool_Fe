@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   AlertCircle,
@@ -14,9 +14,7 @@ import {
   FileCheck,
   StickyNote,
   XCircle,
-  Upload,
   X,
-  Send,
   Calculator,
   Receipt,
   CreditCard,
@@ -266,7 +264,7 @@ export default function ClientContractDetailPage() {
 
           // Fetch partner info
           try {
-            const partner = await partnerService.getById(assignmentData.partnerId);
+            const partner = await partnerService.getDetailedById(assignmentData.partnerId);
             setPartnerName(partner?.companyName || paymentData.partnerName || "—");
           } catch {
             setPartnerName(paymentData.partnerName || "—");

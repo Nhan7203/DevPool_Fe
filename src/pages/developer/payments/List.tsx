@@ -4,16 +4,17 @@ import { Search, Filter, Calendar, Building2, DollarSign, CheckCircle, Clock, Al
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { talentService, type Talent } from '../../../services/Talent';
+import { projectPeriodService, type ProjectPeriodModel } from '../../../services/ProjectPeriod';
+import { talentAssignmentService, type TalentAssignmentModel } from '../../../services/TalentAssignment';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
 
 export default function DeveloperPaymentsList() {
     const { user } = useAuth();
-    const [payments, setPayments] = useState<PartnerContractPayment[]>([]);
-    const [filteredPayments, setFilteredPayments] = useState<PartnerContractPayment[]>([]);
+    const [payments, setPayments] = useState<PartnerContractPaymentModel[]>([]);
+    const [filteredPayments, setFilteredPayments] = useState<PartnerContractPaymentModel[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
@@ -25,7 +26,8 @@ export default function DeveloperPaymentsList() {
     // Store related data for display
     const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
     // Removed contractsMap - no longer using PartnerContract
-    const [periodsMap, setPeriodsMap] = useState<Map<number, PartnerPaymentPeriod>>(new Map());
+    const [periodsMap, setPeriodsMap] = useState<Map<number, ProjectPeriodModel>>(new Map());
+    const [assignmentsMap, setAssignmentsMap] = useState<Map<number, TalentAssignmentModel>>(new Map());
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -79,10 +81,9 @@ export default function DeveloperPaymentsList() {
                 setLoading(true);
                 setError('');
                 
-                // Fetch payments, contracts, partners, and periods in parallel
-                const [partnerPaymentsData, partnerContractsData, partnersData] = await Promise.all([
+                // Fetch payments, partners, periods, and assignments in parallel
+                const [partnerPaymentsData, partnersData] = await Promise.all([
                     partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-                    partnerContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
                     partnerService.getAll()
                 ]);
 
@@ -90,11 +91,11 @@ export default function DeveloperPaymentsList() {
                 // Chỉ hiển thị các trạng thái: pendingcalculation, pendingapproval, paid, rejected
                 const allowedStatuses = ['pendingcalculation', 'pendingapproval', 'paid', 'rejected'];
                 const partnerPayments = Array.isArray(partnerPaymentsData) ? partnerPaymentsData : []
-                    .filter((p: PartnerContractPayment) => {
-                        const normalizedStatus = (p.status || '').toLowerCase();
+                    .filter((p: PartnerContractPaymentModel) => {
+                        const normalizedStatus = (p.paymentStatus || '').toLowerCase();
                         return allowedStatuses.includes(normalizedStatus);
                     })
-                    .sort((a: PartnerContractPayment, b: PartnerContractPayment) => {
+                    .sort((a: PartnerContractPaymentModel, b: PartnerContractPaymentModel) => {
                         const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
                         const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
                         return dateB - dateA; // Mới nhất trước
@@ -156,14 +157,15 @@ export default function DeveloperPaymentsList() {
         if (searchTerm) {
             filtered = filtered.filter(p => {
                 const searchLower = searchTerm.toLowerCase();
-                const contract = contractsMap.get(p.partnerContractId);
-                const partnerName = contract ? partnersMap.get(contract.partnerId)?.companyName?.toLowerCase() || '' : '';
+                const assignment = assignmentsMap.get(p.talentAssignmentId);
+                if (!assignment) return false;
+                const partnerName = partnersMap.get(assignment.partnerId)?.companyName?.toLowerCase() || '';
                 return partnerName.includes(searchLower);
             });
         }
         
         if (filterStatus) {
-            filtered = filtered.filter(p => matchesStatus(p.status, filterStatus));
+            filtered = filtered.filter(p => matchesStatus(p.paymentStatus, filterStatus));
         }
         
         if (filterPeriodId !== null) {
@@ -172,7 +174,7 @@ export default function DeveloperPaymentsList() {
         
         setFilteredPayments(filtered);
         setCurrentPage(1);
-    }, [searchTerm, filterStatus, filterPeriodId, payments, partnersMap, contractsMap]);
+    }, [searchTerm, filterStatus, filterPeriodId, payments, partnersMap, assignmentsMap]);
 
     // Tính toán pagination
     const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
@@ -234,7 +236,7 @@ export default function DeveloperPaymentsList() {
     };
 
     const countStatus = (...statuses: string[]) =>
-        payments.filter(p => statuses.some(status => matchesStatus(p.status, status))).length;
+        payments.filter(p => statuses.some(status => matchesStatus(p.paymentStatus, status))).length;
 
     const getCompanyName = (payment: PartnerContractPaymentModel) => {
         const assignment = assignmentsMap.get(payment.talentAssignmentId);

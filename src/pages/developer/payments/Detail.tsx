@@ -21,7 +21,6 @@ export default function DeveloperPaymentDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
     const [payment, setPayment] = useState<PartnerContractPaymentModel | null>(null);
-    const [talentAssignment, setTalentAssignment] = useState<TalentAssignmentModel | null>(null);
     const [partner, setPartner] = useState<Partner | null>(null);
     const [period, setPeriod] = useState<ProjectPeriodModel | null>(null);
     const [documents, setDocuments] = useState<PartnerDocument[]>([]);
@@ -264,7 +263,7 @@ export default function DeveloperPaymentDetailPage() {
         }
     };
 
-    const formatPeriod = (period: PartnerPaymentPeriod | null) => {
+    const formatPeriod = (period: ProjectPeriodModel | null) => {
         if (!period) return '—';
         const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                           'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
@@ -278,12 +277,12 @@ export default function DeveloperPaymentDetailPage() {
 
     const getTotalAmount = () => {
         if (!payment) return 0;
-        return payment.paidAmount || payment.calculatedAmount || 0;
+        return payment.totalPaidAmount || payment.finalAmount || 0;
     };
 
     const getTotalHours = () => {
         if (!payment) return 0;
-        return payment.actualWorkHours + (payment.otHours || 0);
+        return payment.reportedHours || 0;
     };
 
     // Group documents by type
@@ -359,7 +358,7 @@ export default function DeveloperPaymentDetailPage() {
         );
     }
 
-    if (!payment || !contract) {
+    if (!payment) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
                 <Sidebar items={sidebarItems} title="Developer" />
@@ -434,7 +433,7 @@ export default function DeveloperPaymentDetailPage() {
                                     <label className="text-xs font-medium text-neutral-600">Dự án</label>
                                 </div>
                                 <p className="text-base font-semibold text-gray-900">
-                                    {contract.contractNumber || '—'}
+                                    {payment.contractNumber || '—'}
                                 </p>
                             </div>
 
@@ -456,12 +455,7 @@ export default function DeveloperPaymentDetailPage() {
                                     <label className="text-xs font-medium text-neutral-600">Số giờ làm việc</label>
                                 </div>
                                 <p className="text-base font-semibold text-gray-900">
-                                    {payment.actualWorkHours}h
-                                    {payment.otHours ? (
-                                        <span className="text-xs text-neutral-600 ml-1">
-                                            + {payment.otHours}h OT
-                                        </span>
-                                    ) : null}
+                                    {payment.reportedHours || 0}h
                                     <span className="text-xs text-neutral-500 ml-2">
                                         (Tổng: {getTotalHours()}h)
                                     </span>
@@ -513,8 +507,8 @@ export default function DeveloperPaymentDetailPage() {
                                     <CheckCircle className="w-4 h-4 text-neutral-400" />
                                     <label className="text-xs font-medium text-neutral-600">Trạng thái</label>
                                 </div>
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}>
-                                    {getStatusText(payment.status)}
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.paymentStatus)}`}>
+                                    {getStatusText(payment.paymentStatus)}
                                 </span>
                             </div>
 
@@ -587,11 +581,6 @@ export default function DeveloperPaymentDetailPage() {
                                 <div className="text-right">
                                     <p className="text-base font-semibold text-gray-900">
                                         {getTotalHours()} giờ
-                                        {payment.otHours ? (
-                                            <span className="text-xs text-neutral-500 ml-2">
-                                                ({payment.actualWorkHours}h + {payment.otHours}h OT)
-                                            </span>
-                                        ) : null}
                                     </p>
                                 </div>
                             </div>
@@ -649,7 +638,7 @@ export default function DeveloperPaymentDetailPage() {
                                         {new Intl.NumberFormat('vi-VN').format(getTotalAmount())} VNĐ
                                     </p>
                                     <p className="text-xs text-neutral-500 mt-1">
-                                        {payment.paidAmount ? 'Số tiền đã thanh toán' : 'Số tiền đã tính toán'}
+                                        {payment.totalPaidAmount > 0 ? 'Số tiền đã thanh toán' : 'Số tiền đã tính toán'}
                                     </p>
                                 </div>
                             </div>
@@ -680,8 +669,7 @@ export default function DeveloperPaymentDetailPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-lg font-bold text-green-700">
-                                        {payment.actualWorkHours}h
-                                        {payment.otHours ? ` + ${payment.otHours}h OT` : ''}
+                                        {payment.reportedHours || 0}h
                                     </p>
                                     <p className="text-xs text-neutral-500 mt-1">
                                         Tổng: {getTotalHours()} giờ
