@@ -81,7 +81,7 @@ export default function ProjectDetailPage() {
   const [submittingAssignment, setSubmittingAssignment] = useState(false);
   const [submittingUpdate, setSubmittingUpdate] = useState(false);
   const [assignmentErrors, setAssignmentErrors] = useState<{ endDate?: string }>({});
-  const [updateErrors, setUpdateErrors] = useState<{ endDate?: string }>({});
+  const [updateErrors, setUpdateErrors] = useState<{ startDate?: string; endDate?: string }>({});
   
   // Form state for creating assignment
   const [assignmentForm, setAssignmentForm] = useState<TalentAssignmentCreateModel>({
@@ -315,10 +315,21 @@ export default function ProjectDetailPage() {
     // Validation
     setUpdateErrors({});
     
+    // Check if start date is not in the past (always check when status is Draft)
+    if (selectedAssignment.status === "Draft" && updateForm.startDate) {
+      const startDate = new Date(updateForm.startDate);
+      const today = getTodayDateInVietnam();
+      startDate.setHours(0, 0, 0, 0);
+      if (startDate < today) {
+        setUpdateErrors({ startDate: "Ngày bắt đầu không được nhỏ hơn ngày hôm nay" });
+        return;
+      }
+    }
+    
     // Check if end date >= start date
     const startDateToCheck = selectedAssignment.status === "Draft" 
-      ? (updateForm.startDate ? new Date(updateForm.startDate) : new Date(selectedAssignment.startDate))
-      : new Date(selectedAssignment.startDate);
+      ? (updateForm.startDate ? new Date(updateForm.startDate) : (isValidDate(selectedAssignment.startDate) ? new Date(selectedAssignment.startDate) : new Date()))
+      : (isValidDate(selectedAssignment.startDate) ? new Date(selectedAssignment.startDate) : new Date());
     
     if (updateForm.endDate) {
       const endDate = new Date(updateForm.endDate);
@@ -441,16 +452,55 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Helper function to check if a date string is valid (year >= 1900)
+  const isValidDate = (dateStr?: string | null): boolean => {
+    if (!dateStr) return false;
+    try {
+      const date = new Date(dateStr);
+      return !isNaN(date.getTime()) && date.getFullYear() >= 1900;
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper function to get today's date in Vietnam timezone (UTC+7)
+  const getTodayInVietnam = (): string => {
+    const now = new Date();
+    const vietnamTimeString = now.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    // Format: "MM/DD/YYYY" -> "YYYY-MM-DD"
+    const [month, day, year] = vietnamTimeString.split('/');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper function to get today's Date object in Vietnam timezone
+  const getTodayDateInVietnam = (): Date => {
+    const todayStr = getTodayInVietnam();
+    const [year, month, day] = todayStr.split('-').map(Number);
+    const date = new Date();
+    date.setFullYear(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
   const formatViDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
     try {
       const date = new Date(dateStr);
+      // Kiểm tra date hợp lệ (không phải Invalid Date và năm >= 1900)
+      if (isNaN(date.getTime()) || date.getFullYear() < 1900) {
+        return "—";
+      }
       const day = String(date.getDate()).padStart(2, "0");
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = date.getFullYear();
       return `${day}/${month}/${year}`;
     } catch {
-      return dateStr;
+      return "—";
     }
   };
 
@@ -1519,13 +1569,32 @@ export default function ProjectDetailPage() {
                     <input
                       type="date"
                       value={updateForm.startDate ? updateForm.startDate.split('T')[0] : ""}
-                      onChange={(e) => setUpdateForm({ 
-                        ...updateForm, 
-                        startDate: e.target.value ? `${e.target.value}T00:00:00Z` : "" 
-                      })}
+                      onChange={(e) => {
+                        setUpdateForm({ 
+                          ...updateForm, 
+                          startDate: e.target.value ? `${e.target.value}T00:00:00Z` : "" 
+                        });
+                        // Clear error when user changes value
+                        if (updateErrors.startDate) {
+                          setUpdateErrors({ ...updateErrors, startDate: undefined });
+                        }
+                      }}
+                      min={getTodayInVietnam()}
                       required
-                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
+                        updateErrors.startDate 
+                          ? 'border-red-500 focus:border-red-500' 
+                          : 'border-neutral-200 focus:border-primary-500'
+                      }`}
                     />
+                    {updateErrors.startDate && (
+                      <p className="mt-1 text-sm text-red-500">{updateErrors.startDate}</p>
+                    )}
+                    {!selectedAssignment.startDate && !updateErrors.startDate && (
+                      <p className="mt-1 text-sm text-neutral-500">
+                        Ngày bắt đầu phải từ hôm nay trở đi
+                      </p>
+                    )}
                   </div>
                 </>
               )}
@@ -1804,8 +1873,17 @@ export default function ProjectDetailPage() {
                 {(selectedAssignment.status === "Draft" || (selectedAssignment.status === "Active" && selectedAssignment.startDate)) && (
                   <button
                     onClick={() => {
+                      // Nếu chưa có startDate hợp lệ, tự động fill hôm nay (theo giờ Việt Nam)
+                      let initialStartDate = "";
+                      if (selectedAssignment.status === "Draft" && !isValidDate(selectedAssignment.startDate)) {
+                        const today = getTodayDateInVietnam();
+                        initialStartDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T00:00:00Z`;
+                      } else {
+                        initialStartDate = isValidDate(selectedAssignment.startDate) ? selectedAssignment.startDate : "";
+                      }
+                      
                       setUpdateForm({
-                        startDate: selectedAssignment.startDate || "",
+                        startDate: initialStartDate,
                         endDate: selectedAssignment.endDate || "",
                         commitmentFileUrl: selectedAssignment.commitmentFileUrl || null,
                         notes: selectedAssignment.notes || null

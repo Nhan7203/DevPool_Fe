@@ -165,9 +165,6 @@ const CreatePartnerContractPage = React.lazy(() => import('../pages/hr_staff/con
 const EditPartnerContractPage = React.lazy(() => import('../pages/hr_staff/contracts/Edit'));
 const ListContract = React.lazy(() => import('../pages/hr_staff/contracts/List'));
 
-// Payment Periods
-const HRPartnerPeriods = React.lazy(() => import('../pages/hr_staff/payment-periods/PartnerPeriods'));
-
 // Reports
 const DeveloperStatus = React.lazy(() => import('../pages/hr_staff/reports/Developer_status'));
 const InterviewSuccess = React.lazy(() => import('../pages/hr_staff/reports/Interview_success'));
@@ -222,9 +219,6 @@ const SalesApplyProcessStepDetailPage = React.lazy(() => import('../pages/sales_
 const SalesApplyProcessStepEditPage = React.lazy(() => import('../pages/sales_staff/apply-process-steps/Edit'));
 const SalesApplyProcessStepListPage = React.lazy(() => import('../pages/sales_staff/apply-process-steps/List'));
 
-// Payment Periods
-const SalesClientPeriods = React.lazy(() => import('../pages/sales_staff/payment-periods/ClientPeriods'));
-
 // Contact Inquiries
 const ContactInquiryListPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/List'));
 const ContactInquiryDetailPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/Detail'));
@@ -236,10 +230,6 @@ const AccountantDashboard = React.lazy(() => import('../pages/accountant_staff/D
 const AccountantStaffProfile = React.lazy(() => import('../pages/accountant_staff/Profile'));
 const AccountantClientContractDetail = React.lazy(() => import('../pages/accountant_staff/contracts/clients/Detail'));
 const AccountantPartnerContractDetail = React.lazy(() => import('../pages/accountant_staff/contracts/partners/Detail'));
-const AccountantClientPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/clients/ClientPeriods'));
-const AccountantPartnerPeriods = React.lazy(() => import('../pages/accountant_staff/payment-periods/partners/PartnerPeriods'));
-const AccountantClientContractPaymentDetail = React.lazy(() => import('../pages/accountant_staff/payment-periods/clients/ClientContractDetail'));
-const AccountantPartnerContractPaymentDetail = React.lazy(() => import('../pages/accountant_staff/payment-periods/partners/PartnerContractDetail'));
 const AccountantDocumentsList = React.lazy(() => import('../pages/accountant_staff/documents/List'));
 const AccountantProjectListPage = React.lazy(() => import('../pages/accountant_staff/projects/List'));
 const AccountantProjectDetailPage = React.lazy(() => import('../pages/accountant_staff/projects/Detail'));
@@ -282,12 +272,6 @@ const Overview = React.lazy(() => import('../pages/manager/finance/Overview'));
 const CashFlow = React.lazy(() => import('../pages/manager/finance/Cashflow'));
 const Debt = React.lazy(() => import('../pages/manager/finance/Debt'));
 const Profit = React.lazy(() => import('../pages/manager/finance/Profit'));
-
-// Payment Periods
-const ManagerClientPeriods = React.lazy(() => import('../pages/manager/payment-periods/clients/ClientPeriods'));
-const ManagerClientContractPaymentDetail = React.lazy(() => import('../pages/manager/payment-periods/clients/ClientContractDetail'));
-const ManagerPartnerPeriods = React.lazy(() => import('../pages/manager/payment-periods/partners/PartnerPeriods'));
-const ManagerPartnerContractPaymentDetail = React.lazy(() => import('../pages/manager/payment-periods/partners/PartnerContractDetail'));
 
 
 const AppRouter: React.FC = () => {
@@ -385,9 +369,6 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.HR_STAFF.CONTRACTS.CREATE} element={<CreatePartnerContractPage />} />
               <Route path={ROUTES.HR_STAFF.CONTRACTS.EDIT} element={<EditPartnerContractPage />} />
 
-              {/* Payment Periods */}
-              <Route path="/ta/payment-periods/partners" element={<HRPartnerPeriods />} />
-              
               {/* Reports */}
               <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
               <Route path={ROUTES.HR_STAFF.REPORTS.DEVELOPER_STATUS} element={<DeveloperStatus />} />
@@ -450,7 +431,6 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<SalesApplyProcessStepEditPage />} />
 
               {/* Payment Periods */}
-              <Route path="/sales/payment-periods/clients" element={<SalesClientPeriods />} />
             </Route>
           </Route>
 
@@ -463,10 +443,6 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.ACCOUNTANT_STAFF.PROFILE} element={<AccountantStaffProfile />} />
               <Route path="/accountant/projects" element={<AccountantProjectListPage />} />
               <Route path="/accountant/projects/:id" element={<AccountantProjectDetailPage />} />
-              <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
-              <Route path="/accountant/payment-periods/clients/:id/detail" element={<AccountantClientContractPaymentDetail />} />
-              <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />
-              <Route path="/accountant/payment-periods/partners/:id/detail" element={<AccountantPartnerContractPaymentDetail />} />
               <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
               <Route path="/accountant/contracts/clients/:id" element={<AccountantClientContractDetail />} />
               <Route path="/accountant/contracts/partners/:id" element={<AccountantPartnerContractDetail />} />
@@ -519,10 +495,6 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.MANAGER.FINANCE.PROFIT} element={<Profit />} />
               
               {/* Payment Periods */}
-              <Route path="/manager/payment-periods/clients" element={<ManagerClientPeriods />} />
-              <Route path="/manager/payment-periods/clients/:id/detail" element={<ManagerClientContractPaymentDetail />} />
-              <Route path="/manager/payment-periods/partners" element={<ManagerPartnerPeriods />} />
-              <Route path="/manager/payment-periods/partners/:id/detail" element={<ManagerPartnerContractPaymentDetail />} />
             </Route>
           </Route>
 

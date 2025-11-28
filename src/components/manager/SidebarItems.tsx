@@ -3,8 +3,6 @@ import {
   LineChart,
   Users,
   DollarSign,
-  CalendarClock,
-  Wallet,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -22,23 +20,23 @@ export const sidebarItems = [
       { label: "Nhân Sự", href: "/manager/contracts/developers" },
     ],
   },
-  {
-    label: "Kỳ Thanh Toán",
-    href: "/manager/payment-periods",
-    icon: CalendarClock,
-    subItems: [
-      {
-        label: "Khách hàng",
-        href: "/manager/payment-periods/clients",
-        icon: Wallet,
-      },
-      {
-        label: "Nhân sự",
-        href: "/manager/payment-periods/partners",
-        icon: Wallet,
-      },
-    ],
-  },
+  // {
+  //   label: "Kỳ Thanh Toán",
+  //   href: "/manager/payment-periods",
+  //   icon: CalendarClock,
+  //   subItems: [
+  //     {
+  //       label: "Khách hàng",
+  //       href: "/manager/payment-periods/clients",
+  //       icon: Wallet,
+  //     },
+  //     {
+  //       label: "Nhân sự",
+  //       href: "/manager/payment-periods/partners",
+  //       icon: Wallet,
+  //     },
+  //   ],
+  // },
   {
     label: "Báo cáo Kinh doanh",
     href: "/manager/business",

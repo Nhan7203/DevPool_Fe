@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import { Search, Filter, Calendar, Building2, DollarSign, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, CreditCard, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
-import { partnerContractPaymentService, type PartnerContractPayment } from '../../../services/PartnerContractPayment';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { partnerPaymentPeriodService, type PartnerPaymentPeriod } from '../../../services/PartnerPaymentPeriod';
 import { talentService, type Talent } from '../../../services/Talent';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
@@ -25,7 +24,7 @@ export default function DeveloperPaymentsList() {
     
     // Store related data for display
     const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
-    const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
+    // Removed contractsMap - no longer using PartnerContract
     const [periodsMap, setPeriodsMap] = useState<Map<number, PartnerPaymentPeriod>>(new Map());
     
     // Pagination
@@ -90,7 +89,7 @@ export default function DeveloperPaymentsList() {
                 // Process partner payments (thanh toán từ DevPool cho talent)
                 // Chỉ hiển thị các trạng thái: pendingcalculation, pendingapproval, paid, rejected
                 const allowedStatuses = ['pendingcalculation', 'pendingapproval', 'paid', 'rejected'];
-                const partnerPayments = (Array.isArray(partnerPaymentsData) ? partnerPaymentsData : partnerPaymentsData?.items || [])
+                const partnerPayments = Array.isArray(partnerPaymentsData) ? partnerPaymentsData : []
                     .filter((p: PartnerContractPayment) => {
                         const normalizedStatus = (p.status || '').toLowerCase();
                         return allowedStatuses.includes(normalizedStatus);
@@ -101,15 +100,15 @@ export default function DeveloperPaymentsList() {
                         return dateB - dateA; // Mới nhất trước
                     });
 
-                // Get unique period IDs
-                const periodIds = [...new Set(partnerPayments.map((p: PartnerContractPayment) => p.partnerPeriodId))] as number[];
+                // Get unique period IDs and assignment IDs
+                const periodIds = [...new Set(partnerPayments.map((p: PartnerContractPaymentModel) => p.projectPeriodId))] as number[];
+                const assignmentIds = [...new Set(partnerPayments.map((p: PartnerContractPaymentModel) => p.talentAssignmentId))] as number[];
                 
-                // Fetch all periods
-                const periodsData = await Promise.all(
-                    periodIds.map((periodId) => 
-                        partnerPaymentPeriodService.getById(periodId).catch(() => null)
-                    )
-                );
+                // Fetch all periods and assignments
+                const [periodsData, assignmentsData] = await Promise.all([
+                    Promise.all(periodIds.map((periodId) => projectPeriodService.getById(periodId).catch(() => null))),
+                    Promise.all(assignmentIds.map((assignmentId) => talentAssignmentService.getById(assignmentId).catch(() => null)))
+                ]);
 
                 setPayments(partnerPayments);
                 setFilteredPayments(partnerPayments);
@@ -121,21 +120,23 @@ export default function DeveloperPaymentsList() {
                 });
                 setPartnersMap(partnersMapData);
 
-                // Create contracts map
-                const contractsMapData = new Map<number, PartnerContract>();
-                (Array.isArray(partnerContractsData) ? partnerContractsData : []).forEach((c: PartnerContract) => {
-                    contractsMapData.set(c.id, c);
-                });
-                setContractsMap(contractsMapData);
-
                 // Create periods map
-                const periodsMapData = new Map<number, PartnerPaymentPeriod>();
-                periodsData.forEach((period: PartnerPaymentPeriod | null) => {
+                const periodsMapData = new Map<number, ProjectPeriodModel>();
+                periodsData.forEach((period: ProjectPeriodModel | null) => {
                     if (period) {
                         periodsMapData.set(period.id, period);
                     }
                 });
                 setPeriodsMap(periodsMapData);
+
+                // Create assignments map
+                const assignmentsMapData = new Map<number, TalentAssignmentModel>();
+                assignmentsData.forEach((assignment: TalentAssignmentModel | null) => {
+                    if (assignment) {
+                        assignmentsMapData.set(assignment.id, assignment);
+                    }
+                });
+                setAssignmentsMap(assignmentsMapData);
             } catch (err: any) {
                 console.error("❌ Lỗi tải danh sách thanh toán:", err);
                 setError(err.message || "Không thể tải danh sách thanh toán");
@@ -166,7 +167,7 @@ export default function DeveloperPaymentsList() {
         }
         
         if (filterPeriodId !== null) {
-            filtered = filtered.filter(p => p.partnerPeriodId === filterPeriodId);
+            filtered = filtered.filter(p => p.projectPeriodId === filterPeriodId);
         }
         
         setFilteredPayments(filtered);
@@ -235,21 +236,21 @@ export default function DeveloperPaymentsList() {
     const countStatus = (...statuses: string[]) =>
         payments.filter(p => statuses.some(status => matchesStatus(p.status, status))).length;
 
-    const getCompanyName = (payment: PartnerContractPayment) => {
-        const contract = contractsMap.get(payment.partnerContractId);
-        return contract ? partnersMap.get(contract.partnerId)?.companyName || '—' : '—';
+    const getCompanyName = (payment: PartnerContractPaymentModel) => {
+        const assignment = assignmentsMap.get(payment.talentAssignmentId);
+        return assignment ? partnersMap.get(assignment.partnerId)?.companyName || '—' : '—';
     };
 
-    const formatPeriod = (payment: PartnerContractPayment) => {
-        const period = periodsMap.get(payment.partnerPeriodId);
+    const formatPeriod = (payment: PartnerContractPaymentModel) => {
+        const period = periodsMap.get(payment.projectPeriodId);
         if (!period) return '—';
         const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                           'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
         return `${monthNames[period.periodMonth - 1]}/${period.periodYear}`;
     };
 
-    const getAmount = (payment: PartnerContractPayment) => {
-        return payment.paidAmount || payment.calculatedAmount || 0;
+    const getAmount = (payment: PartnerContractPaymentModel) => {
+        return payment.finalAmount || payment.totalPaidAmount || 0;
     };
 
     const stats = useMemo(() => [

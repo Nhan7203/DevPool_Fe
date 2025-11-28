@@ -3,10 +3,10 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Building2, Calendar, DollarSign, Clock, CheckCircle, AlertCircle, FileText, CreditCard, Download, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
-import { partnerContractPaymentService, type PartnerContractPayment } from '../../../services/PartnerContractPayment';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
+import { talentAssignmentService, type TalentAssignmentModel } from '../../../services/TalentAssignment';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { partnerPaymentPeriodService, type PartnerPaymentPeriod } from '../../../services/PartnerPaymentPeriod';
+import { projectPeriodService, type ProjectPeriodModel } from '../../../services/ProjectPeriod';
 import { partnerDocumentService, type PartnerDocument } from '../../../services/PartnerDocument';
 import { documentTypeService, type DocumentType } from '../../../services/DocumentType';
 import { talentService, type Talent } from '../../../services/Talent';
@@ -20,10 +20,10 @@ import { decodeJWT } from '../../../services/Auth';
 export default function DeveloperPaymentDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
-    const [payment, setPayment] = useState<PartnerContractPayment | null>(null);
-    const [contract, setContract] = useState<PartnerContract | null>(null);
+    const [payment, setPayment] = useState<PartnerContractPaymentModel | null>(null);
+    const [talentAssignment, setTalentAssignment] = useState<TalentAssignmentModel | null>(null);
     const [partner, setPartner] = useState<Partner | null>(null);
-    const [period, setPeriod] = useState<PartnerPaymentPeriod | null>(null);
+    const [period, setPeriod] = useState<ProjectPeriodModel | null>(null);
     const [documents, setDocuments] = useState<PartnerDocument[]>([]);
     const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
     const [talentJobRoleLevel, setTalentJobRoleLevel] = useState<TalentJobRoleLevel | null>(null);
@@ -97,41 +97,40 @@ export default function DeveloperPaymentDetailPage() {
                 // Fetch payment detail
                 const paymentData = await partnerContractPaymentService.getById(Number(id));
                 
+                // Fetch TalentAssignment để lấy talentId
+                const assignmentData = await talentAssignmentService.getById(paymentData.talentAssignmentId);
+                
                 // Verify this payment belongs to current user
-                if (paymentData.talentId !== currentTalentId) {
+                if (assignmentData.talentId !== currentTalentId) {
                     setError('Bạn không có quyền xem thanh toán này');
                     setLoading(false);
                     return;
                 }
                 
                 setPayment(paymentData);
+                setTalentAssignment(assignmentData);
                 
-                // Fetch related data in parallel
-                const [contractData, periodData] = await Promise.all([
-                    partnerContractService.getById(paymentData.partnerContractId),
-                    partnerPaymentPeriodService.getById(paymentData.partnerPeriodId)
-                ]);
-                
-                setContract(contractData);
+                // Fetch related data
+                const periodData = await projectPeriodService.getById(paymentData.projectPeriodId);
                 setPeriod(periodData);
                 
                 // Fetch partner
                 const partners = await partnerService.getAll();
                 const partnerData = Array.isArray(partners) 
-                    ? partners.find((p: Partner) => p.id === contractData.partnerId)
+                    ? partners.find((p: Partner) => p.id === assignmentData.partnerId)
                     : null;
                 setPartner(partnerData || null);
                 
                 // Fetch talent and job role level
                 try {
-                    await talentService.getById(contractData.talentId);
+                    await talentService.getById(assignmentData.talentId);
                     
                     let jobRoleLevelIdToUse: number | null = null;
                     
                     // Try to get from TalentJobRoleLevel first
                     try {
                         const talentJobRoleLevelsData = await talentJobRoleLevelService.getAll({
-                            talentId: contractData.talentId,
+                            talentId: assignmentData.talentId,
                             excludeDeleted: true
                         });
                         const talentJobRoleLevels = Array.isArray(talentJobRoleLevelsData) 
@@ -151,7 +150,7 @@ export default function DeveloperPaymentDetailPage() {
                     if (!jobRoleLevelIdToUse) {
                         try {
                             const cvsData = await talentCVService.getAll({
-                                talentId: contractData.talentId,
+                                talentId: assignmentData.talentId,
                                 excludeDeleted: true
                             });
                             const cvs = Array.isArray(cvsData) ? cvsData : (cvsData?.items || []);
@@ -184,7 +183,7 @@ export default function DeveloperPaymentDetailPage() {
                             console.error("❌ Lỗi tải job role level:", err);
                         }
                     } else {
-                        console.warn("⚠️ Không tìm thấy job role level cho talent:", contractData.talentId);
+                        console.warn("⚠️ Không tìm thấy job role level cho talent:", assignmentData.talentId);
                     }
                 } catch (err) {
                     console.error("❌ Lỗi tải thông tin talent:", err);
@@ -272,13 +271,9 @@ export default function DeveloperPaymentDetailPage() {
         return `${monthNames[period.periodMonth - 1]}/${period.periodYear}`;
     };
 
-    const formatRate = (contract: PartnerContract | null) => {
-        if (!contract || !contract.devRate) return '—';
-        const rateType = contract.rateType === 'Hourly' ? 'giờ' : 
-                        contract.rateType === 'Daily' ? 'ngày' : 
-                        contract.rateType === 'Monthly' ? 'tháng' : 
-                        contract.rateType === 'Fixed' ? 'cố định' : contract.rateType;
-        return `${new Intl.NumberFormat('vi-VN').format(contract.devRate)} VNĐ/${rateType}`;
+    const formatRate = (payment: PartnerContractPaymentModel | null) => {
+        if (!payment || !payment.monthlyRate) return '—';
+        return `${new Intl.NumberFormat('vi-VN').format(payment.monthlyRate)} VNĐ/tháng`;
     };
 
     const getTotalAmount = () => {
@@ -480,7 +475,7 @@ export default function DeveloperPaymentDetailPage() {
                                     <label className="text-xs font-medium text-neutral-600">Mức lương</label>
                                 </div>
                                 <p className="text-base font-semibold text-gray-900">
-                                    {formatRate(contract)}
+                                    {formatRate(payment)}
                                 </p>
                             </div>
 
@@ -577,8 +572,8 @@ export default function DeveloperPaymentDetailPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-base font-semibold text-gray-900">
-                                        {contract?.devRate 
-                                            ? `${new Intl.NumberFormat('vi-VN').format(contract.devRate)} VNĐ/${contract.rateType === 'Hourly' ? 'giờ' : contract.rateType === 'Daily' ? 'ngày' : contract.rateType === 'Monthly' ? 'tháng' : contract.rateType === 'Fixed' ? 'cố định' : contract.rateType}`
+                                        {payment?.monthlyRate 
+                                            ? `${new Intl.NumberFormat('vi-VN').format(payment.monthlyRate)} VNĐ/tháng`
                                             : '—'}
                                     </p>
                                 </div>
@@ -608,13 +603,13 @@ export default function DeveloperPaymentDetailPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-lg font-bold text-primary-700">
-                                        {contract?.devRate 
-                                            ? `${new Intl.NumberFormat('vi-VN').format(getTotalHours() * contract.devRate)} VNĐ`
+                                        {payment?.finalAmount 
+                                            ? `${new Intl.NumberFormat('vi-VN').format(payment.finalAmount)} VNĐ`
                                             : '—'}
                                     </p>
-                                    {contract?.devRate && (
+                                    {payment?.reportedHours && payment?.monthlyRate && (
                                         <p className="text-xs text-neutral-500 mt-1">
-                                            {getTotalHours()} × {new Intl.NumberFormat('vi-VN').format(contract.devRate)}
+                                            {payment.reportedHours}h × {new Intl.NumberFormat('vi-VN').format(payment.monthlyRate / 160)} VNĐ/giờ
                                         </p>
                                     )}
                                 </div>

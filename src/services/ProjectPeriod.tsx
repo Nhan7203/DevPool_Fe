@@ -7,9 +7,8 @@ export interface ProjectPeriodModel {
   projectId: number;
   periodMonth: number;
   periodYear: number;
-  startDate: string; // ISO string
-  endDate: string; // ISO string
   status: string;
+  notes?: string | null;
   createdAt: string; // ISO string
   updatedAt?: string | null; // ISO string
 }
@@ -19,8 +18,9 @@ export interface ProjectPeriodCreateModel {
   projectId: number;
   periodMonth: number;
   periodYear: number;
-  startDate: string; // ISO string
-  endDate: string; // ISO string
+  status?: string; // Default: "Open"
+  notes?: string | null;
+  autoCreatePayments?: boolean; // Default: true - Auto-create ClientContractPayment and PartnerContractPayment for active assignments
 }
 
 // Interface cho ProjectPeriodFilter (Filter để lấy danh sách)

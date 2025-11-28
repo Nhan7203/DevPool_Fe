@@ -1,66 +1,68 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
-import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectPeriodService, type ProjectPeriodModel, type ProjectPeriodCreateModel } from "../../../services/ProjectPeriod";
-import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
-import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
-import { talentAssignmentService, type TalentAssignmentModel } from "../../../services/TalentAssignment";
+import { talentAssignmentService } from "../../../services/TalentAssignment";
+import { type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
+import { type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { 
-  Briefcase, 
-  CalendarDays, 
-  Building2, 
   CheckCircle,
   AlertCircle,
-  FileCheck,
   Plus,
   X,
-  Eye,
   Layers,
-  DollarSign,
-  Clock,
-  ChevronLeft,
-  ChevronRight
+  Building2,
+  FileCheck,
+  Clock
 } from "lucide-react";
 
 export default function AccountantProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [project, setProject] = useState<ProjectDetailedModel | null>(null);
-  const [company, setCompany] = useState<ClientCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('contracts');
   
   // ProjectPeriod states
   const [projectPeriods, setProjectPeriods] = useState<ProjectPeriodModel[]>([]);
   const [filteredPeriods, setFilteredPeriods] = useState<ProjectPeriodModel[]>([]);
-  const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [showCreatePeriodModal, setShowCreatePeriodModal] = useState(false);
   const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [yearFilter, setYearFilter] = useState<number | null>(null);
   const [previewPeriods, setPreviewPeriods] = useState<Array<{ month: number; year: number }>>([]);
 
   // Contract Payments states
-  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [clientContractPayments, setClientContractPayments] = useState<ClientContractPaymentModel[]>([]);
   const [partnerContractPayments, setPartnerContractPayments] = useState<PartnerContractPaymentModel[]>([]);
-  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [loadingPayments] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
       try {
         setLoading(true);
+        // Reset states khi chuyển dự án
+        setProjectPeriods([]);
+        setFilteredPeriods([]);
+        setSelectedPeriodId(null);
+        setClientContractPayments([]);
+        setPartnerContractPayments([]);
+        
+        const projectId = Number(id);
         const [projectData, periodsData] = await Promise.all([
-          projectService.getDetailedById(Number(id)),
-          projectPeriodService.getAll({ projectId: Number(id), excludeDeleted: true }),
+          projectService.getDetailedById(projectId),
+          projectPeriodService.getAll({ projectId, excludeDeleted: true }),
         ]);
 
         setProject(projectData);
-        const sortedPeriods = [...periodsData].sort((a, b) => {
+        
+        // Filter client-side để đảm bảo chỉ lấy periods của dự án này
+        const filteredByProject = periodsData.filter(p => p.projectId === projectId);
+        
+        const sortedPeriods = [...filteredByProject].sort((a, b) => {
           if (a.periodYear !== b.periodYear) {
             return a.periodYear - b.periodYear; // Năm tăng dần
           }
@@ -70,18 +72,10 @@ export default function AccountantProjectDetailPage() {
         setFilteredPeriods(sortedPeriods);
 
         // Tự động chọn chu kỳ mới nhất (cuối cùng) nếu có
-        if (sortedPeriods.length > 0 && !selectedPeriodId) {
+        if (sortedPeriods.length > 0) {
           setSelectedPeriodId(sortedPeriods[sortedPeriods.length - 1].id);
         }
 
-        if (projectData.clientCompanyId) {
-          try {
-            const companyData = await clientCompanyService.getById(projectData.clientCompanyId);
-            setCompany(companyData);
-          } catch (err) {
-            console.error("Lỗi tải thông tin công ty:", err);
-          }
-        }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu dự án:", err);
       } finally {
@@ -91,11 +85,6 @@ export default function AccountantProjectDetailPage() {
     fetchData();
   }, [id]);
 
-  useEffect(() => {
-    if (selectedPeriodId) {
-      fetchContractPayments(selectedPeriodId);
-    }
-  }, [selectedPeriodId]);
 
   // Filter periods by year
   useEffect(() => {
@@ -106,21 +95,6 @@ export default function AccountantProjectDetailPage() {
     }
   }, [yearFilter, projectPeriods]);
 
-  const fetchContractPayments = async (periodId: number) => {
-    try {
-      setLoadingPayments(true);
-      const [clientPayments, partnerPayments] = await Promise.all([
-        clientContractPaymentService.getAll({ projectPeriodId: periodId, excludeDeleted: true }),
-        partnerContractPaymentService.getAll({ projectPeriodId: periodId, excludeDeleted: true }),
-      ]);
-      setClientContractPayments(clientPayments);
-      setPartnerContractPayments(partnerPayments);
-    } catch (err) {
-      console.error("❌ Lỗi tải hợp đồng thanh toán:", err);
-    } finally {
-      setLoadingPayments(false);
-    }
-  };
 
   // Tính toán các tháng cần tạo dựa trên TalentAssignment Active
   const calculatePeriodsToCreate = async () => {
@@ -141,11 +115,16 @@ export default function AccountantProjectDetailPage() {
       // Tập hợp các tháng cần tạo (dạng "YYYY-MM")
       const periodsSet = new Set<string>();
 
-      assignments.forEach((assignment: TalentAssignmentModel) => {
+      // Removed unused variables
+
+      assignments.forEach((assignment: { startDate: string; endDate?: string | null }) => {
         if (!assignment.startDate) return;
 
         const startDate = new Date(assignment.startDate);
-        const endDate = assignment.endDate ? new Date(assignment.endDate) : new Date(); // Nếu không có endDate, dùng ngày hiện tại
+        const endDate = assignment.endDate ? new Date(assignment.endDate) : null;
+
+        // Nếu endDate là null, không tạo chu kỳ (cần có endDate để biết phạm vi)
+        if (!endDate) return;
 
         // Duyệt qua tất cả các tháng từ startDate đến endDate
         let currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
@@ -154,6 +133,8 @@ export default function AccountantProjectDetailPage() {
         while (currentDate <= finalDate) {
           const year = currentDate.getFullYear();
           const month = currentDate.getMonth() + 1;
+          
+          // Chỉ thêm các tháng trong khoảng thời gian của assignment
           periodsSet.add(`${year}-${month}`);
           
           // Chuyển sang tháng tiếp theo
@@ -191,20 +172,55 @@ export default function AccountantProjectDetailPage() {
       const periodsToCreate = await calculatePeriodsToCreate();
 
       if (periodsToCreate.length === 0) {
-        alert("Không có TalentAssignment nào có Status = 'Active' để tạo chu kỳ thanh toán.");
+        alert("Không có chu kỳ thanh toán nào cần được tạo và không có hợp đồng nào mới cần tạo trong dự án này.\n\nLý do: Không có TalentAssignment nào có Status = 'Active' hoặc các TalentAssignment không có endDate.");
+        setCreatingPeriod(false);
         return;
       }
+
+      // Lấy tháng hiện tại và tháng tiếp theo theo giờ Việt Nam
+      const now = new Date();
+      const vietnamTimeString = now.toLocaleString('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const [currentMonth, , currentYear] = vietnamTimeString.split('/').map(Number);
+      const currentPeriod = { year: currentYear, month: currentMonth };
+      
+      // Tính tháng tiếp theo
+      let nextMonth = currentMonth + 1;
+      let nextYear = currentYear;
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear += 1;
+      }
+      const nextPeriod = { year: nextYear, month: nextMonth };
 
       // Lấy danh sách các chu kỳ đã tồn tại
       const existingPeriods = projectPeriods.map(p => `${p.periodYear}-${p.periodMonth}`);
       
-      // Lọc ra các chu kỳ chưa tồn tại
+      // Lọc ra các chu kỳ chưa tồn tại VÀ chỉ cho phép tháng hiện tại và tháng tiếp theo
       const newPeriods = periodsToCreate.filter(
-        p => !existingPeriods.includes(`${p.year}-${p.month}`)
+        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
+        ((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
+         (p.year === nextPeriod.year && p.month === nextPeriod.month))
+      );
+
+      // Các chu kỳ không được phép tạo (ngoài tháng hiện tại và tháng tiếp theo)
+      const disallowedPeriods = periodsToCreate.filter(
+        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
+        !((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
+          (p.year === nextPeriod.year && p.month === nextPeriod.month))
       );
 
       if (newPeriods.length === 0) {
-        alert("Tất cả các chu kỳ cần thiết đã được tạo.");
+        if (disallowedPeriods.length > 0) {
+          alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}) và tháng tiếp theo (${nextPeriod.month}/${nextPeriod.year}).\n\nCác chu kỳ không được phép tạo:\n${disallowedPeriods.map(p => `- ${p.month}/${p.year}`).join('\n')}`);
+        } else {
+          alert("Tất cả các chu kỳ cần thiết đã được tạo. Không có chu kỳ thanh toán nào mới cần tạo và không có hợp đồng nào mới cần tạo trong dự án này.");
+        }
+        setCreatingPeriod(false);
         return;
       }
 
@@ -212,52 +228,102 @@ export default function AccountantProjectDetailPage() {
       const createdPeriods: ProjectPeriodModel[] = [];
       
       for (const period of newPeriods) {
-        const startDate = new Date(period.year, period.month - 1, 1);
-        const endDate = new Date(period.year, period.month, 0); // Ngày cuối cùng của tháng
-
         const payload: ProjectPeriodCreateModel = {
           projectId: Number(id),
           periodMonth: period.month,
           periodYear: period.year,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          status: "Open", // Default status
+          autoCreatePayments: true, // Auto-create ClientContractPayment and PartnerContractPayment for active assignments
         };
 
         try {
+          // Kiểm tra xem chu kỳ đã tồn tại chưa (double-check)
+          const existingPeriod = projectPeriods.find(
+            p => p.projectId === Number(id) && 
+                 p.periodMonth === period.month && 
+                 p.periodYear === period.year
+          );
+          
+          if (existingPeriod) {
+            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} đã tồn tại, bỏ qua`);
+            continue;
+          }
+
           const newPeriod = await projectPeriodService.create(payload);
           createdPeriods.push(newPeriod);
-        } catch (err: any) {
-          console.error(`❌ Lỗi tạo chu kỳ ${period.month}/${period.year}:`, err);
+          console.log(`✅ Tạo thành công chu kỳ ${period.month}/${period.year}`);
+        } catch (err: unknown) {
+          const error = err as { message?: string; errors?: Record<string, string[]>; innerException?: string };
+          const errorMessage = error.message || error.errors ? JSON.stringify(error, null, 2) : String(err);
+          console.error(`❌ Lỗi tạo chu kỳ ${period.month}/${period.year}:`, errorMessage);
+          console.error("Payload gửi đi:", payload);
+          
+          // Kiểm tra xem có phải lỗi duplicate không
+          if (errorMessage.includes("duplicate") || errorMessage.includes("already exists") || errorMessage.includes("unique constraint")) {
+            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} có thể đã tồn tại trong database`);
+          }
           // Tiếp tục tạo các chu kỳ khác
         }
       }
 
+      // Refresh lại danh sách periods từ server để đảm bảo đồng bộ
+      try {
+        const refreshedPeriods = await projectPeriodService.getAll({
+          projectId: Number(id),
+          excludeDeleted: true,
+        });
+        setProjectPeriods(refreshedPeriods);
+        setFilteredPeriods(refreshedPeriods);
+      } catch (refreshErr) {
+        console.error("❌ Lỗi refresh danh sách periods:", refreshErr);
+        // Nếu refresh thất bại, vẫn cập nhật với periods đã tạo thành công
+        if (createdPeriods.length > 0) {
+          const updatedPeriods = [...projectPeriods, ...createdPeriods].sort((a, b) => {
+            if (a.periodYear !== b.periodYear) {
+              return a.periodYear - b.periodYear;
+            }
+            return a.periodMonth - b.periodMonth;
+          });
+          setProjectPeriods(updatedPeriods);
+          setFilteredPeriods(updatedPeriods);
+        }
+      }
+
       if (createdPeriods.length === 0) {
-        alert("Không thể tạo chu kỳ thanh toán. Vui lòng thử lại.");
+        const errorMsg = newPeriods.length > 0
+          ? `Không thể tạo chu kỳ thanh toán. Có thể do:\n- Lỗi khi tạo các hợp đồng thanh toán tự động (ClientContractPayment/PartnerContractPayment)\n- Hoặc các chu kỳ đã tồn tại trong database\n\nVui lòng kiểm tra console để biết chi tiết lỗi hoặc liên hệ quản trị viên.`
+          : "Tất cả các chu kỳ cần thiết đã được tạo hoặc không có chu kỳ nào hợp lệ để tạo.";
+        alert(errorMsg);
+        setCreatingPeriod(false);
         return;
       }
 
-      // Cập nhật danh sách chu kỳ
-      const updatedPeriods = [...projectPeriods, ...createdPeriods].sort((a, b) => {
-        if (a.periodYear !== b.periodYear) {
-          return a.periodYear - b.periodYear; // Năm tăng dần
-        }
-        return a.periodMonth - b.periodMonth; // Tháng tăng dần
-      });
-      setProjectPeriods(updatedPeriods);
-
-      // Tự động chọn chu kỳ đầu tiên được tạo
+      // Tự động chọn chu kỳ mới nhất được tạo
       if (createdPeriods.length > 0) {
-        setSelectedPeriodId(createdPeriods[0].id);
+        const latestPeriod = createdPeriods[createdPeriods.length - 1];
+        setSelectedPeriodId(latestPeriod.id);
+        
+        // Hiển thị thông báo thành công
+        if (createdPeriods.length === newPeriods.length) {
+          alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán! Hệ thống đã tự động tạo các hợp đồng cho các TalentAssignment Active.`);
+        } else {
+          alert(`Đã tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán. ${newPeriods.length - createdPeriods.length} chu kỳ không thể tạo. Vui lòng kiểm tra console để biết chi tiết.`);
+        }
       }
 
       setShowCreatePeriodModal(false);
       setPreviewPeriods([]);
 
-      alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán! Hệ thống đã tự động tạo các hợp đồng cho các TalentAssignment Active.`);
-    } catch (err: any) {
+      if (createdPeriods.length < newPeriods.length) {
+        const failedCount = newPeriods.length - createdPeriods.length;
+        alert(`Tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán!\n\n${failedCount} chu kỳ không thể tạo (có thể do giới hạn của hệ thống - chỉ cho phép tạo tháng hiện tại và tháng tiếp theo).\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ đã tạo thành công.`);
+      } else {
+        alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán!\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ này.`);
+      }
+    } catch (err: unknown) {
       console.error("❌ Lỗi tạo chu kỳ thanh toán:", err);
-      alert(err?.message || "Không thể tạo chu kỳ thanh toán");
+      const errorMessage = err && typeof err === 'object' && 'message' in err ? String(err.message) : "Không thể tạo chu kỳ thanh toán";
+      alert(errorMessage);
     } finally {
       setCreatingPeriod(false);
     }
@@ -268,18 +334,7 @@ export default function AccountantProjectDetailPage() {
     setPreviewPeriods(periods);
   };
 
-  const formatViDate = (dateStr?: string | null) => {
-    if (!dateStr) return "—";
-    try {
-      const date = new Date(dateStr);
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    } catch {
-      return dateStr;
-    }
-  };
+  // Removed unused functions formatViDate and formatViDateTime
 
   const formatCurrency = (amount?: number | null) => {
     if (amount === null || amount === undefined) return "—";
@@ -424,7 +479,7 @@ export default function AccountantProjectDetailPage() {
               <div className="space-y-6">
                 {/* Header với nút tạo chu kỳ và filter năm */}
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-900">Chu kỳ thanh toán</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">Danh sách chu kỳ thanh toán</h2>
                   <div className="flex items-center gap-3">
                     {/* Filter theo năm */}
                     <select
@@ -508,42 +563,57 @@ export default function AccountantProjectDetailPage() {
                                 </div>
                               ) : (
                                 <div className="space-y-4">
-                                  {clientContractPayments.map((payment) => (
-                                    <div key={payment.id} className="border border-neutral-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-sm transition-all">
-                                      <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1">
-                                          <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
-                                          <p className="text-sm text-neutral-600">{payment.talentName || "—"}</p>
+                                  {/* Nhóm theo talentAssignmentId */}
+                                  {Array.from(new Set(clientContractPayments.map(p => p.talentAssignmentId))).map((talentAssignmentId) => {
+                                    const clientPayments = clientContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
+                                    // Removed unused variable partnerPayments
+                                    partnerContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
+                                    return (
+                                      <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
+                                        <div className="mb-3 pb-3 border-b border-neutral-200">
+                                          <p className="text-sm font-medium text-neutral-600">
+                                            Talent Assignment ID: {talentAssignmentId}
+                                          </p>
                                         </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${contractStatusColors[payment.contractStatus] || 'bg-gray-100 text-gray-800'}`}>
-                                            {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
-                                          </span>
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${paymentStatusColors[payment.paymentStatus] || 'bg-gray-100 text-gray-800'}`}>
-                                            {paymentStatusLabels[payment.paymentStatus] || payment.paymentStatus}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
-                                        <div>
-                                          <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                          <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmountVND || payment.finalAmount)}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
-                                          <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
-                                        </div>
-                                      </div>
-                                      {payment.billableHours && (
-                                        <div className="mt-3 pt-3 border-t border-neutral-100">
-                                          <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                            <Clock className="w-4 h-4" />
-                                            <span>Giờ billable: {payment.billableHours}h</span>
+                                        {clientPayments.map((payment) => (
+                                          <div key={payment.id} className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-sm transition-all">
+                                            <div className="flex items-start justify-between mb-3">
+                                              <div className="flex-1">
+                                                <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
+                                                <p className="text-sm text-neutral-600">{payment.talentName || "—"}</p>
+                                              </div>
+                                              <div className="flex flex-col items-end gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${contractStatusColors[payment.contractStatus] || 'bg-gray-100 text-gray-800'}`}>
+                                                  {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
+                                                </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${paymentStatusColors[payment.paymentStatus] || 'bg-gray-100 text-gray-800'}`}>
+                                                  {paymentStatusLabels[payment.paymentStatus] || payment.paymentStatus}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmountVND || payment.finalAmount)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
+                                              </div>
+                                            </div>
+                                            {payment.billableHours && (
+                                              <div className="mt-3 pt-3 border-t border-neutral-100">
+                                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                                  <Clock className="w-4 h-4" />
+                                                  <span>Giờ billable: {payment.billableHours}h</span>
+                                                </div>
+                                              </div>
+                                            )}
                                           </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -566,54 +636,67 @@ export default function AccountantProjectDetailPage() {
                                 </div>
                               ) : (
                                 <div className="space-y-4">
-                                  {partnerContractPayments.map((payment) => (
-                                    <div key={payment.id} className="border border-neutral-200 rounded-lg p-4 hover:border-secondary-300 hover:shadow-sm transition-all">
-                                      <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1">
-                                          <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
-                                          <p className="text-sm text-neutral-600">Talent Assignment ID: {payment.talentAssignmentId}</p>
+                                  {/* Nhóm theo talentAssignmentId */}
+                                  {Array.from(new Set(partnerContractPayments.map(p => p.talentAssignmentId))).map((talentAssignmentId) => {
+                                    const partnerPaymentsForTalent = partnerContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
+                                    return (
+                                      <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
+                                        <div className="mb-3 pb-3 border-b border-neutral-200">
+                                          <p className="text-sm font-medium text-neutral-600">
+                                            Talent Assignment ID: {talentAssignmentId}
+                                          </p>
                                         </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                            payment.contractStatus === 'Approved' 
-                                              ? 'bg-green-100 text-green-800'
-                                              : payment.contractStatus === 'Verified'
-                                              ? 'bg-purple-100 text-purple-800'
-                                              : 'bg-gray-100 text-gray-800'
-                                          }`}>
-                                            {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
-                                          </span>
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                            payment.paymentStatus === 'Paid' 
-                                              ? 'bg-green-100 text-green-800'
-                                              : payment.paymentStatus === 'Processing'
-                                              ? 'bg-yellow-100 text-yellow-800'
-                                              : 'bg-gray-100 text-gray-800'
-                                          }`}>
-                                            {payment.paymentStatus === 'Paid' ? 'Đã thanh toán' : payment.paymentStatus === 'Processing' ? 'Đang xử lý' : 'Chờ thanh toán'}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
-                                        <div>
-                                          <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                          <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmount)}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
-                                          <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
-                                        </div>
-                                      </div>
-                                      {payment.reportedHours && (
-                                        <div className="mt-3 pt-3 border-t border-neutral-100">
-                                          <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                            <Clock className="w-4 h-4" />
-                                            <span>Giờ làm việc: {payment.reportedHours}h</span>
+                                        {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
+                                          <div key={payment.id} className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-secondary-300 hover:shadow-sm transition-all">
+                                            <div className="flex items-start justify-between mb-3">
+                                              <div className="flex-1">
+                                                <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
+                                                <p className="text-sm text-neutral-600">Talent Assignment ID: {payment.talentAssignmentId}</p>
+                                              </div>
+                                              <div className="flex flex-col items-end gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                  payment.contractStatus === 'Approved' 
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : payment.contractStatus === 'Verified'
+                                                    ? 'bg-purple-100 text-purple-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                  {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
+                                                </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                  payment.paymentStatus === 'Paid' 
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : payment.paymentStatus === 'Processing'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                  {payment.paymentStatus === 'Paid' ? 'Đã thanh toán' : payment.paymentStatus === 'Processing' ? 'Đang xử lý' : 'Chờ thanh toán'}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmount)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
+                                              </div>
+                                            </div>
+                                            {payment.reportedHours && (
+                                              <div className="mt-3 pt-3 border-t border-neutral-100">
+                                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                                  <Clock className="w-4 h-4" />
+                                                  <span>Giờ làm việc: {payment.reportedHours}h</span>
+                                                </div>
+                                              </div>
+                                            )}
                                           </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>

@@ -29,7 +29,7 @@ import { decodeJWT } from '../../services/Auth';
 import { talentService, type Talent } from '../../services/Talent';
 import { partnerContractService, type PartnerContract } from '../../services/PartnerContract';
 import { clientContractService, type ClientContract } from '../../services/ClientContract';
-import { partnerContractPaymentService, type PartnerContractPayment } from '../../services/PartnerContractPayment';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../services/PartnerContractPayment';
 import { talentSkillService, type TalentSkill } from '../../services/TalentSkill';
 import { skillService, type Skill } from '../../services/Skill';
 
@@ -114,7 +114,7 @@ export default function DeveloperDashboard() {
 
         const partnerContracts = Array.isArray(partnerContractsData) ? partnerContractsData : [];
         const clientContracts = Array.isArray(clientContractsData) ? clientContractsData : [];
-        const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.items || []);
+        const payments = Array.isArray(paymentsData) ? paymentsData : [];
 
         // Tính toán stats
         // 1. Current Assignments = số hợp đồng đang active
@@ -139,15 +139,15 @@ export default function DeveloperDashboard() {
           return paymentDate.getMonth() === currentMonth && paymentDate.getFullYear() === currentYear;
         });
         
-        const hoursThisMonth = thisMonthPayments.reduce((sum: number, p: PartnerContractPayment) => {
+        const hoursThisMonth = thisMonthPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
           return sum + (p.actualWorkHours || 0) + (p.otHours || 0);
         }, 0);
 
         // 3. Total Earnings = tổng số tiền đã thanh toán
-        const paidPayments = payments.filter((p: PartnerContractPayment) => 
+        const paidPayments = payments.filter((p: PartnerContractPaymentModel) => 
           p.status?.toLowerCase() === 'paid'
         );
-        const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPayment) => {
+        const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
           return sum + (p.paidAmount || p.calculatedAmount || 0);
         }, 0);
 
@@ -156,7 +156,7 @@ export default function DeveloperDashboard() {
 
         // 5. Monthly Earnings (6 tháng gần nhất)
         const monthlyEarningsMap = new Map<string, number>();
-        payments.forEach((p: PartnerContractPayment) => {
+        payments.forEach((p: PartnerContractPaymentModel) => {
           if (p.status?.toLowerCase() === 'paid' && p.paymentDate) {
             const date = new Date(p.paymentDate);
             const monthLabel = `T${date.getMonth() + 1}/${String(date.getFullYear()).slice(-2)}`;
