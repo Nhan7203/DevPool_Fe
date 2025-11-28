@@ -257,6 +257,10 @@ const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/Clie
 const DevContracts = React.lazy(() => import('../pages/manager/contract/Devs/List'));
 const DevDetailPage = React.lazy(() => import('../pages/manager/contract/Devs/Detail'));
 
+// Projects
+const ManagerProjectListPage = React.lazy(() => import('../pages/manager/projects/List'));
+const ManagerProjectDetailPage = React.lazy(() => import('../pages/manager/projects/Detail'));
+
 // Business
 const BusinessOverview = React.lazy(() => import('../pages/manager/business/Overview'));
 const Revenue = React.lazy(() => import('../pages/manager/business/Revenue'));
@@ -477,6 +481,10 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
               <Route path={ROUTES.MANAGER.CONTRACT.DEVS} element={<DevContracts />} />
               <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
+              
+              {/* Projects */}
+              <Route path="/manager/projects" element={<ManagerProjectListPage />} />
+              <Route path="/manager/projects/:id" element={<ManagerProjectDetailPage />} />
               
               {/* Business */}
               <Route path={ROUTES.MANAGER.BUSINESS.OVERVIEW} element={<BusinessOverview />} />

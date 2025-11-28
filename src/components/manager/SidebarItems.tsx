@@ -1,8 +1,8 @@
 import {
   BarChart3,
   LineChart,
-  Users,
   DollarSign,
+  Briefcase,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -12,13 +12,9 @@ export const sidebarItems = [
     icon: BarChart3,
   },
   {
-    label: "Hợp Đồng",
-    href: "/manager/contract",
-    icon: Users,
-    subItems: [
-      { label: "Khách Hàng", href: "/manager/contracts/clients" },
-      { label: "Nhân Sự", href: "/manager/contracts/developers" },
-    ],
+    label: "Dự án",
+    href: "/manager/projects",
+    icon: Briefcase,
   },
   // {
   //   label: "Kỳ Thanh Toán",

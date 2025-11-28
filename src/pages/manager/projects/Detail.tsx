@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
-import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
+import { sidebarItems } from "../../../components/manager/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
-import { projectPeriodService, type ProjectPeriodModel, type ProjectPeriodCreateModel } from "../../../services/ProjectPeriod";
+import { projectPeriodService, type ProjectPeriodModel } from "../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../services/TalentAssignment";
 import { talentService } from "../../../services/Talent";
 import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
@@ -13,7 +13,6 @@ import { partnerContractPaymentService, type PartnerContractPaymentModel } from 
 import { 
   CheckCircle,
   AlertCircle,
-  Plus,
   X,
   Layers,
   Building2,
@@ -27,7 +26,7 @@ import {
   ChevronUp
 } from "lucide-react";
 
-export default function AccountantProjectDetailPage() {
+export default function ManagerProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<ProjectDetailedModel | null>(null);
@@ -41,10 +40,7 @@ export default function AccountantProjectDetailPage() {
   const [projectPeriods, setProjectPeriods] = useState<ProjectPeriodModel[]>([]);
   const [filteredPeriods, setFilteredPeriods] = useState<ProjectPeriodModel[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
-  const [showCreatePeriodModal, setShowCreatePeriodModal] = useState(false);
-  const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [yearFilter, setYearFilter] = useState<number | null>(null);
-  const [previewPeriods, setPreviewPeriods] = useState<Array<{ month: number; year: number }>>([]);
 
   // Contract Payments states
   const [clientContractPayments, setClientContractPayments] = useState<ClientContractPaymentModel[]>([]);
@@ -210,256 +206,6 @@ export default function AccountantProjectDetailPage() {
     fetchContractPayments();
   }, [selectedPeriodId, id, projectPeriods]);
 
-
-  // Tính toán các tháng cần tạo dựa trên TalentAssignment Active
-  const calculatePeriodsToCreate = async () => {
-    if (!id) return [];
-
-    try {
-      // Lấy tất cả TalentAssignment có Status = "Active"
-      const assignments = await talentAssignmentService.getAll({
-        projectId: Number(id),
-        status: "Active",
-        excludeDeleted: true,
-      });
-
-      if (assignments.length === 0) {
-        return [];
-      }
-
-      // Tập hợp các tháng cần tạo (dạng "YYYY-MM")
-      const periodsSet = new Set<string>();
-
-      // Removed unused variables
-
-      assignments.forEach((assignment: { startDate: string; endDate?: string | null }) => {
-        if (!assignment.startDate) return;
-
-        const startDate = new Date(assignment.startDate);
-        const endDate = assignment.endDate ? new Date(assignment.endDate) : null;
-
-        // Nếu endDate là null, không tạo chu kỳ (cần có endDate để biết phạm vi)
-        if (!endDate) return;
-
-        // Duyệt qua tất cả các tháng từ startDate đến endDate
-        let currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-        const finalDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-
-        while (currentDate <= finalDate) {
-          const year = currentDate.getFullYear();
-          const month = currentDate.getMonth() + 1;
-          
-          // Chỉ thêm các tháng trong khoảng thời gian của assignment
-          periodsSet.add(`${year}-${month}`);
-          
-          // Chuyển sang tháng tiếp theo
-          currentDate = new Date(year, month, 1);
-        }
-      });
-
-      // Chuyển đổi Set thành mảng và sắp xếp
-      const periods = Array.from(periodsSet)
-        .map(key => {
-          const [year, month] = key.split('-').map(Number);
-          return { month, year };
-        })
-        .sort((a, b) => {
-          if (a.year !== b.year) {
-            return a.year - b.year;
-          }
-          return a.month - b.month;
-        });
-
-      return periods;
-    } catch (err) {
-      console.error("❌ Lỗi tính toán chu kỳ:", err);
-      return [];
-    }
-  };
-
-  const handleCreatePeriod = async () => {
-    if (!id) return;
-
-    try {
-      setCreatingPeriod(true);
-
-      // Tính toán các chu kỳ cần tạo
-      const periodsToCreate = await calculatePeriodsToCreate();
-
-      if (periodsToCreate.length === 0) {
-        alert("Không có chu kỳ thanh toán nào cần được tạo và không có hợp đồng nào mới cần tạo trong dự án này.\n\nLý do: Không có TalentAssignment nào có Status = 'Active' hoặc các TalentAssignment không có endDate.");
-        setCreatingPeriod(false);
-        return;
-      }
-
-      // Lấy tháng hiện tại và tháng tiếp theo theo giờ Việt Nam
-      const now = new Date();
-      const vietnamTimeString = now.toLocaleString('en-US', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const [currentMonth, , currentYear] = vietnamTimeString.split('/').map(Number);
-      const currentPeriod = { year: currentYear, month: currentMonth };
-      
-      // Tính tháng tiếp theo
-      let nextMonth = currentMonth + 1;
-      let nextYear = currentYear;
-      if (nextMonth > 12) {
-        nextMonth = 1;
-        nextYear += 1;
-      }
-      const nextPeriod = { year: nextYear, month: nextMonth };
-
-      // Lấy danh sách các chu kỳ đã tồn tại
-      const existingPeriods = projectPeriods.map(p => `${p.periodYear}-${p.periodMonth}`);
-      
-      // Lọc ra các chu kỳ chưa tồn tại VÀ chỉ cho phép tháng hiện tại và tháng tiếp theo
-      const newPeriods = periodsToCreate.filter(
-        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
-        ((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
-         (p.year === nextPeriod.year && p.month === nextPeriod.month))
-      );
-
-      // Các chu kỳ không được phép tạo (ngoài tháng hiện tại và tháng tiếp theo)
-      const disallowedPeriods = periodsToCreate.filter(
-        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
-        !((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
-          (p.year === nextPeriod.year && p.month === nextPeriod.month))
-      );
-
-      if (newPeriods.length === 0) {
-        if (disallowedPeriods.length > 0) {
-          alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}) và tháng tiếp theo (${nextPeriod.month}/${nextPeriod.year}).\n\nCác chu kỳ không được phép tạo:\n${disallowedPeriods.map(p => `- ${p.month}/${p.year}`).join('\n')}`);
-        } else {
-          alert("Tất cả các chu kỳ cần thiết đã được tạo. Không có chu kỳ thanh toán nào mới cần tạo và không có hợp đồng nào mới cần tạo trong dự án này.");
-        }
-        setCreatingPeriod(false);
-        return;
-      }
-
-      // Tạo tất cả các chu kỳ mới
-      const createdPeriods: ProjectPeriodModel[] = [];
-      
-      for (const period of newPeriods) {
-        const payload: ProjectPeriodCreateModel = {
-          projectId: Number(id),
-          periodMonth: period.month,
-          periodYear: period.year,
-          status: "Open", // Default status
-          autoCreatePayments: true, // Auto-create ClientContractPayment and PartnerContractPayment for active assignments
-        };
-
-        try {
-          // Kiểm tra xem chu kỳ đã tồn tại chưa (double-check)
-          const existingPeriod = projectPeriods.find(
-            p => p.projectId === Number(id) && 
-                 p.periodMonth === period.month && 
-                 p.periodYear === period.year
-          );
-          
-          if (existingPeriod) {
-            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} đã tồn tại, bỏ qua`);
-            continue;
-          }
-
-          const newPeriod = await projectPeriodService.create(payload);
-          createdPeriods.push(newPeriod);
-          console.log(`✅ Tạo thành công chu kỳ ${period.month}/${period.year}`);
-        } catch (err: unknown) {
-          const error = err as { message?: string; errors?: Record<string, string[]>; innerException?: string };
-          const errorMessage = error.message || error.errors ? JSON.stringify(error, null, 2) : String(err);
-          console.error(`❌ Lỗi tạo chu kỳ ${period.month}/${period.year}:`, errorMessage);
-          console.error("Payload gửi đi:", payload);
-          
-          // Kiểm tra xem có phải lỗi duplicate không
-          if (errorMessage.includes("duplicate") || errorMessage.includes("already exists") || errorMessage.includes("unique constraint")) {
-            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} có thể đã tồn tại trong database`);
-          }
-          // Tiếp tục tạo các chu kỳ khác
-        }
-      }
-
-      // Refresh lại danh sách periods từ server để đảm bảo đồng bộ
-      try {
-        const refreshedPeriods = await projectPeriodService.getAll({
-          projectId: Number(id),
-          excludeDeleted: true,
-        });
-        
-        // Filter client-side để đảm bảo chỉ lấy periods của dự án này
-        const filteredByProject = refreshedPeriods.filter(p => p.projectId === Number(id));
-        
-        const sortedPeriods = [...filteredByProject].sort((a, b) => {
-          if (a.periodYear !== b.periodYear) {
-            return a.periodYear - b.periodYear; // Năm tăng dần
-          }
-          return a.periodMonth - b.periodMonth; // Tháng tăng dần
-        });
-        
-        setProjectPeriods(sortedPeriods);
-        setFilteredPeriods(sortedPeriods);
-      } catch (refreshErr) {
-        console.error("❌ Lỗi refresh danh sách periods:", refreshErr);
-        // Nếu refresh thất bại, vẫn cập nhật với periods đã tạo thành công (chỉ của dự án này)
-        if (createdPeriods.length > 0) {
-          const updatedPeriods = [...projectPeriods.filter(p => p.projectId === Number(id)), ...createdPeriods].sort((a, b) => {
-            if (a.periodYear !== b.periodYear) {
-              return a.periodYear - b.periodYear;
-            }
-            return a.periodMonth - b.periodMonth;
-          });
-          setProjectPeriods(updatedPeriods);
-          setFilteredPeriods(updatedPeriods);
-        }
-      }
-
-      if (createdPeriods.length === 0) {
-        const errorMsg = newPeriods.length > 0
-          ? `Không thể tạo chu kỳ thanh toán. Có thể do:\n- Lỗi khi tạo các hợp đồng thanh toán tự động (ClientContractPayment/PartnerContractPayment)\n- Hoặc các chu kỳ đã tồn tại trong database\n\nVui lòng kiểm tra console để biết chi tiết lỗi hoặc liên hệ quản trị viên.`
-          : "Tất cả các chu kỳ cần thiết đã được tạo hoặc không có chu kỳ nào hợp lệ để tạo.";
-        alert(errorMsg);
-        setCreatingPeriod(false);
-        return;
-      }
-
-      // Tự động chọn chu kỳ mới nhất được tạo
-      if (createdPeriods.length > 0) {
-        const latestPeriod = createdPeriods[createdPeriods.length - 1];
-        setSelectedPeriodId(latestPeriod.id);
-        
-        // Hiển thị thông báo thành công
-        if (createdPeriods.length === newPeriods.length) {
-          alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán! Hệ thống đã tự động tạo các hợp đồng cho các TalentAssignment Active.`);
-        } else {
-          alert(`Đã tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán. ${newPeriods.length - createdPeriods.length} chu kỳ không thể tạo. Vui lòng kiểm tra console để biết chi tiết.`);
-        }
-      }
-
-      setShowCreatePeriodModal(false);
-      setPreviewPeriods([]);
-
-      if (createdPeriods.length < newPeriods.length) {
-        const failedCount = newPeriods.length - createdPeriods.length;
-        alert(`Tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán!\n\n${failedCount} chu kỳ không thể tạo (có thể do giới hạn của hệ thống - chỉ cho phép tạo tháng hiện tại và tháng tiếp theo).\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ đã tạo thành công.`);
-      } else {
-        alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán!\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ này.`);
-      }
-    } catch (err: unknown) {
-      console.error("❌ Lỗi tạo chu kỳ thanh toán:", err);
-      const errorMessage = err && typeof err === 'object' && 'message' in err ? String(err.message) : "Không thể tạo chu kỳ thanh toán";
-      alert(errorMessage);
-    } finally {
-      setCreatingPeriod(false);
-    }
-  };
-
-  const handlePreviewPeriods = async () => {
-    const periods = await calculatePeriodsToCreate();
-    setPreviewPeriods(periods);
-  };
-
   const formatViDateTime = (dateStr?: string | null) => {
     if (!dateStr) return "—";
     try {
@@ -526,7 +272,7 @@ export default function AccountantProjectDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Accountant Staff" />
+        <Sidebar items={sidebarItems} title="Manager" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -540,7 +286,7 @@ export default function AccountantProjectDetailPage() {
   if (!project) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Accountant Staff" />
+        <Sidebar items={sidebarItems} title="Manager" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -548,7 +294,7 @@ export default function AccountantProjectDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy dự án</p>
             <Link 
-              to="/accountant/projects"
+              to="/manager/projects"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               Quay lại danh sách
@@ -561,14 +307,14 @@ export default function AccountantProjectDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Accountant Staff" />
+      <Sidebar items={sidebarItems} title="Manager" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <Breadcrumb
             items={[
-              { label: "Dự án", to: "/accountant/projects" },
+              { label: "Dự án", to: "/manager/projects" },
               { label: project ? project.name : "Chi tiết dự án" }
             ]}
           />
@@ -708,7 +454,7 @@ export default function AccountantProjectDetailPage() {
             {/* Tab: Hợp đồng */}
             {activeTab === 'contracts' && (
               <div className="space-y-6">
-                {/* Header với nút tạo chu kỳ và filter năm */}
+                {/* Header với filter năm */}
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-900">Danh sách chu kỳ thanh toán</h2>
                   <div className="flex items-center gap-3">
@@ -725,13 +471,6 @@ export default function AccountantProjectDetailPage() {
                           <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
-                    <button
-                      onClick={() => setShowCreatePeriodModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Tạo chu kỳ thanh toán
-                    </button>
                   </div>
                 </div>
 
@@ -740,7 +479,6 @@ export default function AccountantProjectDetailPage() {
                   <div className="text-center py-12 bg-neutral-50 rounded-xl">
                     <Layers className="w-12 h-12 text-neutral-400 mx-auto mb-4" />
                     <p className="text-neutral-500">Chưa có chu kỳ thanh toán nào</p>
-                    <p className="text-neutral-400 text-sm mt-1">Nhấn nút "Tạo chu kỳ thanh toán" để bắt đầu</p>
                   </div>
                 ) : (
                   <div>
@@ -797,8 +535,6 @@ export default function AccountantProjectDetailPage() {
                                   {/* Nhóm theo talentAssignmentId */}
                                   {Array.from(new Set(clientContractPayments.map(p => p.talentAssignmentId))).map((talentAssignmentId) => {
                                     const clientPayments = clientContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
-                                    // Removed unused variable partnerPayments
-                                    partnerContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
                                     return (
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
@@ -809,7 +545,7 @@ export default function AccountantProjectDetailPage() {
                                         {clientPayments.map((payment) => (
                                           <div 
                                             key={payment.id} 
-                                            onClick={() => navigate(`/accountant/contracts/clients/${payment.id}`)}
+                                            onClick={() => navigate(`/manager/contracts/clients/${payment.id}`)}
                                             className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <div className="flex items-start justify-between mb-3">
@@ -884,7 +620,7 @@ export default function AccountantProjectDetailPage() {
                                         {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
                                           <div 
                                             key={payment.id} 
-                                            onClick={() => navigate(`/accountant/contracts/partners/${payment.id}`)}
+                                            onClick={() => navigate(`/manager/contracts/partners/${payment.id}`)}
                                             className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-secondary-300 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <div className="flex items-start justify-between mb-3">
@@ -950,81 +686,6 @@ export default function AccountantProjectDetailPage() {
           </div>
         </div>
       </div>
-
-      {/* Modal tạo ProjectPeriod */}
-      {showCreatePeriodModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-gray-900">Tạo chu kỳ thanh toán</h3>
-                <button
-                  onClick={() => setShowCreatePeriodModal(false)}
-                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800 mb-2">
-                  <strong>Lưu ý:</strong> Hệ thống sẽ tự động:
-                </p>
-                <ul className="text-sm text-blue-800 list-disc list-inside space-y-1">
-                  <li>Tìm tất cả TalentAssignment có Status = "Active" (bỏ qua Draft)</li>
-                  <li>Tính toán tất cả các tháng cần tạo dựa trên startDate và endDate của mỗi TalentAssignment</li>
-                  <li>Tạo ProjectPeriod cho mỗi tháng cần thiết</li>
-                  <li>Tự động tạo ClientContractPayment và PartnerContractPayment với ContractStatus = "Draft", PaymentStatus = "Pending"</li>
-                </ul>
-              </div>
-
-              <div>
-                <button
-                  onClick={handlePreviewPeriods}
-                  className="w-full px-4 py-2 bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-lg font-medium transition-colors border border-primary-200"
-                >
-                  Xem trước các chu kỳ sẽ được tạo
-                </button>
-              </div>
-
-              {previewPeriods.length > 0 && (
-                <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">
-                    Các chu kỳ sẽ được tạo ({previewPeriods.length} chu kỳ):
-                  </p>
-                  <div className="max-h-40 overflow-y-auto">
-                    <div className="grid grid-cols-3 gap-2">
-                      {previewPeriods.map((p, idx) => (
-                        <div key={idx} className="text-sm text-neutral-600 bg-white px-2 py-1 rounded border border-neutral-200">
-                          Tháng {p.month}/{p.year}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 border-t border-neutral-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowCreatePeriodModal(false)}
-                className="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-700 hover:bg-neutral-50 transition-colors"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleCreatePeriod}
-                disabled={creatingPeriod}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {creatingPeriod ? "Đang tạo..." : "Tạo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Company Info Modal */}
       {showCompanyInfo && company && (
@@ -1098,3 +759,4 @@ function InfoItem({ label, value, icon }: { label: string; value: string; icon?:
     </div>
   );
 }
+

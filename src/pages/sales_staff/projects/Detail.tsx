@@ -5,7 +5,10 @@ import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { projectPeriodService, type ProjectPeriodModel } from "../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignmentCreateModel } from "../../../services/TalentAssignment";
+import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
 import { talentService, type Talent } from "../../../services/Talent";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
@@ -60,11 +63,17 @@ export default function ProjectDetailPage() {
   const [jobRequestPage, setJobRequestPage] = useState(1);
   const jobRequestPageSize = 5;
   
-  // Contracts search, filter, pagination
-  const [contractSearch, setContractSearch] = useState("");
-  const [contractStatusFilter, setContractStatusFilter] = useState<string>("");
-  const [contractPage, setContractPage] = useState(1);
-  const contractPageSize = 5;
+  // ProjectPeriod states
+  const [projectPeriods, setProjectPeriods] = useState<ProjectPeriodModel[]>([]);
+  const [filteredPeriods, setFilteredPeriods] = useState<ProjectPeriodModel[]>([]);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [yearFilter, setYearFilter] = useState<number | null>(null);
+
+  // Contract Payments states
+  const [clientContractPayments, setClientContractPayments] = useState<ClientContractPaymentModel[]>([]);
+  const [partnerContractPayments, setPartnerContractPayments] = useState<PartnerContractPaymentModel[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [talentNamesMap, setTalentNamesMap] = useState<Record<number, string>>({});
 
   // Talent Assignment states
   const [talentAssignments, setTalentAssignments] = useState<TalentAssignmentModel[]>([]);
@@ -138,6 +147,27 @@ export default function ProjectDetailPage() {
           setTalentAssignments(assignments);
         } catch (err) {
           console.error("❌ Lỗi tải danh sách phân công nhân sự:", err);
+        }
+
+        // Lấy danh sách ProjectPeriods cho project
+        try {
+          const periodsData = await projectPeriodService.getAll({ projectId: Number(id), excludeDeleted: true });
+          const filteredByProject = periodsData.filter(p => p.projectId === Number(id));
+          const sortedPeriods = [...filteredByProject].sort((a, b) => {
+            if (a.periodYear !== b.periodYear) {
+              return a.periodYear - b.periodYear;
+            }
+            return a.periodMonth - b.periodMonth;
+          });
+          setProjectPeriods(sortedPeriods);
+          setFilteredPeriods(sortedPeriods);
+          
+          // Tự động chọn chu kỳ mới nhất nếu có
+          if (sortedPeriods.length > 0) {
+            setSelectedPeriodId(sortedPeriods[sortedPeriods.length - 1].id);
+          }
+        } catch (err) {
+          console.error("❌ Lỗi tải danh sách chu kỳ thanh toán:", err);
         }
 
         // Lấy danh sách talents, partners, jobRoleLevels và locations để hiển thị
@@ -510,12 +540,145 @@ export default function ProjectDetailPage() {
   Completed: "Đã hoàn thành",
 };
 
+  // Filter periods by year
+  useEffect(() => {
+    if (yearFilter === null) {
+      setFilteredPeriods(projectPeriods);
+    } else {
+      setFilteredPeriods(projectPeriods.filter(p => p.periodYear === yearFilter));
+    }
+  }, [yearFilter, projectPeriods]);
+
+  // Fetch contract payments when a period is selected
+  useEffect(() => {
+    const fetchContractPayments = async () => {
+      if (!selectedPeriodId || !id) {
+        setClientContractPayments([]);
+        setPartnerContractPayments([]);
+        return;
+      }
+
+      const selectedPeriod = projectPeriods.find(p => p.id === selectedPeriodId);
+      if (!selectedPeriod || selectedPeriod.projectId !== Number(id)) {
+        setClientContractPayments([]);
+        setPartnerContractPayments([]);
+        return;
+      }
+
+      try {
+        setLoadingPayments(true);
+        const [clientPayments, partnerPayments] = await Promise.all([
+          clientContractPaymentService.getAll({ 
+            projectPeriodId: selectedPeriodId, 
+            excludeDeleted: true 
+          }),
+          partnerContractPaymentService.getAll({ 
+            projectPeriodId: selectedPeriodId, 
+            excludeDeleted: true 
+          })
+        ]);
+
+        const filteredClientPayments = Array.isArray(clientPayments) 
+          ? clientPayments.filter(p => p.projectPeriodId === selectedPeriodId)
+          : [];
+        const filteredPartnerPayments = Array.isArray(partnerPayments) 
+          ? partnerPayments.filter(p => p.projectPeriodId === selectedPeriodId)
+          : [];
+
+        setClientContractPayments(filteredClientPayments);
+        setPartnerContractPayments(filteredPartnerPayments);
+
+        // Fetch talent names
+        const allTalentAssignmentIds = [
+          ...new Set([
+            ...filteredClientPayments.map(p => p.talentAssignmentId),
+            ...filteredPartnerPayments.map(p => p.talentAssignmentId)
+          ])
+        ];
+
+        if (allTalentAssignmentIds.length > 0) {
+          const assignments = await Promise.all(
+            allTalentAssignmentIds.map(id => 
+              talentAssignmentService.getById(id).catch(() => null)
+            )
+          );
+
+          const talentIds = assignments
+            .filter((a): a is TalentAssignmentModel => a !== null)
+            .map(a => a.talentId);
+
+          if (talentIds.length > 0) {
+            const fetchedTalents = await Promise.all(
+              talentIds.map(id => 
+                talentService.getById(id).catch(() => null)
+              )
+            );
+
+            const newTalentNamesMap: Record<number, string> = {};
+            assignments.forEach((assignment) => {
+              if (assignment) {
+                const talent = fetchedTalents.find(t => t && t.id === assignment.talentId);
+                if (talent) {
+                  newTalentNamesMap[assignment.id] = talent.fullName || "—";
+                }
+              }
+            });
+
+            setTalentNamesMap(prev => ({ ...prev, ...newTalentNamesMap }));
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải hợp đồng thanh toán:", err);
+        setClientContractPayments([]);
+        setPartnerContractPayments([]);
+      } finally {
+        setLoadingPayments(false);
+      }
+    };
+
+    fetchContractPayments();
+  }, [selectedPeriodId, id, projectPeriods]);
+
   const contractStatusLabels: Record<string, string> = {
     Draft: "Nháp",
-    Pending: "Chờ duyệt",
-    Active: "Đang hoạt động",
-    Expired: "Hết hạn",
-    Terminated: "Đã chấm dứt",
+    NeedMoreInformation: "Cần thêm thông tin",
+    Submitted: "Đã gửi",
+    Verified: "Đã xác minh",
+    Approved: "Đã duyệt",
+    Rejected: "Từ chối",
+  };
+
+  const paymentStatusLabels: Record<string, string> = {
+    Pending: "Chờ thanh toán",
+    Processing: "Đang xử lý",
+    Invoiced: "Đã xuất hóa đơn",
+    PartiallyPaid: "Đã thanh toán một phần",
+    Paid: "Đã thanh toán",
+  };
+
+  const contractStatusColors: Record<string, string> = {
+    Draft: "bg-gray-100 text-gray-800",
+    NeedMoreInformation: "bg-yellow-100 text-yellow-800",
+    Submitted: "bg-blue-100 text-blue-800",
+    Verified: "bg-purple-100 text-purple-800",
+    Approved: "bg-green-100 text-green-800",
+    Rejected: "bg-red-100 text-red-800",
+  };
+
+  const paymentStatusColors: Record<string, string> = {
+    Pending: "bg-gray-100 text-gray-800",
+    Processing: "bg-yellow-100 text-yellow-800",
+    Invoiced: "bg-blue-100 text-blue-800",
+    PartiallyPaid: "bg-orange-100 text-orange-800",
+    Paid: "bg-green-100 text-green-800",
+  };
+
+  const formatCurrency = (amount?: number | null) => {
+    if (amount === null || amount === undefined) return "—";
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(amount);
   };
 
   // Job Request Status Labels and Colors (support both number and string)
@@ -574,19 +737,6 @@ export default function ProjectDetailPage() {
   );
   const totalJobRequestPages = Math.ceil(filteredJobRequests.length / jobRequestPageSize);
 
-  // Filter và paginate Contracts
-  const filteredContracts = (project?.clientContracts || []).filter((contract: any) => {
-    const matchesSearch = !contractSearch || 
-      (contract.contractNumber?.toLowerCase().includes(contractSearch.toLowerCase()) ||
-       contract.talentName?.toLowerCase().includes(contractSearch.toLowerCase()));
-    const matchesStatus = !contractStatusFilter || contract.status === contractStatusFilter;
-    return matchesSearch && matchesStatus;
-  });
-  const paginatedContracts = filteredContracts.slice(
-    (contractPage - 1) * contractPageSize,
-    contractPage * contractPageSize
-  );
-  const totalContractPages = Math.ceil(filteredContracts.length / contractPageSize);
 
   if (loading) {
     return (
@@ -714,7 +864,7 @@ export default function ProjectDetailPage() {
                 }`}
               >
                 <FileCheck className="w-4 h-4" />
-                Hợp đồng khách hàng
+                Hợp đồng
                 {project.clientContracts && project.clientContracts.length > 0 && (
                   <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
                     {project.clientContracts.length}
@@ -966,155 +1116,236 @@ export default function ProjectDetailPage() {
               </div>
             )}
 
-            {/* Tab: Hợp đồng khách hàng */}
+            {/* Tab: Hợp đồng */}
             {activeTab === 'contracts' && (
-              <div className="animate-fade-in">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Danh sách hợp đồng khách hàng</h3>
-                  <span className="text-sm text-neutral-500">
-                    ({filteredContracts.length} / {project.clientContracts?.length || 0} hợp đồng)
-                  </span>
-                </div>
-              {/* Search and Filter */}
-              <div className="mb-4 flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    value={contractSearch}
-                    onChange={(e) => {
-                      setContractSearch(e.target.value);
-                      setContractPage(1);
-                    }}
-                    placeholder="Tìm kiếm theo mã hợp đồng, ứng viên..."
-                    className="w-full pl-9 pr-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
-                  />
-                  {contractSearch && (
-                    <button
-                      onClick={() => setContractSearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+              <div className="space-y-6">
+                {/* Header với filter năm */}
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-gray-900">Danh sách chu kỳ thanh toán</h2>
+                  <div className="flex items-center gap-3">
+                    {/* Filter theo năm */}
+                    <select
+                      value={yearFilter || ""}
+                      onChange={(e) => setYearFilter(e.target.value ? Number(e.target.value) : null)}
+                      className="px-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                  <select
-                    value={contractStatusFilter}
-                    onChange={(e) => {
-                      setContractStatusFilter(e.target.value);
-                      setContractPage(1);
-                    }}
-                    className="pl-9 pr-8 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  >
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="Draft">Nháp</option>
-                    <option value="Pending">Chờ duyệt</option>
-                    <option value="Active">Đang hoạt động</option>
-                    <option value="Expired">Hết hạn</option>
-                    <option value="Terminated">Đã chấm dứt</option>
-                  </select>
-                </div>
-              </div>
-
-              {paginatedContracts.length > 0 ? (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-neutral-200">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Mã hợp đồng</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ứng viên</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Thời gian</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Trạng thái</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Tệp</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Đơn ứng tuyển</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedContracts.map((contract: any) => (
-                          <tr key={contract.id} className="border-b border-neutral-100 hover:bg-neutral-50">
-                            <td className="py-3 px-4 text-sm text-neutral-900 font-medium">{contract.contractNumber || "—"}</td>
-                            <td className="py-3 px-4 text-sm text-neutral-700">{contract.talentName || "—"}</td>
-                            <td className="py-3 px-4 text-sm text-neutral-700">
-                              {contract.startDate && contract.endDate 
-                                ? `${formatViDate(contract.startDate)} - ${formatViDate(contract.endDate)}`
-                                : contract.startDate 
-                                  ? `Từ ${formatViDate(contract.startDate)}`
-                                  : "—"}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={`inline-flex px-2 py-1 rounded-lg text-xs font-medium ${
-                                contract.status === "Active" ? "bg-green-100 text-green-800" :
-                                contract.status === "Pending" ? "bg-yellow-100 text-yellow-800" :
-                                contract.status === "Expired" ? "bg-red-100 text-red-800" :
-                                "bg-neutral-100 text-neutral-800"
-                              }`}>
-                                {contractStatusLabels[contract.status] || contract.status || "—"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              {contract.contractFileUrl ? (
-                                <a
-                                  href={contract.contractFileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700"
-                                >
-                                  <Download className="w-4 h-4" />
-                                  <span className="text-sm">Tải xuống</span>
-                                </a>
-                              ) : (
-                                <span className="text-sm text-neutral-400">—</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-sm text-neutral-700">
-                              {contract.talentApplicationId ? (
-                                <Link
-                                  to={`/sales/applications/${contract.talentApplicationId}`}
-                                  className="text-primary-600 hover:text-primary-700"
-                                >
-                                  Xem chi tiết
-                                </Link>
-                              ) : "—"}
-                            </td>
-                          </tr>
+                      <option value="">Tất cả các năm</option>
+                      {Array.from(new Set(projectPeriods.map(p => p.periodYear)))
+                        .sort((a, b) => b - a)
+                        .map(year => (
+                          <option key={year} value={year}>{year}</option>
                         ))}
-                      </tbody>
-                    </table>
+                    </select>
                   </div>
-                  {/* Pagination */}
-                  {totalContractPages > 1 && (
-                    <div className="mt-4 flex items-center justify-between">
-                      <p className="text-sm text-neutral-600">
-                        Trang {contractPage} / {totalContractPages}
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setContractPage(prev => Math.max(1, prev - 1))}
-                          disabled={contractPage === 1}
-                          className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setContractPage(prev => Math.min(totalContractPages, prev + 1))}
-                          disabled={contractPage === totalContractPages}
-                          className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                </div>
+
+                {/* Tabs ngang cho các chu kỳ */}
+                {filteredPeriods.length === 0 ? (
+                  <div className="text-center py-12 bg-neutral-50 rounded-xl">
+                    <Layers className="w-12 h-12 text-neutral-400 mx-auto mb-4" />
+                    <p className="text-neutral-500">Chưa có chu kỳ thanh toán nào</p>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Tab Navigation - Horizontal Scroll */}
+                    <div className="border-b border-neutral-200 mb-6 overflow-x-auto">
+                      <div className="flex space-x-1 min-w-max">
+                        {filteredPeriods.map((period) => (
+                          <button
+                            key={period.id}
+                            onClick={() => setSelectedPeriodId(period.id)}
+                            className={`px-6 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap relative ${
+                              selectedPeriodId === period.id
+                                ? 'text-primary-600'
+                                : 'text-neutral-600 hover:text-neutral-900'
+                            }`}
+                          >
+                            Tháng {period.periodMonth}/{period.periodYear}
+                            {selectedPeriodId === period.id && (
+                              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600"></div>
+                            )}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-8 text-neutral-500">
-                  <FileCheck className="w-12 h-12 mx-auto mb-3 text-neutral-400" />
-                  <p>{filteredContracts.length === 0 && (contractSearch || contractStatusFilter) ? "Không tìm thấy kết quả" : "Chưa có hợp đồng nào"}</p>
-                </div>
-              )}
+
+                    {/* Content của chu kỳ được chọn */}
+                    {selectedPeriodId && (
+                      <div className="animate-fade-in">
+                        {loadingPayments ? (
+                          <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                            <p className="text-gray-500">Đang tải hợp đồng...</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Client Contract Payments */}
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                  <Building2 className="w-5 h-5 text-primary-600" />
+                                  Hợp đồng khách hàng
+                                </h3>
+                                <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
+                                  {clientContractPayments.length} hợp đồng
+                                </span>
+                              </div>
+                              {clientContractPayments.length === 0 ? (
+                                <div className="text-center py-12 bg-neutral-50 rounded-lg border border-neutral-200">
+                                  <FileCheck className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+                                  <p className="text-sm text-neutral-500">Chưa có hợp đồng khách hàng</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  {/* Nhóm theo talentAssignmentId */}
+                                  {Array.from(new Set(clientContractPayments.map(p => p.talentAssignmentId))).map((talentAssignmentId) => {
+                                    const clientPayments = clientContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
+                                    return (
+                                      <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
+                                        <div className="mb-3 pb-3 border-b border-neutral-200">
+                                          <p className="text-sm font-medium text-neutral-600">
+                                            Talent Assignment ID: {talentAssignmentId}
+                                          </p>
+                                        </div>
+                                        {clientPayments.map((payment) => (
+                                          <div 
+                                            key={payment.id} 
+                                            onClick={() => navigate(`/sales/contracts/clients/${payment.id}`)}
+                                            className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-sm transition-all cursor-pointer"
+                                          >
+                                            <div className="flex items-start justify-between mb-3">
+                                              <div className="flex-1">
+                                                <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
+                                                <p className="text-sm text-neutral-600">{payment.talentName || "—"}</p>
+                                              </div>
+                                              <div className="flex flex-col items-end gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${contractStatusColors[payment.contractStatus] || 'bg-gray-100 text-gray-800'}`}>
+                                                  {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
+                                                </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${paymentStatusColors[payment.paymentStatus] || 'bg-gray-100 text-gray-800'}`}>
+                                                  {paymentStatusLabels[payment.paymentStatus] || payment.paymentStatus}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmountVND || payment.finalAmount)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
+                                              </div>
+                                            </div>
+                                            {payment.billableHours && (
+                                              <div className="mt-3 pt-3 border-t border-neutral-100">
+                                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                                  <Clock className="w-4 h-4" />
+                                                  <span>Giờ billable: {payment.billableHours}h</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Partner Contract Payments */}
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                  <FileCheck className="w-5 h-5 text-secondary-600" />
+                                  Hợp đồng đối tác
+                                </h3>
+                                <span className="px-3 py-1 bg-secondary-100 text-secondary-700 rounded-full text-sm font-medium">
+                                  {partnerContractPayments.length} hợp đồng
+                                </span>
+                              </div>
+                              {partnerContractPayments.length === 0 ? (
+                                <div className="text-center py-12 bg-neutral-50 rounded-lg border border-neutral-200">
+                                  <FileCheck className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+                                  <p className="text-sm text-neutral-500">Chưa có hợp đồng đối tác</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  {/* Nhóm theo talentAssignmentId */}
+                                  {Array.from(new Set(partnerContractPayments.map(p => p.talentAssignmentId))).map((talentAssignmentId) => {
+                                    const partnerPaymentsForTalent = partnerContractPayments.filter(p => p.talentAssignmentId === talentAssignmentId);
+                                    return (
+                                      <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
+                                        <div className="mb-3 pb-3 border-b border-neutral-200">
+                                          <p className="text-sm font-medium text-neutral-600">
+                                            Talent Assignment ID: {talentAssignmentId}
+                                          </p>
+                                        </div>
+                                        {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
+                                          <div 
+                                            key={payment.id} 
+                                            onClick={() => navigate(`/sales/contracts/partners/${payment.id}`)}
+                                            className="mb-4 last:mb-0 border border-neutral-200 rounded-lg p-4 hover:border-secondary-300 hover:shadow-sm transition-all cursor-pointer"
+                                          >
+                                            <div className="flex items-start justify-between mb-3">
+                                              <div className="flex-1">
+                                                <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
+                                                <p className="text-sm text-neutral-600">{talentNamesMap[payment.talentAssignmentId] || `Talent Assignment ID: ${payment.talentAssignmentId}`}</p>
+                                              </div>
+                                              <div className="flex flex-col items-end gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                  payment.contractStatus === 'Approved' 
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : payment.contractStatus === 'Verified'
+                                                    ? 'bg-purple-100 text-purple-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                  {contractStatusLabels[payment.contractStatus] || payment.contractStatus}
+                                                </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                  payment.paymentStatus === 'Paid' 
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : payment.paymentStatus === 'Processing'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                  {payment.paymentStatus === 'Paid' ? 'Đã thanh toán' : payment.paymentStatus === 'Processing' ? 'Đang xử lý' : 'Chờ thanh toán'}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmount)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.totalPaidAmount)}</p>
+                                              </div>
+                                            </div>
+                                            {payment.reportedHours && (
+                                              <div className="mt-3 pt-3 border-t border-neutral-100">
+                                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                                  <Clock className="w-4 h-4" />
+                                                  <span>Giờ làm việc: {payment.reportedHours}h</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
