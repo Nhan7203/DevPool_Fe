@@ -632,7 +632,7 @@ export default function DeveloperPaymentsList() {
                                             </td>
                                             <td className="py-4 px-6 whitespace-nowrap">
                                                 <span className="text-sm text-neutral-700">
-                                                    {payment.actualWorkHours}h{payment.otHours ? ` + ${payment.otHours}h OT` : ''}
+                                                    {payment.reportedHours || 0}h
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 whitespace-nowrap">
@@ -652,8 +652,8 @@ export default function DeveloperPaymentsList() {
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}>
-                                                    {getStatusText(payment.status)}
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.paymentStatus)}`}>
+                                                    {getStatusText(payment.paymentStatus)}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">

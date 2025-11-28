@@ -4,7 +4,7 @@ import { ArrowLeft, Building2, Calendar, DollarSign, Clock, CheckCircle, AlertCi
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
-import { talentAssignmentService, type TalentAssignmentModel } from '../../../services/TalentAssignment';
+import { talentAssignmentService } from '../../../services/TalentAssignment';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { projectPeriodService, type ProjectPeriodModel } from '../../../services/ProjectPeriod';
 import { partnerDocumentService, type PartnerDocument } from '../../../services/PartnerDocument';
@@ -107,7 +107,6 @@ export default function DeveloperPaymentDetailPage() {
                 }
                 
                 setPayment(paymentData);
-                setTalentAssignment(assignmentData);
                 
                 // Fetch related data
                 const periodData = await projectPeriodService.getById(paymentData.projectPeriodId);
