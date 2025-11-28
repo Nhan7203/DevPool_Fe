@@ -2,66 +2,71 @@ import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
 // Interface cho PartnerContractPayment (Model trả về từ API)
-export interface PartnerContractPayment {
+export interface PartnerContractPaymentModel {
   id: number;
-  partnerPeriodId: number;
-  partnerContractId: number;
-  talentId: number;
-  actualWorkHours: number;
-  otHours?: number | null;
-  calculatedAmount?: number | null;
-  paidAmount?: number | null;
-  paymentDate?: string | null; // DateTime được trả về dưới dạng string ISO
-  status: string;
+  projectPeriodId: number;
+  talentAssignmentId: number;
+
+  // Contract Info
+  contractNumber: string;
+  monthlyRate: number;
+  contractStatus: string;
+
+  // Payment Info
+  reportedHours?: number | null;
+  manMonthCoefficient?: number | null;
+  finalAmount?: number | null;
+  totalPaidAmount: number;
+  paymentDate?: string | null; // ISO string
+  paymentStatus: string;
+
+  // Rejection
+  rejectionReason?: string | null;
   notes?: string | null;
+  createdAt: string; // ISO string
+  updatedAt?: string | null; // ISO string
 }
 
 // Interface cho PartnerContractPaymentCreate (Payload để tạo mới)
-export interface PartnerContractPaymentCreate {
-  partnerPeriodId: number;
-  partnerContractId: number;
-  talentId: number;
-  actualWorkHours: number;
-  otHours?: number | null;
-  calculatedAmount?: number | null;
-  paidAmount?: number | null;
-  paymentDate?: string | null; // DateTime dưới dạng string ISO
-  status: string;
+export interface PartnerContractPaymentCreateModel {
+  projectPeriodId: number;
+  talentAssignmentId: number;
+  contractNumber: string;
+  monthlyRate: number;
+  contractStatus: string;
+  reportedHours?: number | null;
+  manMonthCoefficient?: number | null;
+  finalAmount?: number | null;
+  totalPaidAmount: number;
+  paymentDate?: string | null; // ISO string
+  paymentStatus: string;
+  rejectionReason?: string | null;
   notes?: string | null;
 }
 
 // Interface cho PartnerContractPaymentFilter (Filter để lấy danh sách)
 export interface PartnerContractPaymentFilter {
-  partnerPeriodId?: number;
-  partnerContractId?: number;
+  projectPeriodId?: number;
+  talentAssignmentId?: number;
   talentId?: number;
-  status?: string;
-  paymentDateFrom?: string; // DateTime dưới dạng string ISO
-  paymentDateTo?: string; // DateTime dưới dạng string ISO
+  contractStatus?: string;
+  paymentStatus?: string;
+  paymentDateFrom?: string; // ISO string
+  paymentDateTo?: string; // ISO string
   excludeDeleted?: boolean;
 }
 
-// Interface cho PartnerContractPaymentCalculateModel (Payload để tính toán và submit)
+// Interface cho PartnerContractPaymentCalculateModel (Payload để tính toán)
 export interface PartnerContractPaymentCalculateModel {
   actualWorkHours: number;
   otHours?: number | null;
   notes?: string | null;
 }
 
-// Interface cho PartnerContractPaymentApproveModel (Payload để approve)
-export interface PartnerContractPaymentApproveModel {
-  notes?: string | null;
-}
-
-// Interface cho PartnerContractPaymentRejectModel (Payload để reject)
-export interface PartnerContractPaymentRejectModel {
-  rejectionReason: string;
-}
-
-// Interface cho PartnerContractPaymentMarkAsPaidModel (Payload để ghi nhận đã chi trả)
+// Interface cho MarkAsPaidModel (Payload để ghi nhận đã chi trả)
 export interface PartnerContractPaymentMarkAsPaidModel {
   paidAmount: number;
-  paymentDate: string; // DateTime dưới dạng string ISO
+  paymentDate: string; // ISO string
   notes?: string | null;
 }
 
@@ -71,14 +76,16 @@ export const partnerContractPaymentService = {
     try {
       const params = new URLSearchParams();
 
-      if (filter?.partnerPeriodId)
-        params.append("PartnerPeriodId", filter.partnerPeriodId.toString());
-      if (filter?.partnerContractId)
-        params.append("PartnerContractId", filter.partnerContractId.toString());
+      if (filter?.projectPeriodId)
+        params.append("ProjectPeriodId", filter.projectPeriodId.toString());
+      if (filter?.talentAssignmentId)
+        params.append("TalentAssignmentId", filter.talentAssignmentId.toString());
       if (filter?.talentId)
         params.append("TalentId", filter.talentId.toString());
-      if (filter?.status)
-        params.append("Status", filter.status);
+      if (filter?.contractStatus)
+        params.append("ContractStatus", filter.contractStatus);
+      if (filter?.paymentStatus)
+        params.append("PaymentStatus", filter.paymentStatus);
       if (filter?.paymentDateFrom)
         params.append("PaymentDateFrom", filter.paymentDateFrom);
       if (filter?.paymentDateTo)
@@ -88,7 +95,7 @@ export const partnerContractPaymentService = {
 
       const url = `/partnercontractpayment${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
-      return response.data;
+      return response.data as PartnerContractPaymentModel[];
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tải danh sách thanh toán hợp đồng đối tác" };
@@ -100,19 +107,19 @@ export const partnerContractPaymentService = {
   async getById(id: number) {
     try {
       const response = await axios.get(`/partnercontractpayment/${id}`);
-      return response.data;
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tải thông tin thanh toán hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi tải dữ liệu" };
+      throw { message: "Lỗi không xác định khi tải thông tin thanh toán hợp đồng đối tác" };
     }
   },
 
   // Tạo mới PartnerContractPayment
-  async create(payload: PartnerContractPaymentCreate) {
+  async create(payload: PartnerContractPaymentCreateModel) {
     try {
       const response = await axios.post("/partnercontractpayment", payload);
-      return response.data;
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể tạo thanh toán hợp đồng đối tác" };
@@ -121,10 +128,10 @@ export const partnerContractPaymentService = {
   },
 
   // Cập nhật PartnerContractPayment
-  async update(id: number, payload: Partial<PartnerContractPaymentCreate>) {
+  async update(id: number, payload: Partial<PartnerContractPaymentCreateModel>) {
     try {
       const response = await axios.put(`/partnercontractpayment/${id}`, payload);
-      return response.data;
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể cập nhật thanh toán hợp đồng đối tác" };
@@ -132,68 +139,51 @@ export const partnerContractPaymentService = {
     }
   },
 
-  // Tính toán và submit PartnerContractPayment
-  async calculateAndSubmit(id: number, payload: PartnerContractPaymentCalculateModel) {
+  // Verify contract - Xác minh hợp đồng
+  async verifyContract(id: number) {
     try {
-      const requestPayload = {
-        ActualWorkHours: payload.actualWorkHours,
-        OTHours: payload.otHours ?? null,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/partnercontractpayment/${id}/calculate-and-submit`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/partnercontractpayment/${id}/verify-contract`);
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tính toán và submit thanh toán hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi tính toán và submit thanh toán hợp đồng đối tác" };
+        throw error.response?.data || { message: "Không thể xác minh hợp đồng" };
+      throw { message: "Lỗi không xác định khi xác minh hợp đồng" };
     }
   },
 
-  // Approve PartnerContractPayment
-  async approve(id: number, payload: PartnerContractPaymentApproveModel) {
+  // Approve contract - Phê duyệt hợp đồng
+  async approveContract(id: number) {
     try {
-      const requestPayload = {
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/partnercontractpayment/${id}/approve`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/partnercontractpayment/${id}/approve-contract`);
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể duyệt thanh toán hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi duyệt thanh toán hợp đồng đối tác" };
+        throw error.response?.data || { message: "Không thể phê duyệt hợp đồng" };
+      throw { message: "Lỗi không xác định khi phê duyệt hợp đồng" };
     }
   },
 
-  // Reject PartnerContractPayment
-  async reject(id: number, payload: PartnerContractPaymentRejectModel) {
+  // Start billing - Bắt đầu thanh toán
+  async startBilling(id: number, payload: PartnerContractPaymentCalculateModel) {
     try {
-      const requestPayload = {
-        RejectionReason: payload.rejectionReason
-      };
-      const response = await axios.post(`/partnercontractpayment/${id}/reject`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/partnercontractpayment/${id}/start-billing`, payload);
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể từ chối thanh toán hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi từ chối thanh toán hợp đồng đối tác" };
+        throw error.response?.data || { message: "Không thể bắt đầu thanh toán" };
+      throw { message: "Lỗi không xác định khi bắt đầu thanh toán" };
     }
   },
 
-  // Mark as paid - Ghi nhận đã chi trả
+  // Mark as paid - Đánh dấu đã thanh toán
   async markAsPaid(id: number, payload: PartnerContractPaymentMarkAsPaidModel) {
     try {
-      const requestPayload = {
-        PaidAmount: payload.paidAmount,
-        PaymentDate: payload.paymentDate,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/partnercontractpayment/${id}/mark-as-paid`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/partnercontractpayment/${id}/mark-as-paid`, payload);
+      return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể ghi nhận đã chi trả" };
-      throw { message: "Lỗi không xác định khi ghi nhận đã chi trả" };
+        throw error.response?.data || { message: "Không thể đánh dấu đã thanh toán" };
+      throw { message: "Lỗi không xác định khi đánh dấu đã thanh toán" };
     }
   },
 };
-

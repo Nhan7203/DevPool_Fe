@@ -186,7 +186,7 @@ export const talentAssignmentService = {
 
   async extend(id: number, payload: TalentAssignmentExtendModel) {
     try {
-      const response = await axios.patch(`/talentassignment/${id}/extend`, payload);
+      const response = await axios.post(`/talentassignment/${id}/extend`, payload);
       return response.data as TalentAssignmentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError) {

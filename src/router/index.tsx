@@ -241,6 +241,8 @@ const AccountantPartnerPeriods = React.lazy(() => import('../pages/accountant_st
 const AccountantClientContractPaymentDetail = React.lazy(() => import('../pages/accountant_staff/payment-periods/clients/ClientContractDetail'));
 const AccountantPartnerContractPaymentDetail = React.lazy(() => import('../pages/accountant_staff/payment-periods/partners/PartnerContractDetail'));
 const AccountantDocumentsList = React.lazy(() => import('../pages/accountant_staff/documents/List'));
+const AccountantProjectListPage = React.lazy(() => import('../pages/accountant_staff/projects/List'));
+const AccountantProjectDetailPage = React.lazy(() => import('../pages/accountant_staff/projects/Detail'));
 
 // ========================================
 // DEVELOPER PAGES - Lazy Loading
@@ -459,6 +461,8 @@ const AppRouter: React.FC = () => {
             <Route element={<ProtectedRoute requiredRole="Staff Accountant"><Outlet /></ProtectedRoute>}>
               <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
               <Route path={ROUTES.ACCOUNTANT_STAFF.PROFILE} element={<AccountantStaffProfile />} />
+              <Route path="/accountant/projects" element={<AccountantProjectListPage />} />
+              <Route path="/accountant/projects/:id" element={<AccountantProjectDetailPage />} />
               <Route path="/accountant/payment-periods/clients" element={<AccountantClientPeriods />} />
               <Route path="/accountant/payment-periods/clients/:id/detail" element={<AccountantClientContractPaymentDetail />} />
               <Route path="/accountant/payment-periods/partners" element={<AccountantPartnerPeriods />} />

@@ -1,10 +1,15 @@
-import { BarChart3, CalendarClock, Wallet, FileText } from "lucide-react";
+import { BarChart3, CalendarClock, Wallet, FileText, Briefcase } from "lucide-react";
 
 export const sidebarItems = [
   {
     label: "Tổng Quan",
     href: "/accountant/dashboard",
     icon: BarChart3,
+  },
+  {
+    label: "Dự án",
+    href: "/accountant/projects",
+    icon: Briefcase,
   },
   {
     label: "Kỳ Thanh Toán",
