@@ -51,6 +51,12 @@ export interface TalentAssignmentModel {
   notes?: string | null;
   createdAt: string; // ISO string
   updatedAt?: string | null; // ISO string
+  
+  // Navigation Properties (optional - for display purposes)
+  partnerName?: string | null;
+  partnerCompanyName?: string | null;
+  projectName?: string | null;
+  talentName?: string | null;
 }
 
 // Model for CREATE

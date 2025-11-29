@@ -68,6 +68,23 @@ export interface PartnerContractPaymentMarkAsPaidModel {
   paidAmount: number;
   paymentDate: string; // ISO string
   notes?: string | null;
+  paymentProofFileUrl?: string | null;
+  partnerReceiptFileUrl?: string | null;
+}
+
+// Interface cho VerifyContractModel (Payload để xác minh hợp đồng)
+export interface PartnerContractPaymentVerifyModel {
+  notes?: string | null;
+}
+
+// Interface cho ApproveContractModel (Payload để duyệt hợp đồng)
+export interface PartnerContractPaymentApproveModel {
+  notes?: string | null;
+}
+
+// Interface cho RejectContractModel (Payload để từ chối hợp đồng)
+export interface PartnerContractPaymentRejectModel {
+  rejectionReason: string;
 }
 
 export const partnerContractPaymentService = {
@@ -140,9 +157,9 @@ export const partnerContractPaymentService = {
   },
 
   // Verify contract - Xác minh hợp đồng
-  async verifyContract(id: number) {
+  async verifyContract(id: number, payload?: PartnerContractPaymentVerifyModel) {
     try {
-      const response = await axios.post(`/partnercontractpayment/${id}/verify-contract`);
+      const response = await axios.post(`/partnercontractpayment/${id}/verify-contract`, payload || {});
       return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
@@ -152,14 +169,26 @@ export const partnerContractPaymentService = {
   },
 
   // Approve contract - Phê duyệt hợp đồng
-  async approveContract(id: number) {
+  async approveContract(id: number, payload?: PartnerContractPaymentApproveModel) {
     try {
-      const response = await axios.post(`/partnercontractpayment/${id}/approve-contract`);
+      const response = await axios.post(`/partnercontractpayment/${id}/approve-contract`, payload || {});
       return response.data as PartnerContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể phê duyệt hợp đồng" };
       throw { message: "Lỗi không xác định khi phê duyệt hợp đồng" };
+    }
+  },
+
+  // Reject contract - Từ chối hợp đồng
+  async rejectContract(id: number, payload: PartnerContractPaymentRejectModel) {
+    try {
+      const response = await axios.post(`/partnercontractpayment/${id}/reject-contract`, payload);
+      return response.data as PartnerContractPaymentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể từ chối hợp đồng" };
+      throw { message: "Lỗi không xác định khi từ chối hợp đồng" };
     }
   },
 

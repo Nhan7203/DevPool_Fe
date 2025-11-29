@@ -150,6 +150,7 @@ export interface RecordPaymentModel {
   receivedAmount: number;
   paymentDate: string; // ISO string
   notes?: string | null;
+  clientReceiptFileUrl?: string | null;
 }
 
 // Interface cho CreateInvoiceModel (Payload để tạo hóa đơn)
@@ -160,9 +161,19 @@ export interface CreateInvoiceModel {
   // File invoice sẽ được upload riêng
 }
 
+// Interface cho ApproveContractModel (Payload để duyệt hợp đồng)
+export interface ApproveContractModel {
+  notes?: string | null;
+}
+
 // Interface cho RejectContractModel (Payload để reject contract)
 export interface RejectContractModel {
   rejectionReason: string;
+}
+
+// Interface cho RequestMoreInformationModel (Payload để yêu cầu thêm thông tin)
+export interface RequestMoreInformationModel {
+  notes?: string | null;
 }
 
 export const clientContractPaymentService = {
@@ -245,9 +256,9 @@ export const clientContractPaymentService = {
   },
 
   // Request more information - Yêu cầu thêm thông tin
-  async requestMoreInformation(id: number) {
+  async requestMoreInformation(id: number, payload?: RequestMoreInformationModel) {
     try {
-      const response = await axios.post(`/clientcontractpayment/${id}/request-more-information`);
+      const response = await axios.post(`/clientcontractpayment/${id}/request-more-information`, payload);
       return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
@@ -281,9 +292,9 @@ export const clientContractPaymentService = {
   },
 
   // Approve contract - Manager duyệt hợp đồng
-  async approveContract(id: number) {
+  async approveContract(id: number, payload?: ApproveContractModel) {
     try {
-      const response = await axios.post(`/clientcontractpayment/${id}/approve-contract`);
+      const response = await axios.post(`/clientcontractpayment/${id}/approve-contract`, payload || {});
       return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)

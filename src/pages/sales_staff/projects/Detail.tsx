@@ -68,6 +68,7 @@ export default function ProjectDetailPage() {
   const [filteredPeriods, setFilteredPeriods] = useState<ProjectPeriodModel[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [yearFilter, setYearFilter] = useState<number | null>(null);
+  const [showClosedPeriods, setShowClosedPeriods] = useState<boolean>(false);
 
   // Contract Payments states
   const [clientContractPayments, setClientContractPayments] = useState<ClientContractPaymentModel[]>([]);
@@ -162,9 +163,23 @@ export default function ProjectDetailPage() {
           setProjectPeriods(sortedPeriods);
           setFilteredPeriods(sortedPeriods);
           
-          // Tự động chọn chu kỳ mới nhất nếu có
+          // Tự động chọn chu kỳ của tháng hiện tại, nếu không có thì chọn chu kỳ mới nhất
           if (sortedPeriods.length > 0) {
-            setSelectedPeriodId(sortedPeriods[sortedPeriods.length - 1].id);
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1; // getMonth() trả về 0-11, cần +1 để có 1-12
+            const currentYear = now.getFullYear();
+            
+            // Tìm chu kỳ của tháng hiện tại
+            const currentPeriod = sortedPeriods.find(
+              p => p.periodMonth === currentMonth && p.periodYear === currentYear
+            );
+            
+            if (currentPeriod) {
+              setSelectedPeriodId(currentPeriod.id);
+            } else {
+              // Fallback về chu kỳ mới nhất nếu không tìm thấy chu kỳ tháng hiện tại
+              setSelectedPeriodId(sortedPeriods[sortedPeriods.length - 1].id);
+            }
           }
         } catch (err) {
           console.error("❌ Lỗi tải danh sách chu kỳ thanh toán:", err);
@@ -540,14 +555,39 @@ export default function ProjectDetailPage() {
   Completed: "Đã hoàn thành",
 };
 
-  // Filter periods by year
+  // Filter periods by year and status
   useEffect(() => {
-    if (yearFilter === null) {
-      setFilteredPeriods(projectPeriods);
-    } else {
-      setFilteredPeriods(projectPeriods.filter(p => p.periodYear === yearFilter));
+    let filtered = projectPeriods;
+    
+    // Filter by year
+    if (yearFilter !== null) {
+      filtered = filtered.filter(p => p.periodYear === yearFilter);
     }
-  }, [yearFilter, projectPeriods]);
+    
+    // Filter by status (hide closed periods by default)
+    if (!showClosedPeriods) {
+      filtered = filtered.filter(p => p.status !== "Closed");
+    }
+    
+    setFilteredPeriods(filtered);
+  }, [yearFilter, projectPeriods, showClosedPeriods]);
+
+  // Reset selected period if it's not in filtered list
+  useEffect(() => {
+    if (selectedPeriodId && !filteredPeriods.find(p => p.id === selectedPeriodId)) {
+      if (filteredPeriods.length > 0) {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const currentPeriod = filteredPeriods.find(
+          p => p.periodMonth === currentMonth && p.periodYear === currentYear
+        );
+        setSelectedPeriodId(currentPeriod ? currentPeriod.id : filteredPeriods[filteredPeriods.length - 1].id);
+      } else {
+        setSelectedPeriodId(null);
+      }
+    }
+  }, [filteredPeriods, selectedPeriodId]);
 
   // Fetch contract payments when a period is selected
   useEffect(() => {
@@ -1123,6 +1163,16 @@ export default function ProjectDetailPage() {
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-900">Danh sách chu kỳ thanh toán</h2>
                   <div className="flex items-center gap-3">
+                    {/* Checkbox hiển thị chu kỳ đã đóng */}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showClosedPeriods}
+                        onChange={(e) => setShowClosedPeriods(e.target.checked)}
+                        className="w-4 h-4 text-primary-600 border-neutral-300 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-neutral-700">Hiển thị chu kỳ đã đóng</span>
+                    </label>
                     {/* Filter theo năm */}
                     <select
                       value={yearFilter || ""}
@@ -1150,22 +1200,42 @@ export default function ProjectDetailPage() {
                     {/* Tab Navigation - Horizontal Scroll */}
                     <div className="border-b border-neutral-200 mb-6 overflow-x-auto">
                       <div className="flex space-x-1 min-w-max">
-                        {filteredPeriods.map((period) => (
-                          <button
-                            key={period.id}
-                            onClick={() => setSelectedPeriodId(period.id)}
-                            className={`px-6 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap relative ${
-                              selectedPeriodId === period.id
-                                ? 'text-primary-600'
-                                : 'text-neutral-600 hover:text-neutral-900'
-                            }`}
-                          >
-                            Tháng {period.periodMonth}/{period.periodYear}
-                            {selectedPeriodId === period.id && (
-                              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600"></div>
-                            )}
-                          </button>
-                        ))}
+                        {filteredPeriods.map((period) => {
+                          const statusLabels: Record<string, string> = {
+                            "Open": "Mở",
+                            "Closed": "Đã đóng",
+                            "Pending": "Chờ xử lý",
+                            "Processing": "Đang xử lý"
+                          };
+                          const statusColors: Record<string, string> = {
+                            "Open": "bg-green-100 text-green-700",
+                            "Closed": "bg-gray-100 text-gray-700",
+                            "Pending": "bg-yellow-100 text-yellow-700",
+                            "Processing": "bg-blue-100 text-blue-700"
+                          };
+                          const statusLabel = statusLabels[period.status] || period.status;
+                          const statusColor = statusColors[period.status] || "bg-neutral-100 text-neutral-700";
+                          
+                          return (
+                            <button
+                              key={period.id}
+                              onClick={() => setSelectedPeriodId(period.id)}
+                              className={`px-6 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap relative flex flex-col items-center gap-1 ${
+                                selectedPeriodId === period.id
+                                  ? 'text-primary-600'
+                                  : 'text-neutral-600 hover:text-neutral-900'
+                              }`}
+                            >
+                              <span>Tháng {period.periodMonth}/{period.periodYear}</span>
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${statusColor}`}>
+                                {statusLabel}
+                              </span>
+                              {selectedPeriodId === period.id && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600"></div>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

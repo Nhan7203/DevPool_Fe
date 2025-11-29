@@ -13,12 +13,17 @@ import {
   Clock,
   XCircle,
   StickyNote,
+  X,
+  Ban,
+  Loader2,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
 import {
   partnerContractPaymentService,
   type PartnerContractPaymentModel,
+  type PartnerContractPaymentRejectModel,
+  type PartnerContractPaymentApproveModel,
 } from "../../../../services/PartnerContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
@@ -134,70 +139,145 @@ export default function PartnerContractDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  // Modal states
+  const [showApproveContractModal, setShowApproveContractModal] = useState(false);
+  const [showRejectContractModal, setShowRejectContractModal] = useState(false);
 
-        if (!id) {
-          setError("ID hợp đồng không hợp lệ");
-          setLoading(false);
-          return;
+  // Form states
+  const [approveForm, setApproveForm] = useState<PartnerContractPaymentApproveModel>({ notes: null });
+  const [rejectForm, setRejectForm] = useState<PartnerContractPaymentRejectModel>({ rejectionReason: "" });
+
+  // Processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!id) {
+        setError("ID hợp đồng không hợp lệ");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch contract payment
+      const paymentData = await partnerContractPaymentService.getById(Number(id));
+      setContractPayment(paymentData);
+
+      // Fetch related data in parallel
+      const [periodData, assignmentData] = await Promise.all([
+        projectPeriodService.getById(paymentData.projectPeriodId).catch(() => null),
+        talentAssignmentService.getById(paymentData.talentAssignmentId).catch(() => null),
+      ]);
+
+      setProjectPeriod(periodData);
+      setTalentAssignment(assignmentData);
+
+      // Fetch project info
+      if (assignmentData) {
+        try {
+          const project = await projectService.getById(assignmentData.projectId);
+          setProjectName(project?.name || "—");
+        } catch (err) {
+          console.error("❌ Lỗi fetch project:", err);
+          setProjectName("—");
         }
 
-        // Fetch contract payment
-        const paymentData = await partnerContractPaymentService.getById(Number(id));
-        setContractPayment(paymentData);
-
-        // Fetch related data in parallel
-        const [periodData, assignmentData] = await Promise.all([
-          projectPeriodService.getById(paymentData.projectPeriodId).catch(() => null),
-          talentAssignmentService.getById(paymentData.talentAssignmentId).catch(() => null),
-        ]);
-
-        setProjectPeriod(periodData);
-        setTalentAssignment(assignmentData);
-
-        // Fetch project info
-        if (assignmentData) {
+        // Fetch partner info - ưu tiên lấy từ assignment data
+        if (assignmentData.partnerCompanyName || assignmentData.partnerName) {
+          setPartnerName(assignmentData.partnerCompanyName || assignmentData.partnerName || "—");
+        } else if (assignmentData.partnerId) {
           try {
-            const project = await projectService.getById(assignmentData.projectId);
-            setProjectName(project?.name || "—");
-          } catch {
-            setProjectName("—");
-          }
-
-          // Fetch partner info
-          try {
-            const partner = await partnerService.getDetailedById(assignmentData.partnerId);
-            setPartnerName(partner?.companyName || "—");
-          } catch {
+            console.log("🔍 Fetching partner với ID:", assignmentData.partnerId);
+            const response = await partnerService.getDetailedById(assignmentData.partnerId);
+            console.log("✅ Partner response:", response);
+            // Handle response structure: { data: {...} } or direct data
+            const partnerData = response?.data || response;
+            console.log("✅ Partner data:", partnerData);
+            setPartnerName(partnerData?.companyName || "—");
+          } catch (err) {
+            console.error("❌ Lỗi fetch partner với ID", assignmentData.partnerId, ":", err);
             setPartnerName("—");
           }
-
-          // Fetch talent info
-          try {
-            const talent = await talentService.getById(assignmentData.talentId);
-            setTalentName(talent?.fullName || "—");
-          } catch {
-            setTalentName("—");
-          }
+        } else {
+          console.warn("⚠️ assignmentData.partnerId không tồn tại");
+          setPartnerName("—");
         }
-      } catch (err: unknown) {
-        console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Không thể tải thông tin hợp đồng thanh toán đối tác"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
 
+        // Fetch talent info
+        try {
+          const talent = await talentService.getById(assignmentData.talentId);
+          setTalentName(talent?.fullName || "—");
+        } catch (err) {
+          console.error("❌ Lỗi fetch talent:", err);
+          setTalentName("—");
+        }
+      } else {
+        console.warn("⚠️ assignmentData là null, không thể fetch partner info");
+      }
+    } catch (err: unknown) {
+      console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tải thông tin hợp đồng thanh toán đối tác"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [id]);
+
+  // Handlers
+  const handleApproveContract = async () => {
+    if (!id || !contractPayment) return;
+
+    try {
+      setIsProcessing(true);
+      const payload: PartnerContractPaymentApproveModel = {
+        notes: approveForm.notes || null,
+      };
+      await partnerContractPaymentService.approveContract(Number(id), payload);
+      await fetchData();
+      setShowApproveContractModal(false);
+      setApproveForm({ notes: null });
+      alert("Duyệt hợp đồng thành công!");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi duyệt hợp đồng:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể duyệt hợp đồng";
+      alert(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRejectContract = async () => {
+    if (!id || !contractPayment) return;
+
+    if (!rejectForm.rejectionReason.trim()) {
+      alert("Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      await partnerContractPaymentService.rejectContract(Number(id), rejectForm);
+      await fetchData();
+      setShowRejectContractModal(false);
+      setRejectForm({ rejectionReason: "" });
+      alert("Từ chối hợp đồng thành công!");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi từ chối hợp đồng:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể từ chối hợp đồng";
+      alert(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -282,6 +362,27 @@ export default function PartnerContractDetailPage() {
                   </span>
                 </div>
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Action Buttons for Manager */}
+              {contractPayment.contractStatus === "Verified" && (
+                <>
+                  <button
+                    onClick={() => setShowApproveContractModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Duyệt hợp đồng
+                  </button>
+                  <button
+                    onClick={() => setShowRejectContractModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <Ban className="w-4 h-4" />
+                    Từ chối
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -421,7 +522,7 @@ export default function PartnerContractDetailPage() {
                   label="Hệ số man-month"
                   value={
                     contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined
-                      ? contractPayment.manMonthCoefficient.toFixed(4)
+                      ? parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()
                       : "—"
                   }
                 />
@@ -465,6 +566,98 @@ export default function PartnerContractDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {/* Approve Contract Modal */}
+      {showApproveContractModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Duyệt hợp đồng</h3>
+              <button onClick={() => setShowApproveContractModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-gray-600">Bạn có chắc chắn muốn duyệt hợp đồng này?</p>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
+                <textarea
+                  value={approveForm.notes || ""}
+                  onChange={(e) => setApproveForm({ ...approveForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                  placeholder="Nhập ghi chú nếu có..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowApproveContractModal(false);
+                  setApproveForm({ notes: null });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleApproveContract}
+                disabled={isProcessing}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Duyệt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Contract Modal */}
+      {showRejectContractModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Từ chối hợp đồng</h3>
+              <button onClick={() => setShowRejectContractModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Lý do từ chối <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectForm.rejectionReason}
+                  onChange={(e) => setRejectForm({ ...rejectForm, rejectionReason: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  rows={4}
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowRejectContractModal(false);
+                  setRejectForm({ rejectionReason: "" });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRejectContract}
+                disabled={isProcessing || !rejectForm.rejectionReason.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Từ chối"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

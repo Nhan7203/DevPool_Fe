@@ -24,6 +24,7 @@ import {
   clientContractPaymentService,
   type ClientContractPaymentModel,
   type RejectContractModel,
+  type ApproveContractModel,
 } from "../../../../services/ClientContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
@@ -175,6 +176,7 @@ export default function ClientContractDetailPage() {
   const [showRejectContractModal, setShowRejectContractModal] = useState(false);
 
   // Form states
+  const [approveForm, setApproveForm] = useState<ApproveContractModel>({ notes: null });
   const [rejectForm, setRejectForm] = useState<RejectContractModel>({ rejectionReason: "" });
 
   // Loading states
@@ -283,10 +285,14 @@ export default function ClientContractDetailPage() {
     if (!id || !contractPayment) return;
     try {
       setIsProcessing(true);
-      await clientContractPaymentService.approveContract(Number(id));
+      const payload: ApproveContractModel = {
+        notes: approveForm.notes || null,
+      };
+      await clientContractPaymentService.approveContract(Number(id), payload);
       alert("Duyệt hợp đồng thành công!");
       await refreshContractPayment();
       setShowApproveContractModal(false);
+      setApproveForm({ notes: null });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Lỗi khi duyệt hợp đồng");
     } finally {
@@ -636,7 +642,7 @@ export default function ClientContractDetailPage() {
                   <InfoItem
                     icon={<FileText className="w-4 h-4" />}
                     label="Hệ số man-month"
-                    value={contractPayment.manMonthCoefficient.toFixed(4)}
+                    value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
                   />
                 )}
                 {contractPayment.plannedAmount !== null && contractPayment.plannedAmount !== undefined && (
@@ -726,17 +732,32 @@ export default function ClientContractDetailPage() {
       {/* Approve Contract Modal */}
       {showApproveContractModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Duyệt hợp đồng</h3>
               <button onClick={() => setShowApproveContractModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Bạn có chắc chắn muốn duyệt hợp đồng này?</p>
-            <div className="flex gap-3 justify-end">
+            <div className="space-y-4">
+              <p className="text-gray-600">Bạn có chắc chắn muốn duyệt hợp đồng này?</p>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
+                <textarea
+                  value={approveForm.notes || ""}
+                  onChange={(e) => setApproveForm({ ...approveForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                  placeholder="Nhập ghi chú nếu có..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
               <button
-                onClick={() => setShowApproveContractModal(false)}
+                onClick={() => {
+                  setShowApproveContractModal(false);
+                  setApproveForm({ notes: null });
+                }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
                 Hủy

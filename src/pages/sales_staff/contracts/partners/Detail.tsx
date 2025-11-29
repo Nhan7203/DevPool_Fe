@@ -164,25 +164,42 @@ export default function PartnerContractDetailPage() {
           try {
             const project = await projectService.getById(assignmentData.projectId);
             setProjectName(project?.name || "—");
-          } catch {
+          } catch (err) {
+            console.error("❌ Lỗi fetch project:", err);
             setProjectName("—");
           }
 
-          // Fetch partner info
+        // Fetch partner info - ưu tiên lấy từ assignment data
+        if (assignmentData.partnerCompanyName || assignmentData.partnerName) {
+          setPartnerName(assignmentData.partnerCompanyName || assignmentData.partnerName || "—");
+        } else if (assignmentData.partnerId) {
           try {
-            const partner = await partnerService.getDetailedById(assignmentData.partnerId);
-            setPartnerName(partner?.companyName || "—");
-          } catch {
+            console.log("🔍 Fetching partner với ID:", assignmentData.partnerId);
+            const response = await partnerService.getDetailedById(assignmentData.partnerId);
+            console.log("✅ Partner response:", response);
+            // Handle response structure: { data: {...} } or direct data
+            const partnerData = response?.data || response;
+            console.log("✅ Partner data:", partnerData);
+            setPartnerName(partnerData?.companyName || "—");
+          } catch (err) {
+            console.error("❌ Lỗi fetch partner với ID", assignmentData.partnerId, ":", err);
             setPartnerName("—");
           }
+        } else {
+          console.warn("⚠️ assignmentData.partnerId không tồn tại");
+          setPartnerName("—");
+        }
 
           // Fetch talent info
           try {
             const talent = await talentService.getById(assignmentData.talentId);
             setTalentName(talent?.fullName || "—");
-          } catch {
+          } catch (err) {
+            console.error("❌ Lỗi fetch talent:", err);
             setTalentName("—");
           }
+        } else {
+          console.warn("⚠️ assignmentData là null, không thể fetch partner info");
         }
       } catch (err: unknown) {
         console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);

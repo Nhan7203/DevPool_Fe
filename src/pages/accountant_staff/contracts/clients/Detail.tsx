@@ -31,6 +31,7 @@ import {
   type ClientContractPaymentCalculateModel,
   type CreateInvoiceModel,
   type RecordPaymentModel,
+  type RequestMoreInformationModel,
 } from "../../../../services/ClientContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
@@ -192,6 +193,7 @@ export default function ClientContractDetailPage() {
   // Form states
   const [verifyForm, setVerifyForm] = useState<VerifyContractModel>({ notes: null });
   const [rejectForm, setRejectForm] = useState<RejectContractModel>({ rejectionReason: "" });
+  const [requestMoreInfoForm, setRequestMoreInfoForm] = useState<RequestMoreInformationModel>({ notes: null });
   const [billingForm, setBillingForm] = useState<ClientContractPaymentCalculateModel>({ billableHours: 0, notes: null });
   const [invoiceForm, setInvoiceForm] = useState<CreateInvoiceModel>({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
   const [paymentForm, setPaymentForm] = useState<RecordPaymentModel>({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
@@ -199,6 +201,7 @@ export default function ClientContractDetailPage() {
   // File states
   const [verifyContractFile, setVerifyContractFile] = useState<File | null>(null);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   // Loading states for actions
   const [isProcessing, setIsProcessing] = useState(false);
@@ -210,9 +213,15 @@ export default function ClientContractDetailPage() {
   // Helper to get current user ID from JWT
   const getCurrentUserId = (): string | null => {
     const token = getAccessToken();
-    if (!token) return null;
+    if (!token) {
+      // Fallback to user.id from context if token not available
+      return user?.id || null;
+    }
     const payload = decodeJWT(token);
-    return payload?.nameid || null;
+    // Try multiple possible fields in JWT payload
+    const userId = payload?.nameid || payload?.sub || payload?.userId || payload?.uid;
+    // Fallback to user.id from context if JWT doesn't have userId
+    return userId || user?.id || null;
   };
 
   useEffect(() => {
@@ -315,10 +324,11 @@ export default function ClientContractDetailPage() {
     if (!id || !contractPayment) return;
     try {
       setIsProcessing(true);
-      await clientContractPaymentService.requestMoreInformation(Number(id));
+      await clientContractPaymentService.requestMoreInformation(Number(id), requestMoreInfoForm);
       alert("Đã yêu cầu thêm thông tin thành công!");
       await refreshContractPayment();
       setShowRequestMoreInfoModal(false);
+      setRequestMoreInfoForm({ notes: null });
     } catch (err: any) {
       alert(err?.message || "Lỗi khi yêu cầu thêm thông tin");
     } finally {
@@ -416,6 +426,7 @@ export default function ClientContractDetailPage() {
       alert("Vui lòng điền đầy đủ thông tin và upload file hóa đơn");
       return;
     }
+    
     try {
       setIsProcessing(true);
       const userId = getCurrentUserId();
@@ -424,11 +435,59 @@ export default function ClientContractDetailPage() {
         return;
       }
 
-      // Upload invoice file
+      // Upload invoice file trước (chỉ upload một lần)
       const filePath = `client-invoices/${contractPayment.id}/invoice_${Date.now()}.${invoiceFile.name.split('.').pop()}`;
       const fileUrl = await uploadFile(invoiceFile, filePath);
 
-      // Create ClientDocument for invoice
+      // Format invoiceDate to ISO string if it's in YYYY-MM-DD format
+      // Backend expects full ISO string with time: "2025-11-29T08:33:28.063Z"
+      const invoicePayload: CreateInvoiceModel = {
+        invoiceNumber: invoiceForm.invoiceNumber.trim(),
+        invoiceDate: invoiceForm.invoiceDate.includes('T') 
+          ? invoiceForm.invoiceDate 
+          : new Date(invoiceForm.invoiceDate + 'T00:00:00').toISOString(),
+        notes: invoiceForm.notes || null
+      };
+
+      // Retry logic cho việc tạo invoice (tối đa 3 lần)
+      const maxRetries = 3;
+      let retryCount = 0;
+      let invoiceCreated = false;
+
+      while (retryCount < maxRetries && !invoiceCreated) {
+        try {
+          // Refresh contract payment trước mỗi lần thử (trừ lần đầu)
+          if (retryCount > 0) {
+            const latestContractPayment = await clientContractPaymentService.getById(Number(id));
+            setContractPayment(latestContractPayment);
+            // Đợi một chút trước khi retry (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
+
+          // Create invoice
+          await clientContractPaymentService.createInvoice(Number(id), invoicePayload);
+          invoiceCreated = true;
+        } catch (err: unknown) {
+          retryCount++;
+          const errorMessage = (err as { message?: string; response?: { data?: { message?: string } } })?.message || 
+                              (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "";
+          const isTransactionError = errorMessage.toLowerCase().includes("transaction") && 
+                                   errorMessage.toLowerCase().includes("not current");
+          
+          if (isTransactionError && retryCount < maxRetries) {
+            continue; // Thử lại
+          } else {
+            // Nếu không phải lỗi transaction hoặc đã hết retry, throw error
+            throw err;
+          }
+        }
+      }
+
+      if (!invoiceCreated) {
+        throw new Error("Không thể tạo hóa đơn sau nhiều lần thử. Vui lòng thử lại sau.");
+      }
+
+      // Sau khi tạo invoice thành công, mới tạo document
       const documentPayload: ClientDocumentCreate = {
         clientContractPaymentId: Number(id),
         documentTypeId: 3, // Assuming 3 is for "Invoice" type
@@ -440,15 +499,17 @@ export default function ClientContractDetailPage() {
       };
       await clientDocumentService.create(documentPayload);
 
-      // Create invoice
-      await clientContractPaymentService.createInvoice(Number(id), invoiceForm);
       alert("Tạo hóa đơn thành công!");
       await refreshContractPayment();
       setShowCreateInvoiceModal(false);
       setInvoiceForm({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
       setInvoiceFile(null);
-    } catch (err: any) {
-      alert(err?.message || "Lỗi khi tạo hóa đơn");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi khi tạo hóa đơn:", err);
+      const errorMessage = (err as { message?: string; response?: { data?: { message?: string } } })?.message || 
+                          (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 
+                          "Lỗi khi tạo hóa đơn";
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -462,13 +523,36 @@ export default function ClientContractDetailPage() {
     }
     try {
       setIsProcessing(true);
-      await clientContractPaymentService.recordPayment(Number(id), paymentForm);
+      
+      // Upload receipt file if provided
+      let receiptFileUrl: string | null = null;
+      if (receiptFile) {
+        const filePath = `client-receipts/${contractPayment.id}/receipt_${Date.now()}.${receiptFile.name.split('.').pop()}`;
+        receiptFileUrl = await uploadFile(receiptFile, filePath);
+      }
+
+      // Format paymentDate to ISO string if it's in YYYY-MM-DD format
+      const paymentPayload: RecordPaymentModel = {
+        receivedAmount: paymentForm.receivedAmount,
+        paymentDate: paymentForm.paymentDate.includes('T') 
+          ? paymentForm.paymentDate 
+          : new Date(paymentForm.paymentDate + 'T00:00:00').toISOString(),
+        notes: paymentForm.notes || null,
+        clientReceiptFileUrl: receiptFileUrl || null
+      };
+
+      await clientContractPaymentService.recordPayment(Number(id), paymentPayload);
       alert("Ghi nhận thanh toán thành công!");
       await refreshContractPayment();
       setShowRecordPaymentModal(false);
       setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
-    } catch (err: any) {
-      alert(err?.message || "Lỗi khi ghi nhận thanh toán");
+      setReceiptFile(null);
+    } catch (err: unknown) {
+      console.error("❌ Lỗi khi ghi nhận thanh toán:", err);
+      const errorMessage = (err as { message?: string; response?: { data?: { message?: string } } })?.message || 
+                          (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 
+                          "Lỗi khi ghi nhận thanh toán";
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -845,7 +929,7 @@ export default function ClientContractDetailPage() {
                   <InfoItem
                     icon={<FileText className="w-4 h-4" />}
                     label="Hệ số man-month"
-                    value={contractPayment.manMonthCoefficient.toFixed(4)}
+                    value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
                   />
                 )}
                 {contractPayment.plannedAmount !== null && contractPayment.plannedAmount !== undefined && (
@@ -935,17 +1019,32 @@ export default function ClientContractDetailPage() {
       {/* Request More Information Modal */}
       {showRequestMoreInfoModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Yêu cầu thêm thông tin</h3>
               <button onClick={() => setShowRequestMoreInfoModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Bạn có chắc chắn muốn yêu cầu thêm thông tin cho hợp đồng này?</p>
-            <div className="flex gap-3 justify-end">
+            <div className="space-y-4">
+              <p className="text-gray-600">Bạn có chắc chắn muốn yêu cầu thêm thông tin cho hợp đồng này?</p>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
+                <textarea
+                  value={requestMoreInfoForm.notes || ""}
+                  onChange={(e) => setRequestMoreInfoForm({ ...requestMoreInfoForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                  placeholder="Nhập ghi chú nếu có..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
               <button
-                onClick={() => setShowRequestMoreInfoModal(false)}
+                onClick={() => {
+                  setShowRequestMoreInfoModal(false);
+                  setRequestMoreInfoForm({ notes: null });
+                }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
                 Hủy
@@ -1221,6 +1320,18 @@ export default function ClientContractDetailPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium mb-2">File biên lai (tùy chọn)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                />
+                {receiptFile && (
+                  <p className="text-sm text-gray-600 mt-1">Đã chọn: {receiptFile.name}</p>
+                )}
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-2">Ghi chú</label>
                 <textarea
                   value={paymentForm.notes || ""}
@@ -1235,6 +1346,7 @@ export default function ClientContractDetailPage() {
                 onClick={() => {
                   setShowRecordPaymentModal(false);
                   setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
+                  setReceiptFile(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >

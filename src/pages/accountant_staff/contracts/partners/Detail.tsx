@@ -13,18 +13,26 @@ import {
   Clock,
   XCircle,
   StickyNote,
+  X,
+  Calculator,
+  CreditCard,
+  Loader2,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
 import {
   partnerContractPaymentService,
   type PartnerContractPaymentModel,
+  type PartnerContractPaymentCalculateModel,
+  type PartnerContractPaymentMarkAsPaidModel,
+  type PartnerContractPaymentVerifyModel,
 } from "../../../../services/PartnerContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
 import { projectService } from "../../../../services/Project";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { uploadFile } from "../../../../utils/firebaseStorage";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -134,70 +142,228 @@ export default function PartnerContractDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  // Modal states
+  const [showVerifyContractModal, setShowVerifyContractModal] = useState(false);
+  const [showStartBillingModal, setShowStartBillingModal] = useState(false);
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
 
-        if (!id) {
-          setError("ID hợp đồng không hợp lệ");
-          setLoading(false);
-          return;
+  // Form states
+  const [verifyForm, setVerifyForm] = useState<PartnerContractPaymentVerifyModel>({ notes: null });
+  const [billingForm, setBillingForm] = useState<PartnerContractPaymentCalculateModel>({
+    actualWorkHours: 0,
+    otHours: null,
+    notes: null,
+  });
+  const [markAsPaidForm, setMarkAsPaidForm] = useState<PartnerContractPaymentMarkAsPaidModel>({
+    paidAmount: 0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    notes: null,
+    paymentProofFileUrl: null,
+    partnerReceiptFileUrl: null,
+  });
+
+  // File states
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [partnerReceiptFile, setPartnerReceiptFile] = useState<File | null>(null);
+
+  // Processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!id) {
+        setError("ID hợp đồng không hợp lệ");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch contract payment
+      const paymentData = await partnerContractPaymentService.getById(Number(id));
+      setContractPayment(paymentData);
+
+      // Fetch related data in parallel
+      const [periodData, assignmentData] = await Promise.all([
+        projectPeriodService.getById(paymentData.projectPeriodId).catch(() => null),
+        talentAssignmentService.getById(paymentData.talentAssignmentId).catch(() => null),
+      ]);
+
+      setProjectPeriod(periodData);
+      setTalentAssignment(assignmentData);
+
+      // Fetch project info
+      if (assignmentData) {
+        try {
+          const project = await projectService.getById(assignmentData.projectId);
+          setProjectName(project?.name || "—");
+        } catch (err) {
+          console.error("❌ Lỗi fetch project:", err);
+          setProjectName("—");
         }
 
-        // Fetch contract payment
-        const paymentData = await partnerContractPaymentService.getById(Number(id));
-        setContractPayment(paymentData);
-
-        // Fetch related data in parallel
-        const [periodData, assignmentData] = await Promise.all([
-          projectPeriodService.getById(paymentData.projectPeriodId).catch(() => null),
-          talentAssignmentService.getById(paymentData.talentAssignmentId).catch(() => null),
-        ]);
-
-        setProjectPeriod(periodData);
-        setTalentAssignment(assignmentData);
-
-        // Fetch project info
-        if (assignmentData) {
+        // Fetch partner info - ưu tiên lấy từ assignment data
+        if (assignmentData.partnerCompanyName || assignmentData.partnerName) {
+          setPartnerName(assignmentData.partnerCompanyName || assignmentData.partnerName || "—");
+        } else if (assignmentData.partnerId) {
           try {
-            const project = await projectService.getById(assignmentData.projectId);
-            setProjectName(project?.name || "—");
-          } catch {
-            setProjectName("—");
-          }
-
-          // Fetch partner info
-          try {
-            const partner = await partnerService.getDetailedById(assignmentData.partnerId);
-            setPartnerName(partner?.companyName || "—");
-          } catch {
+            console.log("🔍 Fetching partner với ID:", assignmentData.partnerId);
+            const response = await partnerService.getDetailedById(assignmentData.partnerId);
+            console.log("✅ Partner response:", response);
+            // Handle response structure: { data: {...} } or direct data
+            const partnerData = response?.data || response;
+            console.log("✅ Partner data:", partnerData);
+            setPartnerName(partnerData?.companyName || "—");
+          } catch (err) {
+            console.error("❌ Lỗi fetch partner với ID", assignmentData.partnerId, ":", err);
             setPartnerName("—");
           }
-
-          // Fetch talent info
-          try {
-            const talent = await talentService.getById(assignmentData.talentId);
-            setTalentName(talent?.fullName || "—");
-          } catch {
-            setTalentName("—");
-          }
+        } else {
+          console.warn("⚠️ assignmentData.partnerId không tồn tại");
+          setPartnerName("—");
         }
-      } catch (err: unknown) {
-        console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Không thể tải thông tin hợp đồng thanh toán đối tác"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
 
+        // Fetch talent info
+        try {
+          const talent = await talentService.getById(assignmentData.talentId);
+          setTalentName(talent?.fullName || "—");
+        } catch (err) {
+          console.error("❌ Lỗi fetch talent:", err);
+          setTalentName("—");
+        }
+      } else {
+        console.warn("⚠️ assignmentData là null, không thể fetch partner info");
+      }
+    } catch (err: unknown) {
+      console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tải thông tin hợp đồng thanh toán đối tác"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [id]);
+
+  // Handlers
+  const handleVerifyContract = async () => {
+    if (!id || !contractPayment) return;
+
+    try {
+      setIsProcessing(true);
+      const payload: PartnerContractPaymentVerifyModel = {
+        notes: verifyForm.notes || null,
+      };
+      await partnerContractPaymentService.verifyContract(Number(id), payload);
+      await fetchData();
+      setShowVerifyContractModal(false);
+      setVerifyForm({ notes: null });
+      alert("Xác minh hợp đồng thành công!");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi xác minh hợp đồng:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể xác minh hợp đồng";
+      alert(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleStartBilling = async () => {
+    if (!id || !contractPayment) return;
+
+    if (!billingForm.actualWorkHours || billingForm.actualWorkHours <= 0) {
+      alert("Vui lòng nhập số giờ làm việc thực tế");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      await partnerContractPaymentService.startBilling(Number(id), billingForm);
+      await fetchData();
+      setShowStartBillingModal(false);
+      setBillingForm({ actualWorkHours: 0, otHours: null, notes: null });
+      alert("Bắt đầu tính toán thành công!");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi bắt đầu tính toán:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể bắt đầu tính toán";
+      alert(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!id || !contractPayment) return;
+
+    if (!markAsPaidForm.paidAmount || markAsPaidForm.paidAmount <= 0) {
+      alert("Vui lòng nhập số tiền đã thanh toán");
+      return;
+    }
+
+    if (!markAsPaidForm.paymentDate) {
+      alert("Vui lòng chọn ngày thanh toán");
+      return;
+    }
+
+    if (!paymentProofFile) {
+      alert("Vui lòng chọn file chứng từ thanh toán");
+      return;
+    }
+
+    if (!partnerReceiptFile) {
+      alert("Vui lòng chọn file biên lai đối tác");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+
+      // Upload payment proof file (required)
+      const paymentProofFilePath = `partner-payment-proofs/${contractPayment.id}/payment_proof_${Date.now()}.${paymentProofFile.name.split('.').pop()}`;
+      const paymentProofFileUrl = await uploadFile(paymentProofFile, paymentProofFilePath);
+
+      // Upload partner receipt file (required)
+      const partnerReceiptFilePath = `partner-receipts/${contractPayment.id}/receipt_${Date.now()}.${partnerReceiptFile.name.split('.').pop()}`;
+      const partnerReceiptFileUrl = await uploadFile(partnerReceiptFile, partnerReceiptFilePath);
+
+      // Format paymentDate to ISO string if it's in YYYY-MM-DD format
+      const paymentPayload: PartnerContractPaymentMarkAsPaidModel = {
+        paidAmount: markAsPaidForm.paidAmount,
+        paymentDate: markAsPaidForm.paymentDate.includes('T')
+          ? markAsPaidForm.paymentDate
+          : new Date(markAsPaidForm.paymentDate + 'T00:00:00').toISOString(),
+        notes: markAsPaidForm.notes || null,
+        paymentProofFileUrl: paymentProofFileUrl,
+        partnerReceiptFileUrl: partnerReceiptFileUrl,
+      };
+
+      await partnerContractPaymentService.markAsPaid(Number(id), paymentPayload);
+      await fetchData();
+      setShowMarkAsPaidModal(false);
+      setMarkAsPaidForm({
+        paidAmount: 0,
+        paymentDate: new Date().toISOString().split('T')[0],
+        notes: null,
+        paymentProofFileUrl: null,
+        partnerReceiptFileUrl: null,
+      });
+      setPaymentProofFile(null);
+      setPartnerReceiptFile(null);
+      alert("Đánh dấu đã thanh toán thành công!");
+    } catch (err: unknown) {
+      console.error("❌ Lỗi đánh dấu đã thanh toán:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể đánh dấu đã thanh toán";
+      alert(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -282,6 +448,41 @@ export default function PartnerContractDetailPage() {
                   </span>
                 </div>
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Action Buttons for Accountant */}
+              {/* Verify Contract - Draft + Pending */}
+              {contractPayment.contractStatus === "Draft" && contractPayment.paymentStatus === "Pending" && (
+                <button
+                  onClick={() => setShowVerifyContractModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Xác minh hợp đồng
+                </button>
+              )}
+
+              {/* Start Billing - Approved + Pending */}
+              {contractPayment.contractStatus === "Approved" && contractPayment.paymentStatus === "Pending" && (
+                <button
+                  onClick={() => setShowStartBillingModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <Calculator className="w-4 h-4" />
+                  Bắt đầu tính toán
+                </button>
+              )}
+
+              {/* Mark as Paid - Processing */}
+              {contractPayment.paymentStatus === "Processing" && (
+                <button
+                  onClick={() => setShowMarkAsPaidModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Xác nhận đã thanh toán
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -421,7 +622,7 @@ export default function PartnerContractDetailPage() {
                   label="Hệ số man-month"
                   value={
                     contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined
-                      ? contractPayment.manMonthCoefficient.toFixed(4)
+                      ? parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()
                       : "—"
                   }
                 />
@@ -465,6 +666,243 @@ export default function PartnerContractDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {/* Verify Contract Modal */}
+      {showVerifyContractModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Xác minh hợp đồng</h3>
+              <button onClick={() => setShowVerifyContractModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-gray-600">Bạn có chắc chắn muốn xác minh hợp đồng này?</p>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
+                <textarea
+                  value={verifyForm.notes || ""}
+                  onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                  placeholder="Nhập ghi chú nếu có..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowVerifyContractModal(false);
+                  setVerifyForm({ notes: null });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleVerifyContract}
+                disabled={isProcessing}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác minh"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start Billing Modal */}
+      {showStartBillingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Bắt đầu tính toán</h3>
+              <button onClick={() => setShowStartBillingModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Số giờ làm việc thực tế <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={billingForm.actualWorkHours || ""}
+                  onChange={(e) =>
+                    setBillingForm({ ...billingForm, actualWorkHours: parseFloat(e.target.value) || 0 })
+                  }
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Số giờ làm thêm (OT)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={billingForm.otHours || ""}
+                  onChange={(e) =>
+                    setBillingForm({
+                      ...billingForm,
+                      otHours: e.target.value ? parseFloat(e.target.value) : null,
+                    })
+                  }
+                  className="w-full border rounded-lg p-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={billingForm.notes || ""}
+                  onChange={(e) => setBillingForm({ ...billingForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowStartBillingModal(false);
+                  setBillingForm({ actualWorkHours: 0, otHours: null, notes: null });
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleStartBilling}
+                disabled={isProcessing || !billingForm.actualWorkHours || billingForm.actualWorkHours <= 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tính toán"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Paid Modal */}
+      {showMarkAsPaidModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Xác nhận đã thanh toán</h3>
+              <button onClick={() => setShowMarkAsPaidModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Số tiền đã thanh toán <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={markAsPaidForm.paidAmount || ""}
+                  onChange={(e) =>
+                    setMarkAsPaidForm({ ...markAsPaidForm, paidAmount: parseFloat(e.target.value) || 0 })
+                  }
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Ngày thanh toán <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={markAsPaidForm.paymentDate}
+                  onChange={(e) => setMarkAsPaidForm({ ...markAsPaidForm, paymentDate: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  File chứng từ thanh toán <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+                {paymentProofFile && (
+                  <p className="text-sm text-gray-600 mt-1">Đã chọn: {paymentProofFile.name}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  File biên lai đối tác <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={(e) => setPartnerReceiptFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+                {partnerReceiptFile && (
+                  <p className="text-sm text-gray-600 mt-1">Đã chọn: {partnerReceiptFile.name}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={markAsPaidForm.notes || ""}
+                  onChange={(e) => setMarkAsPaidForm({ ...markAsPaidForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowMarkAsPaidModal(false);
+                  setMarkAsPaidForm({
+                    paidAmount: 0,
+                    paymentDate: new Date().toISOString().split('T')[0],
+                    notes: null,
+                    paymentProofFileUrl: null,
+                    partnerReceiptFileUrl: null,
+                  });
+                  setPaymentProofFile(null);
+                  setPartnerReceiptFile(null);
+                }}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleMarkAsPaid}
+                disabled={
+                  isProcessing ||
+                  !markAsPaidForm.paidAmount ||
+                  markAsPaidForm.paidAmount <= 0 ||
+                  !markAsPaidForm.paymentDate ||
+                  !paymentProofFile ||
+                  !partnerReceiptFile
+                }
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác nhận"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
