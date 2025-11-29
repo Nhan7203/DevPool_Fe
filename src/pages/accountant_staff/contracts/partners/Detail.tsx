@@ -17,6 +17,8 @@ import {
   Calculator,
   CreditCard,
   Loader2,
+  Eye,
+  Download,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/accountant_staff/SidebarItems";
@@ -32,6 +34,8 @@ import { talentAssignmentService, type TalentAssignmentModel } from "../../../..
 import { projectService } from "../../../../services/Project";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { partnerDocumentService, type PartnerDocument } from "../../../../services/PartnerDocument";
+import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { uploadFile } from "../../../../utils/firebaseStorage";
 
 const formatDate = (value?: string | null): string => {
@@ -141,6 +145,10 @@ export default function PartnerContractDetailPage() {
   const [talentName, setTalentName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [partnerDocuments, setPartnerDocuments] = useState<PartnerDocument[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
+  const [activeDocumentTab, setActiveDocumentTab] = useState<number | "all">("all");
+  const [activeMainTab, setActiveMainTab] = useState<string>("contract");
 
   // Modal states
   const [showVerifyContractModal, setShowVerifyContractModal] = useState(false);
@@ -148,7 +156,17 @@ export default function PartnerContractDetailPage() {
   const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
 
   // Form states
-  const [verifyForm, setVerifyForm] = useState<PartnerContractPaymentVerifyModel>({ notes: null });
+  const [verifyForm, setVerifyForm] = useState<PartnerContractPaymentVerifyModel>({
+    monthlyRate: 0,
+    unitPriceForeignCurrency: 0,
+    currencyCode: "",
+    exchangeRate: 0,
+    calculationMethod: "",
+    percentageValue: 0,
+    fixedAmount: 0,
+    finalAmountVND: 0,
+    notes: null,
+  });
   const [billingForm, setBillingForm] = useState<PartnerContractPaymentCalculateModel>({
     actualWorkHours: 0,
     otHours: null,
@@ -208,19 +226,15 @@ export default function PartnerContractDetailPage() {
           setPartnerName(assignmentData.partnerCompanyName || assignmentData.partnerName || "—");
         } else if (assignmentData.partnerId) {
           try {
-            console.log("🔍 Fetching partner với ID:", assignmentData.partnerId);
             const response = await partnerService.getDetailedById(assignmentData.partnerId);
-            console.log("✅ Partner response:", response);
             // Handle response structure: { data: {...} } or direct data
             const partnerData = response?.data || response;
-            console.log("✅ Partner data:", partnerData);
             setPartnerName(partnerData?.companyName || "—");
           } catch (err) {
             console.error("❌ Lỗi fetch partner với ID", assignmentData.partnerId, ":", err);
             setPartnerName("—");
           }
         } else {
-          console.warn("⚠️ assignmentData.partnerId không tồn tại");
           setPartnerName("—");
         }
 
@@ -251,19 +265,128 @@ export default function PartnerContractDetailPage() {
     fetchData();
   }, [id]);
 
+  // Load document types
+  useEffect(() => {
+    const loadDocumentTypes = async () => {
+      try {
+        const data = await documentTypeService.getAll({ excludeDeleted: true });
+        const types = Array.isArray(data) ? data : (data?.items || []);
+        const typesMap = new Map<number, DocumentType>();
+        types.forEach((type: DocumentType) => {
+          typesMap.set(type.id, type);
+        });
+        setDocumentTypes(typesMap);
+      } catch (err: any) {
+        console.error("❌ Lỗi tải loại tài liệu:", err);
+      }
+    };
+    loadDocumentTypes();
+  }, []);
+
+  // Load partner documents
+  useEffect(() => {
+    const loadPartnerDocuments = async () => {
+      if (!id) {
+        setPartnerDocuments([]);
+        return;
+      }
+      try {
+        const data = await partnerDocumentService.getAll({
+          partnerContractPaymentId: Number(id),
+          excludeDeleted: true,
+        });
+        // Handle different response structures
+        let documents: PartnerDocument[] = [];
+        if (Array.isArray(data)) {
+          documents = data;
+        } else if (data?.items && Array.isArray(data.items)) {
+          documents = data.items;
+        } else if (data?.data && Array.isArray(data.data)) {
+          documents = data.data;
+        } else if (data?.data?.items && Array.isArray(data.data.items)) {
+          documents = data.data.items;
+        }
+        setPartnerDocuments(documents);
+      } catch (err: any) {
+        console.error("❌ Lỗi tải tài liệu đối tác:", err);
+        setPartnerDocuments([]);
+      }
+    };
+    loadPartnerDocuments();
+  }, [id, contractPayment?.id]);
+
   // Handlers
   const handleVerifyContract = async () => {
     if (!id || !contractPayment) return;
 
+    // Validation
+    if (!verifyForm.monthlyRate || verifyForm.monthlyRate <= 0) {
+      alert("Vui lòng nhập mức lương tháng");
+      return;
+    }
+
+    if (!verifyForm.unitPriceForeignCurrency || verifyForm.unitPriceForeignCurrency <= 0) {
+      alert("Vui lòng nhập đơn giá ngoại tệ");
+      return;
+    }
+
+    if (!verifyForm.currencyCode) {
+      alert("Vui lòng nhập mã tiền tệ");
+      return;
+    }
+
+    if (!verifyForm.exchangeRate || verifyForm.exchangeRate <= 0) {
+      alert("Vui lòng nhập tỷ giá");
+      return;
+    }
+
+    if (!verifyForm.calculationMethod) {
+      alert("Vui lòng chọn phương thức tính toán");
+      return;
+    }
+
+    if (verifyForm.calculationMethod === "Percentage" && (!verifyForm.percentageValue || verifyForm.percentageValue <= 0)) {
+      alert("Vui lòng nhập giá trị phần trăm");
+      return;
+    }
+
+    if (verifyForm.calculationMethod === "FixedAmount" && (!verifyForm.fixedAmount || verifyForm.fixedAmount <= 0)) {
+      alert("Vui lòng nhập số tiền cố định");
+      return;
+    }
+
+    if (!verifyForm.finalAmountVND || verifyForm.finalAmountVND <= 0) {
+      alert("Vui lòng nhập số tiền cuối cùng (VND)");
+      return;
+    }
+
     try {
       setIsProcessing(true);
       const payload: PartnerContractPaymentVerifyModel = {
+        monthlyRate: verifyForm.monthlyRate,
+        unitPriceForeignCurrency: verifyForm.unitPriceForeignCurrency,
+        currencyCode: verifyForm.currencyCode,
+        exchangeRate: verifyForm.exchangeRate,
+        calculationMethod: verifyForm.calculationMethod,
+        percentageValue: verifyForm.percentageValue,
+        fixedAmount: verifyForm.fixedAmount,
+        finalAmountVND: verifyForm.finalAmountVND,
         notes: verifyForm.notes || null,
       };
       await partnerContractPaymentService.verifyContract(Number(id), payload);
       await fetchData();
       setShowVerifyContractModal(false);
-      setVerifyForm({ notes: null });
+      setVerifyForm({
+        monthlyRate: 0,
+        unitPriceForeignCurrency: 0,
+        currencyCode: "",
+        exchangeRate: 0,
+        calculationMethod: "",
+        percentageValue: 0,
+        fixedAmount: 0,
+        finalAmountVND: 0,
+        notes: null,
+      });
       alert("Xác minh hợp đồng thành công!");
     } catch (err: unknown) {
       console.error("❌ Lỗi xác minh hợp đồng:", err);
@@ -476,7 +599,13 @@ export default function PartnerContractDetailPage() {
               {/* Mark as Paid - Processing */}
               {contractPayment.paymentStatus === "Processing" && (
                 <button
-                  onClick={() => setShowMarkAsPaidModal(true)}
+                  onClick={() => {
+                    setMarkAsPaidForm({
+                      ...markAsPaidForm,
+                      paidAmount: contractPayment.finalAmount || 0,
+                    });
+                    setShowMarkAsPaidModal(true);
+                  }}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <CreditCard className="w-4 h-4" />
@@ -487,19 +616,63 @@ export default function PartnerContractDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-          {/* Thông tin hợp đồng */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
+        {/* Content with Tabs */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveMainTab("contract")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "contract"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
                 Thông tin hợp đồng
-              </h2>
+              </button>
+              <button
+                onClick={() => setActiveMainTab("payment")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "payment"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                Thanh toán
+              </button>
+              <button
+                onClick={() => setActiveMainTab("documents")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "documents"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Tài liệu
+              </button>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {/* Tab: Thông tin hợp đồng */}
+            {activeMainTab === "contract" && (
+              <div className="space-y-6">
+                {/* Thông tin hợp đồng */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin hợp đồng
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
                   label="Số hợp đồng"
@@ -523,86 +696,85 @@ export default function PartnerContractDetailPage() {
                     </span>
                   }
                 />
-              </div>
-            </div>
-          </div>
+                  </div>
+                </div>
 
-          {/* Thông tin chung */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Thông tin chung
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem
-                  icon={<Building2 className="w-4 h-4" />}
-                  label="Đối tác"
-                  value={partnerName}
-                />
-                <InfoItem
-                  icon={<Briefcase className="w-4 h-4" />}
-                  label="Dự án"
-                  value={projectName}
-                />
-                <InfoItem
-                  icon={<UserCheck className="w-4 h-4" />}
-                  label="Nhân sự"
-                  value={talentName}
-                />
-                {projectPeriod && (
-                  <InfoItem
-                    icon={<Calendar className="w-4 h-4" />}
-                    label="Chu kỳ thanh toán"
-                    value={`Tháng ${projectPeriod.periodMonth}/${projectPeriod.periodYear}`}
-                  />
-                )}
-                {talentAssignment && (
-                  <>
+                {/* Thông tin chung */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin chung
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InfoItem
-                      icon={<Calendar className="w-4 h-4" />}
-                      label="Ngày bắt đầu assignment"
-                      value={formatDate(talentAssignment.startDate)}
+                      icon={<Building2 className="w-4 h-4" />}
+                      label="Đối tác"
+                      value={partnerName}
                     />
                     <InfoItem
-                      icon={<Calendar className="w-4 h-4" />}
-                      label="Ngày kết thúc assignment"
-                      value={talentAssignment.endDate ? formatDate(talentAssignment.endDate) : "Đang hiệu lực"}
+                      icon={<Briefcase className="w-4 h-4" />}
+                      label="Dự án"
+                      value={projectName}
                     />
-                  </>
-                )}
-                <InfoItem
-                  icon={<Calendar className="w-4 h-4" />}
-                  label="Ngày tạo"
-                  value={formatDate(contractPayment.createdAt)}
-                />
-                {contractPayment.updatedAt && (
-                  <InfoItem
-                    icon={<Calendar className="w-4 h-4" />}
-                    label="Ngày cập nhật"
-                    value={formatDate(contractPayment.updatedAt)}
-                  />
-                )}
+                    <InfoItem
+                      icon={<UserCheck className="w-4 h-4" />}
+                      label="Nhân sự"
+                      value={talentName}
+                    />
+                    {projectPeriod && (
+                      <InfoItem
+                        icon={<Calendar className="w-4 h-4" />}
+                        label="Chu kỳ thanh toán"
+                        value={`Tháng ${projectPeriod.periodMonth}/${projectPeriod.periodYear}`}
+                      />
+                    )}
+                    {talentAssignment && (
+                      <>
+                        <InfoItem
+                          icon={<Calendar className="w-4 h-4" />}
+                          label="Ngày bắt đầu assignment"
+                          value={formatDate(talentAssignment.startDate)}
+                        />
+                        <InfoItem
+                          icon={<Calendar className="w-4 h-4" />}
+                          label="Ngày kết thúc assignment"
+                          value={talentAssignment.endDate ? formatDate(talentAssignment.endDate) : "Đang hiệu lực"}
+                        />
+                      </>
+                    )}
+                    <InfoItem
+                      icon={<Calendar className="w-4 h-4" />}
+                      label="Ngày tạo"
+                      value={formatDate(contractPayment.createdAt)}
+                    />
+                    {contractPayment.updatedAt && (
+                      <InfoItem
+                        icon={<Calendar className="w-4 h-4" />}
+                        label="Ngày cập nhật"
+                        value={formatDate(contractPayment.updatedAt)}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Thông tin thanh toán */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <DollarSign className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Thông tin thanh toán
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Tab: Thanh toán */}
+            {activeMainTab === "payment" && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-primary-100 rounded-lg">
+                    <DollarSign className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Thông tin thanh toán
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Mức lương/tháng"
@@ -653,16 +825,144 @@ export default function PartnerContractDetailPage() {
                 </div>
               )}
 
-              {contractPayment.notes && (
-                <div className="mt-6 pt-6 border-t border-neutral-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <StickyNote className="w-4 h-4 text-neutral-400" />
-                    <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                {contractPayment.notes && (
+                  <div className="mt-6 pt-6 border-t border-neutral-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <StickyNote className="w-4 h-4 text-neutral-400" />
+                      <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                    </div>
+                    <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
                   </div>
-                  <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: Tài liệu */}
+            {activeMainTab === "documents" && (
+              <div>
+                {partnerDocuments.length > 0 ? (() => {
+                  // Get unique document types from documents
+                  const documentTypeIds = Array.from(new Set(partnerDocuments.map(doc => doc.documentTypeId)));
+                  const availableTypes = documentTypeIds
+                    .map(id => documentTypes.get(id))
+                    .filter((type): type is DocumentType => type !== undefined);
+
+                  // Filter documents by active tab
+                  const filteredDocuments = activeDocumentTab === "all"
+                    ? partnerDocuments
+                    : partnerDocuments.filter(doc => doc.documentTypeId === activeDocumentTab);
+
+                  return (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Tài liệu đối tác</p>
+                      </div>
+                      
+                      {/* Tab Headers */}
+                      <div className="border-b border-neutral-200 mb-4">
+                        <div className="flex overflow-x-auto scrollbar-hide">
+                          <button
+                            onClick={() => setActiveDocumentTab("all")}
+                            className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                              activeDocumentTab === "all"
+                                ? "border-primary-600 text-primary-600 bg-primary-50"
+                                : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                            }`}
+                          >
+                            Tất cả
+                            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                              {partnerDocuments.length}
+                            </span>
+                          </button>
+                          {availableTypes.map((type) => {
+                            const count = partnerDocuments.filter(doc => doc.documentTypeId === type.id).length;
+                            return (
+                              <button
+                                key={type.id}
+                                onClick={() => setActiveDocumentTab(type.id)}
+                                className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                                  activeDocumentTab === type.id
+                                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                                }`}
+                              >
+                                {type.typeName}
+                                <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Documents List */}
+                      <div className="space-y-3">
+                        {filteredDocuments.length > 0 ? (
+                          filteredDocuments.map((doc) => {
+                            const docType = documentTypes.get(doc.documentTypeId);
+                            return (
+                              <div
+                                key={doc.id}
+                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    {docType && (
+                                      <span className="text-xs text-gray-500">
+                                        Loại: {docType.typeName}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-gray-500">
+                                      {formatDate(doc.uploadTimestamp)}
+                                    </span>
+                                  </div>
+                                  {doc.description && (
+                                    <p className="text-xs text-gray-600 mt-1">{doc.description}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <a
+                                    href={doc.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Xem</span>
+                                  </a>
+                                  <a
+                                    href={doc.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="flex items-center gap-2 px-3 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Tải xuống</span>
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            Không có tài liệu nào trong loại này
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="text-center py-12">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">Chưa có tài liệu nào</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -671,7 +971,7 @@ export default function PartnerContractDetailPage() {
       {/* Verify Contract Modal */}
       {showVerifyContractModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Xác minh hợp đồng</h3>
               <button onClick={() => setShowVerifyContractModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -679,23 +979,137 @@ export default function PartnerContractDetailPage() {
               </button>
             </div>
             <div className="space-y-4">
-              <p className="text-gray-600">Bạn có chắc chắn muốn xác minh hợp đồng này?</p>
-              <div>
-                <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
-                <textarea
-                  value={verifyForm.notes || ""}
-                  onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
-                  className="w-full border rounded-lg p-2"
-                  rows={3}
-                  placeholder="Nhập ghi chú nếu có..."
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Mức lương tháng <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={verifyForm.monthlyRate || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, monthlyRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Đơn giá ngoại tệ <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={verifyForm.unitPriceForeignCurrency || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Mã tiền tệ <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={verifyForm.currencyCode || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, currencyCode: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                    placeholder="VD: USD, EUR..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tỷ giá <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={verifyForm.exchangeRate || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, exchangeRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Phương thức tính toán <span className="text-red-500">*</span></label>
+                  <select
+                    value={verifyForm.calculationMethod || ""}
+                    onChange={(e) => {
+                      const method = e.target.value;
+                      setVerifyForm({
+                        ...verifyForm,
+                        calculationMethod: method,
+                        // Reset các trường không liên quan
+                        percentageValue: method === "Percentage" ? verifyForm.percentageValue : 0,
+                        fixedAmount: method === "FixedAmount" ? verifyForm.fixedAmount : 0,
+                      });
+                    }}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  >
+                    <option value="">Chọn phương thức</option>
+                    <option value="Percentage">Phần trăm (%)</option>
+                    <option value="FixedAmount">Số tiền cố định</option>
+                  </select>
+                </div>
+                {verifyForm.calculationMethod === "Percentage" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Giá trị phần trăm <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={verifyForm.percentageValue || ""}
+                      onChange={(e) => setVerifyForm({ ...verifyForm, percentageValue: parseFloat(e.target.value) || 0 })}
+                      className="w-full border rounded-lg p-2"
+                      required
+                    />
+                  </div>
+                )}
+                {verifyForm.calculationMethod === "FixedAmount" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Số tiền cố định <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={verifyForm.fixedAmount || ""}
+                      onChange={(e) => setVerifyForm({ ...verifyForm, fixedAmount: parseFloat(e.target.value) || 0 })}
+                      className="w-full border rounded-lg p-2"
+                      required
+                    />
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium mb-2">Số tiền cuối cùng (VND) <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={verifyForm.finalAmountVND || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, finalAmountVND: parseFloat(e.target.value) || 0 })}
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
+                  <textarea
+                    value={verifyForm.notes || ""}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
+                    className="w-full border rounded-lg p-2"
+                    rows={3}
+                    placeholder="Nhập ghi chú nếu có..."
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button
                 onClick={() => {
                   setShowVerifyContractModal(false);
-                  setVerifyForm({ notes: null });
+                  setVerifyForm({
+                    monthlyRate: 0,
+                    unitPriceForeignCurrency: 0,
+                    currencyCode: "",
+                    exchangeRate: 0,
+                    calculationMethod: "",
+                    percentageValue: 0,
+                    fixedAmount: 0,
+                    finalAmountVND: 0,
+                    notes: null,
+                  });
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >

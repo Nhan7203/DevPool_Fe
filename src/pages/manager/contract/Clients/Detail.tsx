@@ -17,6 +17,8 @@ import {
   Ban,
   Loader2,
   X,
+  Eye,
+  Download,
 } from "lucide-react";
 import Sidebar from "../../../../components/common/Sidebar";
 import { sidebarItems } from "../../../../components/manager/SidebarItems";
@@ -32,6 +34,8 @@ import { projectService } from "../../../../services/Project";
 import { clientCompanyService } from "../../../../services/ClientCompany";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
+import { clientDocumentService, type ClientDocument } from "../../../../services/ClientDocument";
+import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { useAuth } from "../../../../contexts/AuthContext";
 
 const formatDate = (value?: string | null): string => {
@@ -170,6 +174,10 @@ export default function ClientContractDetailPage() {
   const [talentName, setTalentName] = useState<string>("—");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clientDocuments, setClientDocuments] = useState<ClientDocument[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<Map<number, DocumentType>>(new Map());
+  const [activeDocumentTab, setActiveDocumentTab] = useState<number | "all">("all");
+  const [activeMainTab, setActiveMainTab] = useState<string>("contract");
 
   // Modal states
   const [showApproveContractModal, setShowApproveContractModal] = useState(false);
@@ -267,6 +275,42 @@ export default function ClientContractDetailPage() {
     };
 
     fetchData();
+  }, [id]);
+
+  // Load document types
+  useEffect(() => {
+    const loadDocumentTypes = async () => {
+      try {
+        const data = await documentTypeService.getAll({ excludeDeleted: true });
+        const types = Array.isArray(data) ? data : (data?.items || []);
+        const typesMap = new Map<number, DocumentType>();
+        types.forEach((type: DocumentType) => {
+          typesMap.set(type.id, type);
+        });
+        setDocumentTypes(typesMap);
+      } catch (err: any) {
+        console.error("❌ Lỗi tải loại tài liệu:", err);
+      }
+    };
+    loadDocumentTypes();
+  }, []);
+
+  // Load client documents
+  useEffect(() => {
+    const loadClientDocuments = async () => {
+      if (!id) return;
+      try {
+        const data = await clientDocumentService.getAll({
+          clientContractPaymentId: Number(id),
+          excludeDeleted: true,
+        });
+        const documents = Array.isArray(data) ? data : (data?.items || []);
+        setClientDocuments(documents);
+      } catch (err: any) {
+        console.error("❌ Lỗi tải tài liệu khách hàng:", err);
+      }
+    };
+    loadClientDocuments();
   }, [id]);
 
   // Refresh contract payment data
@@ -434,19 +478,63 @@ export default function ClientContractDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-          {/* Thông tin hợp đồng */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
+        {/* Content with Tabs */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveMainTab("contract")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "contract"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
                 Thông tin hợp đồng
-              </h2>
+              </button>
+              <button
+                onClick={() => setActiveMainTab("payment")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "payment"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                Thanh toán
+              </button>
+              <button
+                onClick={() => setActiveMainTab("documents")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeMainTab === "documents"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Tài liệu
+              </button>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {/* Tab: Thông tin hợp đồng */}
+            {activeMainTab === "contract" && (
+              <div className="space-y-6">
+                {/* Thông tin hợp đồng */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin hợp đồng
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
                   label="Số hợp đồng"
@@ -491,22 +579,20 @@ export default function ClientContractDetailPage() {
                   label="Ngày kết thúc hợp đồng"
                   value={formatDate(contractPayment.contractEndDate)}
                 />
-              </div>
-            </div>
-          </div>
+                  </div>
+                </div>
 
-          {/* Thông tin chung */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Thông tin chung
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Thông tin chung */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin chung
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<Building2 className="w-4 h-4" />}
                   label="Công ty khách hàng"
@@ -560,22 +646,25 @@ export default function ClientContractDetailPage() {
                     value={formatDate(contractPayment.updatedAt)}
                   />
                 )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Thông tin tiền tệ và tỷ giá */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <DollarSign className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Thông tin tiền tệ và tỷ giá
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Tab: Thanh toán */}
+            {activeMainTab === "payment" && (
+              <div className="space-y-6">
+                {/* Thông tin tiền tệ và tỷ giá */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin tiền tệ và tỷ giá
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Đơn giá ngoại tệ"
@@ -598,22 +687,20 @@ export default function ClientContractDetailPage() {
                     value={`${contractPayment.percentageValue}%`}
                   />
                 )}
-              </div>
-            </div>
-          </div>
+                  </div>
+                </div>
 
-          {/* Thông tin thanh toán */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 lg:col-span-3">
-            <div className="p-6 border-b border-neutral-200 flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <DollarSign className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Thông tin thanh toán
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Thông tin thanh toán */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin thanh toán
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Mức lương/tháng (Legacy)"
@@ -714,16 +801,145 @@ export default function ClientContractDetailPage() {
                 </div>
               )}
 
-              {contractPayment.notes && (
-                <div className="mt-6 pt-6 border-t border-neutral-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <StickyNote className="w-4 h-4 text-neutral-400" />
-                    <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
-                  </div>
-                  <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
+                  {contractPayment.notes && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Tab: Tài liệu */}
+            {activeMainTab === "documents" && (
+              <div>
+                {clientDocuments.length > 0 ? (() => {
+                  // Get unique document types from documents
+                  const documentTypeIds = Array.from(new Set(clientDocuments.map(doc => doc.documentTypeId)));
+                  const availableTypes = documentTypeIds
+                    .map(id => documentTypes.get(id))
+                    .filter((type): type is DocumentType => type !== undefined);
+
+                  // Filter documents by active tab
+                  const filteredDocuments = activeDocumentTab === "all"
+                    ? clientDocuments
+                    : clientDocuments.filter(doc => doc.documentTypeId === activeDocumentTab);
+
+                  return (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Tài liệu khách hàng</p>
+                      </div>
+                      
+                      {/* Tab Headers */}
+                      <div className="border-b border-neutral-200 mb-4">
+                        <div className="flex overflow-x-auto scrollbar-hide">
+                          <button
+                            onClick={() => setActiveDocumentTab("all")}
+                            className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                              activeDocumentTab === "all"
+                                ? "border-primary-600 text-primary-600 bg-primary-50"
+                                : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                            }`}
+                          >
+                            Tất cả
+                            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                              {clientDocuments.length}
+                            </span>
+                          </button>
+                          {availableTypes.map((type) => {
+                            const count = clientDocuments.filter(doc => doc.documentTypeId === type.id).length;
+                            return (
+                              <button
+                                key={type.id}
+                                onClick={() => setActiveDocumentTab(type.id)}
+                                className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                                  activeDocumentTab === type.id
+                                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                                }`}
+                              >
+                                {type.typeName}
+                                <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Documents List */}
+                      <div className="space-y-3">
+                        {filteredDocuments.length > 0 ? (
+                          filteredDocuments.map((doc) => {
+                            const docType = documentTypes.get(doc.documentTypeId);
+                            return (
+                              <div
+                                key={doc.id}
+                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    {docType && (
+                                      <span className="text-xs text-gray-500">
+                                        Loại: {docType.typeName}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-gray-500">
+                                      {formatDate(doc.uploadTimestamp)}
+                                    </span>
+                                  </div>
+                                  {doc.description && (
+                                    <p className="text-xs text-gray-600 mt-1">{doc.description}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <a
+                                    href={doc.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Xem</span>
+                                  </a>
+                                  <a
+                                    href={doc.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="flex items-center gap-2 px-3 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Tải xuống</span>
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            Không có tài liệu nào trong loại này
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="text-center py-12">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">Chưa có tài liệu nào</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

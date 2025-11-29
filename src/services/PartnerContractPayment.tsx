@@ -74,6 +74,14 @@ export interface PartnerContractPaymentMarkAsPaidModel {
 
 // Interface cho VerifyContractModel (Payload để xác minh hợp đồng)
 export interface PartnerContractPaymentVerifyModel {
+  monthlyRate: number;
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+  calculationMethod: string;
+  percentageValue: number;
+  fixedAmount: number;
+  finalAmountVND: number;
   notes?: string | null;
 }
 
