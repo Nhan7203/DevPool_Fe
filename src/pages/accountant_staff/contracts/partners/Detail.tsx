@@ -246,8 +246,6 @@ export default function PartnerContractDetailPage() {
           console.error("❌ Lỗi fetch talent:", err);
           setTalentName("—");
         }
-      } else {
-        console.warn("⚠️ assignmentData là null, không thể fetch partner info");
       }
     } catch (err: unknown) {
       console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);

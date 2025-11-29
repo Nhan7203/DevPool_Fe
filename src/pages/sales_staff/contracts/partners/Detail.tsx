@@ -182,19 +182,15 @@ export default function PartnerContractDetailPage() {
           setPartnerName(assignmentData.partnerCompanyName || assignmentData.partnerName || "—");
         } else if (assignmentData.partnerId) {
           try {
-            console.log("🔍 Fetching partner với ID:", assignmentData.partnerId);
             const response = await partnerService.getDetailedById(assignmentData.partnerId);
-            console.log("✅ Partner response:", response);
             // Handle response structure: { data: {...} } or direct data
             const partnerData = response?.data || response;
-            console.log("✅ Partner data:", partnerData);
             setPartnerName(partnerData?.companyName || "—");
           } catch (err) {
             console.error("❌ Lỗi fetch partner với ID", assignmentData.partnerId, ":", err);
             setPartnerName("—");
           }
         } else {
-          console.warn("⚠️ assignmentData.partnerId không tồn tại");
           setPartnerName("—");
         }
 
@@ -206,8 +202,6 @@ export default function PartnerContractDetailPage() {
             console.error("❌ Lỗi fetch talent:", err);
             setTalentName("—");
           }
-        } else {
-          console.warn("⚠️ assignmentData là null, không thể fetch partner info");
         }
       } catch (err: unknown) {
         console.error("❌ Lỗi tải thông tin hợp đồng thanh toán đối tác:", err);
