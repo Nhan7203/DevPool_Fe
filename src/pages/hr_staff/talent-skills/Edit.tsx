@@ -108,6 +108,16 @@ export default function TalentSkillEditPage() {
     fetchExistingSkills();
   }, [talentId, currentSkillId]);
 
+  // Tự động set nhóm kỹ năng khi skill đã được chọn
+  useEffect(() => {
+    if (formData.skillId && allSkills.length > 0) {
+      const selectedSkill = allSkills.find(s => s.id === formData.skillId);
+      if (selectedSkill?.skillGroupId) {
+        setSelectedSkillGroupId(selectedSkill.skillGroupId);
+      }
+    }
+  }, [formData.skillId, allSkills]);
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -394,6 +404,10 @@ export default function TalentSkillEditPage() {
                                     onClick={() => {
                                       if (!isDisabled) {
                                         setFormData(prev => ({ ...prev, skillId: skill.id }));
+                                        // Tự động set nhóm kỹ năng theo skill đã chọn
+                                        if (skill.skillGroupId) {
+                                          setSelectedSkillGroupId(skill.skillGroupId);
+                                        }
                                         setSkillSearchQuery("");
                                         setIsSkillDropdownOpen(false);
                                       }
@@ -443,10 +457,10 @@ export default function TalentSkillEditPage() {
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   >
                     <option value="">-- Chọn cấp độ --</option>
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
+                    <option value="Beginner">Mới bắt đầu</option>
+                    <option value="Intermediate">Trung bình</option>
+                    <option value="Advanced">Nâng cao</option>
+                    <option value="Expert">Chuyên gia</option>
                   </select>
                 </div>
 
