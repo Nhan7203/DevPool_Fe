@@ -25,6 +25,7 @@ export default function ApplyActivityEditPage() {
   const [success, setSuccess] = useState(false);
   const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
   const [jobRequest, setJobRequest] = useState<any>(null);
+  const [application, setApplication] = useState<any>(null); // Lưu application để lấy createdAt
   
   const [form, setForm] = useState({
     applyId: 0,
@@ -66,6 +67,7 @@ export default function ApplyActivityEditPage() {
         let templateSteps: ApplyProcessStep[] = [];
         try {
           const apply = await applyService.getById(activityData.applyId);
+          setApplication(apply); // Lưu application để dùng cho validation
           if (apply?.jobRequestId) {
             const jobReq = await jobRequestService.getById(apply.jobRequestId);
             setJobRequest(jobReq);
@@ -138,8 +140,39 @@ export default function ApplyActivityEditPage() {
     return null;
   }, [form.processStepId, sortedSteps, activitySchedules]);
 
+  const formatDateTimeInput = (date: Date) => {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === 'scheduledDate') {
+      // Smart UX: Nếu chọn ngày quá khứ khi Status = Scheduled → tự chuyển sang Completed
+      if (value && form.status === ApplyActivityStatus.Scheduled) {
+        const selectedDate = new Date(value);
+        const now = new Date();
+        selectedDate.setSeconds(0, 0);
+        now.setSeconds(0, 0);
+        
+        // Nếu chọn ngày quá khứ (trước bây giờ)
+        if (selectedDate < now) {
+          const confirmed = window.confirm("Đây có phải hoạt động đã hoàn thành?");
+          if (confirmed) {
+            setForm(prev => ({
+              ...prev,
+              scheduledDate: value,
+              status: ApplyActivityStatus.Completed
+            }));
+            // Không return để cho phép cập nhật scheduledDate
+          } else {
+            // Nếu không xác nhận, không cập nhật scheduledDate (giữ nguyên giá trị cũ)
+            return;
+          }
+        }
+      }
+    }
+    
     setForm(prev => ({ 
       ...prev, 
       [name]: name === 'processStepId' || name === 'status' ? Number(value) : 
@@ -156,6 +189,54 @@ export default function ApplyActivityEditPage() {
 
     if (form.activityType === "" || form.activityType === undefined) {
       setError("⚠️ Vui lòng chọn loại hoạt động.");
+      setSaving(false);
+      return;
+    }
+
+    // Validation theo Status
+    if (form.scheduledDate) {
+      const selectedDate = new Date(form.scheduledDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (form.status === ApplyActivityStatus.Scheduled) {
+        // Scheduled: Date >= Today
+        selectedDate.setHours(0, 0, 0, 0);
+        if (selectedDate < today) {
+          setError("⚠️ Khi trạng thái là 'Scheduled', ngày phải từ hôm nay trở đi.");
+          setSaving(false);
+          return;
+        }
+      } else if (form.status === ApplyActivityStatus.Completed || 
+                 form.status === ApplyActivityStatus.Passed || 
+                 form.status === ApplyActivityStatus.Failed) {
+        // Completed / Passed / Failed: Date >= Application.CreatedAt
+        if (application?.createdAt) {
+          const createdAt = new Date(application.createdAt);
+          createdAt.setHours(0, 0, 0, 0);
+          selectedDate.setHours(0, 0, 0, 0);
+          
+          if (selectedDate < createdAt) {
+            setError(`⚠️ Khi trạng thái là '${form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : "Failed"}', ngày phải sau hoặc bằng ngày tạo hồ sơ ứng tuyển (${createdAt.toLocaleDateString('vi-VN')}).`);
+            setSaving(false);
+            return;
+          }
+        }
+      }
+    }
+
+    // Validation: scheduledDate (startDate) là bắt buộc
+    if (!form.scheduledDate || form.scheduledDate.trim() === "") {
+      setError("⚠️ Vui lòng nhập ngày bắt đầu (scheduledDate).");
+      setSaving(false);
+      return;
+    }
+
+    // Yêu cầu nhập notes khi status là Passed hoặc Failed
+    if ((form.status === ApplyActivityStatus.Passed || 
+         form.status === ApplyActivityStatus.Failed) && 
+        (!form.notes || form.notes.trim() === "")) {
+      setError("⚠️ Vui lòng nhập ghi chú kết quả khi trạng thái là Passed hoặc Failed.");
       setSaving(false);
       return;
     }
@@ -369,6 +450,7 @@ export default function ApplyActivityEditPage() {
                     name="scheduledDate"
                     value={form.scheduledDate}
                     onChange={handleChange}
+                    min={form.status === ApplyActivityStatus.Scheduled ? formatDateTimeInput(new Date()) : undefined}
                     className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
                   {form.scheduledDate && (
@@ -382,6 +464,18 @@ export default function ApplyActivityEditPage() {
                     </button>
                   )}
                 </div>
+                {form.status === ApplyActivityStatus.Scheduled && (
+                  <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Khi trạng thái là "Scheduled", chỉ có thể chọn ngày từ hôm nay trở đi
+                  </p>
+                )}
+                {form.status !== ApplyActivityStatus.Scheduled && application?.createdAt && (
+                  <p className="text-sm text-blue-600 mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Khi trạng thái là "{form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : form.status === ApplyActivityStatus.Failed ? "Failed" : ""}", ngày phải sau hoặc bằng {new Date(application.createdAt).toLocaleDateString('vi-VN')} (ngày tạo hồ sơ)
+                  </p>
+                )}
                 {form.scheduledDate && previousConstraint && (
                   <div className="mt-3 px-4 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm font-medium">
                     ⚠️ Phải sau {new Date(previousConstraint.date).toLocaleString('vi-VN')} (bước {previousConstraint.step.stepOrder}. {previousConstraint.step.stepName})

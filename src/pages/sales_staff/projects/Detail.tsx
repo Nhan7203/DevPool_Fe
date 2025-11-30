@@ -10,6 +10,7 @@ import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignm
 import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
+import { applyActivityService, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { talentService, type Talent } from "../../../services/Talent";
 import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { partnerService, type Partner } from "../../../services/Partner";
@@ -90,7 +91,9 @@ export default function ProjectDetailPage() {
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [submittingAssignment, setSubmittingAssignment] = useState(false);
   const [submittingUpdate, setSubmittingUpdate] = useState(false);
-  const [assignmentErrors, setAssignmentErrors] = useState<{ endDate?: string }>({});
+  const [assignmentErrors, setAssignmentErrors] = useState<{ startDate?: string; endDate?: string }>({});
+  const [assignmentWarnings, setAssignmentWarnings] = useState<{ startDate?: string }>({});
+  const [completedActivityDate, setCompletedActivityDate] = useState<string | null>(null); // Lưu CompletedDate của ApplyActivity
   const [updateErrors, setUpdateErrors] = useState<{ startDate?: string; endDate?: string }>({});
   
   // Form state for creating assignment
@@ -253,8 +256,74 @@ export default function ProjectDetailPage() {
     fetchModalData();
   }, [showCreateAssignmentModal, id, project]);
 
+  // Lấy CompletedDate của ApplyActivity khi talentApplicationId thay đổi
+  useEffect(() => {
+    const fetchCompletedActivityDate = async () => {
+      if (!assignmentForm.talentApplicationId) {
+        setCompletedActivityDate(null);
+        setAssignmentWarnings({});
+        return;
+      }
+
+      try {
+        // Lấy tất cả activities của application này
+        const activities = await applyActivityService.getAll({ 
+          applyId: assignmentForm.talentApplicationId,
+          excludeDeleted: true 
+        });
+        
+        // Tìm activity có status Completed với scheduledDate gần nhất (activity cuối cùng đã hoàn thành)
+        const completedActivities = activities
+          .filter(activity => activity.status === ApplyActivityStatus.Completed && activity.scheduledDate)
+          .sort((a, b) => {
+            const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+            const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+            return dateB - dateA; // Sắp xếp giảm dần (mới nhất trước)
+          });
+        
+        if (completedActivities.length > 0) {
+          setCompletedActivityDate(completedActivities[0].scheduledDate || null);
+        } else {
+          setCompletedActivityDate(null);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải CompletedDate của ApplyActivity:", err);
+        setCompletedActivityDate(null);
+      }
+    };
+
+    fetchCompletedActivityDate();
+  }, [assignmentForm.talentApplicationId]);
+
+  // Check warning khi completedActivityDate hoặc assignmentForm.startDate thay đổi
+  useEffect(() => {
+    if (assignmentForm.startDate && completedActivityDate) {
+      const startDate = new Date(assignmentForm.startDate);
+      const completedDate = new Date(completedActivityDate);
+      startDate.setHours(0, 0, 0, 0);
+      completedDate.setHours(0, 0, 0, 0);
+      
+      if (startDate < completedDate) {
+        setAssignmentWarnings({ 
+          startDate: "Talent vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
+        });
+      } else {
+        setAssignmentWarnings({});
+      }
+    } else {
+      setAssignmentWarnings({});
+    }
+  }, [assignmentForm.startDate, completedActivityDate]);
+
   const handleDelete = async () => {
-    if (!id) return;
+    if (!id || !project) return;
+    
+    // Chỉ cho phép xóa khi status là "Planned"
+    if (project.status !== "Planned") {
+      alert("⚠️ Chỉ có thể xóa dự án khi ở trạng thái 'Planned'!");
+      return;
+    }
+    
     const confirmDelete = window.confirm("⚠️ Bạn có chắc muốn xóa dự án này?");
     if (!confirmDelete) return;
 
@@ -274,16 +343,65 @@ export default function ProjectDetailPage() {
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || !project) return;
 
-    // Validation: End date must be >= start date
+    // Validation
     setAssignmentErrors({});
+    
+    // Validation: StartDate ≤ EndDate
     if (assignmentForm.startDate && assignmentForm.endDate) {
       const startDate = new Date(assignmentForm.startDate);
       const endDate = new Date(assignmentForm.endDate);
       if (endDate < startDate) {
         setAssignmentErrors({ endDate: "Ngày kết thúc không được nhỏ hơn ngày bắt đầu" });
         return;
+      }
+    }
+
+    // Validation: Assignment phải nằm trong Project.StartDate – Project.EndDate
+    if (assignmentForm.startDate) {
+      const assignmentStartDate = new Date(assignmentForm.startDate);
+      assignmentStartDate.setHours(0, 0, 0, 0);
+      
+      if (project.startDate) {
+        const projectStartDate = new Date(project.startDate);
+        projectStartDate.setHours(0, 0, 0, 0);
+        
+        if (assignmentStartDate < projectStartDate) {
+          setAssignmentErrors({ 
+            startDate: `Ngày bắt đầu không được nhỏ hơn ngày bắt đầu dự án (${formatViDate(project.startDate)})` 
+          });
+          return;
+        }
+      }
+
+      if (project.endDate) {
+        const projectEndDate = new Date(project.endDate);
+        projectEndDate.setHours(23, 59, 59, 999);
+        
+        if (assignmentStartDate > projectEndDate) {
+          setAssignmentErrors({ 
+            startDate: `Ngày bắt đầu không được lớn hơn ngày kết thúc dự án (${formatViDate(project.endDate)})` 
+          });
+          return;
+        }
+      }
+
+      if (assignmentForm.endDate) {
+        const assignmentEndDate = new Date(assignmentForm.endDate);
+        assignmentEndDate.setHours(23, 59, 59, 999);
+        
+        if (project.endDate) {
+          const projectEndDate = new Date(project.endDate);
+          projectEndDate.setHours(23, 59, 59, 999);
+          
+          if (assignmentEndDate > projectEndDate) {
+            setAssignmentErrors({ 
+              endDate: `Ngày kết thúc không được lớn hơn ngày kết thúc dự án (${formatViDate(project.endDate)})` 
+            });
+            return;
+          }
+        }
       }
     }
 
@@ -342,6 +460,8 @@ export default function ProjectDetailPage() {
       setCommitmentFile(null);
       setUploadProgress(0);
       setAssignmentErrors({});
+      setAssignmentWarnings({});
+      setCompletedActivityDate(null);
       setShowCreateAssignmentModal(false);
 
       alert("✅ Tạo phân công nhân sự thành công!");
@@ -854,7 +974,13 @@ export default function ProjectDetailPage() {
               </button>
               <button
                 onClick={handleDelete}
-                className="group flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
+                disabled={project?.status !== "Planned"}
+                className={`group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 ${
+                  project?.status === "Planned"
+                    ? "bg-red-600 hover:bg-red-700 text-white hover:shadow-glow"
+                    : "bg-gray-400 text-white cursor-not-allowed opacity-50"
+                }`}
+                title={project?.status !== "Planned" ? "Chỉ có thể xóa dự án khi ở trạng thái 'Planned'" : "Xóa dự án"}
               >
                 <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
                 Xóa
@@ -1741,13 +1867,58 @@ export default function ProjectDetailPage() {
                   <input
                     type="date"
                     value={assignmentForm.startDate ? assignmentForm.startDate.split('T')[0] : ""}
-                    onChange={(e) => setAssignmentForm({ 
-                      ...assignmentForm, 
-                      startDate: e.target.value ? `${e.target.value}T00:00:00Z` : "" 
-                    })}
+                    min={project?.startDate ? project.startDate.split('T')[0] : undefined}
+                    max={project?.endDate ? project.endDate.split('T')[0] : undefined}
+                    onChange={(e) => {
+                      const newStartDate = e.target.value ? `${e.target.value}T00:00:00Z` : "";
+                      setAssignmentForm({ 
+                        ...assignmentForm, 
+                        startDate: newStartDate
+                      });
+                      
+                      // Check warning: Nếu StartDate < CompletedDate
+                      if (newStartDate && completedActivityDate) {
+                        const startDate = new Date(newStartDate);
+                        const completedDate = new Date(completedActivityDate);
+                        startDate.setHours(0, 0, 0, 0);
+                        completedDate.setHours(0, 0, 0, 0);
+                        
+                        if (startDate < completedDate) {
+                          setAssignmentWarnings({ 
+                            startDate: "Talent vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
+                          });
+                        } else {
+                          setAssignmentWarnings({});
+                        }
+                      } else {
+                        setAssignmentWarnings({});
+                      }
+                      
+                      // Clear error when user changes value
+                      if (assignmentErrors.startDate) {
+                        setAssignmentErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.startDate;
+                          return newErrors;
+                        });
+                      }
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
+                      assignmentErrors.startDate 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-neutral-200 focus:border-primary-500'
+                    }`}
                   />
+                  {assignmentErrors.startDate && (
+                    <p className="mt-1 text-sm text-red-500">{assignmentErrors.startDate}</p>
+                  )}
+                  {assignmentWarnings.startDate && !assignmentErrors.startDate && (
+                    <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {assignmentWarnings.startDate}
+                    </p>
+                  )}
                 </div>
 
                 {/* End Date */}
@@ -1758,7 +1929,8 @@ export default function ProjectDetailPage() {
                   <input
                     type="date"
                     value={assignmentForm.endDate ? assignmentForm.endDate.split('T')[0] : ""}
-                    min={assignmentForm.startDate ? assignmentForm.startDate.split('T')[0] : undefined}
+                    min={assignmentForm.startDate ? assignmentForm.startDate.split('T')[0] : project?.startDate ? project.startDate.split('T')[0] : undefined}
+                    max={project?.endDate ? project.endDate.split('T')[0] : undefined}
                     onChange={(e) => {
                       setAssignmentForm({ 
                         ...assignmentForm, 
@@ -1766,7 +1938,11 @@ export default function ProjectDetailPage() {
                       });
                       // Clear error when user changes value
                       if (assignmentErrors.endDate) {
-                        setAssignmentErrors({});
+                        setAssignmentErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.endDate;
+                          return newErrors;
+                        });
                       }
                     }}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${

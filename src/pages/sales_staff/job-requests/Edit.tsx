@@ -584,24 +584,33 @@ export default function JobRequestEditPage() {
                           {projectsFilteredBySearch.length === 0 ? (
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
-                            projectsFilteredBySearch.map(p => (
-                              <button
-                                type="button"
-                                key={p.id}
-                                onClick={() => {
-                                  setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null }));
-                                  setSelectedClientId(p.clientCompanyId);
-                                  setIsProjectDropdownOpen(false);
-                                }}
-                                className={`w-full text-left px-4 py-2.5 text-sm ${
-                                  formData.projectId === p.id
-                                    ? "bg-primary-50 text-primary-700"
-                                    : "hover:bg-neutral-50 text-neutral-700"
-                                }`}
-                              >
-                                {p.name}
-                              </button>
-                            ))
+                            projectsFilteredBySearch.map(p => {
+                              const isDisabled = (p.status === "OnHold" || p.status === "Completed") && p.id !== formData.projectId;
+                              return (
+                                <button
+                                  type="button"
+                                  key={p.id}
+                                  onClick={() => {
+                                    if (!isDisabled) {
+                                      setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null }));
+                                      setSelectedClientId(p.clientCompanyId);
+                                      setIsProjectDropdownOpen(false);
+                                    }
+                                  }}
+                                  disabled={isDisabled}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    isDisabled
+                                      ? "opacity-50 cursor-not-allowed text-neutral-400"
+                                      : formData.projectId === p.id
+                                        ? "bg-primary-50 text-primary-700"
+                                        : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                  title={isDisabled ? `Dự án này đang ở trạng thái "${p.status}" nên không thể chọn` : ""}
+                                >
+                                  {p.name} {isDisabled && `(${p.status})`}
+                                </button>
+                              );
+                            })
                           )}
                         </div>
                       </div>

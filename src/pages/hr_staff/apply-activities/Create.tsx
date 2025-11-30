@@ -29,6 +29,7 @@ export default function ApplyActivityCreatePage() {
   const [existingActivities, setExistingActivities] = useState<number[]>([]);
   const [activitySchedules, setActivitySchedules] = useState<Record<number, string>>({});
   const [scheduleTouched, setScheduleTouched] = useState(false);
+  const [application, setApplication] = useState<any>(null); // Lưu application để lấy createdAt
   
   const [form, setForm] = useState({
     applyId: Number(applyId) || 0,
@@ -42,9 +43,10 @@ export default function ApplyActivityCreatePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Lấy application để có jobRequestId
+        // Lấy application để có jobRequestId và createdAt
         if (applyId) {
           const app = await applyService.getById(Number(applyId));
+          setApplication(app); // Lưu application để dùng cho validation
           
           // Lấy JobRequest để có applyProcessTemplateId
           const jobRequest = await jobRequestService.getById(app.jobRequestId);
@@ -147,7 +149,32 @@ export default function ApplyActivityCreatePage() {
     const { name, value } = e.target;
     if (name === 'scheduledDate') {
       setScheduleTouched(true);
+      
+      // Smart UX: Nếu chọn ngày quá khứ khi Status = Scheduled → tự chuyển sang Completed
+      if (value && form.status === ApplyActivityStatus.Scheduled) {
+        const selectedDate = new Date(value);
+        const now = new Date();
+        selectedDate.setSeconds(0, 0);
+        now.setSeconds(0, 0);
+        
+        // Nếu chọn ngày quá khứ (trước bây giờ)
+        if (selectedDate < now) {
+          const confirmed = window.confirm("Đây có phải hoạt động đã hoàn thành?");
+          if (confirmed) {
+            setForm(prev => ({
+              ...prev,
+              scheduledDate: value,
+              status: ApplyActivityStatus.Completed
+            }));
+            // Không return để cho phép cập nhật scheduledDate
+          } else {
+            // Nếu không xác nhận, không cập nhật scheduledDate (giữ nguyên giá trị cũ)
+            return;
+          }
+        }
+      }
     }
+    
     setForm(prev => ({ 
       ...prev, 
       [name]: name === 'processStepId' || name === 'status'
@@ -178,6 +205,13 @@ export default function ApplyActivityCreatePage() {
       return;
     }
 
+    // Validation: scheduledDate (startDate) là bắt buộc
+    if (!form.scheduledDate || form.scheduledDate.trim() === "") {
+      setError("⚠️ Vui lòng nhập ngày bắt đầu (scheduledDate).");
+      setLoading(false);
+      return;
+    }
+
     if (form.scheduledDate) {
       const selectedStep = processSteps.find(step => step.id === form.processStepId);
       if (selectedStep) {
@@ -199,20 +233,52 @@ export default function ApplyActivityCreatePage() {
       }
     }
 
+    // Validation theo Status
+    if (form.scheduledDate) {
+      const selectedDate = new Date(form.scheduledDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (form.status === ApplyActivityStatus.Scheduled) {
+        // Scheduled: Date >= Today
+        selectedDate.setHours(0, 0, 0, 0);
+        if (selectedDate < today) {
+          setError("⚠️ Khi trạng thái là 'Scheduled', ngày phải từ hôm nay trở đi.");
+          setLoading(false);
+          return;
+        }
+      } else if (form.status === ApplyActivityStatus.Completed || 
+                 form.status === ApplyActivityStatus.Passed || 
+                 form.status === ApplyActivityStatus.Failed) {
+        // Completed / Passed / Failed: Date >= Application.CreatedAt
+        if (application?.createdAt) {
+          const createdAt = new Date(application.createdAt);
+          createdAt.setHours(0, 0, 0, 0);
+          selectedDate.setHours(0, 0, 0, 0);
+          
+          if (selectedDate < createdAt) {
+            setError(`⚠️ Khi trạng thái là '${form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : "Failed"}', ngày phải sau hoặc bằng ngày tạo hồ sơ ứng tuyển (${createdAt.toLocaleDateString('vi-VN')}).`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+    }
+
+    // Yêu cầu nhập notes khi status là Passed hoặc Failed
+    if ((form.status === ApplyActivityStatus.Passed || 
+         form.status === ApplyActivityStatus.Failed) && 
+        (!form.notes || form.notes.trim() === "")) {
+      setError("⚠️ Vui lòng nhập ghi chú kết quả khi trạng thái là Passed hoặc Failed.");
+      setLoading(false);
+      return;
+    }
+
     try {
       // Convert local datetime to UTC if scheduledDate is provided
       let scheduledDateUTC: string | undefined = undefined;
       if (form.scheduledDate) {
         const localDate = new Date(form.scheduledDate);
-        const minAllowed = new Date();
-        minAllowed.setHours(0, 0, 0, 0);
-
-        if (localDate.getTime() < minAllowed.getTime()) {
-          setError("⚠️ Ngày lên lịch phải từ hôm nay trở đi.");
-          setLoading(false);
-          return;
-        }
-
         const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
         scheduledDateUTC = utcDate.toISOString();
       }
@@ -222,7 +288,7 @@ export default function ApplyActivityCreatePage() {
         processStepId: form.processStepId || 0,
         activityType: form.activityType as ApplyActivityType,
         scheduledDate: scheduledDateUTC,
-        status: ApplyActivityStatus.Scheduled,
+        status: form.status,
         notes: form.notes || undefined,
       };
       console.log("ccc", payload);
@@ -348,7 +414,13 @@ export default function ApplyActivityCreatePage() {
                   <option value={ApplyActivityStatus.Completed} disabled>Completed - Hoàn thành</option>
                   <option value={ApplyActivityStatus.Passed} disabled>Passed - Đạt</option>
                   <option value={ApplyActivityStatus.Failed} disabled>Failed - Không đạt</option>
-                </select>             
+                </select>
+                {form.status !== ApplyActivityStatus.Scheduled && (
+                  <p className="mt-2 text-sm text-amber-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Vui lòng nhập kết quả/ghi chú ở phần Notes bên dưới
+                  </p>
+                )}
               </div>
 
             </div>
@@ -377,7 +449,10 @@ export default function ApplyActivityCreatePage() {
                     name="scheduledDate"
                     value={form.scheduledDate}
                     onChange={handleChange}
-                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                    min={form.status === ApplyActivityStatus.Scheduled ? formatDateTimeInput(new Date()) : undefined}
+                    className={`flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                      form.status === ApplyActivityStatus.Scheduled ? "" : ""
+                    }`}
                   />
                   {form.scheduledDate && (
                     <button
@@ -393,6 +468,18 @@ export default function ApplyActivityCreatePage() {
                     </button>
                   )}
                 </div>
+                  {form.status === ApplyActivityStatus.Scheduled && (
+                  <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Khi trạng thái là "Scheduled", chỉ có thể chọn ngày từ hôm nay trở đi
+                  </p>
+                )}
+                {form.status !== ApplyActivityStatus.Scheduled && application?.createdAt && (
+                  <p className="text-sm text-blue-600 mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Khi trạng thái là "{form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : "Failed"}", ngày phải sau hoặc bằng {new Date(application.createdAt).toLocaleDateString('vi-VN')} (ngày tạo hồ sơ)
+                  </p>
+                )}
                 {previousConstraint && (
                   <p className="text-sm text-neutral-500 mt-2">
                     * Thời gian tối thiểu: sau{" "}

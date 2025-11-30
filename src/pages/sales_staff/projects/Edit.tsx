@@ -3,10 +3,11 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { projectService, type Project, type ProjectPayload } from "../../../services/Project";
+import { projectService, type Project, type ProjectPayload, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { marketService, type Market } from "../../../services/Market";
 import { industryService, type Industry } from "../../../services/Industry";
+import { clientContractService } from "../../../services/ClientContract";
 import {
   Briefcase,
   Save,
@@ -48,6 +49,8 @@ export default function ProjectEditPage() {
         marketId: undefined,
         industryIds: [],
     });
+    const [originalStatus, setOriginalStatus] = useState<string>("");
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         const fetchData = async () => {
@@ -81,6 +84,7 @@ export default function ProjectEditPage() {
                     marketId: proj.marketId,
                     industryIds: proj.industryIds ?? [],
                 });
+                setOriginalStatus(proj.status);
             } catch (err) {
                 console.error("❌ Lỗi tải dữ liệu dự án:", err);
                 alert("Không thể tải dữ liệu dự án!");
@@ -96,7 +100,23 @@ export default function ProjectEditPage() {
     ) => {
         const { name, value } = e.target;
         if (name === "industryIds") return;
+        
+        // Nếu xóa EndDate, set về empty string
+        if (name === "endDate" && value === "") {
+            setFormData(prev => ({ ...prev, [name]: "" }));
+            return;
+        }
+        
         setFormData(prev => ({ ...prev, [name]: value }));
+        
+        // Clear errors khi user thay đổi
+        if (fieldErrors[name]) {
+            setFieldErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[name];
+                return newErrors;
+            });
+        }
     };
 
     const handleIndustryChange = (id: number, checked: boolean) => {
@@ -129,33 +149,144 @@ export default function ProjectEditPage() {
         e.preventDefault();
         if (!id) return;
 
-        // Xác nhận trước khi lưu
-        const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
-        if (!confirmed) {
-            return;
-        }
-
         setSaving(true);
         setError("");
         setSuccess(false);
+        setFieldErrors({});
 
-        if (!formData.name?.trim()) {
-            setError("⚠️ Tên dự án không được để trống!");
+        // Nếu status là Ongoing, chỉ validate EndDate và Status
+        if (originalStatus === "Ongoing") {
+            // Validation: Status (bắt buộc)
+            if (!formData.status) {
+                setError("⚠️ Vui lòng chọn trạng thái dự án!");
+                setSaving(false);
+                return;
+            }
+
+            // Validation: EndDate - phải sau StartDate (nếu có)
+            if (formData.endDate && formData.startDate) {
+                const startDate = new Date(formData.startDate);
+                const endDate = new Date(formData.endDate);
+                if (endDate < startDate) {
+                    setFieldErrors({ endDate: "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu!" });
+                    setError("⚠️ Ngày kết thúc phải sau hoặc bằng ngày bắt đầu!");
+                    setSaving(false);
+                    return;
+                }
+            }
+        } else {
+            // Validation đầy đủ cho các trạng thái khác
+            // Validation: Tên dự án
+            if (!formData.name?.trim()) {
+                setFieldErrors({ name: "Tên dự án không được để trống!" });
+                setError("⚠️ Tên dự án không được để trống!");
+                setSaving(false);
+                return;
+            }
+
+            // Validation: StartDate - không cho ngày tương lai quá vô lý (> 5 năm)
+            if (formData.startDate) {
+                const startDate = new Date(formData.startDate);
+                const today = new Date();
+                const fiveYearsLater = new Date(today);
+                fiveYearsLater.setFullYear(today.getFullYear() + 5);
+                
+                if (startDate > fiveYearsLater) {
+                    setFieldErrors({ startDate: "Ngày bắt đầu không được quá 5 năm trong tương lai!" });
+                    setError("⚠️ Ngày bắt đầu không được quá 5 năm trong tương lai!");
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            // Validation: EndDate - phải sau StartDate (nếu có)
+            if (formData.endDate && formData.startDate) {
+                const startDate = new Date(formData.startDate);
+                const endDate = new Date(formData.endDate);
+                if (endDate < startDate) {
+                    setFieldErrors({ endDate: "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu!" });
+                    setError("⚠️ Ngày kết thúc phải sau hoặc bằng ngày bắt đầu!");
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            if (!formData.status) {
+                setError("⚠️ Vui lòng chọn trạng thái dự án!");
+                setSaving(false);
+                return;
+            }
+            if (!formData.marketId) {
+                setError("⚠️ Vui lòng chọn thị trường!");
+                setSaving(false);
+                return;
+            }
+            if (!formData.industryIds || formData.industryIds.length === 0) {
+                setError("⚠️ Vui lòng chọn ít nhất một ngành!");
+                setSaving(false);
+                return;
+            }
+        }
+
+        // Kiểm tra chuyển status: Completed → status khác (disable)
+        if (originalStatus === "Completed" && formData.status !== "Completed") {
+            setError("⚠️ Không thể thay đổi trạng thái từ 'Đã hoàn thành' sang trạng thái khác!");
             setSaving(false);
             return;
         }
-        if (!formData.status) {
-            setError("⚠️ Vui lòng chọn trạng thái dự án!");
+
+        // Kiểm tra chuyển status: Planned → chỉ cho phép chuyển sang Ongoing
+        if (originalStatus === "Planned" && formData.status !== "Planned" && formData.status !== "Ongoing") {
+            setError("⚠️ Từ trạng thái 'Planned' chỉ có thể chuyển sang 'Ongoing'!");
             setSaving(false);
             return;
         }
-        if (!formData.marketId) {
-            setError("⚠️ Vui lòng chọn thị trường!");
+
+        // Kiểm tra chuyển status: Ongoing → chỉ cho phép chuyển sang Completed, OnHold
+        if (originalStatus === "Ongoing" && formData.status !== "Ongoing" && 
+            formData.status !== "Completed" && formData.status !== "OnHold") {
+            setError("⚠️ Từ trạng thái 'Ongoing' chỉ có thể chuyển sang 'Completed' hoặc 'OnHold'!");
             setSaving(false);
             return;
         }
-        if (!formData.industryIds || formData.industryIds.length === 0) {
-            setError("⚠️ Vui lòng chọn ít nhất một ngành!");
+
+        // Kiểm tra chuyển status: Ongoing → Completed (check active contracts)
+        if (originalStatus === "Ongoing" && formData.status === "Completed") {
+            try {
+                const detailedProject = await projectService.getDetailedById(Number(id));
+                const activeContracts = (detailedProject.clientContracts || []).filter(
+                    (contract: any) => contract.status === "Active" || contract.status === "Ongoing"
+                );
+                
+                if (activeContracts.length > 0) {
+                    const confirmed = window.confirm(
+                        `Dự án còn ${activeContracts.length} hợp đồng chưa kết thúc. Bạn có chắc chắn đóng dự án?`
+                    );
+                    if (!confirmed) {
+                        setSaving(false);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error("❌ Lỗi kiểm tra hợp đồng:", err);
+                // Vẫn cho phép tiếp tục nếu không check được
+            }
+        }
+
+        // Kiểm tra chuyển status: Ongoing → OnHold (cảnh báo nhẹ)
+        if (originalStatus === "Ongoing" && formData.status === "OnHold") {
+            const confirmed = window.confirm(
+                "Dự án tạm dừng – không thể tạo Job Request mới. Bạn có chắc chắn muốn tạm dừng dự án?"
+            );
+            if (!confirmed) {
+                setSaving(false);
+                return;
+            }
+        }
+
+        // Xác nhận trước khi lưu
+        const confirmed = window.confirm("Bạn có chắc chắn muốn lưu các thay đổi không?");
+        if (!confirmed) {
             setSaving(false);
             return;
         }
@@ -189,8 +320,10 @@ export default function ProjectEditPage() {
         }
     };
 
-    const isReadOnly =
-        project?.status === "Ongoing" || project?.status === "Completed";
+    const isReadOnly = originalStatus !== "Planned";
+    const isStatusDisabled = originalStatus === "Completed";
+    const canEditEndDate = originalStatus === "Planned" || originalStatus === "Ongoing";
+    const canEditStatus = originalStatus === "Planned" || originalStatus === "Ongoing";
 
     if (loading) {
         return (
@@ -287,7 +420,9 @@ export default function ProjectEditPage() {
                                     onChange={handleChange}
                                     required
                                     disabled={isReadOnly}
-                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                    className={`w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 ${
+                                        isReadOnly ? "bg-neutral-50 cursor-not-allowed" : "bg-white"
+                                    }`}
                                     placeholder="Nhập tên dự án"
                                 />
                             </div>
@@ -304,7 +439,9 @@ export default function ProjectEditPage() {
                                     onChange={handleChange}
                                     disabled={isReadOnly}
                                     rows={4}
-                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
+                                    className={`w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 resize-none ${
+                                        isReadOnly ? "bg-neutral-50 cursor-not-allowed" : "bg-white"
+                                    }`}
                                     placeholder="Nhập mô tả dự án..."
                                 />
                             </div>
@@ -323,23 +460,54 @@ export default function ProjectEditPage() {
                                         onChange={handleChange}
                                         max={formData.endDate || undefined}
                                         disabled={isReadOnly}
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                        className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 ${
+                                            fieldErrors.startDate
+                                                ? "border-red-500 focus:border-red-500"
+                                                : "border-neutral-200 focus:border-primary-500"
+                                        } ${
+                                            isReadOnly ? "bg-neutral-50 cursor-not-allowed" : "bg-white"
+                                        }`}
                                     />
+                                    {fieldErrors.startDate && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                            <AlertCircle className="w-4 h-4" />
+                                            {fieldErrors.startDate}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                                         <CalendarDays className="w-4 h-4" />
                                         Ngày kết thúc
                                     </label>
-                                    <input
-                                        type="date"
-                                        name="endDate"
-                                        value={formData.endDate ?? ""}
-                                        onChange={handleChange}
-                                        min={formData.startDate || undefined}
-                                        disabled={isReadOnly}
-                                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            name="endDate"
+                                            value={formData.endDate ?? ""}
+                                            onChange={handleChange}
+                                            min={formData.startDate || undefined}
+                                            disabled={!canEditEndDate}
+                                            className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 ${
+                                                fieldErrors.endDate
+                                                    ? "border-red-500 focus:border-red-500"
+                                                    : "border-neutral-200 focus:border-primary-500"
+                                            } ${
+                                                !canEditEndDate ? "bg-neutral-50 cursor-not-allowed" : "bg-white"
+                                            }`}
+                                        />
+                                        {!formData.endDate && canEditEndDate && (
+                                            <div className="absolute -bottom-6 left-0 text-xs text-neutral-500 mt-1">
+                                                💡 Dự án sẽ được xem là Ongoing nếu không có ngày kết thúc
+                                            </div>
+                                        )}
+                                    </div>
+                                    {fieldErrors.endDate && (
+                                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                            <AlertCircle className="w-4 h-4" />
+                                            {fieldErrors.endDate}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -539,14 +707,77 @@ export default function ProjectEditPage() {
                                     value={formData.status}
                                     onChange={handleChange}
                                     required
-                                    disabled={isReadOnly}
-                                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
+                                    disabled={!canEditStatus || isStatusDisabled}
+                                    className={`w-full border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                                        (!canEditStatus || isStatusDisabled) ? "opacity-50 cursor-not-allowed bg-neutral-50" : ""
+                                    }`}
                                 >
                                     <option value="">-- Chọn trạng thái --</option>
-                                    <option value="Planned">Đã lên kế hoạch</option>
-                                    <option value="Ongoing">Đang thực hiện</option>
-                                    <option value="Completed">Đã hoàn thành</option>
+                                    {originalStatus === "Planned" && (
+                                        <>
+                                            <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                        </>
+                                    )}
+                                    {originalStatus === "Ongoing" && (
+                                        <>
+                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                            <option value="Completed">Đã hoàn thành (Completed)</option>
+                                            <option value="OnHold">Tạm dừng (OnHold)</option>
+                                        </>
+                                    )}
+                                    {originalStatus === "Completed" && (
+                                        <option value="Completed">Đã hoàn thành (Completed)</option>
+                                    )}
+                                    {originalStatus === "OnHold" && (
+                                        <>
+                                            <option value="OnHold">Tạm dừng (OnHold)</option>
+                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                        </>
+                                    )}
+                                    {originalStatus === "Cancelled" && (
+                                        <option value="Cancelled">Đã hủy (Cancelled)</option>
+                                    )}
+                                    {!originalStatus && (
+                                        <>
+                                            <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                            <option value="Completed">Đã hoàn thành (Completed)</option>
+                                            <option value="OnHold">Tạm dừng (OnHold)</option>
+                                            <option value="Cancelled">Đã hủy (Cancelled)</option>
+                                        </>
+                                    )}
                                 </select>
+                                {isReadOnly && originalStatus !== "Completed" && originalStatus !== "Ongoing" && (
+                                    <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Chỉ có thể chỉnh sửa thông tin dự án khi ở trạng thái "Planned"
+                                    </p>
+                                )}
+                                {originalStatus === "Ongoing" && (
+                                    <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Ở trạng thái "Ongoing" chỉ có thể chỉnh sửa ngày kết thúc và trạng thái
+                                    </p>
+                                )}
+                                {isStatusDisabled && (
+                                    <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Không thể thay đổi trạng thái từ "Đã hoàn thành"
+                                    </p>
+                                )}
+                                {originalStatus === "Planned" && !isReadOnly && (
+                                    <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Từ "Planned" chỉ có thể chuyển sang "Ongoing"
+                                    </p>
+                                )}
+                                {originalStatus === "Ongoing" && !isReadOnly && (
+                                    <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Từ "Ongoing" có thể chuyển sang "Completed" hoặc "OnHold"
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -582,7 +813,7 @@ export default function ProjectEditPage() {
                         </Link>
                         <button
                             type="submit"
-                            disabled={saving || isReadOnly}
+                            disabled={saving || (isReadOnly && originalStatus !== "Ongoing")}
                             className="group flex items-center gap-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {saving ? (
