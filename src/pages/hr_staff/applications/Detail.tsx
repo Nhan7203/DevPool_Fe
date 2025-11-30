@@ -582,6 +582,16 @@ export default function TalentCVApplicationDetailPage() {
         label: "Đã từ chối",
         color: "bg-red-100 text-red-800",
         bgColor: "bg-red-50"
+      },
+      "Expired": {
+        label: "Đã hết hạn",
+        color: "bg-gray-100 text-gray-800",
+        bgColor: "bg-gray-50"
+      },
+      "ClosedBySystem": {
+        label: "Đã đóng bởi hệ thống",
+        color: "bg-red-100 text-red-800",
+        bgColor: "bg-red-50"
       }
     };
 
@@ -631,7 +641,8 @@ export default function TalentCVApplicationDetailPage() {
   }
 
   const statusConfig = getStatusConfig(application.status);
-  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status);
+  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status) && 
+    application.status !== "Expired" && application.status !== "ClosedBySystem";
   const canCreateNextActivity = statusAllowsActivityCreation && hasRemainingSteps;
 
   const formatDate = (dateString?: string | null) => {
@@ -721,8 +732,16 @@ export default function TalentCVApplicationDetailPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ sơ #{application.id}</h1>
               <p className="text-neutral-600 mb-4">Thông tin chi tiết hồ sơ ứng viên</p>
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
+              <div 
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200 relative group`}
+                title={application.status === "Expired" || application.status === "ClosedBySystem" 
+                  ? "Tự động đóng bởi hệ thống do quá 30 ngày không có hoạt động." 
+                  : ""}
+              >
                 <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
+                {(application.status === "Expired" || application.status === "ClosedBySystem") && (
+                  <AlertCircle className="w-4 h-4 text-gray-500" />
+                )}
               </div>
             </div>
 
@@ -828,11 +847,13 @@ export default function TalentCVApplicationDetailPage() {
                     label="Số lượng tuyển dụng"
                     value={(() => {
                       const qty = jobRequest.quantity ?? 0;
-                      const remain =
-                        remainingSlots === null || remainingSlots === undefined
-                          ? "—"
-                          : `${remainingSlots}/${qty} còn lại`;
-                      return `${qty} (${remain})`;
+                      if (remainingSlots === null || remainingSlots === undefined) {
+                        return `${qty} (—)`;
+                      }
+                      if (remainingSlots === 0) {
+                        return `${qty} (Đã đủ)`;
+                      }
+                      return `${qty} (${remainingSlots}/${qty} còn lại)`;
                     })()}
                     icon={<UserPlus className="w-4 h-4" />}
                   />
@@ -911,6 +932,20 @@ export default function TalentCVApplicationDetailPage() {
                   <p className="text-sm text-neutral-500">Chưa có hoạt động nào.</p>
                 ) : (
                   <div className="space-y-4">
+                    {/* System log nếu application bị auto-close */}
+                    {(application.status === "Expired" || application.status === "ClosedBySystem") && (
+                      <div className="p-5 border border-neutral-200 rounded-xl bg-gray-50">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-200 rounded-lg">
+                            <AlertCircle className="w-4 h-4 text-gray-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900 mb-1">System auto-closed (Inactivity > 30 days).</p>
+                            <p className="text-xs text-gray-600">Hệ thống tự động đóng hồ sơ do không có hoạt động trong 30 ngày.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {[...activities].sort((a, b) => a.id - b.id).map((activity, index) => {
                       const processStep = processSteps[activity.processStepId];
                       const formattedDate = activity.scheduledDate
