@@ -644,6 +644,7 @@ export default function ListDev() {
                           <div className="flex items-center justify-center gap-2">
                             <Link
                               to={`/ta/developers/${t.id}`}
+                              state={{ tab: 'cvs' }}
                               className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                             >
                               <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

@@ -43,6 +43,7 @@ export default function TalentCVEditPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [canDeactivate, setCanDeactivate] = useState(true); // Cho phép deactivate hay không
 
   // 🧭 Load dữ liệu Talent CV
   useEffect(() => {
@@ -69,6 +70,29 @@ export default function TalentCVEditPage() {
           isGeneratedFromTemplate: data.isGeneratedFromTemplate,
         });
         setTalentId(data.talentId);
+
+        // Kiểm tra xem có bao nhiêu CV đang hoạt động
+        if (data.isActive) {
+          try {
+            const allActiveCVs = await talentCVService.getAll({
+              talentId: data.talentId,
+              isActive: true,
+              excludeDeleted: true,
+            });
+            
+            // Nếu chỉ có 1 CV đang hoạt động (chính CV hiện tại), không cho phép deactivate
+            if (allActiveCVs && allActiveCVs.length === 1) {
+              setCanDeactivate(false);
+            } else {
+              setCanDeactivate(true);
+            }
+          } catch (err) {
+            console.error("❌ Lỗi kiểm tra CV đang hoạt động:", err);
+            setCanDeactivate(true); // Nếu lỗi, cho phép deactivate để an toàn
+          }
+        } else {
+          setCanDeactivate(true); // Nếu CV không active, luôn cho phép
+        }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin CV!");
@@ -124,6 +148,12 @@ export default function TalentCVEditPage() {
     }
 
     try {
+      // Kiểm tra nếu cố gắng deactivate CV duy nhất đang hoạt động
+      if (formData.isActive && !editableFields.isActive && !canDeactivate) {
+        alert("⚠️ Không thể tắt trạng thái hoạt động!\n\nĐây là CV duy nhất đang hoạt động. Phải có ít nhất một CV đang hoạt động cho nhân sự này.");
+        return;
+      }
+
       const payload: TalentCVFieldsUpdateModel = {
         talentId,
         summary: editableFields.summary,
@@ -159,7 +189,7 @@ export default function TalentCVEditPage() {
       await talentCVService.updateFields(Number(id), payload);
 
       alert("✅ Cập nhật CV thành công!");
-      navigate(`/ta/developers/${talentId}`);
+      navigate(`/ta/developers/${talentId}`, { state: { defaultTab: "cvs" } });
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
       alert("Không thể cập nhật CV!");
@@ -336,11 +366,19 @@ export default function TalentCVEditPage() {
                       name="isActive"
                       checked={editableFields.isActive ?? false}
                       onChange={handleChange}
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                      disabled={!canDeactivate && formData.isActive}
+                      className={`w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2 ${
+                        !canDeactivate && formData.isActive ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                     <span className="text-sm text-gray-700">
-                      {formData.isActive ? "Đang hoạt động" : "Không hoạt động"}
+                      {editableFields.isActive ? "Đang hoạt động" : "Không hoạt động"}
                     </span>
+                    {!canDeactivate && formData.isActive && (
+                      <span className="text-xs text-red-600 ml-2">
+                        (Không thể tắt - CV duy nhất đang hoạt động)
+                      </span>
+                    )}
                   </div>
                 </div>
 
