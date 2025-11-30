@@ -850,8 +850,8 @@ export default function CreateTalent() {
     }
   };
 
-  // Delete CV file from Firebase Storage
-  const handleDeleteCVFile = async (cvIndex: number) => {
+  // Delete CV file from Firebase Storage (with optional skipConfirm)
+  const handleDeleteCVFile = async (cvIndex: number, skipConfirm: boolean = false) => {
     const currentCV = initialCVs[cvIndex];
     const currentUrl = currentCV?.cvFileUrl;
     if (!currentUrl) {
@@ -866,15 +866,17 @@ export default function CreateTalent() {
       return;
     }
 
-    // Xác nhận xóa file từ Firebase
-    const confirmed = window.confirm(
-      "⚠️ Bạn có chắc chắn muốn xóa file CV này?\n\n" +
-      "File sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
-      "Bạn có muốn tiếp tục không?"
-    );
+    // Xác nhận xóa file từ Firebase (trừ khi skipConfirm = true)
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        "⚠️ Bạn có chắc chắn muốn xóa file CV này?\n\n" +
+        "File sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
+        "Bạn có muốn tiếp tục không?"
+      );
 
-    if (!confirmed) {
-      return;
+      if (!confirmed) {
+        return;
+      }
     }
 
     try {
@@ -894,14 +896,18 @@ export default function CreateTalent() {
       setUploadedCVUrl(null);
       setIsUploadedFromFirebase(false);
 
-      alert("✅ Đã xóa file CV thành công!");
+      if (!skipConfirm) {
+        alert("✅ Đã xóa file CV thành công!");
+      }
     } catch (err: any) {
       console.error("❌ Error deleting CV file:", err);
       // Vẫn xóa URL khỏi form dù không xóa được file
       updateInitialCV(cvIndex, 'cvFileUrl', "");
       setUploadedCVUrl(null);
       setIsUploadedFromFirebase(false);
-      alert("⚠️ Đã xóa URL khỏi form, nhưng có thể không xóa được file trong Firebase. Vui lòng kiểm tra lại.");
+      if (!skipConfirm) {
+        alert("⚠️ Đã xóa URL khỏi form, nhưng có thể không xóa được file trong Firebase. Vui lòng kiểm tra lại.");
+      }
     }
   };
 
@@ -1916,31 +1922,28 @@ export default function CreateTalent() {
       newErrors.currentPartnerId = 'Vui lòng chọn đối tác';
     }
 
-    // Validation CV - Chỉ bắt buộc nếu sử dụng trích xuất CV
-    if (useExtractCV) {
-      if (!isUploadedFromFirebase) {
-        alert("⚠️ Vui lòng upload CV lên Firebase trước khi tạo nhân sự!");
-        return;
-      }
+    // Validation CV - Bắt buộc luôn
+    if (initialCVs.length === 0 || !initialCVs[0]) {
+      alert("⚠️ Vui lòng thêm CV ban đầu!");
+      setErrors(prev => ({ ...prev, cv: 'CV ban đầu là bắt buộc' }));
+      return;
+    }
 
-      if (initialCVs.length === 0 || !initialCVs[0]) {
-        alert("⚠️ Vui lòng thêm CV ban đầu!");
-        return;
-      }
-
-      const cv = initialCVs[0];
-      if (!cv.jobRoleLevelId) {
-        alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
-        return;
-      }
-      if (!cv.version || cv.version <= 0) {
-        alert("⚠️ Vui lòng nhập version CV!");
-        return;
-      }
-      if (!cv.cvFileUrl || cv.cvFileUrl.trim() === "") {
-        alert("⚠️ Vui lòng upload CV lên Firebase! CV là bắt buộc khi sử dụng trích xuất CV.");
-        return;
-      }
+    const cv = initialCVs[0];
+    if (!cv.jobRoleLevelId || cv.jobRoleLevelId <= 0) {
+      alert("⚠️ Vui lòng chọn vị trí công việc cho CV!");
+      setErrors(prev => ({ ...prev, cv: 'Vị trí công việc là bắt buộc' }));
+      return;
+    }
+    if (!cv.version || cv.version <= 0) {
+      alert("⚠️ Vui lòng nhập version CV!");
+      setErrors(prev => ({ ...prev, cv: 'Version CV là bắt buộc' }));
+      return;
+    }
+    if (!cv.cvFileUrl || cv.cvFileUrl.trim() === "") {
+      alert("⚠️ Vui lòng upload CV lên Firebase hoặc nhập URL file CV! CV là bắt buộc.");
+      setErrors(prev => ({ ...prev, cv: 'URL file CV là bắt buộc' }));
+      return;
     }
 
     // Validation cho các trường bắt buộc trong arrays
@@ -2319,12 +2322,44 @@ export default function CreateTalent() {
                       <input
                         type="checkbox"
                         checked={useExtractCV}
-                        onChange={(e) => {
-                          setUseExtractCV(e.target.checked);
+                        onChange={async (e) => {
                           if (e.target.checked) {
+                            setUseExtractCV(true);
                             setShowExtractCVModal(true);
                           } else {
-                            // Khi uncheck, đóng modal và reset
+                            // Khi uncheck, kiểm tra nếu đã có dữ liệu trích xuất
+                            if (extractedData) {
+                              // Xây dựng thông báo cảnh báo
+                              let warningMessage = "⚠️ Bạn có chắc chắn muốn bỏ trích xuất CV?\n\n";
+                              warningMessage += "Tất cả dữ liệu đã trích xuất sẽ bị xóa.\n\n";
+                              
+                              // Nếu đã upload CV lên Firebase (tạo CV luôn), thêm cảnh báo về việc xóa file
+                              if (isUploadedFromFirebase && initialCVs[0]?.cvFileUrl && uploadedCVUrl === initialCVs[0].cvFileUrl) {
+                                warningMessage += "⚠️ File CV đã được upload lên Firebase sẽ bị xóa vĩnh viễn.\n\n";
+                              }
+                              
+                              warningMessage += "Bạn có muốn tiếp tục không?";
+                              
+                              const confirmed = window.confirm(warningMessage);
+                              
+                              if (!confirmed) {
+                                // Người dùng hủy, không làm gì cả
+                                return;
+                              }
+                              
+                              // Nếu đã upload CV lên Firebase và đã chọn "Tạo CV luôn", xóa file trên Firebase
+                              if (isUploadedFromFirebase && initialCVs[0]?.cvFileUrl && uploadedCVUrl === initialCVs[0].cvFileUrl) {
+                                try {
+                                  await handleDeleteCVFile(0, true); // skipConfirm = true vì đã confirm ở trên
+                                } catch (error) {
+                                  console.error("Lỗi khi xóa file CV từ Firebase:", error);
+                                  // Vẫn tiếp tục reset dữ liệu dù không xóa được file
+                                }
+                              }
+                            }
+                            
+                            // Reset tất cả dữ liệu
+                            setUseExtractCV(false);
                             setShowExtractCVModal(false);
                             setModalCVFile(null);
                             setCvFile(null);
@@ -2336,12 +2371,22 @@ export default function CreateTalent() {
                               URL.revokeObjectURL(cvPreviewUrl);
                               setCvPreviewUrl(null);
                             }
-                            // Reset CV URL trong initialCVs
-                            if (initialCVs[0]) {
-                              updateInitialCV(0, 'cvFileUrl', '');
-                            }
+                            // Reset CV URL trong initialCVs và reset về trạng thái ban đầu
+                            setInitialCVs([{
+                              jobRoleLevelId: undefined,
+                              version: 1,
+                              cvFileUrl: "",
+                              isActive: true,
+                              summary: "",
+                              isGeneratedFromTemplate: false,
+                              sourceTemplateId: undefined,
+                              generatedForJobRequestId: undefined
+                            }]);
                             setUploadedCVUrl(null);
                             setIsUploadedFromFirebase(false);
+                            // Reset extracted data
+                            setExtractedData(null);
+                            setUnmatchedData({});
                           }
                         }}
                         className="w-5 h-5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
@@ -2356,8 +2401,8 @@ export default function CreateTalent() {
                     </label>
                   </div>
 
-                  {/* Upload CV Section - Chỉ hiển thị khi useExtractCV = true */}
-                  {useExtractCV && (
+                  {/* Upload CV Section - Chỉ hiển thị khi useExtractCV = true và chưa trích xuất CV */}
+                  {useExtractCV && !extractedData && (
                     <div className="mt-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
                       <div className="flex items-center gap-2 mb-3">
                         <Upload className="w-5 h-5 text-primary-600" />
@@ -2397,33 +2442,52 @@ export default function CreateTalent() {
                     </div>
                   )}
 
-                  {/* CV Ban Đầu Section - Chỉ hiển thị khi useExtractCV = true, nằm ngay dưới phần trích xuất */}
-                  {useExtractCV && (
-                    <div className="mt-6 pt-6 border-t border-neutral-200">
-                      <div className="flex items-center gap-3 mb-4">
-                        <FileText className="w-5 h-5 text-primary-600" />
-                        <h3 className="text-lg font-semibold text-neutral-800">
-                          CV Ban Đầu
-                        </h3>
-                      </div>
-                      <div className="space-y-6">
-                        {initialCVs.map((cv, index) => (
-                          <div key={index} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                            <div className="flex justify-between items-center mb-4">
-                              <span className="text-sm font-semibold text-neutral-700">CV Ban Đầu</span>
+                  {/* CV Ban Đầu Section - Luôn hiển thị */}
+                  <div className="mt-6 pt-6 border-t border-neutral-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                      <h3 className="text-lg font-semibold text-neutral-800">
+                        CV Ban Đầu <span className="text-red-500">*</span>
+                      </h3>
+                    </div>
+                    <div className="space-y-6">
+                      {initialCVs.map((cv, index) => (
+                        <div key={index} className="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-sm font-semibold text-neutral-700">CV Ban Đầu</span>
+                          </div>
+
+                          {/* Chọn file CV và Upload Section - Gộp lại */}
+                          <div className="mb-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Upload className="w-5 h-5 text-primary-600" />
+                              <label className="block text-sm font-semibold text-neutral-700">
+                                {cvFile ? 'Upload CV lên Firebase' : 'Chọn file CV (PDF)'}
+                              </label>
                             </div>
 
-                            {/* Upload CV Section - Chỉ hiển thị khi useExtractCV = true và có file CV đã chọn */}
-                            {useExtractCV && cvFile && (
-                              <div className="mb-4 p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-200">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <Upload className="w-5 h-5 text-primary-600" />
-                                  <label className="block text-sm font-semibold text-neutral-700">
-                                    Upload CV File
-                                  </label>
-                                </div>
-
-                                <div className="space-y-3">
+                            <div className="space-y-3">
+                              {!cvFile ? (
+                                <input
+                                  type="file"
+                                  accept=".pdf"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] || null;
+                                    setCvFile(file);
+                                    if (file) {
+                                      const url = URL.createObjectURL(file);
+                                      setCvPreviewUrl(url);
+                                    } else {
+                                      if (cvPreviewUrl) {
+                                        URL.revokeObjectURL(cvPreviewUrl);
+                                        setCvPreviewUrl(null);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                                />
+                              ) : (
+                                <>
                                   {/* File Info */}
                                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                                     <FileText className="w-4 h-4" />
@@ -2479,9 +2543,10 @@ export default function CreateTalent() {
                                       ⚠️ Vui lòng nhập version CV trước khi upload
                                     </p>
                                   )}
-                                </div>
-                              </div>
-                            )}
+                                </>
+                              )}
+                            </div>
+                          </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
@@ -2630,7 +2695,7 @@ export default function CreateTalent() {
                               </div>
                               <div className="md:col-span-2">
                                 <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                                  URL file CV {useExtractCV && <span className="text-red-500">*</span>} {cv.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
+                                  URL file CV <span className="text-red-500">*</span> {cv.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
                                 </label>
 
                                 {/* Warning when URL is from Firebase */}
@@ -2697,7 +2762,6 @@ export default function CreateTalent() {
                         ))}
                       </div>
                     </div>
-                  )}
                 </div>
 
                 {/* Tab Navigation - Sticky */}
@@ -3490,6 +3554,10 @@ export default function CreateTalent() {
                                           onClick={() => {
                                             if (!isDisabled) {
                                               updateSkill(index, 'skillId', s.id);
+                                              // Tự động set nhóm kỹ năng theo skill đã chọn
+                                              if (s.skillGroupId) {
+                                                setSelectedSkillGroupId(s.skillGroupId);
+                                              }
                                               setIsSkillDropdownOpen(prev => ({ ...prev, [index]: false }));
                                               setSkillSearchQuery(prev => ({ ...prev, [index]: "" }));
                                               const newErrors = { ...errors };
@@ -3526,10 +3594,10 @@ export default function CreateTalent() {
                             onChange={(e) => updateSkill(index, 'level', e.target.value)}
                             className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
                           >
-                            <option value="Beginner">Beginner</option>
-                            <option value="Intermediate">Intermediate</option>
-                            <option value="Advanced">Advanced</option>
-                            <option value="Expert">Expert</option>
+                            <option value="Beginner">Mới bắt đầu</option>
+                            <option value="Intermediate">Trung bình</option>
+                            <option value="Advanced">Nâng cao</option>
+                            <option value="Expert">Chuyên gia</option>
                           </select>
                         </div>
                         <div>
@@ -4140,70 +4208,112 @@ export default function CreateTalent() {
                     </div>
 
                     {/* Content - Scrollable */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                      {/* Upload CV */}
-                      <div>
-                        <label className="block mb-2 text-sm font-semibold text-neutral-700">Chọn file CV (PDF)</label>
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          onChange={handleModalFileChange}
-                          className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                        />
-                        {modalCVFile && (
-                          <div className="flex items-center gap-2 text-xs text-neutral-600 mt-2">
-                            <FileText className="w-3 h-3" />
-                            <span>Đã chọn: <span className="font-medium text-neutral-900">{modalCVFile.name}</span></span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* CV Preview trong modal */}
-                      {modalCVPreviewUrl && (
-                        <div className="border-2 border-primary-200 rounded-xl overflow-hidden bg-white shadow-md">
-                          <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-5 py-3 flex items-center justify-between border-b border-primary-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                                <Eye className="w-4 h-4 text-primary-600" />
-                              </div>
-                              <span className="text-sm font-semibold text-primary-800">Xem trước CV</span>
+                    <div className="flex-1 overflow-y-auto p-6">
+                      {modalCVPreviewUrl ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Left Column - Form */}
+                          <div className="space-y-4">
+                            {/* Upload CV */}
+                            <div>
+                              <label className="block mb-2 text-sm font-semibold text-neutral-700">Chọn file CV (PDF)</label>
+                              <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={handleModalFileChange}
+                                className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                              />
+                              {modalCVFile && (
+                                <div className="flex items-center gap-2 text-xs text-neutral-600 mt-2">
+                                  <FileText className="w-3 h-3" />
+                                  <span>Đã chọn: <span className="font-medium text-neutral-900">{modalCVFile.name}</span></span>
+                                </div>
+                              )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => window.open(modalCVPreviewUrl, '_blank')}
-                              className="px-3 py-1.5 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1.5 transition-all font-medium"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              Mở toàn màn hình
-                            </button>
+
+                            {/* Checkbox "Tạo CV luôn" */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                              <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={createCVFromExtract}
+                                  onChange={(e) => setCreateCVFromExtract(e.target.checked)}
+                                  className="w-5 h-5 mt-0.5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
+                                />
+                                <div>
+                                  <span className="text-sm font-semibold text-blue-900 block">Tạo CV luôn</span>
+                                  <p className="text-xs text-blue-700 mt-1">
+                                    Tự động tạo CV mới cho nhân sự từ file CV đã upload. Nếu không chọn, chỉ lấy thông tin để điền vào form.
+                                  </p>
+                                </div>
+                              </label>
+                            </div>
                           </div>
-                          <div className="w-full bg-white" style={{ height: '450px' }}>
-                            <iframe
-                              src={modalCVPreviewUrl}
-                              className="w-full h-full border-0"
-                              title="CV Preview"
+
+                          {/* Right Column - CV Preview (Gọn lại) */}
+                          <div className="border-2 border-primary-200 rounded-xl overflow-hidden bg-white shadow-md flex flex-col">
+                            <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-4 py-2 flex items-center justify-between border-b border-primary-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-primary-100 rounded-lg flex items-center justify-center">
+                                  <Eye className="w-3.5 h-3.5 text-primary-600" />
+                                </div>
+                                <span className="text-xs font-semibold text-primary-800">Xem trước CV</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => window.open(modalCVPreviewUrl, '_blank')}
+                                className="px-2 py-1 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1 transition-all"
+                              >
+                                <Eye className="w-3 h-3" />
+                                Mở toàn màn hình
+                              </button>
+                            </div>
+                            <div className="flex-1 bg-white" style={{ height: '350px', minHeight: '350px' }}>
+                              <iframe
+                                src={modalCVPreviewUrl}
+                                className="w-full h-full border-0"
+                                title="CV Preview"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {/* Upload CV */}
+                          <div>
+                            <label className="block mb-2 text-sm font-semibold text-neutral-700">Chọn file CV (PDF)</label>
+                            <input
+                              type="file"
+                              accept=".pdf"
+                              onChange={handleModalFileChange}
+                              className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                             />
+                            {modalCVFile && (
+                              <div className="flex items-center gap-2 text-xs text-neutral-600 mt-2">
+                                <FileText className="w-3 h-3" />
+                                <span>Đã chọn: <span className="font-medium text-neutral-900">{modalCVFile.name}</span></span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Checkbox "Tạo CV luôn" */}
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                            <label className="flex items-start gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={createCVFromExtract}
+                                onChange={(e) => setCreateCVFromExtract(e.target.checked)}
+                                className="w-5 h-5 mt-0.5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
+                              />
+                              <div>
+                                <span className="text-sm font-semibold text-blue-900 block">Tạo CV luôn</span>
+                                <p className="text-xs text-blue-700 mt-1">
+                                  Tự động tạo CV mới cho nhân sự từ file CV đã upload. Nếu không chọn, chỉ lấy thông tin để điền vào form.
+                                </p>
+                              </div>
+                            </label>
                           </div>
                         </div>
                       )}
-
-                      {/* Checkbox "Tạo CV luôn" */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={createCVFromExtract}
-                            onChange={(e) => setCreateCVFromExtract(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 text-primary-600 border-2 border-primary-300 rounded focus:ring-2 focus:ring-primary-500/30"
-                          />
-                          <div>
-                            <span className="text-sm font-semibold text-blue-900 block">Tạo CV luôn</span>
-                            <p className="text-xs text-blue-700 mt-1">
-                              Tự động tạo CV mới cho nhân sự từ file CV đã upload. Nếu không chọn, chỉ lấy thông tin để điền vào form.
-                            </p>
-                          </div>
-                        </label>
-                      </div>
                     </div>
 
                     {/* Footer - Sticky */}

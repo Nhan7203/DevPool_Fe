@@ -3,13 +3,14 @@ import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentService, type Talent } from "../../../services/Talent";
+import { talentService, type Talent, type TalentProjectCreateModel, type TalentSkillCreateModel, type TalentWorkExperienceCreateModel, type TalentCertificateCreateModel, type TalentJobRoleLevelCreateModel } from "../../../services/Talent";
 import { locationService } from "../../../services/location";
 import { partnerService, type Partner } from "../../../services/Partner";
 import { talentCVService, type TalentCV, type CVAnalysisComparisonResponse } from "../../../services/TalentCV";
 import { talentProjectService, type TalentProject } from "../../../services/TalentProject";
 import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
 import { talentJobRoleLevelService, type TalentJobRoleLevel } from "../../../services/TalentJobRoleLevel";
 import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum } from "../../../services/JobRoleLevel";
@@ -20,6 +21,9 @@ import { notificationService, NotificationPriority, NotificationType } from "../
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { WorkingMode } from "../../../types/WorkingMode";
+import { uploadFile } from "../../../utils/firebaseStorage";
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "../../../configs/firebase";
 import { Button } from "../../../components/ui/button";
 import {
   Edit,
@@ -43,12 +47,16 @@ import {
   Star,
   Workflow,
   Plus,
+  Filter,
   Upload,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   ChevronUp,
   Eye,
+  X,
+  Save,
+  Search,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
@@ -76,6 +84,7 @@ export default function TalentDetailPage() {
   const [certificates, setCertificates] = useState<(TalentCertificate & { certificateTypeName: string })[]>([]);
   const [availableTimes, setAvailableTimes] = useState<TalentAvailableTime[]>([]);
   const [lookupSkills, setLookupSkills] = useState<Skill[]>([]);
+  const [lookupSkillGroups, setLookupSkillGroups] = useState<SkillGroup[]>([]);
   const [lookupJobRoleLevels, setLookupJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [lookupCertificateTypes, setLookupCertificateTypes] = useState<CertificateType[]>([]);
   const [analysisResult, setAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
@@ -101,6 +110,104 @@ export default function TalentDetailPage() {
   };
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences">("projects");
+
+  // Inline form states
+  const [showInlineForm, setShowInlineForm] = useState<"project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineProjectForm, setInlineProjectForm] = useState<Partial<TalentProjectCreateModel>>({
+    projectName: "",
+    position: "",
+    technologies: "",
+    description: "",
+  });
+  const [inlineSkillForm, setInlineSkillForm] = useState<Partial<TalentSkillCreateModel>>({
+    skillId: 0,
+    level: "Beginner",
+    yearsExp: 1,
+  });
+  const [inlineCertificateForm, setInlineCertificateForm] = useState<Partial<TalentCertificateCreateModel>>({
+    certificateTypeId: 0,
+    certificateName: "",
+    certificateDescription: "",
+    issuedDate: undefined,
+    isVerified: false,
+    imageUrl: "",
+  });
+  const [inlineExperienceForm, setInlineExperienceForm] = useState<Partial<TalentWorkExperienceCreateModel>>({
+    company: "",
+    position: "",
+    startDate: "",
+    endDate: undefined,
+    description: "",
+  });
+  const [inlineJobRoleLevelForm, setInlineJobRoleLevelForm] = useState<Partial<TalentJobRoleLevelCreateModel>>({
+    jobRoleLevelId: 0,
+    yearsOfExp: 1,
+    ratePerMonth: undefined,
+  });
+  const [inlineAvailableTimeForm, setInlineAvailableTimeForm] = useState<Partial<TalentAvailableTime>>({
+    startTime: "",
+    endTime: undefined,
+    notes: "",
+  });
+  const [availableTimeFormErrors, setAvailableTimeFormErrors] = useState<Record<string, string>>({});
+  // Certificate image upload states
+  const [certificateImageFile, setCertificateImageFile] = useState<File | null>(null);
+  const [uploadingCertificateImage, setUploadingCertificateImage] = useState(false);
+  const [certificateUploadProgress, setCertificateUploadProgress] = useState<number>(0);
+  const [uploadedCertificateUrl, setUploadedCertificateUrl] = useState<string | null>(null);
+  const [certificateFormErrors, setCertificateFormErrors] = useState<Record<string, string>>({});
+  const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+  const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
+  const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState<string>("");
+  const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
+  const [certificateTypeSearch, setCertificateTypeSearch] = useState<string>("");
+  const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState(false);
+  const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
+  const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
+  const [workExperiencePositionSearch, setWorkExperiencePositionSearch] = useState<string>("");
+  const [isWorkExperiencePositionDropdownOpen, setIsWorkExperiencePositionDropdownOpen] = useState(false);
+  
+  // Danh sách vị trí công việc cho Kinh Nghiệm
+  const workExperiencePositions = [
+    "Frontend Developer (React, Angular, Vue)",
+    "Backend Developer (Node.js, .NET, Java, Go)",
+    "Fullstack Developer",
+    "Mobile Developer (iOS/Android/Flutter/React Native)",
+    "AI/ML Engineer",
+    "Data Engineer",
+    "Data Scientist",
+    "DevOps Engineer",
+    "Cloud Engineer",
+    "QA/QC Engineer (Manual / Automation)",
+    "Test Lead",
+    "Solution Architect",
+    "Technical Lead (Tech Lead)",
+    "Software Architect"
+  ];
+
+  // Tự động đóng form khi chuyển tab (nếu form không thuộc tab hiện tại)
+  useEffect(() => {
+    if (isSubmitting) return; // Không đóng form khi đang submit
+    
+    const formTabMap: Record<string, string> = {
+      "project": "projects",
+      "skill": "skills",
+      "certificate": "certificates",
+      "experience": "experiences",
+      "jobRoleLevel": "jobRoleLevels",
+      "availableTime": "availableTimes"
+    };
+    
+    if (showInlineForm) {
+      const formTab = formTabMap[showInlineForm];
+      if (formTab && formTab !== activeTab) {
+        // Form không thuộc tab hiện tại, đóng form
+        setShowInlineForm(null);
+      }
+    }
+  }, [activeTab, showInlineForm, isSubmitting]);
 
   // Chỉ khôi phục kết quả phân tích CV sau khi đã load danh sách CVs và xác nhận CV ID tồn tại
   useEffect(() => {
@@ -200,7 +307,7 @@ export default function TalentDetailPage() {
         setAvailableTimes(availableTimesData);
 
         // Fetch job role levels once and reuse for both CVs and job role levels mapping
-        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
         const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
         setLookupJobRoleLevels(jobRoleLevelsArray);
         
@@ -237,6 +344,22 @@ export default function TalentDetailPage() {
       // Fetch skill names
         const allSkills = await skillService.getAll();
         setLookupSkills(allSkills);
+        
+        // Fetch skill groups
+        try {
+          const skillGroupsData = await skillGroupService.getAll({ excludeDeleted: true });
+          const skillGroupsArray = Array.isArray(skillGroupsData)
+            ? skillGroupsData
+            : (Array.isArray((skillGroupsData as any)?.items)
+              ? (skillGroupsData as any).items
+              : (Array.isArray((skillGroupsData as any)?.data)
+                ? (skillGroupsData as any).data
+                : []));
+          setLookupSkillGroups(skillGroupsArray);
+        } catch (skillGroupsError) {
+          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
+          setLookupSkillGroups([]);
+        }
         const skillsWithNames = skills.map((skill: TalentSkill) => {
           const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
           return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
@@ -379,7 +502,7 @@ export default function TalentDetailPage() {
       setSelectedCVs((prev) => prev.filter((id) => !deletableCVIds.includes(id)));
       // Refresh data
       const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
       const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
       const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
         const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
@@ -603,31 +726,7 @@ export default function TalentDetailPage() {
     }
   };
 
-  // Helper function để lưu CV đang hoạt động vào sessionStorage
-  const saveActiveCVId = () => {
-    if (!id) return;
-    try {
-      const activeCV = talentCVs.find(cv => cv.isActive);
-      if (activeCV) {
-        const cvIdStorageKey = `${ANALYSIS_STORAGE_PREFIX}-cv-id-${id}`;
-        sessionStorage.setItem(cvIdStorageKey, JSON.stringify(activeCV.id));
-      }
-    } catch (error) {
-      console.error("Không thể lưu CV đang hoạt động vào bộ nhớ tạm:", error);
-    }
-  };
 
-  // Handler để navigate đến trang tạo dự án/kinh nghiệm và tự động chọn CV đang hoạt động hoặc CV đang phân tích
-  const handleNavigateToCreate = (path: string) => {
-    // Ưu tiên lưu CV đang hoạt động nếu có, nếu không thì lưu CV đang phân tích
-    const activeCV = talentCVs.find(cv => cv.isActive);
-    if (activeCV) {
-      saveActiveCVId();
-    } else if (analysisResultCVId) {
-      saveAnalysisCVId();
-    }
-    navigate(path);
-  };
 
   const handlePreparePrefillAndNavigate = (type: PrefillType, data: unknown, targetPath: string) => {
     if (!id) return;
@@ -1072,7 +1171,7 @@ export default function TalentDetailPage() {
       setSelectedJobRoleLevels([]);
       // Refresh data
       const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll();
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
       setLookupJobRoleLevels(allJobRoleLevels);
       const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
         const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
@@ -1131,6 +1230,505 @@ export default function TalentDetailPage() {
       console.error("❌ Lỗi khi xóa thời gian:", err);
       alert("Không thể xóa thời gian!");
     }
+  };
+
+  // Inline form handlers
+  const handleOpenInlineForm = (type: "project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime") => {
+    if (isSubmitting) {
+      return; // Chỉ chặn khi đang submit
+    }
+    // Cho phép mở form của tab khác (sẽ tự động đóng form cũ)
+    setShowInlineForm(type);
+    // Reset form based on type
+    if (type === "project") {
+      setInlineProjectForm({ projectName: "", position: "", technologies: "", description: "" });
+    } else if (type === "skill") {
+      setInlineSkillForm({ skillId: 0, level: "Beginner", yearsExp: 1 });
+    } else if (type === "certificate") {
+      setInlineCertificateForm({ certificateTypeId: 0, certificateName: "", certificateDescription: "", issuedDate: undefined, isVerified: false, imageUrl: "" });
+      setCertificateImageFile(null);
+      setUploadedCertificateUrl(null);
+      setCertificateFormErrors({});
+    } else if (type === "experience") {
+      setInlineExperienceForm({ company: "", position: "", startDate: "", endDate: undefined, description: "" });
+    } else if (type === "jobRoleLevel") {
+      setInlineJobRoleLevelForm({ jobRoleLevelId: 0, yearsOfExp: 1, ratePerMonth: undefined });
+    } else if (type === "availableTime") {
+      setInlineAvailableTimeForm({ startTime: "", endTime: undefined, notes: "" });
+      setAvailableTimeFormErrors({});
+    }
+  };
+
+  const handleCloseInlineForm = () => {
+    setShowInlineForm(null);
+    setAvailableTimeFormErrors({});
+    setCertificateImageFile(null);
+    setUploadedCertificateUrl(null);
+    setCertificateFormErrors({});
+  };
+
+  const handleSubmitInlineProject = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineProjectForm.projectName?.trim()) {
+      alert("⚠️ Vui lòng nhập tên dự án!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const activeCV = talentCVs.find(cv => cv.isActive) || talentCVs[0];
+      if (!activeCV) {
+        alert("⚠️ Vui lòng tạo CV trước khi thêm dự án!");
+        return;
+      }
+      await talentProjectService.create({
+        talentId: Number(id),
+        talentCVId: activeCV.id,
+        projectName: inlineProjectForm.projectName!,
+        position: inlineProjectForm.position || "",
+        technologies: inlineProjectForm.technologies || "",
+        description: inlineProjectForm.description || "",
+      });
+      alert("✅ Đã tạo dự án thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const projects = await talentProjectService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setTalentProjects(projects);
+    } catch (err) {
+      console.error("❌ Lỗi khi tạo dự án:", err);
+      alert("Không thể tạo dự án!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineSkill = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineSkillForm.skillId || inlineSkillForm.skillId === 0) {
+      alert("⚠️ Vui lòng chọn kỹ năng!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentSkillService.create({
+        talentId: Number(id),
+        skillId: inlineSkillForm.skillId!,
+        level: inlineSkillForm.level || "Beginner",
+        yearsExp: inlineSkillForm.yearsExp || 1,
+      });
+      alert("✅ Đã thêm kỹ năng thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const skills = await talentSkillService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allSkills = await skillService.getAll();
+      setLookupSkills(allSkills);
+      const skillsWithNames = skills.map((skill: TalentSkill) => {
+        const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
+        return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
+      });
+      setTalentSkills(skillsWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm kỹ năng:", err);
+      alert("Không thể thêm kỹ năng!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineCertificate = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineCertificateForm.certificateTypeId || inlineCertificateForm.certificateTypeId === 0) {
+      setCertificateFormErrors({ certificateTypeId: "⚠️ Vui lòng chọn loại chứng chỉ!" });
+      return;
+    }
+    if (!inlineCertificateForm.certificateName?.trim()) {
+      setCertificateFormErrors({ certificateName: "⚠️ Vui lòng nhập tên chứng chỉ!" });
+      return;
+    }
+    // Validate issued date
+    if (inlineCertificateForm.issuedDate && !validateIssuedDate(inlineCertificateForm.issuedDate)) {
+      setCertificateFormErrors({ issuedDate: "⚠️ Ngày cấp không được là ngày trong tương lai." });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentCertificateService.create({
+        talentId: Number(id),
+        certificateTypeId: inlineCertificateForm.certificateTypeId!,
+        certificateName: inlineCertificateForm.certificateName!,
+        certificateDescription: inlineCertificateForm.certificateDescription,
+        issuedDate: inlineCertificateForm.issuedDate,
+        isVerified: inlineCertificateForm.isVerified || false,
+        imageUrl: inlineCertificateForm.imageUrl || "",
+      });
+      alert("✅ Đã thêm chứng chỉ thành công!");
+      handleCloseInlineForm();
+      setCertificateFormErrors({});
+      // Refresh data
+      const certificatesData = await talentCertificateService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allCertificateTypes = await certificateTypeService.getAll();
+      setLookupCertificateTypes(allCertificateTypes);
+      const certificatesWithNames = certificatesData.map((cert: TalentCertificate) => {
+        const certTypeInfo = allCertificateTypes.find((c: CertificateType) => c.id === cert.certificateTypeId);
+        return { ...cert, certificateTypeName: certTypeInfo?.name ?? "Unknown Certificate" };
+      });
+      setCertificates(certificatesWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm chứng chỉ:", err);
+      alert("Không thể thêm chứng chỉ!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineExperience = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineExperienceForm.company?.trim() || !inlineExperienceForm.position?.trim()) {
+      alert("⚠️ Vui lòng nhập đầy đủ thông tin công ty và vị trí!");
+      return;
+    }
+    if (!inlineExperienceForm.startDate) {
+      alert("⚠️ Vui lòng nhập ngày bắt đầu!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const activeCV = talentCVs.find(cv => cv.isActive) || talentCVs[0];
+      if (!activeCV) {
+        alert("⚠️ Vui lòng tạo CV trước khi thêm kinh nghiệm!");
+        return;
+      }
+      await talentWorkExperienceService.create({
+        talentId: Number(id),
+        talentCVId: activeCV.id,
+        company: inlineExperienceForm.company!,
+        position: inlineExperienceForm.position!,
+        startDate: inlineExperienceForm.startDate!,
+        endDate: inlineExperienceForm.endDate,
+        description: inlineExperienceForm.description || "",
+      });
+      alert("✅ Đã thêm kinh nghiệm thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const experiences = await talentWorkExperienceService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setWorkExperiences(experiences);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm kinh nghiệm:", err);
+      alert("Không thể thêm kinh nghiệm!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineJobRoleLevel = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineJobRoleLevelForm.jobRoleLevelId || inlineJobRoleLevelForm.jobRoleLevelId === 0) {
+      alert("⚠️ Vui lòng chọn vị trí!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentJobRoleLevelService.create({
+        talentId: Number(id),
+        jobRoleLevelId: inlineJobRoleLevelForm.jobRoleLevelId!,
+        yearsOfExp: inlineJobRoleLevelForm.yearsOfExp || 1,
+        ratePerMonth: inlineJobRoleLevelForm.ratePerMonth,
+      });
+      alert("✅ Đã thêm vị trí thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
+      setLookupJobRoleLevels(allJobRoleLevels);
+      const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
+        const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
+        return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
+      });
+      setJobRoleLevels(jobRoleLevelsWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm vị trí:", err);
+      alert("Không thể thêm vị trí!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Validation functions for available time
+  const validateStartTime = (dateTime: string): boolean => {
+    if (!dateTime) return false;
+    const startDateTime = new Date(dateTime);
+    const now = new Date();
+    return startDateTime > now;
+  };
+
+  const validateEndTime = (startDateTime: string, endDateTime: string | undefined): boolean => {
+    if (!endDateTime) return true; // End time is optional
+    
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    // End time phải sau start time
+    if (end <= start) return false;
+    
+    return true;
+  };
+
+  const findOverlappingSlot = (existing: TalentAvailableTime[], newStart: Date, newEnd?: Date) => {
+    const effectiveNewEnd = newEnd ?? new Date(8640000000000000); // ~ Infinity
+
+    for (const slot of existing) {
+      const slotStart = new Date(slot.startTime);
+      const slotEnd = slot.endTime ? new Date(slot.endTime) : new Date(8640000000000000);
+
+      if (newStart < slotEnd && slotStart < effectiveNewEnd) {
+        return slot;
+      }
+    }
+    return null;
+  };
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "Không xác định";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Không xác định";
+    return date.toLocaleString("vi-VN", { hour12: false });
+  };
+
+  const formatRange = (slot: TalentAvailableTime) => {
+    const start = formatDateTime(slot.startTime);
+    const end = slot.endTime ? formatDateTime(slot.endTime) : "Không xác định";
+    return `${start} - ${end}`;
+  };
+
+  const handleSubmitInlineAvailableTime = async () => {
+    if (!id || isSubmitting) return;
+    
+    // Validate startTime
+    if (!inlineAvailableTimeForm.startTime) {
+      setAvailableTimeFormErrors({ startTime: "⚠️ Vui lòng nhập thời gian bắt đầu!" });
+      return;
+    }
+
+    // Validate startTime hợp lý
+    if (!validateStartTime(inlineAvailableTimeForm.startTime)) {
+      setAvailableTimeFormErrors({ startTime: "⚠️ Thời gian bắt đầu phải nằm trong tương lai." });
+      return;
+    }
+
+    // Validate endTime hợp lý
+    if (inlineAvailableTimeForm.endTime && !validateEndTime(inlineAvailableTimeForm.startTime, inlineAvailableTimeForm.endTime)) {
+      setAvailableTimeFormErrors({ endTime: "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu." });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      setAvailableTimeFormErrors({});
+
+      const newStart = new Date(inlineAvailableTimeForm.startTime!);
+      const newEnd = inlineAvailableTimeForm.endTime ? new Date(inlineAvailableTimeForm.endTime) : undefined;
+
+      // Kiểm tra trùng lặp với các slot đã có
+      const existingTimes = await talentAvailableTimeService.getAll({
+        talentId: Number(id),
+        excludeDeleted: true,
+      });
+
+      if (Array.isArray(existingTimes)) {
+        const overlappingSlot = findOverlappingSlot(existingTimes, newStart, newEnd);
+        if (overlappingSlot) {
+          setAvailableTimeFormErrors({
+            startTime: `⚠️ Khung giờ này trùng với khoảng đã có: ${formatRange(overlappingSlot)}. Vui lòng chọn khung khác.`
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Convert datetime-local to UTC ISO string for PostgreSQL
+      await talentAvailableTimeService.create({
+        talentId: Number(id),
+        startTime: newStart.toISOString(),
+        endTime: newEnd ? newEnd.toISOString() : undefined,
+        notes: inlineAvailableTimeForm.notes || "",
+      });
+      alert("✅ Đã thêm thời gian thành công!");
+      handleCloseInlineForm();
+      setAvailableTimeFormErrors({});
+      // Refresh data
+      const availableTimesData = await talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setAvailableTimes(availableTimesData);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm thời gian:", err);
+      setAvailableTimeFormErrors({ submit: "Không thể thêm thời gian!" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper function để chuyển đổi level từ tiếng Anh sang tiếng Việt
+  const getLevelLabel = (level: string | null | undefined): string => {
+    const levelMap: { [key: string]: string } = {
+      "Beginner": "Mới bắt đầu",
+      "Intermediate": "Trung bình",
+      "Advanced": "Nâng cao",
+      "Expert": "Chuyên gia",
+    };
+    return levelMap[level || "Beginner"] || "Mới bắt đầu";
+  };
+
+  // Helper function để format số tiền
+  const formatCurrency = (value: string | number | undefined): string => {
+    if (!value && value !== 0) return "";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+    if (isNaN(numValue)) return "";
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  // Handle rate per month change cho inline form
+  const handleInlineRatePerMonthChange = (value: string) => {
+    // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+    const cleaned = value.replace(/\D/g, "");
+    // Nếu rỗng, set về undefined
+    if (cleaned === "") {
+      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: undefined });
+      return;
+    }
+    // Parse và lưu số vào state
+    const numValue = parseInt(cleaned, 10);
+    if (!isNaN(numValue)) {
+      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: numValue });
+    }
+  };
+
+  // Handle certificate image file change
+  const handleCertificateImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type (images only)
+      if (!file.type.startsWith('image/')) {
+        alert("⚠️ Vui lòng chọn file ảnh (jpg, png, gif, etc.)");
+        e.target.value = '';
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert("⚠️ Kích thước file không được vượt quá 10MB");
+        e.target.value = '';
+        return;
+      }
+
+      setCertificateImageFile(file);
+      const newErrors = { ...certificateFormErrors };
+      delete newErrors.imageFile;
+      setCertificateFormErrors(newErrors);
+    }
+  };
+
+  // Handle certificate image upload to Firebase
+  const handleUploadCertificateImage = async () => {
+    if (!certificateImageFile) {
+      alert("Vui lòng chọn file ảnh trước!");
+      return;
+    }
+
+    // Xác nhận trước khi upload
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn upload ảnh "${certificateImageFile.name}" lên Firebase không?\n\n` +
+      `Kích thước file: ${(certificateImageFile.size / 1024).toFixed(2)} KB`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setUploadingCertificateImage(true);
+    setCertificateUploadProgress(0);
+
+    try {
+      // Upload to certificates folder
+      const timestamp = Date.now();
+      const sanitizedFileName = certificateImageFile.name.replace(/[^a-zA-Z0-9-_.]/g, '_');
+      const fileName = `cert_${timestamp}_${sanitizedFileName}`;
+      const filePath = `certificates/${fileName}`;
+
+      const downloadURL = await uploadFile(
+        certificateImageFile,
+        filePath,
+        (progress) => setCertificateUploadProgress(progress)
+      );
+
+      // Update the certificate form with the download URL
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: downloadURL });
+      setUploadedCertificateUrl(downloadURL);
+
+      // Clear the file from state after successful upload
+      setCertificateImageFile(null);
+      const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      alert("✅ Upload ảnh chứng chỉ thành công!");
+    } catch (err: any) {
+      console.error("❌ Error uploading certificate image:", err);
+      alert(`❌ Lỗi khi upload ảnh: ${err.message || 'Vui lòng thử lại.'}`);
+    } finally {
+      setUploadingCertificateImage(false);
+      setCertificateUploadProgress(0);
+    }
+  };
+
+  // Handle delete certificate image
+  const handleDeleteCertificateImage = async () => {
+    const currentUrl = inlineCertificateForm.imageUrl;
+    if (!currentUrl) return;
+
+    const uploadedUrl = uploadedCertificateUrl;
+    if (!uploadedUrl || uploadedUrl !== currentUrl) {
+      // URL không phải từ Firebase upload, chỉ cần xóa URL
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: "" });
+      return;
+    }
+
+    // Xác nhận trước khi xóa
+    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa ảnh chứng chỉ này không? File sẽ bị xóa khỏi Firebase.");
+    if (!confirmed) return;
+
+    try {
+      // Extract Firebase path from URL
+      const extractFirebasePath = (url: string): string | null => {
+        try {
+          const urlObj = new URL(url);
+          const pathMatch = urlObj.pathname.match(/\/o\/(.+)\?/);
+          if (pathMatch) {
+            return decodeURIComponent(pathMatch[1]);
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      };
+
+      const firebasePath = extractFirebasePath(currentUrl);
+      if (firebasePath) {
+        const fileRef = ref(storage, firebasePath);
+        await deleteObject(fileRef);
+      }
+
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: "" });
+      setUploadedCertificateUrl(null);
+      alert("✅ Đã xóa ảnh chứng chỉ thành công!");
+    } catch (err) {
+      console.error("❌ Error deleting certificate image:", err);
+      alert("Không thể xóa ảnh chứng chỉ!");
+    }
+  };
+
+  // Validate issued date
+  const validateIssuedDate = (date: string | undefined): boolean => {
+    if (!date) return true; // Optional field
+    const issuedDate = new Date(date);
+    const now = new Date();
+    // Issued date should not be in the future
+    return issuedDate <= now;
   };
 
   if (loading) {
@@ -1474,6 +2072,91 @@ export default function TalentDetailPage() {
             {/* Tab: Dự án */}
             {activeTab === "projects" && (
               <div className="space-y-6">
+                {/* Inline Project Form */}
+                {showInlineForm === "project" && (
+                  <div className="bg-white rounded-xl border-2 border-primary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Tạo dự án mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Tên dự án <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={inlineProjectForm.projectName || ""}
+                          onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, projectName: e.target.value })}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          placeholder="Nhập tên dự án"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Vị trí</label>
+                          <input
+                            type="text"
+                            value={inlineProjectForm.position || ""}
+                            onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, position: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder="Nhập vị trí"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Công nghệ sử dụng</label>
+                          <input
+                            type="text"
+                            value={inlineProjectForm.technologies || ""}
+                            onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, technologies: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder="Nhập công nghệ sử dụng"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineProjectForm.description || ""}
+                          onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, description: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
+                          placeholder="Nhập mô tả dự án"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineProject}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {analysisResult && (analysisResult.projects.newEntries.length > 0 || analysisResult.projects.potentialDuplicates.length > 0) && (
                   <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50/80 p-4">
                     <div className="flex items-center justify-between gap-2">
@@ -1510,16 +2193,19 @@ export default function TalentDetailPage() {
                     )}
                   </div>
                 )}
-                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Danh sách dự án</h3>
                   <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleNavigateToCreate(`/ta/talent-projects/create?talentId=${id}`)}
-                      className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                      title="Tạo dự án"
-                    >
-                      <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                    </Button>
+                    {showInlineForm !== "project" && (
+                      <Button
+                        onClick={() => handleOpenInlineForm("project")}
+                        disabled={isSubmitting}
+                        className={`group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={isSubmitting ? "Đang xử lý..." : "Tạo dự án"}
+                      >
+                        <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                      </Button>
+                    )}
                     {selectedProjects.length > 0 && (
                       <Button
                         onClick={handleDeleteProjects}
@@ -2051,17 +2737,166 @@ export default function TalentDetailPage() {
             {/* Tab: Vị trí và mức lương */}
             {activeTab === "jobRoleLevels" && (
               <div className="space-y-4">
+                {/* Inline JobRoleLevel Form */}
+                {showInlineForm === "jobRoleLevel" && (
+                  <div className="bg-white rounded-xl border-2 border-warning-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm vị trí mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Vị trí <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsJobRoleLevelDropdownOpen(!isJobRoleLevelDropdownOpen)}
+                            className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-warning-500/20 transition-all border-neutral-300 focus:border-warning-500"
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Target className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineJobRoleLevelForm.jobRoleLevelId && inlineJobRoleLevelForm.jobRoleLevelId > 0
+                                  ? lookupJobRoleLevels.find(j => j.id === inlineJobRoleLevelForm.jobRoleLevelId)?.name || "Chọn vị trí"
+                                  : "Chọn vị trí"}
+                              </span>
+                            </div>
+                          </button>
+                          {isJobRoleLevelDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={jobRoleLevelSearch}
+                                    onChange={(e) => setJobRoleLevelSearch(e.target.value)}
+                                    placeholder="Tìm vị trí..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-warning-500 focus:ring-warning-500"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  const filtered = jobRoleLevelSearch
+                                    ? lookupJobRoleLevels.filter(j => j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase()))
+                                    : lookupJobRoleLevels;
+                                  if (filtered.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                  }
+                                  
+                                  // Get selected job role level IDs (excluding current form)
+                                  const selectedJobRoleLevelIds = jobRoleLevels
+                                    .map(jrl => jrl.jobRoleLevelId)
+                                    .filter(id => id > 0);
+                                  
+                                  return filtered.map((jobRoleLevel) => {
+                                    const isDisabled = selectedJobRoleLevelIds.includes(jobRoleLevel.id);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={jobRoleLevel.id}
+                                        onClick={() => {
+                                          if (!isDisabled) {
+                                            setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, jobRoleLevelId: jobRoleLevel.id });
+                                            setIsJobRoleLevelDropdownOpen(false);
+                                            setJobRoleLevelSearch("");
+                                          }
+                                        }}
+                                        disabled={isDisabled}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineJobRoleLevelForm.jobRoleLevelId === jobRoleLevel.id
+                                            ? "bg-warning-50 text-warning-700"
+                                            : isDisabled
+                                              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
+                                      </button>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Kinh nghiệm (năm)</label>
+                          <input
+                            type="number"
+                            value={inlineJobRoleLevelForm.yearsOfExp || 1}
+                            onChange={(e) => setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, yearsOfExp: Number(e.target.value) })}
+                            min="0"
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Mức lương mong muốn</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formatCurrency(inlineJobRoleLevelForm.ratePerMonth)}
+                              onChange={(e) => handleInlineRatePerMonthChange(e.target.value)}
+                              placeholder="VD: 5.000.000"
+                              className="w-full py-2 px-3 pr-12 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
+                              VNĐ
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineJobRoleLevel}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Vị trí và mức lương</h3>
                     <div className="flex gap-2">
-                      <Link to={`/ta/talent-job-role-levels/create?talentId=${id}`}>
+                      {showInlineForm !== "jobRoleLevel" && (
                         <Button
-                          className="group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                          title="Thêm vị trí"
+                          onClick={() => handleOpenInlineForm("jobRoleLevel")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm vị trí"}
                         >
                           <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                         </Button>
-                      </Link>
+                      )}
                       {selectedJobRoleLevels.length > 0 && (
                         <Button
                           onClick={handleDeleteJobRoleLevels}
@@ -2264,17 +3099,264 @@ export default function TalentDetailPage() {
             {/* Tab: Kỹ năng của nhân sự */}
             {activeTab === "skills" && (
               <div className="space-y-4">
+                {/* Inline Skill Form */}
+                {showInlineForm === "skill" && (
+                  <div className="bg-white rounded-xl border-2 border-secondary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm kỹ năng mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {/* Skill Filter - Lọc theo nhóm kỹ năng */}
+                      {lookupSkills.length > 0 && lookupSkillGroups.length > 0 && (
+                        <div className="mb-4">
+                          <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+                            <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+                              <Filter className="w-3.5 h-3.5" />
+                              Lọc danh sách kỹ năng theo nhóm
+                            </label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsSkillGroupDropdownOpen(!isSkillGroupDropdownOpen)}
+                                className="w-full flex items-center justify-between px-3 py-1.5 border rounded-lg bg-white text-left focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all border-neutral-300"
+                              >
+                                <div className="flex items-center gap-2 text-xs text-neutral-700">
+                                  <Filter className="w-3.5 h-3.5 text-neutral-400" />
+                                  <span>
+                                    {selectedSkillGroupId
+                                      ? lookupSkillGroups.find(g => g.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
+                                      : "Tất cả nhóm kỹ năng"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isSkillGroupDropdownOpen && (
+                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={skillGroupSearchQuery}
+                                        onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
+                                        placeholder="Tìm nhóm kỹ năng..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSkillGroupId(undefined);
+                                        setIsSkillGroupDropdownOpen(false);
+                                        setSkillGroupSearchQuery("");
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        !selectedSkillGroupId
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
+                                      Tất cả nhóm kỹ năng
+                                    </button>
+                                    {(() => {
+                                      const filtered = skillGroupSearchQuery
+                                        ? lookupSkillGroups.filter(g =>
+                                          g.name.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()) ||
+                                          (g.description && g.description.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()))
+                                        )
+                                        : lookupSkillGroups;
+                                      if (filtered.length === 0) {
+                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy nhóm kỹ năng</p>;
+                                      }
+                                      return filtered.map((group) => (
+                                        <button
+                                          type="button"
+                                          key={group.id}
+                                          onClick={() => {
+                                            setSelectedSkillGroupId(group.id);
+                                            setIsSkillGroupDropdownOpen(false);
+                                            setSkillGroupSearchQuery("");
+                                          }}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            selectedSkillGroupId === group.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {group.name}
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Kỹ năng <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsSkillDropdownOpen(!isSkillDropdownOpen)}
+                            className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-secondary-500/20 transition-all border-neutral-300 focus:border-secondary-500"
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Star className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineSkillForm.skillId && inlineSkillForm.skillId > 0
+                                  ? lookupSkills.find(s => s.id === inlineSkillForm.skillId)?.name || "Chọn kỹ năng"
+                                  : "Chọn kỹ năng"}
+                              </span>
+                            </div>
+                          </button>
+                          {isSkillDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={skillSearchQuery}
+                                    onChange={(e) => setSkillSearchQuery(e.target.value)}
+                                    placeholder="Tìm kỹ năng..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-secondary-500 focus:ring-secondary-500"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  // Filter skills theo search query và skill group
+                                  const filteredSkills = lookupSkills.filter((s) => {
+                                    const matchesSearch = !skillSearchQuery ||
+                                      s.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                                      (s.description && s.description.toLowerCase().includes(skillSearchQuery.toLowerCase()));
+                                    const matchesGroup = !selectedSkillGroupId || s.skillGroupId === selectedSkillGroupId;
+                                    return matchesSearch && matchesGroup;
+                                  });
+
+                                  if (filteredSkills.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy kỹ năng nào</p>;
+                                  }
+
+                                  // Check if skill is already selected
+                                  const selectedSkillIds = talentSkills
+                                    .map(skill => skill.skillId)
+                                    .filter(id => id > 0);
+
+                                  return filteredSkills.map((skill) => {
+                                    const isDisabled = selectedSkillIds.includes(skill.id);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={skill.id}
+                                        onClick={() => {
+                                          if (!isDisabled) {
+                                            setInlineSkillForm({ ...inlineSkillForm, skillId: skill.id });
+                                            // Tự động set nhóm kỹ năng theo skill đã chọn
+                                            if (skill.skillGroupId) {
+                                              setSelectedSkillGroupId(skill.skillGroupId);
+                                            }
+                                            setIsSkillDropdownOpen(false);
+                                            setSkillSearchQuery("");
+                                          }
+                                        }}
+                                        disabled={isDisabled}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineSkillForm.skillId === skill.id
+                                            ? "bg-secondary-50 text-secondary-700"
+                                            : isDisabled
+                                              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {skill.name}{isDisabled ? ' (đã chọn)' : ''}
+                                      </button>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Trình độ</label>
+                          <select
+                            value={inlineSkillForm.level || "Beginner"}
+                            onChange={(e) => setInlineSkillForm({ ...inlineSkillForm, level: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                          >
+                            <option value="Beginner">Mới bắt đầu</option>
+                            <option value="Intermediate">Trung bình</option>
+                            <option value="Advanced">Nâng cao</option>
+                            <option value="Expert">Chuyên gia</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Số năm kinh nghiệm</label>
+                          <input
+                            type="number"
+                            value={inlineSkillForm.yearsExp || 1}
+                            onChange={(e) => setInlineSkillForm({ ...inlineSkillForm, yearsExp: Number(e.target.value) })}
+                            min="0"
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineSkill}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Kỹ năng của nhân sự</h3>
                     <div className="flex gap-2">
-                      <Link to={`/ta/talent-skills/create?talentId=${id}`}>
+                      {showInlineForm !== "skill" && (
                         <Button
-                          className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                          title="Thêm kỹ năng"
+                          onClick={() => handleOpenInlineForm("skill")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm kỹ năng"}
                         >
                           <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                         </Button>
-                      </Link>
+                      )}
                       {selectedSkills.length > 0 && (
                         <Button
                           onClick={handleDeleteSkills}
@@ -2423,7 +3505,7 @@ export default function TalentDetailPage() {
                                     <div className="text-sm font-medium text-secondary-800">{skill.skillName}</div>
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="text-sm text-secondary-700">{skill.level}</div>
+                                    <div className="text-sm text-secondary-700">{getLevelLabel(skill.level)}</div>
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="text-sm text-secondary-600">{skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}</div>
@@ -2455,17 +3537,159 @@ export default function TalentDetailPage() {
             {/* Tab: Lịch sẵn sàng của nhân sự */}
             {activeTab === "availableTimes" && (
               <div className="space-y-4">
+                {/* Inline AvailableTime Form */}
+                {showInlineForm === "availableTime" && (
+                  <div className="bg-white rounded-xl border-2 border-secondary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm thời gian sẵn sàng mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Thời gian bắt đầu <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={inlineAvailableTimeForm.startTime || ""}
+                            min={new Date().toISOString().slice(0, 16)}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, startTime: value });
+                              // Validate startTime
+                              const newErrors = { ...availableTimeFormErrors };
+                              if (value && !validateStartTime(value)) {
+                                newErrors.startTime = "⚠️ Thời gian bắt đầu phải nằm trong tương lai.";
+                              } else {
+                                delete newErrors.startTime;
+                              }
+                              // Re-validate endTime if startTime changes
+                              if (inlineAvailableTimeForm.endTime && value) {
+                                if (!validateEndTime(value, inlineAvailableTimeForm.endTime)) {
+                                  newErrors.endTime = "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu.";
+                                } else {
+                                  delete newErrors.endTime;
+                                }
+                              }
+                              setAvailableTimeFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              availableTimeFormErrors.startTime
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                            }`}
+                          />
+                          {availableTimeFormErrors.startTime && (
+                            <p className="text-xs text-red-600 mt-1">{availableTimeFormErrors.startTime}</p>
+                          )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Chọn ngày và giờ bắt đầu có sẵn (phải lớn hơn thời điểm hiện tại)
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Thời gian kết thúc (tùy chọn)</label>
+                          <input
+                            type="datetime-local"
+                            value={inlineAvailableTimeForm.endTime || ""}
+                            min={inlineAvailableTimeForm.startTime ? (() => {
+                              const startDate = new Date(inlineAvailableTimeForm.startTime);
+                              startDate.setMinutes(startDate.getMinutes() + 1);
+                              return startDate.toISOString().slice(0, 16);
+                            })() : undefined}
+                            onChange={(e) => {
+                              const value = e.target.value || undefined;
+                              setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, endTime: value });
+                              // Validate endTime
+                              const newErrors = { ...availableTimeFormErrors };
+                              if (value && inlineAvailableTimeForm.startTime) {
+                                if (!validateEndTime(inlineAvailableTimeForm.startTime, value)) {
+                                  newErrors.endTime = "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu.";
+                                } else {
+                                  delete newErrors.endTime;
+                                }
+                              } else if (value && !inlineAvailableTimeForm.startTime) {
+                                newErrors.endTime = "⚠️ Vui lòng chọn thời gian bắt đầu trước.";
+                              } else {
+                                delete newErrors.endTime;
+                              }
+                              setAvailableTimeFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              availableTimeFormErrors.endTime
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                            }`}
+                          />
+                          {availableTimeFormErrors.endTime && (
+                            <p className="text-xs text-red-600 mt-1">{availableTimeFormErrors.endTime}</p>
+                          )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Để trống nếu không có thời gian kết thúc cụ thể
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Ghi chú</label>
+                        <textarea
+                          value={inlineAvailableTimeForm.notes || ""}
+                          onChange={(e) => setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, notes: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500 resize-none"
+                          placeholder="Nhập ghi chú"
+                        />
+                      </div>
+                      {availableTimeFormErrors.submit && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-sm text-red-700">{availableTimeFormErrors.submit}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineAvailableTime}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h3>
                     <div className="flex gap-2">
-                      <Link to={`/ta/talent-available-times/create?talentId=${id}`}>
+                      {showInlineForm !== "availableTime" && (
                         <Button
-                          className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                          title="Thêm thời gian"
+                          onClick={() => handleOpenInlineForm("availableTime")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm thời gian"}
                         >
                           <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                         </Button>
-                      </Link>
+                      )}
                       {selectedAvailableTimes.length > 0 && (
                         <Button
                           onClick={handleDeleteAvailableTimes}
@@ -2564,17 +3788,327 @@ export default function TalentDetailPage() {
             {/* Tab: Chứng chỉ */}
             {activeTab === "certificates" && (
               <div className="space-y-4">
+                {/* Inline Certificate Form */}
+                {showInlineForm === "certificate" && (
+                  <div className="bg-white rounded-xl border-2 border-primary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm chứng chỉ mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Loại chứng chỉ <span className="text-red-500">*</span>
+                        </label>
+                        {certificateFormErrors.certificateTypeId && (
+                          <p className="text-xs text-red-600 mb-1">{certificateFormErrors.certificateTypeId}</p>
+                        )}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCertificateTypeDropdownOpen(!isCertificateTypeDropdownOpen);
+                              const newErrors = { ...certificateFormErrors };
+                              delete newErrors.certificateTypeId;
+                              setCertificateFormErrors(newErrors);
+                            }}
+                            className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 transition-all ${
+                              certificateFormErrors.certificateTypeId
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Award className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineCertificateForm.certificateTypeId && inlineCertificateForm.certificateTypeId > 0
+                                  ? lookupCertificateTypes.find(t => t.id === inlineCertificateForm.certificateTypeId)?.name || "Chọn loại chứng chỉ"
+                                  : "Chọn loại chứng chỉ"}
+                              </span>
+                            </div>
+                          </button>
+                          {isCertificateTypeDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={certificateTypeSearch}
+                                    onChange={(e) => setCertificateTypeSearch(e.target.value)}
+                                    placeholder="Tìm loại chứng chỉ..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  const filtered = certificateTypeSearch
+                                    ? lookupCertificateTypes.filter(t => t.name.toLowerCase().includes(certificateTypeSearch.toLowerCase()))
+                                    : lookupCertificateTypes;
+                                  if (filtered.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại chứng chỉ nào</p>;
+                                  }
+                                  return filtered.map((type) => (
+                                    <button
+                                      type="button"
+                                      key={type.id}
+                                      onClick={() => {
+                                        setInlineCertificateForm({ ...inlineCertificateForm, certificateTypeId: type.id });
+                                        setIsCertificateTypeDropdownOpen(false);
+                                        setCertificateTypeSearch("");
+                                        const newErrors = { ...certificateFormErrors };
+                                        delete newErrors.certificateTypeId;
+                                        setCertificateFormErrors(newErrors);
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        inlineCertificateForm.certificateTypeId === type.id
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
+                                      {type.name}
+                                    </button>
+                                  ));
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Tên chứng chỉ <span className="text-red-500">*</span>
+                        </label>
+                        {certificateFormErrors.certificateName && (
+                          <p className="text-xs text-red-600 mb-1">{certificateFormErrors.certificateName}</p>
+                        )}
+                        <input
+                          type="text"
+                          value={inlineCertificateForm.certificateName || ""}
+                          onChange={(e) => {
+                            setInlineCertificateForm({ ...inlineCertificateForm, certificateName: e.target.value });
+                            const newErrors = { ...certificateFormErrors };
+                            delete newErrors.certificateName;
+                            setCertificateFormErrors(newErrors);
+                          }}
+                          maxLength={255}
+                          className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                            certificateFormErrors.certificateName
+                              ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                              : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          }`}
+                          placeholder="Nhập tên chứng chỉ"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Ngày cấp</label>
+                          <input
+                            type="date"
+                            value={inlineCertificateForm.issuedDate || ""}
+                            max={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => {
+                              const value = e.target.value || undefined;
+                              setInlineCertificateForm({ ...inlineCertificateForm, issuedDate: value });
+                              // Validate issued date
+                              const newErrors = { ...certificateFormErrors };
+                              if (value && !validateIssuedDate(value)) {
+                                newErrors.issuedDate = "⚠️ Ngày cấp không được là ngày trong tương lai.";
+                              } else {
+                                delete newErrors.issuedDate;
+                              }
+                              setCertificateFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              certificateFormErrors.issuedDate
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                          />
+                          {certificateFormErrors.issuedDate && (
+                            <p className="text-xs text-red-600 mt-1">{certificateFormErrors.issuedDate}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">URL hình ảnh</label>
+                          <input
+                            type="url"
+                            value={inlineCertificateForm.imageUrl || ""}
+                            onChange={(e) => {
+                              // Only allow manual URL input if not uploaded from Firebase
+                              if (!uploadedCertificateUrl || uploadedCertificateUrl !== inlineCertificateForm.imageUrl) {
+                                setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: e.target.value });
+                              }
+                            }}
+                            disabled={!!(inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl)}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl
+                                ? "bg-gray-100 cursor-not-allowed opacity-75 border-gray-300"
+                                : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                            placeholder="https://... hoặc upload từ file ảnh đã chọn"
+                          />
+                          {inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl && (
+                            <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              URL này được upload từ Firebase. Để thay đổi, hãy xóa và upload ảnh mới.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {/* Upload ảnh chứng chỉ */}
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Upload ảnh chứng chỉ
+                        </label>
+                        <div className="space-y-2">
+                          {/* File Input */}
+                          <div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCertificateImageFileChange}
+                              disabled={uploadingCertificateImage}
+                              className="w-full text-xs py-1.5 px-2 border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                            {certificateImageFile && (
+                              <div className="flex items-center gap-2 text-xs text-neutral-600 mt-1">
+                                <FileText className="w-3 h-3" />
+                                <span>Đã chọn: <span className="font-medium">{certificateImageFile.name}</span> ({(certificateImageFile.size / 1024).toFixed(2)} KB)</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Upload Progress */}
+                          {uploadingCertificateImage && (
+                            <div className="space-y-1">
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-primary-500 to-blue-500 h-2 rounded-full transition-all duration-300 animate-pulse"
+                                  style={{ width: `${certificateUploadProgress}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-xs text-center text-primary-700 font-medium">
+                                Đang upload... {certificateUploadProgress}%
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Upload Button */}
+                          <button
+                            type="button"
+                            onClick={handleUploadCertificateImage}
+                            disabled={!certificateImageFile || uploadingCertificateImage}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                          >
+                            {uploadingCertificateImage ? (
+                              <>
+                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                Đang upload...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                Upload ảnh lên Firebase
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {inlineCertificateForm.imageUrl && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={handleDeleteCertificateImage}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all text-xs"
+                              title={uploadedCertificateUrl === inlineCertificateForm.imageUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              Xóa ảnh
+                            </button>
+                            <a
+                              href={inlineCertificateForm.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all text-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Xem ảnh
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineCertificateForm.certificateDescription || ""}
+                          onChange={(e) => setInlineCertificateForm({ ...inlineCertificateForm, certificateDescription: e.target.value })}
+                          rows={3}
+                          maxLength={1000}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
+                          placeholder="Nhập mô tả về chứng chỉ..."
+                        />
+                      </div>
+                      {/* Error messages */}
+                      {(certificateFormErrors.certificateTypeId || certificateFormErrors.certificateName || certificateFormErrors.issuedDate) && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
+                          {certificateFormErrors.certificateTypeId && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.certificateTypeId}</p>
+                          )}
+                          {certificateFormErrors.certificateName && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.certificateName}</p>
+                          )}
+                          {certificateFormErrors.issuedDate && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.issuedDate}</p>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineCertificate}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Chứng chỉ</h3>
                     <div className="flex gap-2">
-                      <Link to={`/ta/talent-certificates/create?talentId=${id}`}>
+                      {showInlineForm !== "certificate" && (
                         <Button
-                          className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                          title="Thêm chứng chỉ"
+                          onClick={() => handleOpenInlineForm("certificate")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm chứng chỉ"}
                         >
                           <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                         </Button>
-                      </Link>
+                      )}
                       {selectedCertificates.length > 0 && (
                         <Button
                           onClick={handleDeleteCertificates}
@@ -2706,7 +4240,8 @@ export default function TalentDetailPage() {
                                   className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                                 />
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Chứng chỉ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Loại chứng chỉ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tên chứng chỉ</th>
                               <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Ngày cấp</th>
                               <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trạng thái</th>
                               <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Hành động</th>
@@ -2738,6 +4273,9 @@ export default function TalentDetailPage() {
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="text-sm font-medium text-primary-800">{cert.certificateTypeName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-primary-800">{cert.certificateName || '—'}</div>
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="text-sm text-primary-700">{cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}</div>
@@ -2787,16 +4325,169 @@ export default function TalentDetailPage() {
             {/* Tab: Kinh nghiệm làm việc */}
             {activeTab === "experiences" && (
               <div className="space-y-4">
+                {/* Inline Experience Form */}
+                {showInlineForm === "experience" && (
+                  <div className="bg-white rounded-xl border-2 border-accent-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm kinh nghiệm mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Công ty <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={inlineExperienceForm.company || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, company: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                            placeholder="Nhập tên công ty"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Vị trí <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsWorkExperiencePositionDropdownOpen(!isWorkExperiencePositionDropdownOpen)}
+                              className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-accent-500/20 transition-all border-neutral-300 focus:border-accent-500"
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Target className="w-4 h-4 text-neutral-400" />
+                                <span className={inlineExperienceForm.position ? "text-neutral-800" : "text-neutral-500"}>
+                                  {inlineExperienceForm.position || "Chọn vị trí"}
+                                </span>
+                              </div>
+                            </button>
+                            {isWorkExperiencePositionDropdownOpen && (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={workExperiencePositionSearch}
+                                      onChange={(e) => setWorkExperiencePositionSearch(e.target.value)}
+                                      placeholder="Tìm vị trí..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-accent-500 focus:ring-accent-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  {(() => {
+                                    const filtered = workExperiencePositionSearch
+                                      ? workExperiencePositions.filter(p => p.toLowerCase().includes(workExperiencePositionSearch.toLowerCase()))
+                                      : workExperiencePositions;
+                                    if (filtered.length === 0) {
+                                      return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                    }
+                                    return filtered.map((position) => (
+                                      <button
+                                        type="button"
+                                        key={position}
+                                        onClick={() => {
+                                          setInlineExperienceForm({ ...inlineExperienceForm, position: position });
+                                          setIsWorkExperiencePositionDropdownOpen(false);
+                                          setWorkExperiencePositionSearch("");
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineExperienceForm.position === position
+                                            ? "bg-accent-50 text-accent-700"
+                                            : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {position}
+                                      </button>
+                                    ));
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Ngày bắt đầu <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={inlineExperienceForm.startDate || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, startDate: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Ngày kết thúc</label>
+                          <input
+                            type="date"
+                            value={inlineExperienceForm.endDate || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, endDate: e.target.value || undefined })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineExperienceForm.description || ""}
+                          onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, description: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+                          placeholder="Nhập mô tả kinh nghiệm"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineExperience}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Kinh nghiệm làm việc</h3>
                     <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleNavigateToCreate(`/ta/talent-work-experiences/create?talentId=${id}`)}
-                        className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                        title="Thêm kinh nghiệm"
-                      >
-                        <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                      </Button>
+                      {showInlineForm !== "experience" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("experience")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm kinh nghiệm"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
                       {selectedExperiences.length > 0 && (
                         <Button
                           onClick={handleDeleteExperiences}
