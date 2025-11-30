@@ -5,7 +5,7 @@ import { auth, onAuthStateChanged } from '../configs/firebase';
 import { getUser, getAccessToken, clearAuthData } from '../utils/storage';
 
 type Role =
-  | 'Staff HR'
+  | 'Staff TA'
   | 'Staff Accountant'
   | 'Staff Sales'
   | 'Developer'
@@ -34,7 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function roleDisplayName(role: Role, email: string) {
   switch (role) {
-    case 'Staff HR':
+    case 'Staff TA':
       return 'Nhân viên Nhân sự';
     case 'Staff Accountant':
       return 'Nhân viên Kế toán';

@@ -3,18 +3,18 @@ import { Link } from 'react-router-dom';
 import { Search, Filter, Calendar, Building2, DollarSign, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, CreditCard, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
-import { partnerContractPaymentService, type PartnerContractPayment } from '../../../services/PartnerContractPayment';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { partnerPaymentPeriodService, type PartnerPaymentPeriod } from '../../../services/PartnerPaymentPeriod';
 import { talentService, type Talent } from '../../../services/Talent';
+import { projectPeriodService, type ProjectPeriodModel } from '../../../services/ProjectPeriod';
+import { talentAssignmentService, type TalentAssignmentModel } from '../../../services/TalentAssignment';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
 
 export default function DeveloperPaymentsList() {
     const { user } = useAuth();
-    const [payments, setPayments] = useState<PartnerContractPayment[]>([]);
-    const [filteredPayments, setFilteredPayments] = useState<PartnerContractPayment[]>([]);
+    const [payments, setPayments] = useState<PartnerContractPaymentModel[]>([]);
+    const [filteredPayments, setFilteredPayments] = useState<PartnerContractPaymentModel[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
@@ -25,8 +25,9 @@ export default function DeveloperPaymentsList() {
     
     // Store related data for display
     const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
-    const [contractsMap, setContractsMap] = useState<Map<number, PartnerContract>>(new Map());
-    const [periodsMap, setPeriodsMap] = useState<Map<number, PartnerPaymentPeriod>>(new Map());
+    // Removed contractsMap - no longer using PartnerContract
+    const [periodsMap, setPeriodsMap] = useState<Map<number, ProjectPeriodModel>>(new Map());
+    const [assignmentsMap, setAssignmentsMap] = useState<Map<number, TalentAssignmentModel>>(new Map());
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -61,7 +62,7 @@ export default function DeveloperPaymentsList() {
                 if (talent) {
                     setCurrentTalentId(talent.id);
                 } else {
-                    setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ HR.');
+                    setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ TA.');
                 }
             } catch (err: any) {
                 console.error('❌ Lỗi tìm talent:', err);
@@ -80,36 +81,35 @@ export default function DeveloperPaymentsList() {
                 setLoading(true);
                 setError('');
                 
-                // Fetch payments, contracts, partners, and periods in parallel
-                const [partnerPaymentsData, partnerContractsData, partnersData] = await Promise.all([
+                // Fetch payments, partners, periods, and assignments in parallel
+                const [partnerPaymentsData, partnersData] = await Promise.all([
                     partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-                    partnerContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
                     partnerService.getAll()
                 ]);
 
                 // Process partner payments (thanh toán từ DevPool cho talent)
                 // Chỉ hiển thị các trạng thái: pendingcalculation, pendingapproval, paid, rejected
                 const allowedStatuses = ['pendingcalculation', 'pendingapproval', 'paid', 'rejected'];
-                const partnerPayments = (Array.isArray(partnerPaymentsData) ? partnerPaymentsData : partnerPaymentsData?.items || [])
-                    .filter((p: PartnerContractPayment) => {
-                        const normalizedStatus = (p.status || '').toLowerCase();
+                const partnerPayments = Array.isArray(partnerPaymentsData) ? partnerPaymentsData : []
+                    .filter((p: PartnerContractPaymentModel) => {
+                        const normalizedStatus = (p.paymentStatus || '').toLowerCase();
                         return allowedStatuses.includes(normalizedStatus);
                     })
-                    .sort((a: PartnerContractPayment, b: PartnerContractPayment) => {
+                    .sort((a: PartnerContractPaymentModel, b: PartnerContractPaymentModel) => {
                         const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
                         const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
                         return dateB - dateA; // Mới nhất trước
                     });
 
-                // Get unique period IDs
-                const periodIds = [...new Set(partnerPayments.map((p: PartnerContractPayment) => p.partnerPeriodId))] as number[];
+                // Get unique period IDs and assignment IDs
+                const periodIds = [...new Set(partnerPayments.map((p: PartnerContractPaymentModel) => p.projectPeriodId))] as number[];
+                const assignmentIds = [...new Set(partnerPayments.map((p: PartnerContractPaymentModel) => p.talentAssignmentId))] as number[];
                 
-                // Fetch all periods
-                const periodsData = await Promise.all(
-                    periodIds.map((periodId) => 
-                        partnerPaymentPeriodService.getById(periodId).catch(() => null)
-                    )
-                );
+                // Fetch all periods and assignments
+                const [periodsData, assignmentsData] = await Promise.all([
+                    Promise.all(periodIds.map((periodId) => projectPeriodService.getById(periodId).catch(() => null))),
+                    Promise.all(assignmentIds.map((assignmentId) => talentAssignmentService.getById(assignmentId).catch(() => null)))
+                ]);
 
                 setPayments(partnerPayments);
                 setFilteredPayments(partnerPayments);
@@ -121,21 +121,23 @@ export default function DeveloperPaymentsList() {
                 });
                 setPartnersMap(partnersMapData);
 
-                // Create contracts map
-                const contractsMapData = new Map<number, PartnerContract>();
-                (Array.isArray(partnerContractsData) ? partnerContractsData : []).forEach((c: PartnerContract) => {
-                    contractsMapData.set(c.id, c);
-                });
-                setContractsMap(contractsMapData);
-
                 // Create periods map
-                const periodsMapData = new Map<number, PartnerPaymentPeriod>();
-                periodsData.forEach((period: PartnerPaymentPeriod | null) => {
+                const periodsMapData = new Map<number, ProjectPeriodModel>();
+                periodsData.forEach((period: ProjectPeriodModel | null) => {
                     if (period) {
                         periodsMapData.set(period.id, period);
                     }
                 });
                 setPeriodsMap(periodsMapData);
+
+                // Create assignments map
+                const assignmentsMapData = new Map<number, TalentAssignmentModel>();
+                assignmentsData.forEach((assignment: TalentAssignmentModel | null) => {
+                    if (assignment) {
+                        assignmentsMapData.set(assignment.id, assignment);
+                    }
+                });
+                setAssignmentsMap(assignmentsMapData);
             } catch (err: any) {
                 console.error("❌ Lỗi tải danh sách thanh toán:", err);
                 setError(err.message || "Không thể tải danh sách thanh toán");
@@ -155,23 +157,24 @@ export default function DeveloperPaymentsList() {
         if (searchTerm) {
             filtered = filtered.filter(p => {
                 const searchLower = searchTerm.toLowerCase();
-                const contract = contractsMap.get(p.partnerContractId);
-                const partnerName = contract ? partnersMap.get(contract.partnerId)?.companyName?.toLowerCase() || '' : '';
+                const assignment = assignmentsMap.get(p.talentAssignmentId);
+                if (!assignment) return false;
+                const partnerName = partnersMap.get(assignment.partnerId)?.companyName?.toLowerCase() || '';
                 return partnerName.includes(searchLower);
             });
         }
         
         if (filterStatus) {
-            filtered = filtered.filter(p => matchesStatus(p.status, filterStatus));
+            filtered = filtered.filter(p => matchesStatus(p.paymentStatus, filterStatus));
         }
         
         if (filterPeriodId !== null) {
-            filtered = filtered.filter(p => p.partnerPeriodId === filterPeriodId);
+            filtered = filtered.filter(p => p.projectPeriodId === filterPeriodId);
         }
         
         setFilteredPayments(filtered);
         setCurrentPage(1);
-    }, [searchTerm, filterStatus, filterPeriodId, payments, partnersMap, contractsMap]);
+    }, [searchTerm, filterStatus, filterPeriodId, payments, partnersMap, assignmentsMap]);
 
     // Tính toán pagination
     const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
@@ -233,23 +236,23 @@ export default function DeveloperPaymentsList() {
     };
 
     const countStatus = (...statuses: string[]) =>
-        payments.filter(p => statuses.some(status => matchesStatus(p.status, status))).length;
+        payments.filter(p => statuses.some(status => matchesStatus(p.paymentStatus, status))).length;
 
-    const getCompanyName = (payment: PartnerContractPayment) => {
-        const contract = contractsMap.get(payment.partnerContractId);
-        return contract ? partnersMap.get(contract.partnerId)?.companyName || '—' : '—';
+    const getCompanyName = (payment: PartnerContractPaymentModel) => {
+        const assignment = assignmentsMap.get(payment.talentAssignmentId);
+        return assignment ? partnersMap.get(assignment.partnerId)?.companyName || '—' : '—';
     };
 
-    const formatPeriod = (payment: PartnerContractPayment) => {
-        const period = periodsMap.get(payment.partnerPeriodId);
+    const formatPeriod = (payment: PartnerContractPaymentModel) => {
+        const period = periodsMap.get(payment.projectPeriodId);
         if (!period) return '—';
         const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                           'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
         return `${monthNames[period.periodMonth - 1]}/${period.periodYear}`;
     };
 
-    const getAmount = (payment: PartnerContractPayment) => {
-        return payment.paidAmount || payment.calculatedAmount || 0;
+    const getAmount = (payment: PartnerContractPaymentModel) => {
+        return payment.finalAmount || payment.totalPaidAmount || 0;
     };
 
     const stats = useMemo(() => [
@@ -629,7 +632,7 @@ export default function DeveloperPaymentsList() {
                                             </td>
                                             <td className="py-4 px-6 whitespace-nowrap">
                                                 <span className="text-sm text-neutral-700">
-                                                    {payment.actualWorkHours}h{payment.otHours ? ` + ${payment.otHours}h OT` : ''}
+                                                    {payment.reportedHours || 0}h
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 whitespace-nowrap">
@@ -649,8 +652,8 @@ export default function DeveloperPaymentsList() {
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}>
-                                                    {getStatusText(payment.status)}
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.paymentStatus)}`}>
+                                                    {getStatusText(payment.paymentStatus)}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">

@@ -103,7 +103,7 @@ export default function LoginForm() {
       await login(
         response.email,
         '', // Không cần password nữa vì đã có token
-        frontendRole as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin'
+        frontendRole as 'Staff TA' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin'
       );
 
       // Hiển thị thông báo thành công
@@ -114,8 +114,8 @@ export default function LoginForm() {
       setTimeout(() => {
         // Redirect based on role
         switch (frontendRole) {
-          case 'Staff HR':
-            navigate('/hr/dashboard');
+          case 'Staff TA':
+            navigate('/ta/dashboard');
             break;
           case 'Staff Accountant':
             navigate('/accountant/dashboard');
@@ -318,7 +318,7 @@ export default function LoginForm() {
           Tài khoản demo:
         </h4>
         <div className="text-sm text-neutral-600 space-y-2 font-medium">
-          <div><span className="font-semibold">HR</span>: hr@example.com / string</div>
+          <div><span className="font-semibold">TA</span>: hr@example.com / string</div>
           <div><span className="font-semibold">Sales</span>: sale@example.com / string</div>
           <div><span className="font-semibold">Accountant</span>: accountant@example.com / string</div>
           <div><span className="font-semibold">Manager</span>: manager@example.com / string</div>

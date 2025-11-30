@@ -9,7 +9,7 @@ interface RegisterFormProps {
 
 export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
   const [formData, setFormData] = useState({
-    role: 'Developer' as 'Staff HR' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin',
+    role: 'Developer' as 'Staff TA' | 'Staff Accountant' | 'Staff Sales' | 'Developer' | 'Manager' | 'Admin',
     email: '',
     password: '',
     confirmPassword: ''
@@ -80,7 +80,7 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
 
       // Redirect based on role
       switch (formData.role) {
-        case 'Staff HR':
+        case 'Staff TA':
           navigate('/staff_hr/setup');
           break;
         case 'Admin':
@@ -138,13 +138,13 @@ export default function RegisterForm({ onToggleForm }: RegisterFormProps) {
             </div>
 
             <div
-              onClick={() => setFormData(prev => ({ ...prev, role: 'Staff HR' }))}
-              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'Staff HR'
+              onClick={() => setFormData(prev => ({ ...prev, role: 'Staff TA' }))}
+              className={`border-2 rounded-xl p-5 cursor-pointer transition-all duration-300 transform hover:scale-103 ${formData.role === 'Staff TA'
                   ? 'border-secondary-500 bg-gradient-to-br from-secondary-50 to-primary-50 shadow-glow-green'
                   : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-soft'
                 }`}
             >
-              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'Staff HR' ? 'text-secondary-600' : 'text-neutral-500'
+              <Building className={`w-8 h-8 mb-3 mx-auto transition-colors duration-300 ${formData.role === 'Staff TA' ? 'text-secondary-600' : 'text-neutral-500'
                 }`} />
               <div className="text-center">
                 <h3 className="font-semibold text-neutral-900 mb-1">Nhân Sự</h3>

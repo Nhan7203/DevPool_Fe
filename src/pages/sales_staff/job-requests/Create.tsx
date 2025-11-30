@@ -127,9 +127,9 @@ export default function JobRequestCreatePage() {
 
   const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
     try {
-      const hrUsersResponse = await userService.getAll({ role: "HR", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+      const hrUsersResponse = await userService.getAll({ role: "TA", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
       const hrUserIds = (hrUsersResponse.items || [])
-        .filter((u) => (u.roles || []).some((role) => role === "HR" || role === "Staff HR"))
+        .filter((u) => (u.roles || []).some((role) => role === "TA" || role === "Staff TA"))
         .map((u) => u.id)
         .filter(Boolean);
 
@@ -149,7 +149,7 @@ export default function JobRequestCreatePage() {
         userIds: hrUserIds,
         entityType: "JobRequest",
         entityId: jobRequestId ?? undefined,
-        actionUrl: jobRequestId ? `/hr/job-requests/${jobRequestId}` : undefined,
+        actionUrl: jobRequestId ? `/ta/job-requests/${jobRequestId}` : undefined,
         metaData: {
           jobTitle,
           createdBy: creatorName?.toString() ?? "Sales",
@@ -157,7 +157,7 @@ export default function JobRequestCreatePage() {
       });
       console.log("✅ Notification created:", notification);
     } catch (notifyError) {
-      console.error("Không thể gửi thông báo tới HR:", notifyError);
+      console.error("Không thể gửi thông báo tới TA:", notifyError);
     }
   }, [user]);
 
@@ -633,24 +633,33 @@ export default function JobRequestCreatePage() {
                           {projectsFilteredBySearch.length === 0 ? (
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
-                            projectsFilteredBySearch.map(p => (
-                              <button
-                                type="button"
-                                key={p.id}
-                                onClick={() => {
-                                  setForm(prev => ({ ...prev, projectId: p.id.toString(), clientCompanyCVTemplateId: 0 }));
-                                  setSelectedClientId(p.clientCompanyId);
-                                  setIsProjectDropdownOpen(false);
-                                }}
-                                className={`w-full text-left px-4 py-2.5 text-sm ${
-                                  form.projectId === p.id.toString()
-                                    ? "bg-primary-50 text-primary-700"
-                                    : "hover:bg-neutral-50 text-neutral-700"
-                                }`}
-                              >
-                                {p.name}
-                              </button>
-                            ))
+                            projectsFilteredBySearch.map(p => {
+                              const isDisabled = p.status === "OnHold" || p.status === "Completed";
+                              return (
+                                <button
+                                  type="button"
+                                  key={p.id}
+                                  onClick={() => {
+                                    if (!isDisabled) {
+                                      setForm(prev => ({ ...prev, projectId: p.id.toString(), clientCompanyCVTemplateId: 0 }));
+                                      setSelectedClientId(p.clientCompanyId);
+                                      setIsProjectDropdownOpen(false);
+                                    }
+                                  }}
+                                  disabled={isDisabled}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    isDisabled
+                                      ? "opacity-50 cursor-not-allowed text-neutral-400"
+                                      : form.projectId === p.id.toString()
+                                        ? "bg-primary-50 text-primary-700"
+                                        : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                  title={isDisabled ? `Dự án này đang ở trạng thái "${p.status}" nên không thể chọn` : ""}
+                                >
+                                  {p.name} {isDisabled && `(${p.status})`}
+                                </button>
+                              );
+                            })
                           )}
                         </div>
                       </div>

@@ -10,7 +10,6 @@ import { applyActivityService, type ApplyActivity, ApplyActivityType } from '../
 import { jobRequestService, type JobRequest, JobRequestStatus } from '../../../services/JobRequest';
 import { talentCVService } from '../../../services/TalentCV';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
 import { projectService, type Project } from '../../../services/Project';
 import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
 
@@ -39,14 +38,6 @@ interface RecentJobRequest {
   createdAt?: string;
 }
 
-interface RecentContract {
-  id: number;
-  contractNumber: string;
-  partnerName: string;
-  talentName: string;
-  status: string;
-  startDate: string;
-}
 
 export default function HRDashboard() {
   const navigate = useNavigate();
@@ -56,11 +47,9 @@ export default function HRDashboard() {
   const [, setActivities] = useState<ApplyActivity[]>([]);
   const [jobRequests, setJobRequests] = useState<JobRequest[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [contracts, setContracts] = useState<PartnerContract[]>([]);
   const [recentApplications, setRecentApplications] = useState<RecentApplication[]>([]);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [recentJobRequests, setRecentJobRequests] = useState<RecentJobRequest[]>([]);
-  const [recentContracts, setRecentContracts] = useState<RecentContract[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,13 +57,12 @@ export default function HRDashboard() {
         setLoading(true);
 
         // Fetch all data in parallel
-        const [talentsData, applicationsData, activitiesData, jobRequestsData, partnersData, contractsData, projectsData, clientCompaniesData] = await Promise.all([
+        const [talentsData, applicationsData, activitiesData, jobRequestsData, partnersData, projectsData, clientCompaniesData] = await Promise.all([
           talentService.getAll({ excludeDeleted: true }),
           applyService.getAll(),
           applyActivityService.getAll({ excludeDeleted: true }),
           jobRequestService.getAll({ excludeDeleted: true }),
           partnerService.getAll(),
-          partnerContractService.getAll({ excludeDeleted: true }),
           projectService.getAll({ excludeDeleted: true }),
           clientCompanyService.getAll({ excludeDeleted: true })
         ]);
@@ -84,14 +72,13 @@ export default function HRDashboard() {
         setActivities(activitiesData);
         setJobRequests(jobRequestsData);
         setPartners(partnersData);
-        setContracts(contractsData);
 
         // Get recent applications with talent names
         const recentApps = applicationsData
           .sort((a: Apply, b: Apply) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 5);
         const recentAppsWithDetails = await Promise.all(
-          recentApps.map(async (app) => {
+          recentApps.map(async (app: Apply) => {
             try {
               const [cv, jobRequest] = await Promise.all([
                 talentCVService.getById(app.cvId),
@@ -122,14 +109,14 @@ export default function HRDashboard() {
 
         // Get recent activities
         const recentActivitiesData = activitiesData
-          .filter(activity => activity.scheduledDate) // Chỉ lấy những activity có scheduledDate
+          .filter((activity: ApplyActivity) => activity.scheduledDate) // Chỉ lấy những activity có scheduledDate
           .sort((a: ApplyActivity, b: ApplyActivity) => {
             // Sort by scheduledDate (newest first)
             return new Date(b.scheduledDate!).getTime() - new Date(a.scheduledDate!).getTime();
           })
           .slice(0, 5)
-          .map(activity => {
-            const activityTypeNames = {
+          .map((activity: ApplyActivity) => {
+            const activityTypeNames: Record<ApplyActivityType, string> = {
               [ApplyActivityType.Online]: 'Hoạt động trực tuyến',
               [ApplyActivityType.Offline]: 'Hoạt động trực tiếp'
             };
@@ -185,38 +172,6 @@ export default function HRDashboard() {
             };
           });
         setRecentJobRequests(recentJobReqs);
-
-        // Get recent contracts
-        const recentContractsData = contractsData
-          .sort((a: PartnerContract, b: PartnerContract) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
-          .slice(0, 5)
-          .map(async (contract: PartnerContract) => {
-            try {
-              const [partner, talent] = await Promise.all([
-                partnersData.find((p: Partner) => p.id === contract.partnerId),
-                talentsData.find((t: Talent) => t.id === contract.talentId)
-              ]);
-              return {
-                id: contract.id,
-                contractNumber: contract.contractNumber,
-                partnerName: partner?.companyName || 'N/A',
-                talentName: talent?.fullName || 'N/A',
-                status: contract.status,
-                startDate: contract.startDate
-              };
-            } catch {
-              return {
-                id: contract.id,
-                contractNumber: contract.contractNumber,
-                partnerName: 'N/A',
-                talentName: 'N/A',
-                status: contract.status,
-                startDate: contract.startDate
-              };
-            }
-          });
-        const resolvedContracts = await Promise.all(recentContractsData);
-        setRecentContracts(resolvedContracts);
       } catch (err) {
         console.error('❌ Lỗi tải dữ liệu dashboard:', err);
       } finally {
@@ -244,7 +199,6 @@ export default function HRDashboard() {
   const totalApplications = applications.length;
   const totalJobRequests = jobRequests.length;
   const totalPartners = partners.length;
-  const totalContracts = contracts.length;
 
   const hiredCount = applications.filter(app => app.status === 'Hired').length;
 
@@ -268,7 +222,7 @@ export default function HRDashboard() {
     {
       title: 'Đối Tác',
       value: totalPartners.toString(),
-      change: `${totalContracts} hợp đồng`,
+      change: 'Tổng số trong hệ thống',
       trend: 'up',
       color: 'orange',
       icon: Building2
@@ -313,52 +267,11 @@ export default function HRDashboard() {
     }
   };
 
-  // Helper functions for contract status
-  const normalizeContractStatus = (status: string | null | undefined): string => {
-    if (!status) return '';
-    return status.toLowerCase().trim();
-  };
-
-  const getContractStatusText = (status: string | null | undefined): string => {
-    const normalized = normalizeContractStatus(status);
-    switch (normalized) {
-      case 'active':
-        return 'Đang hiệu lực';
-      case 'pending':
-        return 'Chờ duyệt';
-      case 'draft':
-        return 'Bản nháp';
-      case 'expired':
-        return 'Đã hết hạn';
-      case 'terminated':
-        return 'Đã chấm dứt';
-      default:
-        return status || 'N/A';
-    }
-  };
-
-  const getContractStatusColor = (status: string | null | undefined): string => {
-    const normalized = normalizeContractStatus(status);
-    switch (normalized) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'expired':
-        return 'bg-blue-100 text-blue-800';
-      case 'terminated':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -371,12 +284,12 @@ export default function HRDashboard() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, HR Staff</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, TA Staff</h1>
           <p className="text-neutral-600 mt-1">Quản lý tuyển dụng và nhân sự hiệu quả</p>
         </div>
 
@@ -405,117 +318,61 @@ export default function HRDashboard() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
-          {/* Recent Job Requests */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
-                <button
-                  onClick={() => navigate('/hr/job-requests')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentJobRequests.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Target className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentJobRequests.map((jr) => (
-                    <div
-                      key={jr.id}
-                      onClick={() => navigate(`/hr/job-requests/${jr.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.companyName}
-                          </span>
-                          <span className="flex items-center">
-                            <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {jr.quantity} vị trí
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
-                            jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
-                              jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
-                                'bg-red-100 text-red-800'
-                          }`}>
-                          {jr.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {/* Recent Job Requests */}
+        <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100 mb-8 animate-fade-in">
+          <div className="p-6 border-b border-neutral-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Yêu Cầu Tuyển Dụng Gần Đây</h2>
+              <button
+                onClick={() => navigate('/ta/job-requests')}
+                className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
+              >
+                Xem tất cả
+              </button>
             </div>
           </div>
-
-          {/* Recent Contracts */}
-          <div className="bg-white rounded-2xl shadow-soft hover:shadow-medium transition-all duration-300 border border-neutral-100">
-            <div className="p-6 border-b border-neutral-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Hợp Đồng Gần Đây</h2>
-                <button
-                  onClick={() => navigate('/hr/contracts')}
-                  className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
-                >
-                  Xem tất cả
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {recentContracts.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FileText className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có hợp đồng nào</p>
+          <div className="p-6">
+            {recentJobRequests.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-8 h-8 text-neutral-400" />
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentContracts.map((contract) => (
-                    <div
-                      key={contract.id}
-                      onClick={() => navigate(`/hr/contracts/${contract.id}`)}
-                      className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{contract.contractNumber}</h3>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.partnerName}
-                          </span>
-                          <span className="flex items-center">
-                            <UserPlus className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
-                            {contract.talentName}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getContractStatusColor(contract.status)}`}>
-                          {getContractStatusText(contract.status)}
+                <p className="text-neutral-500 text-lg font-medium">Chưa có yêu cầu nào</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentJobRequests.map((jr) => (
+                  <div
+                    key={jr.id}
+                    onClick={() => navigate(`/ta/job-requests/${jr.id}`)}
+                    className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
+                  >
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900 group-hover:text-primary-700 transition-colors duration-300">{jr.title}</h3>
+                      <div className="flex items-center space-x-4 mt-2 text-sm text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">
+                        <span className="flex items-center">
+                          <Building2 className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                          {jr.companyName}
+                        </span>
+                        <span className="flex items-center">
+                          <Briefcase className="w-4 h-4 mr-1 group-hover:scale-110 transition-transform duration-300" />
+                          {jr.quantity} vị trí
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <div className="text-right">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${jr.status === 'Chờ duyệt' ? 'bg-orange-100 text-orange-800' :
+                          jr.status === 'Đã duyệt' ? 'bg-green-100 text-green-800' :
+                            jr.status === 'Đã đóng' ? 'bg-gray-100 text-gray-800' :
+                              'bg-red-100 text-red-800'
+                        }`}>
+                        {jr.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -555,7 +412,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Ứng Tuyển Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/applications')}
+                  onClick={() => navigate('/ta/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -575,7 +432,7 @@ export default function HRDashboard() {
                   {recentApplications.map((app) => (
                     <div
                       key={app.id}
-                      onClick={() => navigate(`/hr/applications/${app.id}`)}
+                      onClick={() => navigate(`/ta/applications/${app.id}`)}
                       className="group flex items-center justify-between p-4 bg-gradient-to-r from-neutral-50 to-primary-50 rounded-xl hover:from-primary-50 hover:to-accent-50 transition-all duration-300 border border-neutral-200 hover:border-primary-300 cursor-pointer"
                     >
                       <div className="flex-1">
@@ -609,7 +466,7 @@ export default function HRDashboard() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Hoạt Động Gần Đây</h2>
                 <button
-                  onClick={() => navigate('/hr/applications')}
+                  onClick={() => navigate('/ta/applications')}
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium transition-colors duration-300 hover:scale-105 transform"
                 >
                   Xem tất cả
@@ -669,21 +526,21 @@ export default function HRDashboard() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao Tác Nhanh</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
-                onClick={() => navigate('/hr/developers/create')}
+                onClick={() => navigate('/ta/developers/create')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
               >
                 <UserPlus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 <span>Thêm nhân sự mới</span>
               </button>
               <button
-                onClick={() => navigate('/hr/applications')}
+                onClick={() => navigate('/ta/applications')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-secondary-600 to-secondary-700 text-white px-6 py-3 rounded-xl hover:from-secondary-700 hover:to-secondary-800 transition-all duration-300 shadow-soft hover:shadow-glow-green transform hover:scale-105"
               >
                 <Calendar className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 <span>Xem Ứng Tuyển</span>
               </button>
               <button
-                onClick={() => navigate('/hr/job-requests')}
+                onClick={() => navigate('/ta/job-requests')}
                 className="group flex items-center justify-center space-x-2 bg-gradient-to-r from-accent-600 to-accent-700 text-white px-6 py-3 rounded-xl hover:from-accent-700 hover:to-accent-800 transition-all duration-300 shadow-soft hover:shadow-glow-purple transform hover:scale-105"
               >
                 <FileText className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />

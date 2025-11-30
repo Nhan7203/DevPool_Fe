@@ -7,7 +7,7 @@ import { userService, type User, type UserFilter, type PagedResult } from "../..
 // ------ Types ------
 export type StaffRole =
   | "Manager"
-  | "HR"
+  | "TA"
   | "Sale"
   | "Accountant";
 
@@ -16,7 +16,7 @@ type StatusFilter = "All" | "Active" | "Inactive";
 // Options - Chỉ bao gồm các role staff, không có Admin và Dev (Talent)
 const ROLE_OPTIONS = [
   "Manager",
-  "HR",
+  "TA",
   "Sale",
   "Accountant",
 ] as const satisfies readonly StaffRole[];
@@ -31,7 +31,7 @@ const convertToUserRow = (user: User): UserRow => user;
 // Helper
 const roleColors: Record<StaffRole, string> = {
   Manager: "bg-amber-100 text-amber-700",
-  "HR": "bg-blue-100 text-blue-700",
+  "TA": "bg-blue-100 text-blue-700",
   "Sale": "bg-sky-100 text-sky-700",
   "Accountant": "bg-teal-100 text-teal-700",
 };
@@ -163,7 +163,7 @@ export default function StaffManagementPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Quản lý Nhân viên</h1>
             <p className="text-neutral-600 mt-1">
-              Tạo/sửa tài khoản nhân viên (Manager, HR, Sales, Accountant), phân quyền vai trò và vô hiệu hóa khi cần.
+              Tạo/sửa tài khoản nhân viên (Manager, TA, Sales, Accountant), phân quyền vai trò và vô hiệu hóa khi cần.
             </p>
           </div>
           <button
@@ -417,7 +417,7 @@ export default function StaffManagementPage() {
                   fullName: payload.fullName,
                   phoneNumber: payload.phone,
                   password: "TempPassword123!", // This should be generated or set by admin
-                  role: payload.roles[0] || "HR", // Take first role for now
+                  role: payload.roles[0] || "TA", // Take first role for now
                 });
                 await fetchUsers(currentPage);
                 setShowCreate(false);
@@ -445,7 +445,7 @@ export default function StaffManagementPage() {
                 // Update role if changed
                 if (payload.roles[0] !== showEdit.roles[0]) {
                   await userService.updateRole(showEdit.id, {
-                    role: payload.roles[0] || "HR",
+                    role: payload.roles[0] || "TA",
                   });
                 }
                 
@@ -540,7 +540,7 @@ function UserModal({
               {(
                 [
                   "Manager",
-                  "HR",
+                  "TA",
                   "Sale",
                   "Accountant",
                 ] as StaffRole[]

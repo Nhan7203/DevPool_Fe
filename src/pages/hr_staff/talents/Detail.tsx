@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { talentService, type Talent } from "../../../services/Talent";
+import { talentService, type Talent, type TalentProjectCreateModel, type TalentSkillCreateModel, type TalentWorkExperienceCreateModel, type TalentCertificateCreateModel, type TalentJobRoleLevelCreateModel } from "../../../services/Talent";
 import { locationService } from "../../../services/location";
 import { partnerService, type Partner } from "../../../services/Partner";
-import { talentCVService, type TalentCV, type CVAnalysisComparisonResponse } from "../../../services/TalentCV";
+import { talentCVService, type TalentCV, type TalentCVCreate, type CVAnalysisComparisonResponse } from "../../../services/TalentCV";
 import { talentProjectService, type TalentProject } from "../../../services/TalentProject";
 import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
 import { talentJobRoleLevelService, type TalentJobRoleLevel } from "../../../services/TalentJobRoleLevel";
 import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum } from "../../../services/JobRoleLevel";
@@ -19,9 +21,11 @@ import { notificationService, NotificationPriority, NotificationType } from "../
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { WorkingMode } from "../../../types/WorkingMode";
+import { uploadFile, uploadTalentCV } from "../../../utils/firebaseStorage";
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "../../../configs/firebase";
 import { Button } from "../../../components/ui/button";
 import {
-  ArrowLeft,
   Edit,
   Trash2,
   Briefcase,
@@ -43,12 +47,17 @@ import {
   Star,
   Workflow,
   Plus,
+  Filter,
   Upload,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   ChevronUp,
   Eye,
+  X,
+  Save,
+  Search,
+  Layers,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
@@ -65,6 +74,8 @@ export default function TalentDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+  const locationState = location.state as { tab?: "projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences"; defaultTab?: "projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences" } | null;
+  const initialTab = locationState?.tab || locationState?.defaultTab;
   const [talent, setTalent] = useState<Talent | null>(null);
   const [locationName, setLocationName] = useState<string>("—");
   const [partnerName, setPartnerName] = useState<string>("—");
@@ -76,6 +87,7 @@ export default function TalentDetailPage() {
   const [certificates, setCertificates] = useState<(TalentCertificate & { certificateTypeName: string })[]>([]);
   const [availableTimes, setAvailableTimes] = useState<TalentAvailableTime[]>([]);
   const [lookupSkills, setLookupSkills] = useState<Skill[]>([]);
+  const [lookupSkillGroups, setLookupSkillGroups] = useState<SkillGroup[]>([]);
   const [lookupJobRoleLevels, setLookupJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [lookupCertificateTypes, setLookupCertificateTypes] = useState<CertificateType[]>([]);
   const [analysisResult, setAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
@@ -85,6 +97,8 @@ export default function TalentDetailPage() {
   const [sentSuggestionKeys, setSentSuggestionKeys] = useState<Set<string>>(new Set());
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisLoadingId, setAnalysisLoadingId] = useState<number | null>(null);
+  const [expandedAnalysisDetail, setExpandedAnalysisDetail] = useState<"skills" | "jobRoleLevels" | "certificates" | "projects" | "experiences" | null>(null);
+  const [expandedBasicInfo, setExpandedBasicInfo] = useState(true); // Mặc định mở
   type PrefillType = "projects" | "jobRoleLevels" | "skills" | "certificates" | "experiences";
   const ANALYSIS_STORAGE_PREFIX = "talent-analysis-prefill";
   const prefillTypes: PrefillType[] = ["projects", "jobRoleLevels", "skills", "certificates", "experiences"];
@@ -100,10 +114,148 @@ export default function TalentDetailPage() {
     });
   };
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences">(initialTab || "cvs");
 
-  // Chỉ khôi phục kết quả phân tích CV sau khi đã load danh sách CVs và xác nhận CV ID tồn tại
+  // Inline form states
+  const [showInlineForm, setShowInlineForm] = useState<"project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime" | "cv" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineProjectForm, setInlineProjectForm] = useState<Partial<TalentProjectCreateModel>>({
+    projectName: "",
+    position: "",
+    technologies: "",
+    description: "",
+  });
+  const [inlineSkillForm, setInlineSkillForm] = useState<Partial<TalentSkillCreateModel>>({
+    skillId: 0,
+    level: "Beginner",
+    yearsExp: 1,
+  });
+  const [inlineCertificateForm, setInlineCertificateForm] = useState<Partial<TalentCertificateCreateModel>>({
+    certificateTypeId: 0,
+    certificateName: "",
+    certificateDescription: "",
+    issuedDate: undefined,
+    isVerified: false,
+    imageUrl: "",
+  });
+  const [inlineExperienceForm, setInlineExperienceForm] = useState<Partial<TalentWorkExperienceCreateModel>>({
+    company: "",
+    position: "",
+    startDate: "",
+    endDate: undefined,
+    description: "",
+  });
+  const [inlineJobRoleLevelForm, setInlineJobRoleLevelForm] = useState<Partial<TalentJobRoleLevelCreateModel>>({
+    jobRoleLevelId: 0,
+    yearsOfExp: 1,
+    ratePerMonth: undefined,
+  });
+  const [inlineAvailableTimeForm, setInlineAvailableTimeForm] = useState<Partial<TalentAvailableTime>>({
+    startTime: "",
+    endTime: undefined,
+    notes: "",
+  });
+  const [availableTimeFormErrors, setAvailableTimeFormErrors] = useState<Record<string, string>>({});
+  // CV inline form states
+  const [inlineCVForm, setInlineCVForm] = useState<Partial<TalentCVCreate>>({
+    jobRoleLevelId: 0,
+    version: 1,
+    cvFileUrl: "",
+    isActive: true,
+    summary: "",
+    isGeneratedFromTemplate: false,
+  });
+  const [cvFormErrors, setCvFormErrors] = useState<Record<string, string>>({});
+  const [cvVersionError, setCvVersionError] = useState<string>("");
+  const [existingCVsForValidation, setExistingCVsForValidation] = useState<TalentCV[]>([]);
+  const [selectedCVFile, setSelectedCVFile] = useState<File | null>(null);
+  const [uploadingCV, setUploadingCV] = useState(false);
+  const [cvUploadProgress, setCvUploadProgress] = useState<number>(0);
+  const [isCVUploadedFromFirebase, setIsCVUploadedFromFirebase] = useState(false);
+  const [uploadedCVUrl, setUploadedCVUrl] = useState<string | null>(null);
+  const [extractingCV, setExtractingCV] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
+  interface ExtractedCVData {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    dateOfBirth?: string;
+    skills?: string[];
+    workExperiences?: Array<{
+      position: string;
+      company: string;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    }>;
+    locationName?: string;
+  }
+  const [, setExtractedCVData] = useState<ExtractedCVData | null>(null);
+  const [inlineCVAnalysisResult, setInlineCVAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
+  const [showInlineCVAnalysisModal, setShowInlineCVAnalysisModal] = useState(false);
+  const [showCVFullForm, setShowCVFullForm] = useState(false); // Hiện form đầy đủ sau khi xác nhận phân tích
+  // Certificate image upload states
+  const [certificateImageFile, setCertificateImageFile] = useState<File | null>(null);
+  const [uploadingCertificateImage, setUploadingCertificateImage] = useState(false);
+  const [certificateUploadProgress, setCertificateUploadProgress] = useState<number>(0);
+  const [uploadedCertificateUrl, setUploadedCertificateUrl] = useState<string | null>(null);
+  const [certificateFormErrors, setCertificateFormErrors] = useState<Record<string, string>>({});
+  const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
+  const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
+  const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState<string>("");
+  const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
+  const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
+  const [certificateTypeSearch, setCertificateTypeSearch] = useState<string>("");
+  const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState(false);
+  const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
+  const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
+  const [workExperiencePositionSearch, setWorkExperiencePositionSearch] = useState<string>("");
+  const [isWorkExperiencePositionDropdownOpen, setIsWorkExperiencePositionDropdownOpen] = useState(false);
+  
+  // Danh sách vị trí công việc cho Kinh Nghiệm
+  const workExperiencePositions = [
+    "Frontend Developer (React, Angular, Vue)",
+    "Backend Developer (Node.js, .NET, Java, Go)",
+    "Fullstack Developer",
+    "Mobile Developer (iOS/Android/Flutter/React Native)",
+    "AI/ML Engineer",
+    "Data Engineer",
+    "Data Scientist",
+    "DevOps Engineer",
+    "Cloud Engineer",
+    "QA/QC Engineer (Manual / Automation)",
+    "Test Lead",
+    "Solution Architect",
+    "Technical Lead (Tech Lead)",
+    "Software Architect"
+  ];
+
+  // Tự động đóng form khi chuyển tab (nếu form không thuộc tab hiện tại)
   useEffect(() => {
-    if (!ANALYSIS_RESULT_STORAGE_KEY || talentCVs.length === 0) return;
+    if (isSubmitting) return; // Không đóng form khi đang submit
+    
+    const formTabMap: Record<string, string> = {
+      "project": "projects",
+      "skill": "skills",
+      "certificate": "certificates",
+      "experience": "experiences",
+      "jobRoleLevel": "jobRoleLevels",
+      "availableTime": "availableTimes",
+      "cv": "cvs"
+    };
+    
+    if (showInlineForm) {
+      const formTab = formTabMap[showInlineForm];
+      if (formTab && formTab !== activeTab) {
+        // Form không thuộc tab hiện tại, đóng form
+        setShowInlineForm(null);
+      }
+    }
+  }, [activeTab, showInlineForm, isSubmitting]);
+
+  // Khôi phục kết quả phân tích CV từ sessionStorage
+  useEffect(() => {
+    if (!ANALYSIS_RESULT_STORAGE_KEY) return;
     try {
       const stored = sessionStorage.getItem(ANALYSIS_RESULT_STORAGE_KEY);
       if (!stored) return;
@@ -111,15 +263,25 @@ export default function TalentDetailPage() {
         cvId: number | null;
         result: CVAnalysisComparisonResponse | null;
       };
-      // Chỉ khôi phục nếu có kết quả phân tích VÀ CV ID tồn tại trong danh sách CVs hiện tại
-      if (parsed?.result && parsed?.cvId) {
-        const cvExists = talentCVs.some(cv => cv.id === parsed.cvId);
-        if (cvExists) {
-          setAnalysisResult(parsed.result);
-          setAnalysisResultCVId(parsed.cvId);
+      // Khôi phục nếu có kết quả phân tích
+      if (parsed?.result) {
+        // Nếu có CV ID, kiểm tra CV có tồn tại không
+        if (parsed.cvId !== null) {
+          // Chờ danh sách CVs được load trước khi kiểm tra
+          if (talentCVs.length > 0) {
+            const cvExists = talentCVs.some(cv => cv.id === parsed.cvId);
+            if (cvExists) {
+              setAnalysisResult(parsed.result);
+              setAnalysisResultCVId(parsed.cvId);
+            } else {
+              // CV không tồn tại, xóa dữ liệu phân tích cũ
+              sessionStorage.removeItem(ANALYSIS_RESULT_STORAGE_KEY);
+            }
+          }
         } else {
-          // CV không tồn tại, xóa dữ liệu phân tích cũ
-          sessionStorage.removeItem(ANALYSIS_RESULT_STORAGE_KEY);
+          // cvId là null (phân tích từ file mới), khôi phục luôn
+          setAnalysisResult(parsed.result);
+          setAnalysisResultCVId(null);
         }
       }
     } catch (error) {
@@ -148,14 +310,7 @@ export default function TalentDetailPage() {
 
   // Collapse/Expand states for each section
   const [isCVsExpanded, setIsCVsExpanded] = useState(true);
-  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
-  const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
-  const [isExperiencesExpanded, setIsExperiencesExpanded] = useState(true);
-  const [isJobRoleLevelsExpanded, setIsJobRoleLevelsExpanded] = useState(true);
-  const [isCertificatesExpanded, setIsCertificatesExpanded] = useState(true);
-  const [isAvailableTimesExpanded, setIsAvailableTimesExpanded] = useState(true);
   // State để quản lý việc collapse/expand CV không hoạt động theo từng jobRoleLevelName
-  // Mặc định tất cả các nhóm CV không hoạt động đều được thu gọn
   const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
 
   const talentName = talent?.fullName ?? "";
@@ -206,7 +361,7 @@ export default function TalentDetailPage() {
         setAvailableTimes(availableTimesData);
 
         // Fetch job role levels once and reuse for both CVs and job role levels mapping
-        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
         const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
         setLookupJobRoleLevels(jobRoleLevelsArray);
         
@@ -235,15 +390,30 @@ export default function TalentDetailPage() {
         // Thu gọn tất cả các nhóm CV không hoạt động mặc định
         const inactiveGroups = new Set<string>();
         sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
-          if (!cv.isActive && cv.jobRoleLevelName) {
-            inactiveGroups.add(cv.jobRoleLevelName);
-          }
-        });
-        setCollapsedInactiveCVGroups(inactiveGroups);
+        if (!cv.isActive && cv.jobRoleLevelName) {
+          inactiveGroups.add(cv.jobRoleLevelName);
+        }
+      });
 
-        // Fetch skill names
+      // Fetch skill names
         const allSkills = await skillService.getAll();
         setLookupSkills(allSkills);
+        
+        // Fetch skill groups
+        try {
+          const skillGroupsData = await skillGroupService.getAll({ excludeDeleted: true });
+          const skillGroupsArray = Array.isArray(skillGroupsData)
+            ? skillGroupsData
+            : (Array.isArray((skillGroupsData as any)?.items)
+              ? (skillGroupsData as any).items
+              : (Array.isArray((skillGroupsData as any)?.data)
+                ? (skillGroupsData as any).data
+                : []));
+          setLookupSkillGroups(skillGroupsArray);
+        } catch (skillGroupsError) {
+          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
+          setLookupSkillGroups([]);
+        }
         const skillsWithNames = skills.map((skill: TalentSkill) => {
           const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
           return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
@@ -332,30 +502,6 @@ export default function TalentDetailPage() {
     setIsCVsExpanded(talentCVs.length > 0);
   }, [talentCVs.length]);
 
-  useEffect(() => {
-    setIsProjectsExpanded(talentProjects.length > 0);
-  }, [talentProjects.length]);
-
-  useEffect(() => {
-    setIsSkillsExpanded(talentSkills.length > 0);
-  }, [talentSkills.length]);
-
-  useEffect(() => {
-    setIsExperiencesExpanded(workExperiences.length > 0);
-  }, [workExperiences.length]);
-
-  useEffect(() => {
-    setIsJobRoleLevelsExpanded(jobRoleLevels.length > 0);
-  }, [jobRoleLevels.length]);
-
-  useEffect(() => {
-    setIsCertificatesExpanded(certificates.length > 0);
-  }, [certificates.length]);
-
-  useEffect(() => {
-    setIsAvailableTimesExpanded(availableTimes.length > 0);
-  }, [availableTimes.length]);
-
   // 🗑️ Xóa nhân sự
   const handleDelete = async () => {
     if (!id) return;
@@ -365,7 +511,7 @@ export default function TalentDetailPage() {
     try {
       await talentService.deleteById(Number(id));
       alert("✅ Đã xóa nhân sự thành công!");
-      navigate("/hr/developers");
+      navigate("/ta/developers");
     } catch (err) {
       console.error("❌ Lỗi khi xóa:", err);
       alert("Không thể xóa nhân sự!");
@@ -374,7 +520,7 @@ export default function TalentDetailPage() {
 
   // ✏️ Chuyển sang trang sửa
   const handleEdit = () => {
-    navigate(`/hr/developers/edit/${id}`);
+    navigate(`/ta/developers/edit/${id}`);
   };
 
   // 🗑️ Delete handlers for each section
@@ -401,16 +547,36 @@ export default function TalentDetailPage() {
       return;
     }
 
-    const confirm = window.confirm(`⚠️ Bạn có chắc muốn xóa ${selectedCVs.length} CV đã chọn?`);
+    const confirm = window.confirm(`⚠️ Bạn có chắc muốn xóa ${selectedCVs.length} CV đã chọn?\n\nFile CV trên Firebase Storage cũng sẽ bị xóa vĩnh viễn.`);
     if (!confirm) return;
 
     try {
+      // Xóa file từ Firebase trước khi xóa CV từ database
+      const cvsToDelete = talentCVs.filter(cv => deletableCVIds.includes(cv.id));
+      const deleteFilePromises = cvsToDelete
+        .filter(cv => cv.cvFileUrl)
+        .map(async (cv) => {
+          try {
+            const firebasePath = extractCVFirebasePath(cv.cvFileUrl);
+            if (firebasePath) {
+              const fileRef = ref(storage, firebasePath);
+              await deleteObject(fileRef);
+            }
+          } catch (err) {
+            console.error(`❌ Error deleting CV file from Firebase for CV ${cv.id}:`, err);
+            // Tiếp tục xóa CV dù không xóa được file
+          }
+        });
+      
+      await Promise.all(deleteFilePromises);
+      
+      // Sau đó xóa CV từ database
       await Promise.all(deletableCVIds.map(id => talentCVService.deleteById(id)));
-      alert("✅ Đã xóa CV thành công!");
+      alert("✅ Đã xóa CV và file trên Firebase thành công!");
       setSelectedCVs((prev) => prev.filter((id) => !deletableCVIds.includes(id)));
       // Refresh data
       const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true });
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
       const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
       const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
         const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
@@ -440,7 +606,6 @@ export default function TalentDetailPage() {
           inactiveGroups.add(cv.jobRoleLevelName);
         }
       });
-      setCollapsedInactiveCVGroups(inactiveGroups);
     } catch (err) {
       console.error("❌ Lỗi khi xóa CV:", err);
       alert("Không thể xóa CV!");
@@ -464,6 +629,98 @@ export default function TalentDetailPage() {
     if (!cv.cvFileUrl) {
       alert("⚠️ Không tìm thấy đường dẫn CV để phân tích.");
       return;
+    }
+
+    // Kiểm tra nếu form tạo CV đang mở
+    const isFormOpen = showInlineForm === "cv";
+    const hasFirebaseFileInForm = isFormOpen && isCVUploadedFromFirebase && uploadedCVUrl && inlineCVForm.cvFileUrl && uploadedCVUrl === inlineCVForm.cvFileUrl;
+    const hasSelectedFile = isFormOpen && selectedCVFile; // Chỉ chọn file, chưa upload
+    
+    // Kiểm tra nếu đã có kết quả phân tích CV hiện tại
+    const hasAnalysisResult = !!analysisResult;
+    
+    // Nếu có form đang mở hoặc có kết quả phân tích, cần cảnh báo
+    if (isFormOpen || hasAnalysisResult) {
+      let warningMessage = "⚠️ CẢNH BÁO\n\n";
+      
+      if (hasFirebaseFileInForm && hasAnalysisResult) {
+        warningMessage += "Bạn đang có:\n";
+        warningMessage += "- Form tạo CV đang mở với file đã upload lên Firebase.\n";
+        warningMessage += "- Kết quả phân tích CV hiện tại.\n\n";
+        warningMessage += "Để phân tích CV \"v" + cv.version + "\", hệ thống sẽ:\n";
+        warningMessage += "- Xóa file CV đã upload lên Firebase.\n";
+        warningMessage += "- Hủy kết quả phân tích CV hiện tại.\n";
+        warningMessage += "- Đóng form tạo CV.\n\n";
+      } else if (hasFirebaseFileInForm) {
+        warningMessage += "Bạn đang có form tạo CV đang mở với file đã upload lên Firebase.\n\n";
+        warningMessage += "Để phân tích CV \"v" + cv.version + "\", hệ thống sẽ:\n";
+        warningMessage += "- Xóa file CV đã upload lên Firebase.\n";
+        warningMessage += "- Đóng form tạo CV.\n\n";
+      } else if (hasSelectedFile && hasAnalysisResult) {
+        warningMessage += "Bạn đang có:\n";
+        warningMessage += "- Form tạo CV đang mở với file đã chọn.\n";
+        warningMessage += "- Kết quả phân tích CV hiện tại.\n\n";
+        warningMessage += "Để phân tích CV \"v" + cv.version + "\", hệ thống sẽ:\n";
+        warningMessage += "- Đóng form tạo CV.\n";
+        warningMessage += "- Hủy kết quả phân tích CV hiện tại.\n\n";
+      } else if (hasSelectedFile) {
+        warningMessage += "Bạn đang có form tạo CV đang mở với file đã chọn.\n\n";
+        warningMessage += "Để phân tích CV \"v" + cv.version + "\", hệ thống sẽ đóng form tạo CV.\n\n";
+      } else if (hasAnalysisResult) {
+        warningMessage += "Bạn đang có kết quả phân tích CV hiện tại.\n\n";
+        warningMessage += "Để phân tích CV \"v" + cv.version + "\", bạn cần hủy kết quả phân tích hiện tại.\n\n";
+      }
+      
+      warningMessage += "Bạn có muốn tiếp tục không?";
+      
+      const confirmedCancel = window.confirm(warningMessage);
+      if (!confirmedCancel) {
+        return;
+      }
+      
+      // Xóa file Firebase nếu có
+      if (hasFirebaseFileInForm) {
+        try {
+          const firebasePath = extractCVFirebasePath(uploadedCVUrl!);
+          if (firebasePath) {
+            const fileRef = ref(storage, firebasePath);
+            await deleteObject(fileRef);
+          }
+        } catch (err) {
+          console.error("❌ Error deleting CV file from Firebase:", err);
+        }
+      }
+      
+      // Đóng form tạo CV nếu đang mở
+      if (isFormOpen) {
+        setShowInlineForm(null);
+        setAvailableTimeFormErrors({});
+        setCertificateImageFile(null);
+        setUploadedCertificateUrl(null);
+        setCertificateFormErrors({});
+        if (cvPreviewUrl) {
+          URL.revokeObjectURL(cvPreviewUrl);
+        }
+        setCvFormErrors({});
+        setCvVersionError("");
+        setSelectedCVFile(null);
+        setUploadingCV(false);
+        setCvUploadProgress(0);
+        setIsCVUploadedFromFirebase(false);
+        setUploadedCVUrl(null);
+        setExtractingCV(false);
+        setCvPreviewUrl(null);
+        setExtractedCVData(null);
+        setExistingCVsForValidation([]);
+        setShowCVFullForm(false);
+        setInlineCVAnalysisResult(null);
+        setShowInlineCVAnalysisModal(false);
+      }
+      
+      // Hủy kết quả phân tích hiện tại nếu có
+      if (hasAnalysisResult) {
+        await clearAnalysisResult();
+      }
     }
 
     const confirmed = window.confirm(
@@ -515,7 +772,8 @@ export default function TalentDetailPage() {
     }
   };
 
-  const handleCancelAnalysis = () => {
+  // Hủy kết quả phân tích mà không đóng form (dùng khi phân tích file mới)
+  const clearAnalysisResult = async () => {
     clearPrefillStorage();
     setAnalysisResult(null);
     setAnalysisError(null);
@@ -528,6 +786,82 @@ export default function TalentDetailPage() {
         console.warn("Không thể xóa kết quả phân tích CV đã lưu:", storageError);
       }
     }
+  };
+
+  const handleCancelAnalysis = async () => {
+    // Kiểm tra nếu có file đã upload lên Firebase trong form
+    const hasFirebaseFile = showInlineForm === "cv" && isCVUploadedFromFirebase && uploadedCVUrl && inlineCVForm.cvFileUrl && uploadedCVUrl === inlineCVForm.cvFileUrl;
+    
+    // Tạo thông báo cảnh báo
+    let warningMessage = "⚠️ CẢNH BÁO\n\n";
+    warningMessage += "Bạn có chắc chắn muốn hủy kết quả phân tích CV không?\n\n";
+    
+    if (hasFirebaseFile) {
+      warningMessage += "⚠️ LƯU Ý:\n";
+      warningMessage += "- Kết quả phân tích CV sẽ bị xóa.\n";
+      warningMessage += "- File CV đã upload lên Firebase sẽ bị xóa vĩnh viễn.\n";
+      warningMessage += "- Form tạo CV sẽ bị đóng.\n\n";
+    } else {
+      warningMessage += "Kết quả phân tích CV sẽ bị xóa và không thể khôi phục.\n\n";
+    }
+    
+    warningMessage += "Bạn có muốn tiếp tục không?";
+    
+    const confirmed = window.confirm(warningMessage);
+    
+    // Nếu người dùng không xác nhận, dừng ngay - không làm gì cả
+    if (!confirmed) {
+      return;
+    }
+    
+    // Người dùng đã xác nhận, tiếp tục hủy phân tích
+    await clearAnalysisResult();
+    
+    // Xóa file CV đã upload lên Firebase nếu có
+    if (hasFirebaseFile) {
+      try {
+        const firebasePath = extractCVFirebasePath(uploadedCVUrl!);
+        if (firebasePath) {
+          const fileRef = ref(storage, firebasePath);
+          await deleteObject(fileRef);
+        }
+      } catch (err) {
+        console.error("❌ Error deleting CV file from Firebase:", err);
+        // Vẫn tiếp tục xóa các state dù không xóa được file
+      }
+    }
+    
+    // Đóng form tạo CV nếu đang mở
+    if (showInlineForm === "cv") {
+      // Không cần cảnh báo lại vì đã cảnh báo ở trên
+      setShowInlineForm(null);
+      setAvailableTimeFormErrors({});
+      setCertificateImageFile(null);
+      setUploadedCertificateUrl(null);
+      setCertificateFormErrors({});
+      // Clean up CV form
+      if (cvPreviewUrl) {
+        URL.revokeObjectURL(cvPreviewUrl);
+      }
+      setCvFormErrors({});
+      setCvVersionError("");
+      setSelectedCVFile(null);
+      setUploadingCV(false);
+      setCvUploadProgress(0);
+      setIsCVUploadedFromFirebase(false);
+      setUploadedCVUrl(null);
+      setExtractingCV(false);
+      setCvPreviewUrl(null);
+      setExtractedCVData(null);
+      setExistingCVsForValidation([]);
+      setShowCVFullForm(false);
+      setInlineCVAnalysisResult(null);
+      setShowInlineCVAnalysisModal(false);
+    }
+    // Reset form CV full
+    setShowCVFullForm(false);
+    setInlineCVAnalysisResult(null);
+    setShowInlineCVAnalysisModal(false);
   };
 
   const isSuggestionPending = useCallback(
@@ -591,7 +925,7 @@ export default function TalentDetailPage() {
       try {
         const token = localStorage.getItem("accessToken");
         const decoded = token ? decodeJWT(token) : null;
-        const requesterName = decoded?.unique_name || decoded?.email || decoded?.name || "HR Staff";
+        const requesterName = decoded?.unique_name || decoded?.email || decoded?.name || "TA Staff";
         const messageLines = displayItems.map((item, idx) => `${idx + 1}. ${item}`).join("\n");
 
         await notificationService.create({
@@ -624,61 +958,9 @@ export default function TalentDetailPage() {
   );
 
 
-  // Helper function để lưu CV ID đang được phân tích vào sessionStorage
-  const saveAnalysisCVId = () => {
-    if (!id || !analysisResultCVId) return;
-    try {
-      const cvIdStorageKey = `${ANALYSIS_STORAGE_PREFIX}-cv-id-${id}`;
-      sessionStorage.setItem(cvIdStorageKey, JSON.stringify(analysisResultCVId));
-    } catch (error) {
-      console.error("Không thể lưu CV ID vào bộ nhớ tạm:", error);
-    }
-  };
 
-  // Helper function để lưu CV đang hoạt động vào sessionStorage
-  const saveActiveCVId = () => {
-    if (!id) return;
-    try {
-      const activeCV = talentCVs.find(cv => cv.isActive);
-      if (activeCV) {
-        const cvIdStorageKey = `${ANALYSIS_STORAGE_PREFIX}-cv-id-${id}`;
-        sessionStorage.setItem(cvIdStorageKey, JSON.stringify(activeCV.id));
-      }
-    } catch (error) {
-      console.error("Không thể lưu CV đang hoạt động vào bộ nhớ tạm:", error);
-    }
-  };
 
-  // Handler để navigate đến trang tạo dự án/kinh nghiệm và tự động chọn CV đang hoạt động hoặc CV đang phân tích
-  const handleNavigateToCreate = (path: string) => {
-    // Ưu tiên lưu CV đang hoạt động nếu có, nếu không thì lưu CV đang phân tích
-    const activeCV = talentCVs.find(cv => cv.isActive);
-    if (activeCV) {
-      saveActiveCVId();
-    } else if (analysisResultCVId) {
-      saveAnalysisCVId();
-    }
-    navigate(path);
-  };
 
-  const handlePreparePrefillAndNavigate = (type: PrefillType, data: unknown, targetPath: string) => {
-    if (!id) return;
-    if (Array.isArray(data) && data.length === 0) {
-      alert("Không có gợi ý phù hợp để dùng cho việc tạo mới.");
-      return;
-    }
-    try {
-      sessionStorage.setItem(getPrefillStorageKey(type), JSON.stringify(data));
-      // Lưu CV ID đang được phân tích cho projects và experiences
-      if ((type === "projects" || type === "experiences") && analysisResultCVId) {
-        saveAnalysisCVId();
-      }
-    } catch (error) {
-      console.error("Không thể lưu dữ liệu gợi ý vào bộ nhớ tạm:", error);
-    }
-    const url = `${targetPath}${targetPath.includes("?") ? "&" : "?"}fromAnalysis=1`;
-    navigate(url);
-  };
 
   const systemSkillMap = useMemo(() => {
     const map = new Map<string, Skill>();
@@ -706,46 +988,14 @@ export default function TalentDetailPage() {
     return { byId, byName, normalizedNames };
   }, [talentSkills]);
 
-  const skillsRecognizedForAddition = useMemo(() => {
-    if (!analysisResult) return [];
-
-    const suggestionsByName = new Map<string, { skillName: string; level?: string; yearsExp?: number | null }>();
-
-    const considerSuggestion = (skillName?: string, level?: string | null, yearsExp?: number | null) => {
-      const normalized = skillName?.trim().toLowerCase();
-      if (!skillName || !normalized) return;
-      if (!systemSkillMap.has(normalized)) return;
-      if (talentSkillLookup.normalizedNames.has(normalized)) return;
-
-      if (!suggestionsByName.has(normalized)) {
-        suggestionsByName.set(normalized, {
-          skillName,
-          level: level ?? undefined,
-          yearsExp,
-        });
-      }
-    };
-
-    analysisResult.skills.newFromCV.forEach((suggestion) => {
-      considerSuggestion(suggestion.skillName, suggestion.level, suggestion.yearsExp ?? null);
-    });
-
-    analysisResult.skills.matched.forEach((match) => {
-      const normalized = match.skillName.trim().toLowerCase();
-      const attr = talentSkillLookup.byId.get(match.skillId ?? NaN) ?? talentSkillLookup.byName.get(normalized);
-      if (!attr) {
-        considerSuggestion(match.skillName, match.cvLevel, match.cvYearsExp ?? null);
-      }
-    });
-
-    return Array.from(suggestionsByName.values());
-  }, [analysisResult, systemSkillMap, talentSkillLookup]);
 
   const unmatchedSkillSuggestions = useMemo(() => {
     if (!analysisResult) return [];
+    // Chỉ lấy những skill chưa có trong hệ thống
     return analysisResult.skills.newFromCV.filter((suggestion) => {
       const name = suggestion.skillName?.trim().toLowerCase() ?? "";
       if (!name) return false;
+      // Chưa có trong hệ thống
       return !systemSkillMap.has(name);
     });
   }, [analysisResult, systemSkillMap]);
@@ -775,6 +1025,111 @@ export default function TalentDetailPage() {
         };
       });
   }, [analysisResult, talentSkillLookup]);
+
+  // Matched skills có trong hệ thống nhưng chưa có trong hồ sơ (chưa có trong talent)
+  const matchedSkillsNotInProfile = useMemo(() => {
+    if (!analysisResult) return [];
+    return analysisResult.skills.matched
+      .filter((match) => {
+        if (!match.skillId) return false; // Phải có skillId để biết có trong hệ thống
+        const normalized = match.skillName.trim().toLowerCase();
+        // Có trong hệ thống (có skillId) nhưng chưa có trong talent
+        return !talentSkillLookup.byId.has(match.skillId) && !talentSkillLookup.byName.has(normalized);
+      })
+      .map((match) => {
+        return {
+          skillId: match.skillId!,
+          skillName: match.skillName,
+          cvLevel: match.cvLevel ?? undefined,
+          cvYearsExp: match.cvYearsExp ?? undefined,
+          matchConfidence: Math.round(match.matchConfidence * 100),
+        };
+      });
+  }, [analysisResult, talentSkillLookup, lookupSkills]);
+
+  // Hàm tạo nhanh skill từ matched item
+  const handleQuickCreateSkill = (matchedSkill: { skillId: number; skillName: string; cvLevel?: string; cvYearsExp?: number }) => {
+    // Chuyển sang tab skills
+    setActiveTab("skills");
+    
+    // Mở form inline trước (sẽ reset form)
+    handleOpenInlineForm("skill");
+    
+    // Chuẩn bị và điền dữ liệu vào form sau khi form đã mở và reset
+    setTimeout(() => {
+      const levelMap: Record<string, string> = {
+        "beginner": "Beginner",
+        "intermediate": "Intermediate",
+        "advanced": "Advanced",
+        "expert": "Expert",
+      };
+      const level = matchedSkill.cvLevel ? (levelMap[matchedSkill.cvLevel.toLowerCase()] || "Beginner") : "Beginner";
+      const yearsExp = matchedSkill.cvYearsExp ? Number(matchedSkill.cvYearsExp) : 1;
+      
+      // Tìm skill để lấy skillGroupId
+      const skill = lookupSkills.find(s => s.id === matchedSkill.skillId);
+      
+      setInlineSkillForm({
+        skillId: matchedSkill.skillId,
+        level: level as "Beginner" | "Intermediate" | "Advanced" | "Expert",
+        yearsExp: yearsExp,
+      });
+      
+      // Lọc theo nhóm kỹ năng nếu có
+      if (skill?.skillGroupId) {
+        setSelectedSkillGroupId(skill.skillGroupId);
+      }
+      
+      // Tự động lọc để hiển thị kỹ năng đã chọn
+      setSkillSearchQuery(matchedSkill.skillName);
+      setIsSkillDropdownOpen(false);
+    }, 100);
+  };
+
+
+  // Hàm tạo nhanh jobRoleLevel từ matched item
+  const handleQuickCreateJobRoleLevel = (matchedJobRole: { jobRoleLevelId: number; position: string; level?: string; yearsOfExp?: number; ratePerMonth?: number }) => {
+    // Chuyển sang tab jobRoleLevels
+    setActiveTab("jobRoleLevels");
+    
+    // Mở form inline trước (sẽ reset form)
+    handleOpenInlineForm("jobRoleLevel");
+    
+    // Điền dữ liệu vào form sau khi form đã mở và reset
+    setTimeout(() => {
+      setInlineJobRoleLevelForm({
+        jobRoleLevelId: matchedJobRole.jobRoleLevelId,
+        yearsOfExp: matchedJobRole.yearsOfExp ?? 1,
+        ratePerMonth: matchedJobRole.ratePerMonth,
+      });
+    }, 100);
+  };
+
+
+  // Hàm tạo nhanh certificate từ recognized (có trong hệ thống nhưng chưa có trong hồ sơ)
+  const handleQuickCreateCertificateFromRecognized = (item: { suggestion: CertificateSuggestion; system: CertificateType }) => {
+    // Chuyển sang tab certificates
+    setActiveTab("certificates");
+    
+    // Mở form inline trước (sẽ reset form)
+    handleOpenInlineForm("certificate");
+    
+    // Điền dữ liệu vào form sau khi form đã mở và reset
+    setTimeout(() => {
+      setInlineCertificateForm({
+        certificateTypeId: item.system.id,
+        certificateName: item.suggestion.certificateName ?? "",
+        certificateDescription: "",
+        issuedDate: item.suggestion.issuedDate ?? undefined,
+        isVerified: false,
+        imageUrl: item.suggestion.imageUrl ?? "",
+      });
+      
+      // Tự động lọc để hiển thị chứng chỉ đã chọn
+      setCertificateTypeSearch(item.system.name);
+      setIsCertificateTypeDropdownOpen(false);
+    }, 100);
+  };
 
   const getTalentLevelName = (levelValue: number | undefined) => {
     if (levelValue === undefined) return "";
@@ -857,6 +1212,29 @@ export default function TalentDetailPage() {
     return result;
   }, [analysisResult, jobRoleLevelSystemMap, talentJobRoleLevelMap]);
 
+  // Cần tạo mới - JobRoleLevels có trong hệ thống nhưng chưa có trong hồ sơ (từ recognized) - có nút "Tạo nhanh"
+  const matchedJobRoleLevelsNotInProfile = useMemo(() => {
+    if (!analysisResult) return [];
+    const result: Array<{ jobRoleLevelId: number; position: string; level?: string; yearsOfExp?: number; ratePerMonth?: number }> = [];
+    
+    // Lấy từ recognized (có trong hệ thống, chưa có trong hồ sơ) để tránh trùng với "Đề xuất thêm"
+    // Chỉ lấy một phần để làm "Cần tạo mới" (có nút), phần còn lại sẽ là "Đề xuất thêm" (không có nút)
+    // Tạm thời lấy tất cả từ recognized để có nút "Tạo nhanh"
+    jobRoleLevelComparisons.recognized.forEach(({ suggestion, system }) => {
+      if (system) {
+        result.push({
+          jobRoleLevelId: system.id,
+          position: suggestion.position ?? system.name ?? "",
+          level: suggestion.level ?? undefined,
+          yearsOfExp: suggestion.yearsOfExp ?? undefined,
+          ratePerMonth: suggestion.ratePerMonth ?? undefined,
+        });
+      }
+    });
+    
+    return result;
+  }, [jobRoleLevelComparisons]);
+
   const normalizeCertificateName = (name?: string | null) => (name ?? "").trim().toLowerCase();
 
   const certificateSystemMap = useMemo(() => {
@@ -918,7 +1296,6 @@ export default function TalentDetailPage() {
   }, [analysisResult, certificateSystemMap, talentCertificateMap]);
 
   const {
-    recognized: jobRoleLevelsRecognized,
     matched: jobRoleLevelsMatched,
     unmatched: jobRoleLevelsUnmatched,
     onlyInTalent: jobRoleLevelsOnlyInTalent,
@@ -1104,7 +1481,7 @@ export default function TalentDetailPage() {
       setSelectedJobRoleLevels([]);
       // Refresh data
       const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll();
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
       setLookupJobRoleLevels(allJobRoleLevels);
       const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
         const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
@@ -1165,10 +1542,1108 @@ export default function TalentDetailPage() {
     }
   };
 
+  // Inline form handlers
+  const handleOpenInlineForm = (type: "project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime" | "cv") => {
+    if (isSubmitting) {
+      return; // Chỉ chặn khi đang submit
+    }
+    // Cho phép mở form của tab khác (sẽ tự động đóng form cũ)
+    setShowInlineForm(type);
+    // Reset form based on type
+    if (type === "project") {
+      setInlineProjectForm({ projectName: "", position: "", technologies: "", description: "" });
+    } else if (type === "skill") {
+      setInlineSkillForm({ skillId: 0, level: "Beginner", yearsExp: 1 });
+    } else if (type === "certificate") {
+      setInlineCertificateForm({ certificateTypeId: 0, certificateName: "", certificateDescription: "", issuedDate: undefined, isVerified: false, imageUrl: "" });
+      setCertificateImageFile(null);
+      setUploadedCertificateUrl(null);
+      setCertificateFormErrors({});
+    } else if (type === "experience") {
+      setInlineExperienceForm({ company: "", position: "", startDate: "", endDate: undefined, description: "" });
+    } else if (type === "jobRoleLevel") {
+      setInlineJobRoleLevelForm({ jobRoleLevelId: 0, yearsOfExp: 1, ratePerMonth: undefined });
+    } else if (type === "availableTime") {
+      setInlineAvailableTimeForm({ startTime: "", endTime: undefined, notes: "" });
+      setAvailableTimeFormErrors({});
+    } else if (type === "cv") {
+      setInlineCVForm({
+        jobRoleLevelId: 0,
+        version: 1,
+        cvFileUrl: "",
+        isActive: true,
+        summary: "",
+        isGeneratedFromTemplate: false,
+      });
+      setCvFormErrors({});
+      setCvVersionError("");
+      setSelectedCVFile(null);
+      setUploadingCV(false);
+      setCvUploadProgress(0);
+      setIsCVUploadedFromFirebase(false);
+      setUploadedCVUrl(null);
+      setExtractingCV(false);
+      if (cvPreviewUrl) {
+        URL.revokeObjectURL(cvPreviewUrl);
+      }
+      setCvPreviewUrl(null);
+      setExtractedCVData(null);
+      setExistingCVsForValidation([]);
+      setInlineCVAnalysisResult(null);
+      setShowInlineCVAnalysisModal(false);
+    }
+  };
+
+  // Close inline CV analysis modal
+  const handleCloseInlineCVAnalysisModal = () => {
+    setShowInlineCVAnalysisModal(false);
+  };
+
+  // Handle confirm and apply analysis result
+  const handleConfirmInlineCVAnalysis = () => {
+    if (!inlineCVAnalysisResult) return;
+    
+    // Tạo danh sách các trường khác nhau
+    const differences: string[] = [];
+    if (isValueDifferent(inlineCVAnalysisResult.basicInfo.current.fullName, inlineCVAnalysisResult.basicInfo.suggested.fullName)) {
+      differences.push(`• Họ tên: "${inlineCVAnalysisResult.basicInfo.current.fullName ?? "—"}" → "${inlineCVAnalysisResult.basicInfo.suggested.fullName ?? "—"}"`);
+    }
+    if (isValueDifferent(inlineCVAnalysisResult.basicInfo.current.email, inlineCVAnalysisResult.basicInfo.suggested.email)) {
+      differences.push(`• Email: "${inlineCVAnalysisResult.basicInfo.current.email ?? "—"}" → "${inlineCVAnalysisResult.basicInfo.suggested.email ?? "—"}"`);
+    }
+    if (isValueDifferent(inlineCVAnalysisResult.basicInfo.current.phone, inlineCVAnalysisResult.basicInfo.suggested.phone)) {
+      differences.push(`• Điện thoại: "${inlineCVAnalysisResult.basicInfo.current.phone ?? "—"}" → "${inlineCVAnalysisResult.basicInfo.suggested.phone ?? "—"}"`);
+    }
+    if (isValueDifferent(inlineCVAnalysisResult.basicInfo.current.locationName, inlineCVAnalysisResult.basicInfo.suggested.locationName)) {
+      differences.push(`• Nơi ở: "${inlineCVAnalysisResult.basicInfo.current.locationName ?? "—"}" → "${inlineCVAnalysisResult.basicInfo.suggested.locationName ?? "—"}"`);
+    }
+    
+    let confirmMessage = "⚠️ PHÁT HIỆN THÔNG TIN KHÁC NHAU:\n\n";
+    
+    if (differences.length > 0) {
+      confirmMessage += differences.join("\n") + "\n\n";
+    }
+    
+    confirmMessage += "Bạn có chắc chắn muốn xem các gợi ý phân tích ở các tab khác không?\n\n";
+    confirmMessage += "Hệ thống sẽ hiển thị các gợi ý ở các tab:\n";
+    confirmMessage += "• Kỹ năng\n";
+    confirmMessage += "• Vị trí & Lương\n";
+    confirmMessage += "• Chứng chỉ\n";
+    confirmMessage += "• Dự án\n";
+    confirmMessage += "• Kinh nghiệm\n\n";
+    confirmMessage += "Bạn có muốn tiếp tục không?";
+    
+    const confirmed = window.confirm(confirmMessage);
+    
+    if (!confirmed) return;
+    
+    // Set analysis result để hiển thị gợi ý ở các tab khác
+    setAnalysisResult(inlineCVAnalysisResult);
+    setAnalysisResultCVId(null); // Không có CV ID vì đây là file mới
+    
+    // Lưu kết quả phân tích vào sessionStorage để giữ nguyên khi reload
+    if (ANALYSIS_RESULT_STORAGE_KEY) {
+      try {
+        sessionStorage.setItem(
+          ANALYSIS_RESULT_STORAGE_KEY,
+          JSON.stringify({ cvId: null, result: inlineCVAnalysisResult })
+        );
+      } catch (storageError) {
+        console.warn("Không thể lưu kết quả phân tích CV:", storageError);
+      }
+    }
+    
+    // Đóng modal và hiện form đầy đủ
+    setShowInlineCVAnalysisModal(false);
+    setShowCVFullForm(true);
+    
+    // Giữ nguyên tab CV, không tự động chuyển tab
+    alert("✅ Đã áp dụng kết quả phân tích! Vui lòng xem các gợi ý ở các tab tương ứng.");
+  };
+
+  // Helper function to check if values are different
+  const isValueDifferent = (current: string | null | undefined, suggested: string | null | undefined): boolean => {
+    const currentVal = (current ?? "").trim();
+    const suggestedVal = (suggested ?? "").trim();
+    return currentVal !== suggestedVal && suggestedVal !== "";
+  };
+
+  // Đóng form sau khi tạo CV thành công (không cảnh báo xóa file vì file đã được lưu vào CV)
+  const closeInlineFormAfterSuccess = () => {
+    setShowInlineForm(null);
+    setAvailableTimeFormErrors({});
+    setCertificateImageFile(null);
+    setUploadedCertificateUrl(null);
+    setCertificateFormErrors({});
+    // Clean up CV form
+    if (cvPreviewUrl) {
+      URL.revokeObjectURL(cvPreviewUrl);
+    }
+    setCvFormErrors({});
+    setCvVersionError("");
+    setSelectedCVFile(null);
+    setUploadingCV(false);
+    setCvUploadProgress(0);
+    setIsCVUploadedFromFirebase(false);
+    setUploadedCVUrl(null);
+    setExtractingCV(false);
+    setCvPreviewUrl(null);
+    setExtractedCVData(null);
+    setExistingCVsForValidation([]);
+    setShowCVFullForm(false);
+    setInlineCVAnalysisResult(null);
+    setShowInlineCVAnalysisModal(false);
+  };
+
+  const handleCloseInlineForm = async () => {
+    // Nếu đang ở form CV và đã upload file lên Firebase, cảnh báo và xóa file
+    if (showInlineForm === "cv" && isCVUploadedFromFirebase && uploadedCVUrl) {
+      const currentCVUrl = inlineCVForm.cvFileUrl;
+      if (currentCVUrl && uploadedCVUrl === currentCVUrl) {
+        const confirmed = window.confirm(
+          "⚠️ CẢNH BÁO\n\n" +
+          "Bạn đã upload file CV lên Firebase.\n\n" +
+          "Nếu đóng form, file CV sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
+          "Bạn có chắc chắn muốn đóng form và xóa file không?"
+        );
+        
+        if (!confirmed) {
+          return; // Không đóng form nếu người dùng không xác nhận
+        }
+        
+        // Xóa file từ Firebase
+        try {
+          const firebasePath = extractCVFirebasePath(uploadedCVUrl);
+          if (firebasePath) {
+            const fileRef = ref(storage, firebasePath);
+            await deleteObject(fileRef);
+          }
+        } catch (err) {
+          console.error("❌ Error deleting CV file from Firebase:", err);
+          // Vẫn tiếp tục đóng form dù không xóa được file
+        }
+      }
+    }
+    
+    closeInlineFormAfterSuccess();
+  };
+
+  const handleSubmitInlineProject = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineProjectForm.projectName?.trim()) {
+      alert("⚠️ Vui lòng nhập tên dự án!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const activeCV = talentCVs.find(cv => cv.isActive) || talentCVs[0];
+      if (!activeCV) {
+        alert("⚠️ Vui lòng tạo CV trước khi thêm dự án!");
+        return;
+      }
+      await talentProjectService.create({
+        talentId: Number(id),
+        talentCVId: activeCV.id,
+        projectName: inlineProjectForm.projectName!,
+        position: inlineProjectForm.position || "",
+        technologies: inlineProjectForm.technologies || "",
+        description: inlineProjectForm.description || "",
+      });
+      alert("✅ Đã tạo dự án thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const projects = await talentProjectService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setTalentProjects(projects);
+    } catch (err) {
+      console.error("❌ Lỗi khi tạo dự án:", err);
+      alert("Không thể tạo dự án!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineSkill = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineSkillForm.skillId || inlineSkillForm.skillId === 0) {
+      alert("⚠️ Vui lòng chọn kỹ năng!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentSkillService.create({
+        talentId: Number(id),
+        skillId: inlineSkillForm.skillId!,
+        level: inlineSkillForm.level || "Beginner",
+        yearsExp: inlineSkillForm.yearsExp || 1,
+      });
+      alert("✅ Đã thêm kỹ năng thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const skills = await talentSkillService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allSkills = await skillService.getAll();
+      setLookupSkills(allSkills);
+      const skillsWithNames = skills.map((skill: TalentSkill) => {
+        const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
+        return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
+      });
+      setTalentSkills(skillsWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm kỹ năng:", err);
+      alert("Không thể thêm kỹ năng!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineCertificate = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineCertificateForm.certificateTypeId || inlineCertificateForm.certificateTypeId === 0) {
+      setCertificateFormErrors({ certificateTypeId: "⚠️ Vui lòng chọn loại chứng chỉ!" });
+      return;
+    }
+    if (!inlineCertificateForm.certificateName?.trim()) {
+      setCertificateFormErrors({ certificateName: "⚠️ Vui lòng nhập tên chứng chỉ!" });
+      return;
+    }
+    // Validate issued date
+    if (inlineCertificateForm.issuedDate && !validateIssuedDate(inlineCertificateForm.issuedDate)) {
+      setCertificateFormErrors({ issuedDate: "⚠️ Ngày cấp không được là ngày trong tương lai." });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentCertificateService.create({
+        talentId: Number(id),
+        certificateTypeId: inlineCertificateForm.certificateTypeId!,
+        certificateName: inlineCertificateForm.certificateName!,
+        certificateDescription: inlineCertificateForm.certificateDescription,
+        issuedDate: inlineCertificateForm.issuedDate,
+        isVerified: inlineCertificateForm.isVerified || false,
+        imageUrl: inlineCertificateForm.imageUrl || "",
+      });
+      alert("✅ Đã thêm chứng chỉ thành công!");
+      handleCloseInlineForm();
+      setCertificateFormErrors({});
+      // Refresh data
+      const certificatesData = await talentCertificateService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allCertificateTypes = await certificateTypeService.getAll();
+      setLookupCertificateTypes(allCertificateTypes);
+      const certificatesWithNames = certificatesData.map((cert: TalentCertificate) => {
+        const certTypeInfo = allCertificateTypes.find((c: CertificateType) => c.id === cert.certificateTypeId);
+        return { ...cert, certificateTypeName: certTypeInfo?.name ?? "Unknown Certificate" };
+      });
+      setCertificates(certificatesWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm chứng chỉ:", err);
+      alert("Không thể thêm chứng chỉ!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineExperience = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineExperienceForm.company?.trim() || !inlineExperienceForm.position?.trim()) {
+      alert("⚠️ Vui lòng nhập đầy đủ thông tin công ty và vị trí!");
+      return;
+    }
+    if (!inlineExperienceForm.startDate) {
+      alert("⚠️ Vui lòng nhập ngày bắt đầu!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const activeCV = talentCVs.find(cv => cv.isActive) || talentCVs[0];
+      if (!activeCV) {
+        alert("⚠️ Vui lòng tạo CV trước khi thêm kinh nghiệm!");
+        return;
+      }
+      await talentWorkExperienceService.create({
+        talentId: Number(id),
+        talentCVId: activeCV.id,
+        company: inlineExperienceForm.company!,
+        position: inlineExperienceForm.position!,
+        startDate: inlineExperienceForm.startDate!,
+        endDate: inlineExperienceForm.endDate,
+        description: inlineExperienceForm.description || "",
+      });
+      alert("✅ Đã thêm kinh nghiệm thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const experiences = await talentWorkExperienceService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setWorkExperiences(experiences);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm kinh nghiệm:", err);
+      alert("Không thể thêm kinh nghiệm!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitInlineJobRoleLevel = async () => {
+    if (!id || isSubmitting) return;
+    if (!inlineJobRoleLevelForm.jobRoleLevelId || inlineJobRoleLevelForm.jobRoleLevelId === 0) {
+      alert("⚠️ Vui lòng chọn vị trí!");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await talentJobRoleLevelService.create({
+        talentId: Number(id),
+        jobRoleLevelId: inlineJobRoleLevelForm.jobRoleLevelId!,
+        yearsOfExp: inlineJobRoleLevelForm.yearsOfExp || 1,
+        ratePerMonth: inlineJobRoleLevelForm.ratePerMonth,
+      });
+      alert("✅ Đã thêm vị trí thành công!");
+      handleCloseInlineForm();
+      // Refresh data
+      const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
+      setLookupJobRoleLevels(allJobRoleLevels);
+      const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
+        const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
+        return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
+      });
+      setJobRoleLevels(jobRoleLevelsWithNames);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm vị trí:", err);
+      alert("Không thể thêm vị trí!");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Validation functions for available time
+  const validateStartTime = (dateTime: string): boolean => {
+    if (!dateTime) return false;
+    const startDateTime = new Date(dateTime);
+    const now = new Date();
+    return startDateTime > now;
+  };
+
+  const validateEndTime = (startDateTime: string, endDateTime: string | undefined): boolean => {
+    if (!endDateTime) return true; // End time is optional
+    
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    // End time phải sau start time
+    if (end <= start) return false;
+    
+    return true;
+  };
+
+  const findOverlappingSlot = (existing: TalentAvailableTime[], newStart: Date, newEnd?: Date) => {
+    const effectiveNewEnd = newEnd ?? new Date(8640000000000000); // ~ Infinity
+
+    for (const slot of existing) {
+      const slotStart = new Date(slot.startTime);
+      const slotEnd = slot.endTime ? new Date(slot.endTime) : new Date(8640000000000000);
+
+      if (newStart < slotEnd && slotStart < effectiveNewEnd) {
+        return slot;
+      }
+    }
+    return null;
+  };
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "Không xác định";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Không xác định";
+    return date.toLocaleString("vi-VN", { hour12: false });
+  };
+
+  const formatRange = (slot: TalentAvailableTime) => {
+    const start = formatDateTime(slot.startTime);
+    const end = slot.endTime ? formatDateTime(slot.endTime) : "Không xác định";
+    return `${start} - ${end}`;
+  };
+
+  const handleSubmitInlineAvailableTime = async () => {
+    if (!id || isSubmitting) return;
+    
+    // Validate startTime
+    if (!inlineAvailableTimeForm.startTime) {
+      setAvailableTimeFormErrors({ startTime: "⚠️ Vui lòng nhập thời gian bắt đầu!" });
+      return;
+    }
+
+    // Validate startTime hợp lý
+    if (!validateStartTime(inlineAvailableTimeForm.startTime)) {
+      setAvailableTimeFormErrors({ startTime: "⚠️ Thời gian bắt đầu phải nằm trong tương lai." });
+      return;
+    }
+
+    // Validate endTime hợp lý
+    if (inlineAvailableTimeForm.endTime && !validateEndTime(inlineAvailableTimeForm.startTime, inlineAvailableTimeForm.endTime)) {
+      setAvailableTimeFormErrors({ endTime: "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu." });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      setAvailableTimeFormErrors({});
+
+      const newStart = new Date(inlineAvailableTimeForm.startTime!);
+      const newEnd = inlineAvailableTimeForm.endTime ? new Date(inlineAvailableTimeForm.endTime) : undefined;
+
+      // Kiểm tra trùng lặp với các slot đã có
+      const existingTimes = await talentAvailableTimeService.getAll({
+        talentId: Number(id),
+        excludeDeleted: true,
+      });
+
+      if (Array.isArray(existingTimes)) {
+        const overlappingSlot = findOverlappingSlot(existingTimes, newStart, newEnd);
+        if (overlappingSlot) {
+          setAvailableTimeFormErrors({
+            startTime: `⚠️ Khung giờ này trùng với khoảng đã có: ${formatRange(overlappingSlot)}. Vui lòng chọn khung khác.`
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Convert datetime-local to UTC ISO string for PostgreSQL
+      await talentAvailableTimeService.create({
+        talentId: Number(id),
+        startTime: newStart.toISOString(),
+        endTime: newEnd ? newEnd.toISOString() : undefined,
+        notes: inlineAvailableTimeForm.notes || "",
+      });
+      alert("✅ Đã thêm thời gian thành công!");
+      handleCloseInlineForm();
+      setAvailableTimeFormErrors({});
+      // Refresh data
+      const availableTimesData = await talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true });
+      setAvailableTimes(availableTimesData);
+    } catch (err) {
+      console.error("❌ Lỗi khi thêm thời gian:", err);
+      setAvailableTimeFormErrors({ submit: "Không thể thêm thời gian!" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper function để chuyển đổi level từ tiếng Anh sang tiếng Việt
+  const getLevelLabel = (level: string | null | undefined): string => {
+    const levelMap: { [key: string]: string } = {
+      "Beginner": "Mới bắt đầu",
+      "Intermediate": "Trung bình",
+      "Advanced": "Nâng cao",
+      "Expert": "Chuyên gia",
+    };
+    return levelMap[level || "Beginner"] || "Mới bắt đầu";
+  };
+
+  // Helper function để format số tiền
+  const formatCurrency = (value: string | number | undefined): string => {
+    if (!value && value !== 0) return "";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
+    if (isNaN(numValue)) return "";
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  // Handle rate per month change cho inline form
+  const handleInlineRatePerMonthChange = (value: string) => {
+    // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
+    const cleaned = value.replace(/\D/g, "");
+    // Nếu rỗng, set về undefined
+    if (cleaned === "") {
+      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: undefined });
+      return;
+    }
+    // Parse và lưu số vào state
+    const numValue = parseInt(cleaned, 10);
+    if (!isNaN(numValue)) {
+      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: numValue });
+    }
+  };
+
+  // Handle certificate image file change
+  const handleCertificateImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type (images only)
+      if (!file.type.startsWith('image/')) {
+        alert("⚠️ Vui lòng chọn file ảnh (jpg, png, gif, etc.)");
+        e.target.value = '';
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert("⚠️ Kích thước file không được vượt quá 10MB");
+        e.target.value = '';
+        return;
+      }
+
+      setCertificateImageFile(file);
+      const newErrors = { ...certificateFormErrors };
+      delete newErrors.imageFile;
+      setCertificateFormErrors(newErrors);
+    }
+  };
+
+  // Handle certificate image upload to Firebase
+  const handleUploadCertificateImage = async () => {
+    if (!certificateImageFile) {
+      alert("Vui lòng chọn file ảnh trước!");
+      return;
+    }
+
+    // Xác nhận trước khi upload
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn upload ảnh "${certificateImageFile.name}" lên Firebase không?\n\n` +
+      `Kích thước file: ${(certificateImageFile.size / 1024).toFixed(2)} KB`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setUploadingCertificateImage(true);
+    setCertificateUploadProgress(0);
+
+    try {
+      // Upload to certificates folder
+      const timestamp = Date.now();
+      const sanitizedFileName = certificateImageFile.name.replace(/[^a-zA-Z0-9-_.]/g, '_');
+      const fileName = `cert_${timestamp}_${sanitizedFileName}`;
+      const filePath = `certificates/${fileName}`;
+
+      const downloadURL = await uploadFile(
+        certificateImageFile,
+        filePath,
+        (progress) => setCertificateUploadProgress(progress)
+      );
+
+      // Update the certificate form with the download URL
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: downloadURL });
+      setUploadedCertificateUrl(downloadURL);
+
+      // Clear the file from state after successful upload
+      setCertificateImageFile(null);
+      const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      alert("✅ Upload ảnh chứng chỉ thành công!");
+    } catch (err: any) {
+      console.error("❌ Error uploading certificate image:", err);
+      alert(`❌ Lỗi khi upload ảnh: ${err.message || 'Vui lòng thử lại.'}`);
+    } finally {
+      setUploadingCertificateImage(false);
+      setCertificateUploadProgress(0);
+    }
+  };
+
+  // Handle delete certificate image
+  const handleDeleteCertificateImage = async () => {
+    const currentUrl = inlineCertificateForm.imageUrl;
+    if (!currentUrl) return;
+
+    const uploadedUrl = uploadedCertificateUrl;
+    if (!uploadedUrl || uploadedUrl !== currentUrl) {
+      // URL không phải từ Firebase upload, chỉ cần xóa URL
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: "" });
+      return;
+    }
+
+    // Xác nhận trước khi xóa
+    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa ảnh chứng chỉ này không? File sẽ bị xóa khỏi Firebase.");
+    if (!confirmed) return;
+
+    try {
+      // Extract Firebase path from URL
+      const extractFirebasePath = (url: string): string | null => {
+        try {
+          const urlObj = new URL(url);
+          const pathMatch = urlObj.pathname.match(/\/o\/(.+)\?/);
+          if (pathMatch) {
+            return decodeURIComponent(pathMatch[1]);
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      };
+
+      const firebasePath = extractFirebasePath(currentUrl);
+      if (firebasePath) {
+        const fileRef = ref(storage, firebasePath);
+        await deleteObject(fileRef);
+      }
+
+      setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: "" });
+      setUploadedCertificateUrl(null);
+      alert("✅ Đã xóa ảnh chứng chỉ thành công!");
+    } catch (err) {
+      console.error("❌ Error deleting certificate image:", err);
+      alert("Không thể xóa ảnh chứng chỉ!");
+    }
+  };
+
+  // Validate issued date
+  const validateIssuedDate = (date: string | undefined): boolean => {
+    if (!date) return true; // Optional field
+    const issuedDate = new Date(date);
+    const now = new Date();
+    // Issued date should not be in the future
+    return issuedDate <= now;
+  };
+
+  // CV form validation
+  const validateCVVersion = (version: number, jobRoleLevelId: number, existingCVsList: TalentCV[]): string => {
+    if (version <= 0) {
+      return "Version phải lớn hơn 0";
+    }
+    
+    if (jobRoleLevelId === 0) {
+      return "";
+    }
+    
+    // Nếu chưa có CV nào cho jobRoleLevelId này, chỉ cho phép version = 1
+    if (existingCVsList.length === 0) {
+      if (version !== 1) {
+        return "Chưa có CV nào cho vị trí công việc này. Vui lòng tạo version 1 trước.";
+      }
+      return "";
+    }
+    
+    // Tìm version cao nhất trong danh sách CV hiện có
+    const maxVersion = Math.max(...existingCVsList.map((cv: TalentCV) => cv.version || 0));
+    
+    // Kiểm tra trùng với các CV cùng jobRoleLevelId
+    const duplicateCV = existingCVsList.find((cv: TalentCV) => cv.version === version);
+    
+    if (duplicateCV) {
+      const suggestedVersion = maxVersion + 1;
+      return `Version ${version} đã tồn tại cho vị trí công việc này. Vui lòng chọn version khác (ví dụ: ${suggestedVersion}).`;
+    }
+    
+    // Kiểm tra version phải lớn hơn version cao nhất đã tồn tại
+    if (version <= maxVersion) {
+      const suggestedVersion = maxVersion + 1;
+      return `Version ${version} không hợp lệ. Version phải lớn hơn version cao nhất hiện có (${maxVersion}). Vui lòng chọn version ${suggestedVersion} hoặc cao hơn.`;
+    }
+    
+    return "";
+  };
+
+  // Fetch CVs by jobRoleLevelId for validation
+  useEffect(() => {
+    const fetchCVsForValidation = async () => {
+      if (!id || !inlineCVForm.jobRoleLevelId || inlineCVForm.jobRoleLevelId === 0) {
+        setExistingCVsForValidation([]);
+        setCvVersionError("");
+        return;
+      }
+      try {
+        const cvs = await talentCVService.getAll({ 
+          talentId: Number(id), 
+          jobRoleLevelId: inlineCVForm.jobRoleLevelId,
+          excludeDeleted: true 
+        });
+        setExistingCVsForValidation(cvs || []);
+      } catch (error) {
+        console.error("❌ Error loading CVs for validation", error);
+        setExistingCVsForValidation([]);
+      }
+    };
+    fetchCVsForValidation();
+  }, [id, inlineCVForm.jobRoleLevelId]);
+
+  // Auto-set version and validate when existingCVsForValidation changes
+  useEffect(() => {
+    const jobRoleLevelId = inlineCVForm.jobRoleLevelId || 0;
+    if (jobRoleLevelId > 0 && existingCVsForValidation.length === 0 && inlineCVForm.version !== 1) {
+      setInlineCVForm(prev => ({ ...prev, version: 1 }));
+      setCvVersionError("");
+    } else if (inlineCVForm.version && inlineCVForm.version > 0 && jobRoleLevelId > 0 && existingCVsForValidation.length > 0) {
+      const error = validateCVVersion(inlineCVForm.version, jobRoleLevelId, existingCVsForValidation);
+      setCvVersionError(error);
+    } else if (existingCVsForValidation.length === 0 && jobRoleLevelId === 0) {
+      setCvVersionError("");
+    }
+  }, [existingCVsForValidation, inlineCVForm.jobRoleLevelId, inlineCVForm.version]);
+
+  // Extract Firebase path from URL
+  const extractCVFirebasePath = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      const pathMatch = urlObj.pathname.match(/\/o\/(.+)/);
+      if (pathMatch && pathMatch[1]) {
+        return decodeURIComponent(pathMatch[1]);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Handle CV file select
+  const handleCVFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedCVFile(file);
+      setCvFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.file;
+        return newErrors;
+      });
+      const url = URL.createObjectURL(file);
+      setCvPreviewUrl(url);
+    }
+  };
+
+  // Handle CV analysis (thay thế extract)
+  const handleAnalyzeCV = async () => {
+    if (!selectedCVFile) {
+      alert("Vui lòng chọn file CV trước!");
+      return;
+    }
+
+    if (!id) {
+      alert("⚠️ Không tìm thấy ID nhân sự để phân tích CV.");
+      return;
+    }
+
+    // Nếu đã có kết quả phân tích CV, thông báo và hủy phân tích hiện tại trước (không đóng form)
+    if (analysisResult) {
+      const confirmed = window.confirm(
+        "⚠️ ĐANG CÓ KẾT QUẢ PHÂN TÍCH CV HIỆN TẠI\n\n" +
+        "Hệ thống sẽ hủy kết quả phân tích CV hiện tại và phân tích file CV mới.\n\n" +
+        "Bạn có muốn tiếp tục không?"
+      );
+      if (!confirmed) {
+        return;
+      }
+      await clearAnalysisResult();
+    }
+
+    try {
+      setExtractingCV(true);
+      setCvFormErrors({});
+      
+      const result = await talentCVService.analyzeCVForUpdate(Number(id), selectedCVFile);
+      
+      setInlineCVAnalysisResult(result);
+      setShowInlineCVAnalysisModal(true);
+      
+      // Tự động điền summary từ kết quả phân tích nếu có
+      if (result && !inlineCVForm.summary) {
+        const summaryParts: string[] = [];
+        if (result.basicInfo.suggested.fullName) {
+          summaryParts.push(`Tên: ${result.basicInfo.suggested.fullName}`);
+        }
+        if (result.skills && result.skills.newFromCV.length > 0) {
+          const skills = result.skills.newFromCV.slice(0, 5).map(s => s.skillName).join(', ');
+          summaryParts.push(`Kỹ năng: ${skills}`);
+        }
+        if (summaryParts.length > 0) {
+          setInlineCVForm(prev => ({ ...prev, summary: summaryParts.join('. ') + '.' }));
+        }
+      }
+      
+    } catch (error) {
+      console.error("❌ Lỗi phân tích CV:", error);
+      const message = (error as { message?: string }).message ?? "Không thể phân tích CV";
+      setCvFormErrors({ submit: `❌ ${message}` });
+      alert(`❌ ${message}`);
+    } finally {
+      setExtractingCV(false);
+    }
+  };
+
+  // Handle delete CV file
+  const handleDeleteCVFile = async () => {
+    const currentUrl = inlineCVForm.cvFileUrl;
+    if (!currentUrl) {
+      return;
+    }
+
+    if (!uploadedCVUrl || uploadedCVUrl !== currentUrl) {
+      setInlineCVForm(prev => ({ ...prev, cvFileUrl: "" }));
+      setUploadedCVUrl(null);
+      setIsCVUploadedFromFirebase(false);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "⚠️ Bạn có chắc chắn muốn xóa file CV này?\n\n" +
+      "File sẽ bị xóa vĩnh viễn khỏi Firebase Storage.\n\n" +
+      "Bạn có muốn tiếp tục không?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const firebasePath = extractCVFirebasePath(currentUrl);
+      if (firebasePath) {
+        const fileRef = ref(storage, firebasePath);
+        await deleteObject(fileRef);
+      }
+
+      // Reset tất cả state liên quan đến file đã upload
+      setInlineCVForm(prev => ({ ...prev, cvFileUrl: "" }));
+      setUploadedCVUrl(null);
+      setIsCVUploadedFromFirebase(false);
+      // KHÔNG reset selectedCVFile và cvPreviewUrl - để người dùng có thể upload lại file đã chọn
+      // setSelectedCVFile(null);
+      // if (cvPreviewUrl) {
+      //   URL.revokeObjectURL(cvPreviewUrl);
+      //   setCvPreviewUrl(null);
+      // }
+
+      alert("✅ Đã xóa file CV thành công!");
+    } catch (err: any) {
+      console.error("❌ Error deleting CV file:", err);
+      // Reset tất cả state liên quan đến file đã upload
+      setInlineCVForm(prev => ({ ...prev, cvFileUrl: "" }));
+      setUploadedCVUrl(null);
+      setIsCVUploadedFromFirebase(false);
+      // KHÔNG reset selectedCVFile và cvPreviewUrl - để người dùng có thể upload lại file đã chọn
+      // setSelectedCVFile(null);
+      // if (cvPreviewUrl) {
+      //   URL.revokeObjectURL(cvPreviewUrl);
+      //   setCvPreviewUrl(null);
+      // }
+      alert("⚠️ Đã xóa URL khỏi form, nhưng có thể không xóa được file trong Firebase. Vui lòng kiểm tra lại.");
+    }
+  };
+
+  // Handle CV file upload
+  const handleCVFileUpload = async () => {
+    if (!selectedCVFile) {
+      setCvFormErrors({ file: "⚠️ Vui lòng chọn file trước khi upload." });
+      return;
+    }
+
+    if (!inlineCVForm.jobRoleLevelId || inlineCVForm.jobRoleLevelId === 0) {
+      setCvFormErrors({ jobRoleLevelId: "⚠️ Vui lòng chọn vị trí công việc trước khi upload lên Firebase." });
+      return;
+    }
+
+    if (!inlineCVForm.version || inlineCVForm.version <= 0) {
+      setCvFormErrors({ version: "⚠️ Vui lòng nhập version CV trước khi upload." });
+      return;
+    }
+
+    if (existingCVsForValidation.length > 0) {
+      const versionErrorMsg = validateCVVersion(inlineCVForm.version, inlineCVForm.jobRoleLevelId, existingCVsForValidation);
+      if (versionErrorMsg) {
+        setCvVersionError(versionErrorMsg);
+        setCvFormErrors({ version: "⚠️ " + versionErrorMsg });
+        return;
+      }
+    }
+
+    if (!id) {
+      setCvFormErrors({ submit: "⚠️ Không tìm thấy ID nhân sự." });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn upload file "${selectedCVFile.name}" lên Firebase không?\n\n` +
+      `Version: ${inlineCVForm.version}\n` +
+      `Kích thước file: ${(selectedCVFile.size / 1024).toFixed(2)} KB`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+
+    setUploadingCV(true);
+    setCvFormErrors({});
+    setCvUploadProgress(0);
+
+    try {
+      const downloadURL = await uploadTalentCV(
+        selectedCVFile,
+        Number(id),
+        `v${inlineCVForm.version}`,
+        (progress) => setCvUploadProgress(progress)
+      );
+
+      setInlineCVForm(prev => ({ ...prev, cvFileUrl: downloadURL }));
+      setIsCVUploadedFromFirebase(true);
+      setUploadedCVUrl(downloadURL);
+    } catch (err: any) {
+      console.error("❌ Error uploading CV file:", err);
+      setCvFormErrors({ submit: err.message || "Không thể upload file. Vui lòng thử lại." });
+    } finally {
+      setUploadingCV(false);
+      setCvUploadProgress(0);
+    }
+  };
+
+  // Handle submit inline CV
+  const handleSubmitInlineCV = async () => {
+    if (!id || isSubmitting) return;
+    
+    setCvFormErrors({});
+
+    if (!inlineCVForm.jobRoleLevelId || inlineCVForm.jobRoleLevelId === 0) {
+      setCvFormErrors({ jobRoleLevelId: "⚠️ Vui lòng chọn vị trí công việc trước khi tạo." });
+      return;
+    }
+
+    if (!inlineCVForm.version || inlineCVForm.version <= 0) {
+      setCvFormErrors({ version: "⚠️ Vui lòng nhập version CV (phải lớn hơn 0)." });
+      return;
+    }
+
+    const versionErrorMsg = validateCVVersion(inlineCVForm.version, inlineCVForm.jobRoleLevelId, existingCVsForValidation);
+    if (versionErrorMsg) {
+      setCvVersionError(versionErrorMsg);
+      setCvFormErrors({ version: "⚠️ " + versionErrorMsg });
+      return;
+    }
+
+    if (!isCVUploadedFromFirebase || !inlineCVForm.cvFileUrl?.trim()) {
+      setCvFormErrors({ submit: "⚠️ Vui lòng upload file CV lên Firebase trước khi tạo." });
+      return;
+    }
+
+    try {
+      const url = new URL(inlineCVForm.cvFileUrl.trim());
+      if (!["http:", "https:"].includes(url.protocol)) {
+        throw new Error("invalid protocol");
+      }
+    } catch {
+      setCvFormErrors({ submit: "⚠️ URL file CV không hợp lệ. Vui lòng nhập đường dẫn bắt đầu bằng http hoặc https." });
+      return;
+    }
+
+    // Kiểm tra nếu có kết quả phân tích CV và có gợi ý chưa được xử lý
+    if (analysisResult) {
+      const hasBasicInfoChanges = analysisResult.basicInfo?.hasChanges || false;
+      const hasNewSkills = (analysisResult.skills?.newFromCV?.length || 0) > 0;
+      const hasNewJobRoleLevels = (analysisResult.jobRoleLevels?.newFromCV?.length || 0) > 0;
+      const hasNewProjects = (analysisResult.projects?.newEntries?.length || 0) > 0;
+      const hasNewCertificates = (analysisResult.certificates?.newFromCV?.length || 0) > 0;
+      const hasNewExperiences = (analysisResult.workExperiences?.newEntries?.length || 0) > 0;
+
+      if (hasBasicInfoChanges || hasNewSkills || hasNewJobRoleLevels || hasNewProjects || hasNewCertificates || hasNewExperiences) {
+        let warningMessage = "⚠️ CẢNH BÁO\n\n";
+        warningMessage += "Bạn đang có kết quả phân tích CV với các gợi ý chưa được xử lý:\n\n";
+
+        const pendingItems: string[] = [];
+        if (hasBasicInfoChanges) {
+          pendingItems.push("• Thông tin cơ bản có thay đổi");
+        }
+        if (hasNewSkills) {
+          pendingItems.push(`• ${analysisResult.skills.newFromCV.length} kỹ năng mới`);
+        }
+        if (hasNewJobRoleLevels) {
+          pendingItems.push(`• ${analysisResult.jobRoleLevels.newFromCV.length} vị trí & mức lương mới`);
+        }
+        if (hasNewProjects) {
+          pendingItems.push(`• ${analysisResult.projects.newEntries.length} dự án mới`);
+        }
+        if (hasNewCertificates) {
+          pendingItems.push(`• ${analysisResult.certificates.newFromCV.length} chứng chỉ mới`);
+        }
+        if (hasNewExperiences) {
+          pendingItems.push(`• ${analysisResult.workExperiences.newEntries.length} kinh nghiệm làm việc mới`);
+        }
+
+        warningMessage += pendingItems.join("\n");
+        warningMessage += "\n\n";
+        warningMessage += "Nếu bạn tạo CV này mà chưa xử lý các gợi ý trên, bạn có thể bỏ lỡ thông tin quan trọng từ CV.\n\n";
+        warningMessage += "Bạn có chắc chắn muốn tiếp tục tạo CV này không?";
+
+        const confirmed = window.confirm(warningMessage);
+        if (!confirmed) {
+          return;
+        }
+      }
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      let finalForm: TalentCVCreate = {
+        talentId: Number(id),
+        jobRoleLevelId: inlineCVForm.jobRoleLevelId!,
+        version: inlineCVForm.version!,
+        cvFileUrl: inlineCVForm.cvFileUrl!,
+        isActive: true,
+        summary: inlineCVForm.summary || "",
+        isGeneratedFromTemplate: inlineCVForm.isGeneratedFromTemplate || false,
+        sourceTemplateId: inlineCVForm.sourceTemplateId,
+        generatedForJobRequestId: inlineCVForm.generatedForJobRequestId,
+      };
+      
+      const existingCVs = await talentCVService.getAll({ 
+        talentId: Number(id), 
+        excludeDeleted: true 
+      });
+      const activeCVWithSameJobRoleLevel = existingCVs.find(
+        (cv: TalentCV) => cv.isActive && cv.jobRoleLevelId === finalForm.jobRoleLevelId
+      );
+
+      if (activeCVWithSameJobRoleLevel) {
+        const jobRoleLevelName = lookupJobRoleLevels.find(jrl => jrl.id === finalForm.jobRoleLevelId)?.name || "vị trí này";
+        const confirmed = window.confirm(
+          `⚠️ Bạn đang có CV active với vị trí công việc "${jobRoleLevelName}".\n\n` +
+          `CV mới sẽ được set active và CV cũ sẽ bị set inactive.\n\n` +
+          `Bạn có chắc chắn muốn upload CV này không?`
+        );
+        if (!confirmed) {
+          setIsSubmitting(false);
+          return;
+        }
+        await talentCVService.deactivate(activeCVWithSameJobRoleLevel.id);
+      } else {
+        const confirmed = window.confirm("Bạn có chắc chắn muốn tạo CV mới cho nhân sự không?");
+        if (!confirmed) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      
+      await talentCVService.create(finalForm);
+      alert("✅ Đã tạo CV thành công!");
+      
+      // Hủy phân tích và đóng form (không cảnh báo xóa file vì file đã được lưu vào CV)
+      await clearAnalysisResult();
+      closeInlineFormAfterSuccess();
+      
+      // Refresh data
+      const cvs = await talentCVService.getAll({ talentId: Number(id), excludeDeleted: true });
+      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
+      const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+      const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
+        const jobRoleLevelInfo = jobRoleLevelsArray.find((jrl: JobRoleLevel) => jrl.id === cv.jobRoleLevelId);
+        return { ...cv, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Chưa xác định" };
+      });
+      const sortedCVs = cvsWithJobRoleLevelNames.sort((a: TalentCV & { jobRoleLevelName?: string }, b: TalentCV & { jobRoleLevelName?: string }) => {
+        const nameA = a.jobRoleLevelName || "";
+        const nameB = b.jobRoleLevelName || "";
+        if (nameA !== nameB) {
+          return nameA.localeCompare(nameB);
+        }
+        if (a.isActive !== b.isActive) {
+          return a.isActive ? -1 : 1;
+        }
+        return (b.version || 0) - (a.version || 0);
+      });
+      setTalentCVs(sortedCVs);
+    } catch (err) {
+      console.error("❌ Lỗi khi tạo CV:", err);
+      setCvFormErrors({ submit: "Không thể tạo CV!" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -1182,7 +2657,7 @@ export default function TalentDetailPage() {
   if (!talent) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1190,7 +2665,7 @@ export default function TalentDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy nhân sự</p>
             <Link
-              to="/hr/developers"
+              to="/ta/developers"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách
@@ -1267,22 +2742,17 @@ export default function TalentDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to={returnTo || "/hr/developers"}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">
-                {returnTo ? "Quay lại màn Matching" : "Quay lại danh sách"}
-              </span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Nhân sự", to: returnTo || "/ta/developers" },
+              { label: talent?.fullName || "Chi tiết nhân sự" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -1329,14 +2799,14 @@ export default function TalentDetailPage() {
           </div>
         </div>
 
-        {/* Thông tin chung */}
+        {/* Thông tin cơ bản */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary-100 rounded-lg">
                 <FileText className="w-5 h-5 text-primary-600" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Thông tin cơ bản</h2>
             </div>
           </div>
           <div className="p-6">
@@ -1410,7 +2880,853 @@ export default function TalentDetailPage() {
           </div>
         </div>
 
-        {/* CV của nhân sự */}
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
+          <div className="sticky top-0 z-50 border-b border-neutral-200 bg-white shadow-sm rounded-t-2xl">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <style>{`
+                .scrollbar-hide::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              <button
+                type="button"
+                onClick={() => setActiveTab("cvs")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "cvs"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                CV
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("projects")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "projects"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Dự án
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("jobRoleLevels")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "jobRoleLevels"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Target className="w-4 h-4" />
+                Vị trí & Lương
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("skills")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "skills"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Star className="w-4 h-4" />
+                Kỹ năng
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("availableTimes")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "availableTimes"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                Lịch sẵn sàng
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("certificates")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "certificates"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Award className="w-4 h-4" />
+                Chứng chỉ
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("experiences")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === "experiences"
+                    ? "border-primary-500 text-primary-600 bg-white"
+                    : "border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-100/50"
+                }`}
+              >
+                <Workflow className="w-4 h-4" />
+                Kinh nghiệm
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {/* Tab: Dự án */}
+            {activeTab === "projects" && (
+              <div className="space-y-6">
+                {/* Inline Project Form */}
+                {showInlineForm === "project" && (
+                  <div className="bg-white rounded-xl border-2 border-primary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Tạo dự án mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Tên dự án <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={inlineProjectForm.projectName || ""}
+                          onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, projectName: e.target.value })}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          placeholder="Nhập tên dự án"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Vị trí</label>
+                          <input
+                            type="text"
+                            value={inlineProjectForm.position || ""}
+                            onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, position: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder="Nhập vị trí"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Công nghệ sử dụng</label>
+                          <input
+                            type="text"
+                            value={inlineProjectForm.technologies || ""}
+                            onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, technologies: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            placeholder="Nhập công nghệ sử dụng"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineProjectForm.description || ""}
+                          onChange={(e) => setInlineProjectForm({ ...inlineProjectForm, description: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
+                          placeholder="Nhập mô tả dự án"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineProject}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {analysisResult && (analysisResult.projects.newEntries.length > 0 || analysisResult.projects.potentialDuplicates.length > 0) && (
+                  <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50/80 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Gợi ý từ CV mới</h3>
+                      <span className="text-xs text-purple-700">{analysisResult.projects.newEntries.length} dự án mới · {analysisResult.projects.potentialDuplicates.length} dự án có thể trùng</span>
+                    </div>
+                    {analysisResult.projects.newEntries.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-purple-700 font-medium">Đề xuất thêm dự án:</p>
+                        {analysisResult.projects.newEntries.map((project, index) => (
+                          <div key={`suggested-project-${index}`} className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-purple-900 shadow-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{project.projectName}</span>
+                              {project.position && <span className="text-xs text-purple-700">Vai trò: {project.position}</span>}
+                            </div>
+                            {project.technologies && (
+                              <p className="mt-1 text-xs text-purple-600">Công nghệ: {project.technologies}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {analysisResult.projects.potentialDuplicates.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                        <p className="font-medium mb-1">Kiểm tra trùng lặp:</p>
+                        <ul className="space-y-1">
+                          {analysisResult.projects.potentialDuplicates.map((dup, index) => (
+                            <li key={`dup-project-${index}`}>
+                              - {dup.fromCV.projectName} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Danh sách dự án</h3>
+                  <div className="flex gap-2">
+                    {showInlineForm !== "project" && (
+                      <Button
+                        onClick={() => handleOpenInlineForm("project")}
+                        disabled={isSubmitting}
+                        className={`group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={isSubmitting ? "Đang xử lý..." : "Tạo dự án"}
+                      >
+                        <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                      </Button>
+                    )}
+                    {selectedProjects.length > 0 && (
+                      <Button
+                        onClick={handleDeleteProjects}
+                        className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                      >
+                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                        Xóa dự án ({selectedProjects.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {talentProjects.length > 0 ? (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-neutral-50 border-b border-neutral-200">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                              <input
+                                type="checkbox"
+                                checked={selectedProjects.length === talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).length && talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const currentPageItems = talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).map(project => project.id);
+                                    setSelectedProjects([...new Set([...selectedProjects, ...currentPageItems])]);
+                                  } else {
+                                    const currentPageItems = talentProjects.slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage).map(project => project.id);
+                                    setSelectedProjects(selectedProjects.filter(id => !currentPageItems.includes(id)));
+                                  }
+                                }}
+                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                              />
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tên dự án</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Công nghệ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-neutral-200">
+                          {talentProjects
+                            .slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage)
+                            .map((project) => (
+                              <tr 
+                                key={project.id} 
+                                className="hover:bg-primary-50 transition-colors duration-200 cursor-pointer"
+                                onClick={() => navigate(`/ta/talent-projects/edit/${project.id}`)}
+                              >
+                                <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProjects.includes(project.id)}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      if (e.target.checked) {
+                                        setSelectedProjects([...selectedProjects, project.id]);
+                                      } else {
+                                        setSelectedProjects(selectedProjects.filter(id => id !== project.id));
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-primary-800">{project.projectName}</div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-primary-700">{project.position}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="text-sm text-primary-600">{project.technologies}</div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <SectionPagination
+                      currentPage={pageProjects}
+                      totalItems={talentProjects.length}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setPageProjects}
+                    />
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Briefcase className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
+                    <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa tham gia dự án</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: CV */}
+            {activeTab === "cvs" && (
+              <div className="space-y-6">
+                {/* Kết quả phân tích CV - Hiển thị trước CV của nhân sự */}
+                {analysisError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-8">
+                    <p className="font-semibold">Lỗi phân tích CV</p>
+                    <p className="text-sm mt-1">{analysisError}</p>
+                  </div>
+                )}
+                {analysisResult && (
+                  <div className="bg-white rounded-2xl shadow-soft border border-primary-100 mb-8 animate-fade-in">
+                    <div className="p-6 border-b border-primary-200 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary-100 rounded-lg">
+                          <Workflow className="w-5 h-5 text-primary-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Kết quả phân tích CV</h2>
+                      </div>
+                      <Button
+                        onClick={handleCancelAnalysis}
+                        className="px-4 py-2 rounded-xl bg-neutral-600 text-white hover:bg-neutral-700 transition-all duration-300"
+                      >
+                        Hủy phân tích
+                      </Button>
+                    </div>
+                    <div className="p-6 space-y-5">
+                      <p className="text-sm text-neutral-600">
+                        Hệ thống đã so sánh CV mới với dữ liệu hiện có của nhân sự. Các gợi ý chi tiết được hiển thị ngay trong từng phần bên dưới để bạn thao tác nhanh chóng.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div 
+                          className={`p-4 rounded-xl border border-primary-100 bg-primary-50/70 cursor-pointer transition-all hover:shadow-md hover:border-primary-300 ${expandedBasicInfo ? "ring-2 ring-primary-400" : ""}`}
+                          onClick={() => setExpandedBasicInfo(!expandedBasicInfo)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-primary-600 font-semibold">Thông tin cơ bản</p>
+                            <ChevronDown className={`w-4 h-4 text-primary-600 transition-transform ${expandedBasicInfo ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-primary-900">{analysisResult.basicInfo.hasChanges ? "Có thay đổi" : "Không thay đổi"}</p>
+                          <p className="mt-2 text-xs text-primary-700 cursor-pointer hover:text-primary-900 underline">Xem chi tiết</p>
+                        </div>
+                        <div 
+                          className={`p-4 rounded-xl border border-amber-100 bg-amber-50/70 cursor-pointer transition-all hover:shadow-md hover:border-amber-300 ${expandedAnalysisDetail === "skills" ? "ring-2 ring-amber-400" : ""}`}
+                          onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "skills" ? null : "skills")}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-amber-600 font-semibold">Kỹ năng</p>
+                            <ChevronDown className={`w-4 h-4 text-amber-600 transition-transform ${expandedAnalysisDetail === "skills" ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-amber-900">
+                            {matchedSkillsNotInProfile.length + matchedSkillsDetails.length + unmatchedSkillSuggestions.length}
+                          </p>
+                          <p className="mt-2 text-xs text-amber-700 cursor-pointer hover:text-amber-900">
+                            {matchedSkillsNotInProfile.length} cần tạo mới · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} chưa có trong hệ thống
+                            <span className="ml-2 text-amber-600 underline">(Nhấp để xem chi tiết)</span>
+                          </p>
+                        </div>
+                        <div 
+                          className={`p-4 rounded-xl border border-green-100 bg-green-50/70 cursor-pointer transition-all hover:shadow-md hover:border-green-300 ${expandedAnalysisDetail === "jobRoleLevels" ? "ring-2 ring-green-400" : ""}`}
+                          onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "jobRoleLevels" ? null : "jobRoleLevels")}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-green-600 font-semibold">Vị trí & mức lương</p>
+                            <ChevronDown className={`w-4 h-4 text-green-600 transition-transform ${expandedAnalysisDetail === "jobRoleLevels" ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-green-900">
+                            {matchedJobRoleLevelsNotInProfile.length + jobRoleLevelsMatched.length + jobRoleLevelsUnmatched.length}
+                          </p>
+                          <p className="mt-2 text-xs text-green-700 cursor-pointer hover:text-green-900">
+                            {matchedJobRoleLevelsNotInProfile.length} cần tạo mới · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} chưa có trong hệ thống
+                            <span className="ml-2 text-green-600 underline">(Nhấp để xem chi tiết)</span>
+                          </p>
+                        </div>
+                        <div 
+                          className={`p-4 rounded-xl border border-purple-100 bg-purple-50/70 cursor-pointer transition-all hover:shadow-md hover:border-purple-300 ${expandedAnalysisDetail === "projects" ? "ring-2 ring-purple-400" : ""}`}
+                          onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "projects" ? null : "projects")}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-purple-600 font-semibold">Dự án</p>
+                            <ChevronDown className={`w-4 h-4 text-purple-600 transition-transform ${expandedAnalysisDetail === "projects" ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-purple-900">{analysisResult.projects.newEntries.length}</p>
+                          <p className="mt-2 text-xs text-purple-700 cursor-pointer hover:text-purple-900">
+                            Dự án mới cần xem xét
+                            <span className="ml-2 text-purple-600 underline">(Nhấp để xem chi tiết)</span>
+                          </p>
+                        </div>
+                        <div 
+                          className={`p-4 rounded-xl border border-blue-100 bg-blue-50/70 cursor-pointer transition-all hover:shadow-md hover:border-blue-300 ${expandedAnalysisDetail === "experiences" ? "ring-2 ring-blue-400" : ""}`}
+                          onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "experiences" ? null : "experiences")}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold">Kinh nghiệm</p>
+                            <ChevronDown className={`w-4 h-4 text-blue-600 transition-transform ${expandedAnalysisDetail === "experiences" ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-blue-900">{analysisResult.workExperiences.newEntries.length}</p>
+                          <p className="mt-2 text-xs text-blue-700 cursor-pointer hover:text-blue-900">
+                            Kinh nghiệm làm việc mới phát hiện
+                            <span className="ml-2 text-blue-600 underline">(Nhấp để xem chi tiết)</span>
+                          </p>
+                        </div>
+                        <div 
+                          className={`p-4 rounded-xl border border-rose-100 bg-rose-50/70 cursor-pointer transition-all hover:shadow-md hover:border-rose-300 ${expandedAnalysisDetail === "certificates" ? "ring-2 ring-rose-400" : ""}`}
+                          onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "certificates" ? null : "certificates")}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wide text-rose-600 font-semibold">Chứng chỉ</p>
+                            <ChevronDown className={`w-4 h-4 text-rose-600 transition-transform ${expandedAnalysisDetail === "certificates" ? "rotate-180" : ""}`} />
+                          </div>
+                          <p className="mt-1 text-lg font-bold text-rose-900">
+                            {analysisResult.certificates?.newFromCV?.length || 0}
+                          </p>
+                          <p className="mt-2 text-xs text-rose-700 cursor-pointer hover:text-rose-900">
+                            Cần tạo loại chứng chỉ theo tên các chứng chỉ
+                            <span className="ml-2 text-rose-600 underline">(Nhấp để xem chi tiết)</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Chi tiết phân tích - Skills */}
+                      {expandedAnalysisDetail === "skills" && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-base font-semibold text-amber-900">Kỹ năng</h3>
+                            <button
+                              onClick={() => setExpandedAnalysisDetail(null)}
+                              className="text-amber-600 hover:text-amber-800 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {matchedSkillsDetails.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-green-800 mb-1.5">Trùng CV ({matchedSkillsDetails.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {matchedSkillsDetails.map((match, index) => (
+                                    <span key={`skill-match-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
+                                      {match.skillName}: CV {match.cvLevel} ({match.cvYearsExp} năm) · Hồ sơ {match.systemLevel} ({match.systemYearsExp} năm)
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {matchedSkillsNotInProfile.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-amber-800 mb-1.5">Cần tạo mới (có trong hệ thống, chưa có trong hồ sơ) ({matchedSkillsNotInProfile.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {matchedSkillsNotInProfile.map((skill, index) => (
+                                    <div key={`skill-matched-notin-${index}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs text-amber-900">
+                                      <span>
+                                        {skill.skillName}
+                                        {skill.cvLevel && <span className="ml-1.5 text-amber-600">· {getLevelLabel(skill.cvLevel)}</span>}
+                                        {skill.cvYearsExp && <span className="ml-1.5 text-amber-600">· {skill.cvYearsExp} năm</span>}
+                                      </span>
+                                      <button
+                                        onClick={() => handleQuickCreateSkill({
+                                          skillId: skill.skillId,
+                                          skillName: skill.skillName,
+                                          cvLevel: skill.cvLevel,
+                                          cvYearsExp: skill.cvYearsExp ?? undefined,
+                                        })}
+                                        className="px-2 py-0.5 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors text-xs font-medium"
+                                      >
+                                        Tạo nhanh
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {unmatchedSkillSuggestions.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-amber-800 mb-1.5">Chưa có trong hệ thống (cần đề xuất admin tạo mới) ({unmatchedSkillSuggestions.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {unmatchedSkillSuggestions.map((skill, index) => (
+                                    <span key={`skill-unmatched-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs text-amber-900">
+                                      {skill.skillName}
+                                      {skill.level && <span className="ml-1.5 text-amber-600">· {getLevelLabel(skill.level)}</span>}
+                                      {skill.yearsExp && <span className="ml-1.5 text-amber-600">· {skill.yearsExp} năm</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {matchedSkillsDetails.length === 0 && matchedSkillsNotInProfile.length === 0 && unmatchedSkillSuggestions.length === 0 && (
+                              <p className="text-xs text-amber-700">Không có gợi ý kỹ năng nào</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Chi tiết phân tích - JobRoleLevels */}
+                      {expandedAnalysisDetail === "jobRoleLevels" && (
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-base font-semibold text-green-900">Vị trí & Mức lương</h3>
+                            <button
+                              onClick={() => setExpandedAnalysisDetail(null)}
+                              className="text-green-600 hover:text-green-800 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {jobRoleLevelsMatched.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-green-800 mb-1.5">Trùng CV ({jobRoleLevelsMatched.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {jobRoleLevelsMatched.map(({ suggestion, existing, system }, index) => {
+                                    const systemLevelName = system ? getTalentLevelName(system.level) : undefined;
+                                    const formattedSystemLevel = systemLevelName ? systemLevelName.charAt(0).toUpperCase() + systemLevelName.slice(1) : "—";
+                                    return (
+                                      <span key={`jobrole-match-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
+                                        {suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}: CV Level {suggestion.level ?? "—"} ({suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"}) · Hồ sơ Level {formattedSystemLevel} ({existing.yearsOfExp ?? "—"} năm)
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {matchedJobRoleLevelsNotInProfile.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-green-800 mb-1.5">Cần tạo mới (có trong hệ thống, chưa có trong hồ sơ) ({matchedJobRoleLevelsNotInProfile.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {matchedJobRoleLevelsNotInProfile.map((jobRole, index) => (
+                                    <div key={`jobrole-matched-notin-${index}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
+                                      <span>
+                                        {jobRole.position}
+                                        {jobRole.level && <span className="ml-1.5 text-green-600">· Level {jobRole.level}</span>}
+                                        {jobRole.yearsOfExp && <span className="ml-1.5 text-green-600">· {jobRole.yearsOfExp} năm</span>}
+                                      </span>
+                                      <button
+                                        onClick={() => handleQuickCreateJobRoleLevel(jobRole)}
+                                        className="px-2 py-0.5 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors text-xs font-medium"
+                                      >
+                                        Tạo nhanh
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {jobRoleLevelsUnmatched.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-green-800 mb-1.5">Chưa có trong hệ thống (cần đề xuất admin tạo mới) ({jobRoleLevelsUnmatched.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {jobRoleLevelsUnmatched.map((suggestion, index) => (
+                                    <span key={`jobrole-unmatched-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
+                                      {suggestion.position ?? "Vị trí chưa rõ"}
+                                      {suggestion.level && <span className="ml-1.5 text-green-600">· Level {suggestion.level}</span>}
+                                      {suggestion.yearsOfExp && <span className="ml-1.5 text-green-600">· {suggestion.yearsOfExp} năm</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {jobRoleLevelsMatched.length === 0 && matchedJobRoleLevelsNotInProfile.length === 0 && jobRoleLevelsUnmatched.length === 0 && (
+                              <p className="text-xs text-green-700">Không có gợi ý vị trí nào</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Chi tiết phân tích - Certificates */}
+                      {expandedAnalysisDetail === "certificates" && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-base font-semibold text-rose-900">Chứng chỉ</h3>
+                            <button
+                              onClick={() => setExpandedAnalysisDetail(null)}
+                              className="text-rose-600 hover:text-rose-800 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {/* Hiển thị tất cả chứng chỉ từ CV (chỉ hiển thị tên, cần tạo loại chứng chỉ dựa theo tên) */}
+                            {analysisResult.certificates?.newFromCV && analysisResult.certificates.newFromCV.length > 0 ? (
+                              <div>
+                                <p className="text-xs font-semibold text-rose-800 mb-1.5">Cần tạo loại chứng chỉ theo tên các chứng chỉ ({analysisResult.certificates.newFromCV.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {analysisResult.certificates.newFromCV.map((cert, index) => (
+                                    <span key={`cert-all-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-rose-200 rounded-lg text-xs text-rose-900">
+                                      {cert.certificateName}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-rose-700">Không có gợi ý chứng chỉ nào</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Chi tiết phân tích - Projects */}
+                      {expandedAnalysisDetail === "projects" && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-purple-900">Chi tiết Dự án</h3>
+                            <button
+                              onClick={() => setExpandedAnalysisDetail(null)}
+                              className="text-purple-600 hover:text-purple-800 transition-colors"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                          
+                          {analysisResult.projects.newEntries.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-purple-900 mb-2">Dự án mới ({analysisResult.projects.newEntries.length})</h4>
+                              <div className="space-y-2">
+                                {analysisResult.projects.newEntries.map((project, index) => (
+                                  <div key={`project-new-${index}`} className="bg-white p-3 rounded-lg border border-purple-200">
+                                    <p className="font-medium text-purple-900">{project.projectName}</p>
+                                    {project.position && <p className="text-xs text-purple-700 mt-1">Vị trí: {project.position}</p>}
+                                    {project.technologies && <p className="text-xs text-purple-700">Công nghệ: {project.technologies}</p>}
+                                    {project.description && <p className="text-xs text-purple-600 mt-1 line-clamp-2">{project.description}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {analysisResult.projects.potentialDuplicates.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-purple-900 mb-3">Có thể trùng ({analysisResult.projects.potentialDuplicates.length})</h4>
+                              <div className="space-y-4">
+                                {analysisResult.projects.potentialDuplicates.map((dup, index) => (
+                                  <div key={`project-dup-${index}`} className="bg-white p-4 rounded-lg border border-purple-200">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-neutral-700">
+                                      <div>
+                                        <p className="font-medium text-neutral-900 mb-2">Hiện tại</p>
+                                        <ul className="space-y-1">
+                                          <li>Tên dự án: {dup.existing.projectName ?? "—"}</li>
+                                          <li>Vị trí: {dup.existing.position ?? "—"}</li>
+                                          <li>Công nghệ: {dup.existing.technologies ?? "—"}</li>
+                                          <li>Mô tả: {dup.existing.description ? (dup.existing.description.length > 100 ? `${dup.existing.description.substring(0, 100)}...` : dup.existing.description) : "—"}</li>
+                                        </ul>
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-neutral-900 mb-2">Từ CV</p>
+                                        <ul className="space-y-1">
+                                          <li>Tên dự án: {dup.fromCV.projectName ?? "—"}</li>
+                                          <li>Vị trí: {dup.fromCV.position ?? "—"}</li>
+                                          <li>Công nghệ: {dup.fromCV.technologies ?? "—"}</li>
+                                          <li>Mô tả: {dup.fromCV.description ? (dup.fromCV.description.length > 100 ? `${dup.fromCV.description.substring(0, 100)}...` : dup.fromCV.description) : "—"}</li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-purple-200">
+                                      <p className="text-xs text-purple-700">
+                                        <span className="font-medium">Khuyến nghị:</span> <span className="font-semibold">{dup.recommendation}</span>
+                                        {dup.differencesSummary && dup.differencesSummary.length > 0 && (
+                                          <span className="block mt-1 text-purple-600">
+                                            Khác biệt: {dup.differencesSummary.join(", ")}
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {analysisResult.projects.newEntries.length === 0 && analysisResult.projects.potentialDuplicates.length === 0 && (
+                            <p className="text-sm text-purple-700">Không có gợi ý dự án nào</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Chi tiết phân tích - Experiences */}
+                      {expandedAnalysisDetail === "experiences" && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-blue-900">Chi tiết Kinh nghiệm</h3>
+                            <button
+                              onClick={() => setExpandedAnalysisDetail(null)}
+                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                          
+                          {analysisResult.workExperiences.newEntries.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-blue-900 mb-2">Kinh nghiệm mới ({analysisResult.workExperiences.newEntries.length})</h4>
+                              <div className="space-y-2">
+                                {analysisResult.workExperiences.newEntries.map((exp, index) => (
+                                  <div key={`exp-new-${index}`} className="bg-white p-3 rounded-lg border border-blue-200">
+                                    <p className="font-medium text-blue-900">{exp.position}</p>
+                                    <p className="text-xs text-blue-700 mt-1">Công ty: {exp.company}</p>
+                                    <p className="text-xs text-blue-700">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
+                                    {exp.description && <p className="text-xs text-blue-600 mt-1 line-clamp-2">{exp.description}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {analysisResult.workExperiences.potentialDuplicates.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-blue-900 mb-3">Có thể trùng ({analysisResult.workExperiences.potentialDuplicates.length})</h4>
+                              <div className="space-y-4">
+                                {analysisResult.workExperiences.potentialDuplicates.map((dup, index) => (
+                                  <div key={`exp-dup-${index}`} className="bg-white p-4 rounded-lg border border-blue-200">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-neutral-700">
+                                      <div>
+                                        <p className="font-medium text-neutral-900 mb-2">Hiện tại</p>
+                                        <ul className="space-y-1">
+                                          <li>Vị trí: {dup.existing.position ?? "—"}</li>
+                                          <li>Công ty: {dup.existing.company ?? "—"}</li>
+                                          <li>Thời gian: {dup.existing.startDate ? new Date(dup.existing.startDate).toLocaleDateString("vi-VN") : "—"} - {dup.existing.endDate ? new Date(dup.existing.endDate).toLocaleDateString("vi-VN") : "Hiện tại"}</li>
+                                          <li>Mô tả: {dup.existing.description ? (dup.existing.description.length > 100 ? `${dup.existing.description.substring(0, 100)}...` : dup.existing.description) : "—"}</li>
+                                        </ul>
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-neutral-900 mb-2">Từ CV</p>
+                                        <ul className="space-y-1">
+                                          <li>Vị trí: {dup.fromCV.position ?? "—"}</li>
+                                          <li>Công ty: {dup.fromCV.company ?? "—"}</li>
+                                          <li>Thời gian: {dup.fromCV.startDate ?? "—"} - {dup.fromCV.endDate ?? "Hiện tại"}</li>
+                                          <li>Mô tả: {dup.fromCV.description ? (dup.fromCV.description.length > 100 ? `${dup.fromCV.description.substring(0, 100)}...` : dup.fromCV.description) : "—"}</li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-blue-200">
+                                      <p className="text-xs text-blue-700">
+                                        <span className="font-medium">Khuyến nghị:</span> <span className="font-semibold">{dup.recommendation}</span>
+                                        {dup.differencesSummary && dup.differencesSummary.length > 0 && (
+                                          <span className="block mt-1 text-blue-600">
+                                            Khác biệt: {dup.differencesSummary.join(", ")}
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {analysisResult.workExperiences.newEntries.length === 0 && analysisResult.workExperiences.potentialDuplicates.length === 0 && (
+                            <p className="text-sm text-blue-700">Không có gợi ý kinh nghiệm nào</p>
+                          )}
+                        </div>
+                      )}
+                      <div className="bg-neutral-50 rounded-xl border border-neutral-200">
+                        <div 
+                          className="p-4 cursor-pointer flex items-center justify-between hover:bg-neutral-100 transition-colors rounded-xl"
+                          onClick={() => setExpandedBasicInfo(!expandedBasicInfo)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-gray-900">So sánh thông tin cơ bản</h3>
+                            <p className="text-sm text-neutral-600">
+                              <span className="font-medium">Có thay đổi:</span> {analysisResult.basicInfo.hasChanges ? "Có" : "Không"}
+                            </p>
+                          </div>
+                          <ChevronDown className={`w-5 h-5 text-neutral-600 transition-transform ${expandedBasicInfo ? "rotate-180" : ""}`} />
+                        </div>
+                        {expandedBasicInfo && (
+                          <div className="px-4 pb-4 pt-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-neutral-700">
+                              <div>
+                                <p className="font-medium text-neutral-900">Hiện tại</p>
+                                <ul className="space-y-1 mt-1">
+                                  <li>Họ tên: {analysisResult.basicInfo.current.fullName ?? "—"}</li>
+                                  <li>Email: {analysisResult.basicInfo.current.email ?? "—"}</li>
+                                  <li>Điện thoại: {analysisResult.basicInfo.current.phone ?? "—"}</li>
+                                  <li>Nơi ở: {analysisResult.basicInfo.current.locationName ?? "—"}</li>
+                                </ul>
+                              </div>
+                              <div>
+                                <p className="font-medium text-neutral-900">Gợi ý</p>
+                                <ul className="space-y-1 mt-1">
+                                  <li>Họ tên: {analysisResult.basicInfo.suggested.fullName ?? "—"}</li>
+                                  <li>Email: {analysisResult.basicInfo.suggested.email ?? "—"}</li>
+                                  <li>Điện thoại: {analysisResult.basicInfo.suggested.phone ?? "—"}</li>
+                                  <li>Nơi ở: {analysisResult.basicInfo.suggested.locationName ?? "—"}</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <details className="bg-neutral-50 rounded-xl border border-neutral-200">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-700 hover:text-primary-600">
+                          Xem toàn bộ dữ liệu phân tích (JSON)
+                        </summary>
+                        <pre className="overflow-auto text-xs bg-black text-green-300 p-4 rounded-b-xl">
+{JSON.stringify(analysisResult, null, 2)}
+                        </pre>
+                      </details>
+                      {analysisResult.rawExtractedText && (
+                        <details className="bg-neutral-50 rounded-xl border border-neutral-200">
+                          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-700 hover:text-primary-600">
+                            Raw Extracted Text
+                          </summary>
+                          <pre className="overflow-auto text-xs bg-neutral-900 text-neutral-100 p-4 rounded-b-xl whitespace-pre-wrap">
+{analysisResult.rawExtractedText}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* CV của nhân sự */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
           <div className="p-6 border-b border-neutral-200">
             <div className="flex items-center justify-between">
@@ -1428,14 +3744,16 @@ export default function TalentDetailPage() {
                 <h2 className="text-xl font-semibold text-gray-900">CV của nhân sự</h2>
               </div>
               <div className="flex gap-2">
-                <Link to={`/hr/talent-cvs/create?talentId=${id}`}>
+                {showInlineForm !== "cv" && (
                   <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Tải lên CV"
+                    onClick={() => handleOpenInlineForm("cv")}
+                    disabled={isSubmitting}
+                    className={`group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={isSubmitting ? "Đang xử lý..." : "Thêm CV"}
                   >
                     <Upload className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
-                </Link>
+                )}
                 {selectedCVs.length > 0 && (
                   <Button
                     onClick={handleDeleteCVs}
@@ -1450,157 +3768,664 @@ export default function TalentDetailPage() {
           </div>
           {isCVsExpanded && (
             <div className="p-6">
+              {/* Inline CV Form */}
+              {showInlineForm === "cv" && (
+                <div className="bg-white rounded-xl border-2 border-accent-200 p-6 mb-6 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Thêm CV mới</h3>
+                    <button
+                      onClick={handleCloseInlineForm}
+                      className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Giai đoạn 1: Chọn file CV (giống Create.tsx) */}
+                  {!showCVFullForm && (
+                    <div className="space-y-4">
+                      {/* File Input - Giống Create.tsx */}
+                      <div>
+                        <label className="block mb-2 text-sm font-semibold text-neutral-700">Chọn file CV (PDF)</label>
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleCVFileSelect}
+                          className="w-full px-4 py-3 text-sm border-2 border-neutral-300 rounded-xl bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                        />
+                        {selectedCVFile && (
+                          <div className="flex items-center gap-2 text-sm text-neutral-600 mt-2">
+                            <FileText className="w-4 h-4" />
+                            <span>File đã chọn: <span className="font-medium">{selectedCVFile.name}</span> ({(selectedCVFile.size / 1024).toFixed(2)} KB)</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Preview và nút Phân tích - Hiện khi đã chọn file */}
+                      {selectedCVFile && cvPreviewUrl && (
+                        <div className="space-y-4">
+                          {/* CV Preview - Ở trên */}
+                          <div className="border-2 border-primary-200 rounded-xl overflow-hidden bg-white shadow-md">
+                            <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-4 py-2 flex items-center justify-between border-b border-primary-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-primary-100 rounded-lg flex items-center justify-center">
+                                  <Eye className="w-3.5 h-3.5 text-primary-600" />
+                                </div>
+                                <span className="text-xs font-semibold text-primary-800">Xem trước CV</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => window.open(cvPreviewUrl, '_blank')}
+                                className="px-2 py-1 text-xs text-primary-700 hover:text-primary-900 hover:bg-primary-100 rounded-lg flex items-center gap-1 transition-all"
+                              >
+                                <Eye className="w-3 h-3" />
+                                Mở toàn màn hình
+                              </button>
+                            </div>
+                            <div className="bg-white w-full" style={{ height: '500px' }}>
+                              <iframe
+                                src={cvPreviewUrl}
+                                className="w-full h-full border-0"
+                                title="CV Preview"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Nút Phân tích - Ở dưới */}
+                          <div>
+                            <button
+                              type="button"
+                              onClick={handleAnalyzeCV}
+                              disabled={extractingCV}
+                              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-lg hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-semibold text-sm px-4 py-3"
+                            >
+                              {extractingCV ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                  Đang phân tích...
+                                </>
+                              ) : (
+                                <>
+                                  <Workflow className="w-4 h-4" />
+                                  Phân tích CV
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Giai đoạn 2: Form đầy đủ - Chỉ hiện sau khi xác nhận phân tích */}
+                  {showCVFullForm && (
+                    <div className="space-y-6">
+                      {/* Vị trí công việc */}
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                          <Briefcase className="w-4 h-4" />
+                          Vị trí công việc <span className="text-red-500">*</span>
+                        </label>
+                        {cvFormErrors.jobRoleLevelId && (
+                          <p className="text-xs text-red-600 mb-1">{cvFormErrors.jobRoleLevelId}</p>
+                        )}
+                        <select
+                          value={inlineCVForm.jobRoleLevelId || 0}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            setInlineCVForm({ ...inlineCVForm, jobRoleLevelId: value });
+                            const newErrors = { ...cvFormErrors };
+                            delete newErrors.jobRoleLevelId;
+                            setCvFormErrors(newErrors);
+                          }}
+                          disabled={isCVUploadedFromFirebase}
+                          className={`w-full border rounded-xl px-4 py-3 focus:ring-accent-500 bg-white ${
+                            isCVUploadedFromFirebase 
+                              ? 'border-green-300 bg-green-50 cursor-not-allowed' 
+                              : cvFormErrors.jobRoleLevelId
+                              ? 'border-red-300 focus:border-red-500'
+                              : 'border-neutral-200 focus:border-accent-500'
+                          }`}
+                          required
+                        >
+                          <option value="0">-- Chọn vị trí công việc --</option>
+                          {lookupJobRoleLevels.map(jobRoleLevel => (
+                            <option key={jobRoleLevel.id} value={jobRoleLevel.id}>{jobRoleLevel.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Version */}
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          Version CV <span className="text-red-500">*</span>
+                        </label>
+                        {cvFormErrors.version && (
+                          <p className="text-xs text-red-600 mb-1">{cvFormErrors.version}</p>
+                        )}
+                        {cvVersionError && !isCVUploadedFromFirebase && (
+                          <p className="text-xs text-red-500 mb-1">{cvVersionError}</p>
+                        )}
+                        <input
+                          type="number"
+                          value={inlineCVForm.version || 1}
+                          onChange={(e) => {
+                            const versionNum = Number(e.target.value);
+                            setInlineCVForm({ ...inlineCVForm, version: versionNum });
+                            const error = validateCVVersion(versionNum, inlineCVForm.jobRoleLevelId || 0, existingCVsForValidation);
+                            setCvVersionError(error);
+                            const newErrors = { ...cvFormErrors };
+                            if (error) {
+                              newErrors.version = error;
+                            } else {
+                              delete newErrors.version;
+                            }
+                            setCvFormErrors(newErrors);
+                          }}
+                          placeholder="VD: 1, 2, 3..."
+                          min="1"
+                          step="1"
+                          required
+                          disabled={isCVUploadedFromFirebase || (inlineCVForm.jobRoleLevelId ? inlineCVForm.jobRoleLevelId > 0 && existingCVsForValidation.length === 0 : false)}
+                          className={`w-full border rounded-xl px-4 py-3 focus:ring-accent-500 bg-white ${
+                            isCVUploadedFromFirebase || (inlineCVForm.jobRoleLevelId ? inlineCVForm.jobRoleLevelId > 0 && existingCVsForValidation.length === 0 : false)
+                              ? 'border-green-300 bg-green-50 cursor-not-allowed'
+                              : cvVersionError || cvFormErrors.version
+                                ? 'border-red-500 focus:border-red-500' 
+                                : 'border-neutral-200 focus:border-accent-500'
+                          }`}
+                        />
+                        {existingCVsForValidation.length > 0 && !isCVUploadedFromFirebase && (
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Các version hiện có: {existingCVsForValidation.map((cv: TalentCV) => cv.version || 'N/A').join(', ')}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Upload File Section */}
+                      <div className="bg-gradient-to-r from-accent-50 to-blue-50 rounded-xl p-6 border border-accent-200">
+                        <label className="block text-gray-700 font-semibold mb-3 flex items-center gap-2">
+                          <Upload className="w-5 h-5 text-accent-600" />
+                          Upload File CV
+                        </label>
+                        
+                        <div className="space-y-4">
+                          {/* File Info - Hiện file đã chọn */}
+                          {selectedCVFile && (
+                            <div className="flex items-center gap-2 text-sm text-neutral-600">
+                              <FileText className="w-4 h-4" />
+                              <span>File đã chọn: <span className="font-medium">{selectedCVFile.name}</span> ({(selectedCVFile.size / 1024).toFixed(2)} KB)</span>
+                            </div>
+                          )}
+
+                          {/* Upload Progress */}
+                          {uploadingCV && (
+                            <div className="space-y-2">
+                              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-accent-500 to-blue-500 h-3 rounded-full transition-all duration-300 animate-pulse"
+                                  style={{ width: `${cvUploadProgress}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-sm text-center text-accent-700 font-medium">
+                                Đang upload... {cvUploadProgress}%
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Upload Button */}
+                          {!isCVUploadedFromFirebase && (
+                            <button
+                              type="button"
+                              onClick={handleCVFileUpload}
+                              disabled={!selectedCVFile || uploadingCV || !inlineCVForm.version || inlineCVForm.version <= 0 || !inlineCVForm.jobRoleLevelId || inlineCVForm.jobRoleLevelId === 0 || !!cvVersionError}
+                              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent-600 to-blue-600 hover:from-accent-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {uploadingCV ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                  Đang upload...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  Upload lên Firebase
+                                </>
+                              )}
+                            </button>
+                          )}
+                          {isCVUploadedFromFirebase && (
+                            <div className="w-full flex items-center justify-center gap-2 bg-green-100 text-green-700 px-4 py-3 rounded-xl font-medium">
+                              <CheckCircle className="w-4 h-4" />
+                              Đã upload lên Firebase thành công
+                            </div>
+                          )}
+
+                        </div>
+                      </div>
+
+                      {/* URL file CV */}
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4" />
+                        URL file CV <span className="text-red-500">*</span> {inlineCVForm.cvFileUrl && <span className="text-green-600 text-xs">(✓ Đã có)</span>}
+                      </label>
+
+                      <div className="flex gap-2">
+                        <input
+                          value={inlineCVForm.cvFileUrl || ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setInlineCVForm({ ...inlineCVForm, cvFileUrl: value });
+                            if (value && uploadedCVUrl !== value) {
+                              setIsCVUploadedFromFirebase(false);
+                              setUploadedCVUrl(null);
+                            }
+                          }}
+                          placeholder="https://example.com/cv-file.pdf hoặc tự động từ Firebase"
+                          required
+                          disabled={!!(inlineCVForm.cvFileUrl && uploadedCVUrl === inlineCVForm.cvFileUrl) || uploadingCV || isCVUploadedFromFirebase}
+                          className={`flex-1 border rounded-xl px-4 py-3 focus:ring-accent-500 bg-white ${
+                            inlineCVForm.cvFileUrl && uploadedCVUrl === inlineCVForm.cvFileUrl
+                              ? 'bg-gray-100 cursor-not-allowed opacity-75 border-gray-300'
+                              : isCVUploadedFromFirebase 
+                                ? 'border-green-300 bg-green-50 cursor-not-allowed' 
+                                : 'border-neutral-200 focus:border-accent-500'
+                          }`}
+                          readOnly={uploadingCV || isCVUploadedFromFirebase}
+                        />
+                        {inlineCVForm.cvFileUrl && (
+                          <>
+                            <a
+                              href={inlineCVForm.cvFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-4 py-3 bg-accent-100 text-accent-700 rounded-xl hover:bg-accent-200 transition-all"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Xem
+                            </a>
+                            <button
+                              type="button"
+                              onClick={handleDeleteCVFile}
+                              disabled={uploadingCV}
+                              className="flex items-center gap-1.5 px-4 py-3 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={uploadedCVUrl === inlineCVForm.cvFileUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                            >
+                              <X className="w-4 h-4" />
+                              Xóa
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tóm tắt CV */}
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Tóm tắt CV
+                      </label>
+                      <textarea
+                        value={inlineCVForm.summary || ""}
+                        onChange={(e) => setInlineCVForm({ ...inlineCVForm, summary: e.target.value })}
+                        placeholder="Mô tả ngắn gọn về nội dung CV, bao gồm: tên ứng viên, vị trí công việc, kinh nghiệm làm việc, kỹ năng chính, dự án nổi bật, chứng chỉ (nếu có)..."
+                        rows={4}
+                        className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-accent-500 focus:ring-accent-500 bg-white resize-none"
+                      />
+                    </div>
+
+                    {/* Error messages */}
+                    {cvFormErrors.submit && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p className="text-sm text-red-700">{cvFormErrors.submit}</p>
+                      </div>
+                    )}
+
+                    {/* Submit buttons */}
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        onClick={handleCloseInlineForm}
+                        className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        onClick={handleSubmitInlineCV}
+                        disabled={isSubmitting}
+                        className={`px-4 py-2 rounded-lg bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Đang lưu...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            Thêm CV
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal phân tích CV inline */}
+              {showInlineCVAnalysisModal && inlineCVAnalysisResult && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleCloseInlineCVAnalysisModal}>
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white z-10">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary-100 rounded-lg">
+                          <Workflow className="w-5 h-5 text-primary-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Kết quả phân tích CV</h2>
+                      </div>
+                      <button
+                        onClick={handleCloseInlineCVAnalysisModal}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+                    <div className="p-6 space-y-5">
+                      <p className="text-sm text-neutral-600">
+                        Hệ thống đã so sánh CV mới với dữ liệu hiện có của nhân sự.
+                      </p>
+                      <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">So sánh thông tin cơ bản</h3>
+                        <p className="text-sm text-neutral-600 mb-3">
+                          <span className="font-medium">Có thay đổi:</span> {inlineCVAnalysisResult.basicInfo.hasChanges ? "Có" : "Không"}
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-neutral-700">
+                          <div>
+                            <p className="font-medium text-neutral-900 mb-2">Hiện tại</p>
+                            <ul className="space-y-2 bg-white p-3 rounded-lg border border-neutral-200">
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.fullName, inlineCVAnalysisResult.basicInfo.suggested.fullName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Họ tên:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.fullName, inlineCVAnalysisResult.basicInfo.suggested.fullName) ? 'text-red-700' : ''}`}>
+                                  {inlineCVAnalysisResult.basicInfo.current.fullName ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.email, inlineCVAnalysisResult.basicInfo.suggested.email) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Email:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.email, inlineCVAnalysisResult.basicInfo.suggested.email) ? 'text-red-700' : ''}`}>
+                                  {inlineCVAnalysisResult.basicInfo.current.email ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.phone, inlineCVAnalysisResult.basicInfo.suggested.phone) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Điện thoại:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.phone, inlineCVAnalysisResult.basicInfo.suggested.phone) ? 'text-red-700' : ''}`}>
+                                  {inlineCVAnalysisResult.basicInfo.current.phone ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.locationName, inlineCVAnalysisResult.basicInfo.suggested.locationName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Nơi ở:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.locationName, inlineCVAnalysisResult.basicInfo.suggested.locationName) ? 'text-red-700' : ''}`}>
+                                  {inlineCVAnalysisResult.basicInfo.current.locationName ?? "—"}
+                                </span>
+                              </li>
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-medium text-neutral-900 mb-2">Gợi ý từ CV</p>
+                            <ul className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.fullName, inlineCVAnalysisResult.basicInfo.suggested.fullName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Họ tên:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.fullName, inlineCVAnalysisResult.basicInfo.suggested.fullName) ? 'text-red-700' : 'text-blue-700'}`}>
+                                  {inlineCVAnalysisResult.basicInfo.suggested.fullName ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.email, inlineCVAnalysisResult.basicInfo.suggested.email) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Email:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.email, inlineCVAnalysisResult.basicInfo.suggested.email) ? 'text-red-700' : 'text-blue-700'}`}>
+                                  {inlineCVAnalysisResult.basicInfo.suggested.email ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.phone, inlineCVAnalysisResult.basicInfo.suggested.phone) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Điện thoại:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.phone, inlineCVAnalysisResult.basicInfo.suggested.phone) ? 'text-red-700' : 'text-blue-700'}`}>
+                                  {inlineCVAnalysisResult.basicInfo.suggested.phone ?? "—"}
+                                </span>
+                              </li>
+                              <li className={`flex justify-between ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.locationName, inlineCVAnalysisResult.basicInfo.suggested.locationName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                <span className="text-neutral-500">Nơi ở:</span>
+                                <span className={`font-medium ${isValueDifferent(inlineCVAnalysisResult.basicInfo.current.locationName, inlineCVAnalysisResult.basicInfo.suggested.locationName) ? 'text-red-700' : 'text-blue-700'}`}>
+                                  {inlineCVAnalysisResult.basicInfo.suggested.locationName ?? "—"}
+                                </span>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
+                        <Button
+                          onClick={handleCloseInlineCVAnalysisModal}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Đóng
+                        </Button>
+                        {inlineCVAnalysisResult.basicInfo.hasChanges && (
+                          <Button
+                            onClick={handleConfirmInlineCVAnalysis}
+                            className="px-4 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all flex items-center gap-2"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Xác nhận và xem gợi ý
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {talentCVs.length > 0 ? (
                 <>
-                  <div className="space-y-4">
-                    {(() => {
-                      // Nhóm CV theo jobRoleLevelName
-                      const groupedCVs = new Map<string, (TalentCV & { jobRoleLevelName?: string })[]>();
-                      talentCVs.forEach((cv) => {
-                        const key = cv.jobRoleLevelName || "Chưa xác định";
-                        if (!groupedCVs.has(key)) {
-                          groupedCVs.set(key, []);
-                        }
-                        groupedCVs.get(key)!.push(cv);
-                      });
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Danh sách CV</h3>
+                    <p className="text-sm text-neutral-600 mt-1">Quản lý các phiên bản CV của nhân sự</p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-50 border-b border-neutral-200">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                            <input
+                              type="checkbox"
+                              checked={selectedCVs.length === talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).length && talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const currentPageItems = talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).map(cv => cv.id);
+                                  setSelectedCVs([...new Set([...selectedCVs, ...currentPageItems])]);
+                                } else {
+                                  const currentPageItems = talentCVs.slice((pageCVs - 1) * itemsPerPage, pageCVs * itemsPerPage).map(cv => cv.id);
+                                  setSelectedCVs(selectedCVs.filter(id => !currentPageItems.includes(id)));
+                                }
+                              }}
+                              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Phiên bản</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trạng thái</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-neutral-200">
+                        {(() => {
+                          // Nhóm CV theo jobRoleLevelName
+                          const groupedCVs = new Map<string, (TalentCV & { jobRoleLevelName?: string })[]>();
+                          talentCVs.forEach((cv) => {
+                            const key = cv.jobRoleLevelName || "Chưa xác định";
+                            if (!groupedCVs.has(key)) {
+                              groupedCVs.set(key, []);
+                            }
+                            groupedCVs.get(key)!.push(cv);
+                          });
 
-                      // Lấy danh sách các nhóm đã sắp xếp
-                      const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                          // Lấy danh sách các nhóm đã sắp xếp
+                          const sortedGroups = Array.from(groupedCVs.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-                      return sortedGroups.map(([jobRoleLevelName, cvs]) => {
-                        // Tách CV active và inactive
-                        const activeCVs = cvs.filter(cv => cv.isActive);
-                        const inactiveCVs = cvs.filter(cv => !cv.isActive);
-                        const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
+                          // Lấy CV cho trang hiện tại
+                          const startIndex = (pageCVs - 1) * itemsPerPage;
+                          const endIndex = startIndex + itemsPerPage;
+                          let currentIndex = 0;
+                          const rows: React.ReactNode[] = [];
 
-                        return (
-                          <div key={jobRoleLevelName} className="space-y-2">
-                            {/* CV đang hoạt động */}
-                            {activeCVs.map((cv) => {
-                              const isLoading = analysisLoadingId === cv.id;
-                              const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
-                              const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
-                              const canAnalyze = !hasOtherAnalysis;
-                              const analysisControls = isCurrentAnalysis
-                                ? (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCancelAnalysis();
-                                    }}
-                                    className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white"
-                                  >
-                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    Hủy phân tích
-                                  </Button>
-                                )
-                                : (
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAnalyzeCVFromUrl(cv);
-                                    }}
-                                    disabled={isLoading || !canAnalyze}
-                                    className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${
-                                      isLoading || !canAnalyze
-                                        ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                                    }`}
-                                    title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
-                                  >
-                                    <Workflow className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    {isLoading ? "Đang phân tích..." : "Phân tích CV"}
-                                  </Button>
-                                );
+                          sortedGroups.forEach(([jobRoleLevelName, cvs]) => {
+                            // Sắp xếp CV: active trước (version giảm dần), inactive sau (version giảm dần)
+                            const sortedCVs = [...cvs].sort((a, b) => {
+                              if (a.isActive !== b.isActive) {
+                                return a.isActive ? -1 : 1; // Active trước
+                              }
+                              return b.version - a.version; // Version giảm dần
+                            });
 
-                              return (
-                                <div key={cv.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200 hover:bg-neutral-100 transition-colors duration-200">
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedCVs.includes(cv.id)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) => {
+                            const activeCVs = sortedCVs.filter(cv => cv.isActive);
+                            const inactiveCVs = sortedCVs.filter(cv => !cv.isActive);
+                            const isCollapsed = collapsedInactiveCVGroups.has(jobRoleLevelName);
+
+                            // Hiển thị CV active
+                            activeCVs.forEach((cv, index) => {
+                              if (currentIndex >= startIndex && currentIndex < endIndex) {
+                                const isLoading = analysisLoadingId === cv.id;
+                                const isCurrentAnalysis = analysisResultCVId === cv.id && !!analysisResult;
+                                const hasOtherAnalysis = !!analysisResult && analysisResultCVId !== null && analysisResultCVId !== cv.id;
+                                const canAnalyze = !hasOtherAnalysis;
+                                const analysisControls = isCurrentAnalysis
+                                  ? (
+                                    <Button
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        if (e.target.checked) {
-                                          setSelectedCVs([...selectedCVs, cv.id]);
-                                        } else {
-                                          setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
-                                        }
+                                        handleCancelAnalysis();
                                       }}
-                                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                                    />
-                                    <div
-                                      className="flex items-center gap-3 flex-1 cursor-pointer"
-                                      onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
+                                      className="group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-neutral-500 to-neutral-600 hover:from-neutral-600 hover:to-neutral-700 text-white text-xs"
                                     >
-                                      <FileText className="w-5 h-5 text-primary-600" />
-                                      <div>
-                                        <p className="font-medium text-gray-900 hover:text-primary-700 transition-colors duration-200">
-                                          {cv.jobRoleLevelName ? `${cv.jobRoleLevelName} v${cv.version}` : `v${cv.version}`}
-                                        </p>
+                                      <Workflow className="w-3 h-3" />
+                                      Hủy
+                                    </Button>
+                                  )
+                                  : (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAnalyzeCVFromUrl(cv);
+                                      }}
+                                      disabled={isLoading || !canAnalyze}
+                                      className={`group flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 text-xs ${
+                                        isLoading || !canAnalyze
+                                          ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                          : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                                      }`}
+                                      title={!canAnalyze ? "Vui lòng hủy phân tích CV đang hiển thị trước khi phân tích CV khác" : ""}
+                                    >
+                                      <Workflow className="w-3 h-3" />
+                                      {isLoading ? "Đang phân tích..." : "Phân tích"}
+                                    </Button>
+                                  );
+
+                                // Thêm nút collapse/expand vào phiên bản mới nhất (đầu tiên) nếu có phiên bản cũ
+                                const isNewestVersion = index === 0 && inactiveCVs.length > 0;
+                                const collapseButton = isNewestVersion ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCollapsedInactiveCVGroups(prev => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(jobRoleLevelName)) {
+                                          newSet.delete(jobRoleLevelName);
+                                        } else {
+                                          newSet.add(jobRoleLevelName);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors duration-200"
+                                    title={isCollapsed ? `Hiển thị ${inactiveCVs.length} phiên bản cũ` : `Ẩn ${inactiveCVs.length} phiên bản cũ`}
+                                  >
+                                    {isCollapsed ? (
+                                      <ChevronDown className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronUp className="w-4 h-4" />
+                                    )}
+                                    <span className="text-xs">({inactiveCVs.length})</span>
+                                  </button>
+                                ) : null;
+
+                                rows.push(
+                                  <tr 
+                                    key={cv.id} 
+                                    className="hover:bg-accent-50 transition-colors duration-200 cursor-pointer"
+                                    onClick={() => navigate(`/ta/talent-cvs/edit/${cv.id}`)}
+                                  >
+                                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCVs.includes(cv.id)}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          if (e.target.checked) {
+                                            setSelectedCVs([...selectedCVs, cv.id]);
+                                          } else {
+                                            setSelectedCVs(selectedCVs.filter(id => id !== cv.id));
+                                          }
+                                        }}
+                                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="text-sm font-medium text-accent-800">{cv.jobRoleLevelName || "Chưa xác định"}</div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="text-sm text-accent-700">v{cv.version}</div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                        Đang hoạt động
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex items-center gap-2">
+                                        <a
+                                          href={cv.cvFileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                          Xem PDF
+                                        </a>
+                                        {analysisControls}
+                                        {collapseButton}
                                       </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Đang hoạt động</span>
-                                    <a
-                                      href={cv.cvFileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="group flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300"
-                                    >
-                                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                      <span className="text-sm font-medium">Xem PDF</span>
-                                    </a>
-                                    {analysisControls}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                              currentIndex++;
+                            });
 
-                            {/* CV không hoạt động - Thu gọn */}
-                            {inactiveCVs.length > 0 && (
-                              <div className="mt-4 pt-4 border-t border-neutral-200">
-                                {/* Nút toggle để expand/collapse */}
-                                <button
-                                  onClick={() => {
-                                    setCollapsedInactiveCVGroups(prev => {
-                                      const newSet = new Set(prev);
-                                      if (newSet.has(jobRoleLevelName)) {
-                                        newSet.delete(jobRoleLevelName);
-                                      } else {
-                                        newSet.add(jobRoleLevelName);
-                                      }
-                                      return newSet;
-                                    });
-                                  }}
-                                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors duration-200 border border-neutral-200 bg-neutral-50/50"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-neutral-500" />
-                                    <span>
-                                      {inactiveCVs.length} phiên bản cũ ({jobRoleLevelName})
-                                    </span>
-                                  </span>
-                                  {isCollapsed ? (
-                                    <ChevronDown className="w-4 h-4 text-neutral-500" />
-                                  ) : (
-                                    <ChevronUp className="w-4 h-4 text-neutral-500" />
-                                  )}
-                                </button>
-
-                                {/* Danh sách CV không hoạt động */}
-                                {!isCollapsed && (
-                                  <div className="mt-3 space-y-2 pl-2">
-                                    {inactiveCVs.map((cv) => (
-                                      <div key={cv.id} className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-neutral-200 hover:border-neutral-300 hover:shadow-sm transition-all duration-200">
-                                        <div className="flex items-center gap-3 flex-1">
+                            // Hiển thị các phiên bản cũ nếu không bị collapse
+                            if (inactiveCVs.length > 0) {
+                              if (!isCollapsed) {
+                                inactiveCVs.forEach((cv) => {
+                                  if (currentIndex >= startIndex && currentIndex < endIndex) {
+                                    rows.push(
+                                      <tr 
+                                        key={cv.id} 
+                                        className="hover:bg-neutral-50 transition-colors duration-200 cursor-pointer bg-neutral-50/50"
+                                        onClick={() => navigate(`/ta/talent-cvs/edit/${cv.id}`)}
+                                      >
+                                        <td className="px-4 py-3 whitespace-nowrap pl-8" onClick={(e) => e.stopPropagation()}>
                                           <input
                                             type="checkbox"
                                             checked={selectedCVs.includes(cv.id)}
-                                            onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               if (e.target.checked) {
@@ -1611,39 +4436,48 @@ export default function TalentDetailPage() {
                                             }}
                                             className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                                           />
-                                          <div
-                                            className="flex items-center gap-2 flex-1 cursor-pointer"
-                                            onClick={() => navigate(`/hr/talent-cvs/edit/${cv.id}`)}
-                                          >
-                                            <FileText className="w-4 h-4 text-neutral-500" />
-                                            <p className="text-sm font-medium text-neutral-700 hover:text-primary-700 transition-colors duration-200">
-                                              Version {cv.version}
-                                            </p>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <div className="text-sm font-medium text-neutral-600">{cv.jobRoleLevelName || "Chưa xác định"}</div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <div className="text-sm text-neutral-500">v{cv.version}</div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                                            Không hoạt động
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                          <div className="flex items-center gap-2">
+                                            <a
+                                              href={cv.cvFileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                              Xem PDF
+                                            </a>
+                                            {/* Không hiển thị nút phân tích cho CV không hoạt động */}
                                           </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Không hoạt động</span>
-                                          <a
-                                            href={cv.cvFileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="group flex items-center gap-1.5 px-3 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 text-sm font-medium"
-                                          >
-                                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                            <span>Xem PDF</span>
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      });
-                    })()}
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+                                  currentIndex++;
+                                });
+                              } else {
+                                // Nếu bị collapse, vẫn đếm số lượng để pagination đúng
+                                currentIndex += inactiveCVs.length;
+                              }
+                            }
+                          });
+
+                          return rows;
+                        })()}
+                      </tbody>
+                    </table>
                   </div>
                   <SectionPagination
                     currentPage={pageCVs}
@@ -1664,1075 +4498,1860 @@ export default function TalentDetailPage() {
             </div>
           )}
         </div>
-        {analysisError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-8">
-            <p className="font-semibold">Lỗi phân tích CV</p>
-            <p className="text-sm mt-1">{analysisError}</p>
-          </div>
-        )}
-        {analysisResult && (
-          <div className="bg-white rounded-2xl shadow-soft border border-primary-100 mb-8 animate-fade-in">
-            <div className="p-6 border-b border-primary-200 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Workflow className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kết quả phân tích CV</h2>
               </div>
-              {/* <Button
-                onClick={handleCancelAnalysis}
-                className="group flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all duration-300"
-              >
-                <XCircle className="w-4 h-4 text-neutral-500 group-hover:text-neutral-700 transition-colors duration-300" />
-                Hủy kết quả phân tích
-              </Button> */}
-            </div>
-            <div className="p-6 space-y-5">
-              <p className="text-sm text-neutral-600">
-                Hệ thống đã so sánh CV mới với dữ liệu hiện có của nhân sự. Các gợi ý chi tiết được hiển thị ngay trong từng phần bên dưới để bạn thao tác nhanh chóng.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl border border-primary-100 bg-primary-50/70">
-                  <p className="text-xs uppercase tracking-wide text-primary-600 font-semibold">Thông tin cơ bản</p>
-                  <p className="mt-1 text-lg font-bold text-primary-900">{analysisResult.basicInfo.hasChanges ? "Có thay đổi" : "Không thay đổi"}</p>
-                  <p className="mt-2 text-xs text-primary-700">Xem phần Thông tin chung để cập nhật</p>
-                </div>
-                <div className="p-4 rounded-xl border border-amber-100 bg-amber-50/70">
-                  <p className="text-xs uppercase tracking-wide text-amber-600 font-semibold">Kỹ năng</p>
-                  <p className="mt-1 text-lg font-bold text-amber-900">
-                    {skillsRecognizedForAddition.length + matchedSkillsDetails.length + unmatchedSkillSuggestions.length}
-                  </p>
-                  <p className="mt-2 text-xs text-amber-700">
-                    {skillsRecognizedForAddition.length} đề xuất thêm · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} cần tạo mới
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl border border-green-100 bg-green-50/70">
-                  <p className="text-xs uppercase tracking-wide text-green-600 font-semibold">Vị trí & mức lương</p>
-                  <p className="mt-1 text-lg font-bold text-green-900">
-                    {jobRoleLevelsRecognized.length + jobRoleLevelsMatched.length + jobRoleLevelsUnmatched.length}
-                  </p>
-                  <p className="mt-2 text-xs text-green-700">
-                    {jobRoleLevelsRecognized.length} đề xuất thêm · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} cần tạo mới
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl border border-purple-100 bg-purple-50/70">
-                  <p className="text-xs uppercase tracking-wide text-purple-600 font-semibold">Dự án</p>
-                  <p className="mt-1 text-lg font-bold text-purple-900">{analysisResult.projects.newEntries.length}</p>
-                  <p className="mt-2 text-xs text-purple-700">Dự án mới cần xem xét</p>
-                </div>
-                <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/70">
-                  <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold">Kinh nghiệm</p>
-                  <p className="mt-1 text-lg font-bold text-blue-900">{analysisResult.workExperiences.newEntries.length}</p>
-                  <p className="mt-2 text-xs text-blue-700">Kinh nghiệm làm việc mới phát hiện</p>
-                </div>
-                <div className="p-4 rounded-xl border border-rose-100 bg-rose-50/70">
-                  <p className="text-xs uppercase tracking-wide text-rose-600 font-semibold">Chứng chỉ</p>
-                  <p className="mt-1 text-lg font-bold text-rose-900">
-                    {certificatesRecognized.length + certificatesMatched.length + certificatesUnmatched.length}
-                  </p>
-                  <p className="mt-2 text-xs text-rose-700">
-                    {certificatesRecognized.length} đề xuất thêm · {certificatesMatched.length} trùng CV · {certificatesUnmatched.length} cần tạo mới
-                  </p>
-                </div>
-              </div>
-              <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">So sánh thông tin cơ bản</h3>
-                <p className="text-sm text-neutral-600 mb-1">
-                  <span className="font-medium">Có thay đổi:</span> {analysisResult.basicInfo.hasChanges ? "Có" : "Không"}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-neutral-700">
-                  <div>
-                    <p className="font-medium text-neutral-900">Hiện tại</p>
-                    <ul className="space-y-1 mt-1">
-                      <li>Họ tên: {analysisResult.basicInfo.current.fullName ?? "—"}</li>
-                      <li>Email: {analysisResult.basicInfo.current.email ?? "—"}</li>
-                      <li>Điện thoại: {analysisResult.basicInfo.current.phone ?? "—"}</li>
-                      <li>Nơi ở: {analysisResult.basicInfo.current.locationName ?? "—"}</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-medium text-neutral-900">Gợi ý</p>
-                    <ul className="space-y-1 mt-1">
-                      <li>Họ tên: {analysisResult.basicInfo.suggested.fullName ?? "—"}</li>
-                      <li>Email: {analysisResult.basicInfo.suggested.email ?? "—"}</li>
-                      <li>Điện thoại: {analysisResult.basicInfo.suggested.phone ?? "—"}</li>
-                      <li>Nơi ở: {analysisResult.basicInfo.suggested.locationName ?? "—"}</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <details className="bg-neutral-50 rounded-xl border border-neutral-200">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-700 hover:text-primary-600">
-                  Xem toàn bộ dữ liệu phân tích (JSON)
-                </summary>
-                <pre className="overflow-auto text-xs bg-black text-green-300 p-4 rounded-b-xl">
-{JSON.stringify(analysisResult, null, 2)}
-                </pre>
-              </details>
-              {analysisResult.rawExtractedText && (
-                <details className="bg-neutral-50 rounded-xl border border-neutral-200">
-                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-700 hover:text-primary-600">
-                    Raw Extracted Text
-                  </summary>
-                  <pre className="overflow-auto text-xs bg-neutral-900 text-neutral-100 p-4 rounded-b-xl whitespace-pre-wrap">
-{analysisResult.rawExtractedText}
-                  </pre>
-                </details>
-              )}
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Dự án của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isProjectsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Dự án của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleNavigateToCreate(`/hr/talent-projects/create?talentId=${id}`)}
-                  className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                  title="Tạo dự án"
-                >
-                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                {selectedProjects.length > 0 && (
-                  <Button
-                    onClick={handleDeleteProjects}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa dự án ({selectedProjects.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isProjectsExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.projects.newEntries.length > 0 || analysisResult.projects.potentialDuplicates.length > 0) && (
-                <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Gợi ý từ CV mới</h3>
-                    <span className="text-xs text-purple-700">{analysisResult.projects.newEntries.length} dự án mới · {analysisResult.projects.potentialDuplicates.length} dự án có thể trùng</span>
-                  </div>
-                  {analysisResult.projects.newEntries.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-purple-700 font-medium">Đề xuất thêm dự án:</p>
-                      {analysisResult.projects.newEntries.map((project, index) => (
-                        <div key={`suggested-project-${index}`} className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-purple-900 shadow-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold">{project.projectName}</span>
-                            {project.position && <span className="text-xs text-purple-700">Vai trò: {project.position}</span>}
-                          </div>
-                          {project.technologies && (
-                            <p className="mt-1 text-xs text-purple-600">Công nghệ: {project.technologies}</p>
-                          )}
-                        </div>
-                      ))}
+            {/* Tab: Vị trí và mức lương */}
+            {activeTab === "jobRoleLevels" && (
+              <div className="space-y-4">
+                {/* Inline JobRoleLevel Form */}
+                {showInlineForm === "jobRoleLevel" && (
+                  <div className="bg-white rounded-xl border-2 border-warning-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm vị trí mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
-                  )}
-                  {analysisResult.projects.potentialDuplicates.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                      <p className="font-medium mb-1">Kiểm tra trùng lặp:</p>
-                      <ul className="space-y-1">
-                        {analysisResult.projects.potentialDuplicates.map((dup, index) => (
-                          <li key={`dup-project-${index}`}>
-                            - {dup.fromCV.projectName} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {talentProjects.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {talentProjects
-                      .slice((pageProjects - 1) * itemsPerPage, pageProjects * itemsPerPage)
-                      .map((project) => (
-                        <div key={project.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-projects/edit/${project.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedProjects.includes(project.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedProjects([...selectedProjects, project.id]);
-                                  } else {
-                                    setSelectedProjects(selectedProjects.filter(id => id !== project.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{project.projectName}</h3>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-2">
-                            <p className="text-sm text-primary-700">
-                              <span className="font-medium">Vị trí:</span> {project.position}
-                            </p>
-                            <p className="text-sm text-primary-600">
-                              <span className="font-medium">Công nghệ:</span> {project.technologies}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageProjects}
-                    totalItems={talentProjects.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageProjects}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Briefcase className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa tham gia dự án</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Vị trí và mức lương */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsJobRoleLevelsExpanded(!isJobRoleLevelsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isJobRoleLevelsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-warning-100 rounded-lg">
-                  <Target className="w-5 h-5 text-warning-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Vị trí và mức lương</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-job-role-levels/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm vị trí"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedJobRoleLevels.length > 0 && (
-                  <Button
-                    onClick={handleDeleteJobRoleLevels}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa vị trí ({selectedJobRoleLevels.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isJobRoleLevelsExpanded && (
-            <div className="p-6">
-              {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsMatched.length > 0 || jobRoleLevelsOnlyInTalent.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-green-200 bg-green-50/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí & mức lương</h3>
-                    <span className="text-xs text-green-700">
-                      {jobRoleLevelsRecognized.length} đề xuất thêm · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} cần tạo mới
-                    </span>
-                  </div>
-                  {jobRoleLevelsMatched.length > 0 && (
-                    <div className="rounded-lg border border-green-300 bg-white px-3 py-2 text-xs text-green-900">
-                      <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
-                      <ul className="space-y-1">
-                        {jobRoleLevelsMatched.map(({ suggestion, existing, system }, index) => {
-                          const systemLevelName = system ? getTalentLevelName(system.level) : undefined;
-                          const formattedSystemLevel = systemLevelName ? systemLevelName.charAt(0).toUpperCase() + systemLevelName.slice(1) : "—";
-                          return (
-                            <li key={`jobrole-match-${index}`} className="leading-relaxed">
-                              - {suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}: CV Level {suggestion.level ?? "—"} ({suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"}) · Hồ sơ Level {formattedSystemLevel} ({existing.yearsOfExp ?? "—"} năm) · Lương CV {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"} · Hồ sơ {existing.ratePerMonth ? `${existing.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                  {(jobRoleLevelsRecognized.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
-                      {jobRoleLevelsRecognized.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
-                          <ul className="space-y-2">
-                            {jobRoleLevelsRecognized.map(({ suggestion, system }, index) => (
-                              <li key={`jobrole-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <span className="font-semibold text-sm">{suggestion.position ?? system?.name ?? "Vị trí chưa rõ"}</span>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      onClick={() =>
-                                        handlePreparePrefillAndNavigate(
-                                          "jobRoleLevels",
-                                          [suggestion],
-                                          `/hr/talent-job-role-levels/create?talentId=${id}`
-                                        )
-                                      }
-                                      className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-warning-600 to-warning-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-warning-700 hover:to-warning-800"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                      Tạo nhanh
-                                    </Button>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-amber-600 mt-1">
-                                  Gợi ý CV: Level {suggestion.level ?? "—"} · {suggestion.yearsOfExp ? `${suggestion.yearsOfExp} năm` : "Chưa rõ"} · Lương {suggestion.ratePerMonth ? `${suggestion.ratePerMonth.toLocaleString("vi-VN")}đ/tháng` : "Chưa rõ"}
-                                </p>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {jobRoleLevelsUnmatched.length > 0 && (
-                        <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {jobRoleLevelsUnmatched.map((suggestion, index) => (
-                              <li key={`jobrole-unmatched-${index}`}>
-                                - {suggestion.position ?? "Vị trí chưa rõ"}{" "}
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "jobRoleLevel",
-                                  jobRoleSuggestionRequestKey,
-                                  jobRoleSuggestionDisplayItems,
-                                  jobRoleSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(jobRoleSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm vị trí/level vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(jobRoleSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Vị trí <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsJobRoleLevelDropdownOpen(!isJobRoleLevelDropdownOpen)}
+                            className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-warning-500/20 transition-all border-neutral-300 focus:border-warning-500"
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Target className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineJobRoleLevelForm.jobRoleLevelId && inlineJobRoleLevelForm.jobRoleLevelId > 0
+                                  ? lookupJobRoleLevels.find(j => j.id === inlineJobRoleLevelForm.jobRoleLevelId)?.name || "Chọn vị trí"
+                                  : "Chọn vị trí"}
                               </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {jobRoleLevels.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {jobRoleLevels
-                      .slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage)
-                      .map((jrl) => (
-                        <div key={jrl.id} className="p-4 bg-gradient-to-r from-warning-50 to-warning-100 rounded-xl border border-warning-200 hover:from-warning-100 hover:to-warning-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-job-role-levels/edit/${jrl.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedJobRoleLevels.includes(jrl.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
-                                  } else {
-                                    setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-warning-800 hover:text-warning-900 transition-colors duration-200">{jrl.jobRoleLevelName}</h3>
                             </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-warning-700">
-                              <span className="font-medium">Kinh nghiệm:</span> {jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}
-                            </p>
-                            <p className="text-sm text-warning-600">
-                              <span className="font-medium">Mức lương:</span> {jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageJobRoleLevels}
-                    totalItems={jobRoleLevels.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageJobRoleLevels}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Target className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật vị trí làm việc</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Kỹ năng của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isSkillsExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <Star className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kỹ năng của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-skills/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm kỹ năng"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedSkills.length > 0 && (
-                  <Button
-                    onClick={handleDeleteSkills}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kỹ năng ({selectedSkills.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isSkillsExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.skills.newFromCV.length > 0 || analysisResult.skills.matched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-amber-900 uppercase tracking-wide">Đề xuất kỹ năng</h3>
-                    <span className="text-xs text-amber-700">
-                      {skillsRecognizedForAddition.length} đề xuất thêm · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} cần tạo mới
-                    </span>
-                  </div>
-                  {(skillsRecognizedForAddition.length > 0 || unmatchedSkillSuggestions.length > 0) && (
-                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                      <p className="font-medium mb-2 text-sm text-amber-900">So sánh khác với hồ sơ hiện tại:</p>
-                      {skillsRecognizedForAddition.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
-                          <ul className="space-y-1">
-                            {skillsRecognizedForAddition.map((skill, index) => (
-                              <li key={`missing-skill-system-${index}`} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-sm">{skill.skillName}</span>
+                          </button>
+                          {isJobRoleLevelDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={jobRoleLevelSearch}
+                                    onChange={(e) => setJobRoleLevelSearch(e.target.value)}
+                                    placeholder="Tìm vị trí..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-warning-500 focus:ring-warning-500"
+                                  />
                                 </div>
-                                <Button
-                                  onClick={() =>
-                                    handlePreparePrefillAndNavigate(
-                                      "skills",
-                                      [skill],
-                                      `/hr/talent-skills/create?talentId=${id}`
-                                    )
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  const filtered = jobRoleLevelSearch
+                                    ? lookupJobRoleLevels.filter(j => j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase()))
+                                    : lookupJobRoleLevels;
+                                  if (filtered.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
                                   }
-                                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-secondary-700 hover:to-secondary-800"
-                                >
-                                  <Plus className="w-4 h-4" />
-                                  Tạo nhanh
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {unmatchedSkillSuggestions.length > 0 && (
-                        <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {unmatchedSkillSuggestions.map((skill, index) => (
-                              <li key={`unmatched-skill-${index}`}>- {skill.skillName}</li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "skill",
-                                  skillSuggestionRequestKey,
-                                  skillSuggestionDisplayItems,
-                                  skillSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(skillSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm kỹ năng vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(skillSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {talentSkills.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {talentSkills
-                      .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
-                      .map((skill) => (
-                        <div key={skill.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-skills/edit/${skill.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedSkills.includes(skill.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedSkills([...selectedSkills, skill.id]);
-                                  } else {
-                                    setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-secondary-800 hover:text-secondary-900 transition-colors duration-200">{skill.skillName}</h3>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-secondary-700">
-                              <span className="font-medium">Level:</span> {skill.level}
-                            </p>
-                            <p className="text-sm text-secondary-600">
-                              <span className="font-medium">Kinh nghiệm:</span> {skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageSkills}
-                    totalItems={talentSkills.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageSkills}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Star className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Lịch sẵn sàng của nhân sự */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsAvailableTimesExpanded(!isAvailableTimesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isAvailableTimesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-secondary-100 rounded-lg">
-                  <Calendar className="w-5 h-5 text-secondary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-available-times/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm thời gian"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedAvailableTimes.length > 0 && (
-                  <Button
-                    onClick={handleDeleteAvailableTimes}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa thời gian ({selectedAvailableTimes.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isAvailableTimesExpanded && (
-            <div className="p-6">
-              {availableTimes.length > 0 ? (
-                <>
-                  <div className="space-y-4">
-                    {availableTimes
-                      .slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage)
-                      .map((time) => (
-                        <div key={time.id} className="p-4 bg-gradient-to-r from-secondary-50 to-secondary-100 rounded-xl border border-secondary-200 hover:from-secondary-100 hover:to-secondary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-available-times/edit/${time.id}`)}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedAvailableTimes.includes(time.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
-                                  } else {
-                                    setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                              />
-                              <div>
-                                <p className="text-sm text-secondary-700">
-                                  <span className="font-medium">Từ:</span> {new Date(time.startTime).toLocaleDateString('vi-VN')}
-                                </p>
-                                <p className="text-sm text-secondary-600">
-                                  <span className="font-medium">Đến:</span> {time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}
-                                </p>
+                                  
+                                  // Get selected job role level IDs (excluding current form)
+                                  const selectedJobRoleLevelIds = jobRoleLevels
+                                    .map(jrl => jrl.jobRoleLevelId)
+                                    .filter(id => id > 0);
+                                  
+                                  return filtered.map((jobRoleLevel) => {
+                                    const isDisabled = selectedJobRoleLevelIds.includes(jobRoleLevel.id);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={jobRoleLevel.id}
+                                        onClick={() => {
+                                          if (!isDisabled) {
+                                            setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, jobRoleLevelId: jobRoleLevel.id });
+                                            setIsJobRoleLevelDropdownOpen(false);
+                                            setJobRoleLevelSearch("");
+                                          }
+                                        }}
+                                        disabled={isDisabled}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineJobRoleLevelForm.jobRoleLevelId === jobRoleLevel.id
+                                            ? "bg-warning-50 text-warning-700"
+                                            : isDisabled
+                                              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
+                                      </button>
+                                    );
+                                  });
+                                })()}
                               </div>
                             </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Kinh nghiệm (năm)</label>
+                          <input
+                            type="number"
+                            value={inlineJobRoleLevelForm.yearsOfExp || 1}
+                            onChange={(e) => setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, yearsOfExp: Number(e.target.value) })}
+                            min="0"
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Mức lương mong muốn</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formatCurrency(inlineJobRoleLevelForm.ratePerMonth)}
+                              onChange={(e) => handleInlineRatePerMonthChange(e.target.value)}
+                              placeholder="VD: 5.000.000"
+                              className="w-full py-2 px-3 pr-12 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
+                              VNĐ
+                            </span>
                           </div>
-                          {time.notes && (
-                            <div className="mt-3">
-                              <p className="text-sm text-gray-600 font-medium mb-1">Ghi chú:</p>
-                              <p className="text-sm text-gray-700">{time.notes}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineJobRoleLevel}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Vị trí và mức lương</h3>
+                    <div className="flex gap-2">
+                      {showInlineForm !== "jobRoleLevel" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("jobRoleLevel")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-warning-600 to-warning-700 hover:from-warning-700 hover:to-warning-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm vị trí"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
+                      {selectedJobRoleLevels.length > 0 && (
+                        <Button
+                          onClick={handleDeleteJobRoleLevels}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa vị trí ({selectedJobRoleLevels.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {analysisResult && (matchedJobRoleLevelsNotInProfile.length > 0 || jobRoleLevelsMatched.length > 0 || jobRoleLevelsOnlyInTalent.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-green-200 bg-green-50/80 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí & mức lương</h3>
+                        <span className="text-xs text-green-700">
+                          {matchedJobRoleLevelsNotInProfile.length} cần tạo mới · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} chưa có trong hệ thống
+                        </span>
+                      </div>
+                      {(matchedJobRoleLevelsNotInProfile.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
+                          {matchedJobRoleLevelsNotInProfile.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Cần tạo mới (có trong hệ thống, chưa có trong hồ sơ) ({matchedJobRoleLevelsNotInProfile.length}):</p>
+                              <ul className="space-y-2">
+                                {matchedJobRoleLevelsNotInProfile.map((jobRole, index) => (
+                                  <li key={`jobrole-matched-notin-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm">
+                                        {jobRole.position}
+                                        {jobRole.level && <span className="ml-1.5 text-amber-600">· Level {jobRole.level}</span>}
+                                        {jobRole.yearsOfExp && <span className="ml-1.5 text-amber-600">· {jobRole.yearsOfExp} năm</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          onClick={() => handleQuickCreateJobRoleLevel(jobRole)}
+                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
+                                        >
+                                          <Plus className="w-4 h-4" />
+                                          Tạo nhanh
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {jobRoleLevelsUnmatched.length > 0 && (
+                            <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Chưa có trong hệ thống (cần đề xuất admin tạo mới) ({jobRoleLevelsUnmatched.length}):</p>
+                              <ul className="mt-2 space-y-1">
+                                {jobRoleLevelsUnmatched.map((suggestion, index) => (
+                                  <li key={`jobrole-unmatched-${index}`}>
+                                    - {suggestion.position ?? "Vị trí chưa rõ"}{" "}
+                                  </li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
+                                <Button
+                                  onClick={() =>
+                                    handleSuggestionRequest(
+                                      "jobRoleLevel",
+                                      jobRoleSuggestionRequestKey,
+                                      jobRoleSuggestionDisplayItems,
+                                      jobRoleSuggestionDetailItems
+                                    )
+                                  }
+                                  disabled={
+                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  {isSuggestionPending(jobRoleSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm vị trí/level vào hệ thống"}
+                                </Button>
+                                {isSuggestionPending(jobRoleSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageAvailableTimes}
-                    totalItems={availableTimes.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageAvailableTimes}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật thời gian có sẵn</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Chứng chỉ */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsCertificatesExpanded(!isCertificatesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isCertificatesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
-                  )}
-                </button>
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Award className="w-5 h-5 text-primary-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Chứng chỉ</h2>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/hr/talent-certificates/create?talentId=${id}`}>
-                  <Button
-                    className="group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                    title="Thêm chứng chỉ"
-                  >
-                    <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                {selectedCertificates.length > 0 && (
-                  <Button
-                    onClick={handleDeleteCertificates}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa chứng chỉ ({selectedCertificates.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isCertificatesExpanded && (
-            <div className="p-6">
-              {(certificatesRecognized.length > 0 || certificatesMatched.length > 0 || certificatesOnlyInTalent.length > 0 || certificatesUnmatched.length > 0) && (
-                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-rose-900 uppercase tracking-wide">Đề xuất chứng chỉ</h3>
-                    <span className="text-xs text-rose-700">
-                      {certificatesRecognized.length} đề xuất thêm · {certificatesMatched.length} trùng CV · {certificatesUnmatched.length} cần tạo mới
-                    </span>
-                  </div>
-                  {certificatesMatched.length > 0 && (
-                    <div className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs text-rose-900">
-                      <p className="font-medium mb-1">So sánh trùng với hồ sơ hiện tại:</p>
-                      <ul className="space-y-1">
-                        {certificatesMatched.map(({ suggestion, existing }, index) => (
-                          <li key={`certificate-match-${index}`} className="leading-relaxed">
-                            - {suggestion.certificateName}: CV ngày cấp {suggestion.issuedDate ?? "Chưa rõ"} · Hồ sơ ngày cấp {existing.issuedDate ? new Date(existing.issuedDate).toLocaleDateString("vi-VN") : "Chưa rõ"} · Trạng thái {existing.isVerified ? "đã xác thực" : "chưa xác thực"}
-                          </li>
-                        ))}
-                      </ul>
+                      )}
                     </div>
                   )}
-                  {(certificatesRecognized.length > 0 || certificatesUnmatched.length > 0) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
-                      {certificatesRecognized.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
-                          <ul className="space-y-2">
-                            {certificatesRecognized.map(({ suggestion }, index) => (
-                              <li key={`certificate-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <span className="font-semibold text-sm">{suggestion.certificateName}</span>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      onClick={() =>
-                                        handlePreparePrefillAndNavigate(
-                                          "certificates",
-                                          [suggestion],
-                                          `/hr/talent-certificates/create?talentId=${id}`
+                  {jobRoleLevels.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedJobRoleLevels.length === jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).length && jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).map(jrl => jrl.id);
+                                      setSelectedJobRoleLevels([...new Set([...selectedJobRoleLevels, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = jobRoleLevels.slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage).map(jrl => jrl.id);
+                                      setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Mức lương</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {jobRoleLevels
+                              .slice((pageJobRoleLevels - 1) * itemsPerPage, pageJobRoleLevels * itemsPerPage)
+                              .map((jrl) => (
+                                <tr 
+                                  key={jrl.id} 
+                                  className="hover:bg-warning-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-job-role-levels/edit/${jrl.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedJobRoleLevels.includes(jrl.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedJobRoleLevels([...selectedJobRoleLevels, jrl.id]);
+                                        } else {
+                                          setSelectedJobRoleLevels(selectedJobRoleLevels.filter(id => id !== jrl.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-warning-600 bg-gray-100 border-gray-300 rounded focus:ring-warning-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-warning-800">{jrl.jobRoleLevelName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-warning-700">{jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-warning-600">{jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageJobRoleLevels}
+                        totalItems={jobRoleLevels.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageJobRoleLevels}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Target className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin vị trí</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật vị trí làm việc</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Kỹ năng của nhân sự */}
+            {activeTab === "skills" && (
+              <div className="space-y-4">
+                {/* Inline Skill Form */}
+                {showInlineForm === "skill" && (
+                  <div className="bg-white rounded-xl border-2 border-secondary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm kỹ năng mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {/* Skill Filter - Lọc theo nhóm kỹ năng */}
+                      {lookupSkills.length > 0 && lookupSkillGroups.length > 0 && (
+                        <div className="mb-4">
+                          <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+                            <label className="block text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+                              <Filter className="w-3.5 h-3.5" />
+                              Lọc danh sách kỹ năng theo nhóm
+                            </label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsSkillGroupDropdownOpen(!isSkillGroupDropdownOpen)}
+                                className="w-full flex items-center justify-between px-3 py-1.5 border rounded-lg bg-white text-left focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 transition-all border-neutral-300"
+                              >
+                                <div className="flex items-center gap-2 text-xs text-neutral-700">
+                                  <Filter className="w-3.5 h-3.5 text-neutral-400" />
+                                  <span>
+                                    {selectedSkillGroupId
+                                      ? lookupSkillGroups.find(g => g.id === selectedSkillGroupId)?.name || "Nhóm kỹ năng"
+                                      : "Tất cả nhóm kỹ năng"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isSkillGroupDropdownOpen && (
+                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={skillGroupSearchQuery}
+                                        onChange={(e) => setSkillGroupSearchQuery(e.target.value)}
+                                        placeholder="Tìm nhóm kỹ năng..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSkillGroupId(undefined);
+                                        setIsSkillGroupDropdownOpen(false);
+                                        setSkillGroupSearchQuery("");
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        !selectedSkillGroupId
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
+                                      Tất cả nhóm kỹ năng
+                                    </button>
+                                    {(() => {
+                                      const filtered = skillGroupSearchQuery
+                                        ? lookupSkillGroups.filter(g =>
+                                          g.name.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()) ||
+                                          (g.description && g.description.toLowerCase().includes(skillGroupSearchQuery.toLowerCase()))
                                         )
+                                        : lookupSkillGroups;
+                                      if (filtered.length === 0) {
+                                        return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy nhóm kỹ năng</p>;
                                       }
+                                      return filtered.map((group) => (
+                                        <button
+                                          type="button"
+                                          key={group.id}
+                                          onClick={() => {
+                                            setSelectedSkillGroupId(group.id);
+                                            setIsSkillGroupDropdownOpen(false);
+                                            setSkillGroupSearchQuery("");
+                                          }}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            selectedSkillGroupId === group.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {group.name}
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Kỹ năng <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsSkillDropdownOpen(!isSkillDropdownOpen)}
+                            className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-secondary-500/20 transition-all border-neutral-300 focus:border-secondary-500"
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Star className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineSkillForm.skillId && inlineSkillForm.skillId > 0
+                                  ? lookupSkills.find(s => s.id === inlineSkillForm.skillId)?.name || "Chọn kỹ năng"
+                                  : "Chọn kỹ năng"}
+                              </span>
+                            </div>
+                          </button>
+                          {isSkillDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={skillSearchQuery}
+                                    onChange={(e) => setSkillSearchQuery(e.target.value)}
+                                    placeholder="Tìm kỹ năng..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-secondary-500 focus:ring-secondary-500"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  // Filter skills theo search query và skill group
+                                  const filteredSkills = lookupSkills.filter((s) => {
+                                    const matchesSearch = !skillSearchQuery ||
+                                      s.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                                      (s.description && s.description.toLowerCase().includes(skillSearchQuery.toLowerCase()));
+                                    const matchesGroup = !selectedSkillGroupId || s.skillGroupId === selectedSkillGroupId;
+                                    return matchesSearch && matchesGroup;
+                                  });
+
+                                  if (filteredSkills.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy kỹ năng nào</p>;
+                                  }
+
+                                  // Check if skill is already selected
+                                  const selectedSkillIds = talentSkills
+                                    .map(skill => skill.skillId)
+                                    .filter(id => id > 0);
+
+                                  return filteredSkills.map((skill) => {
+                                    const isDisabled = selectedSkillIds.includes(skill.id);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={skill.id}
+                                        onClick={() => {
+                                          if (!isDisabled) {
+                                            setInlineSkillForm({ ...inlineSkillForm, skillId: skill.id });
+                                            // Tự động set nhóm kỹ năng theo skill đã chọn
+                                            if (skill.skillGroupId) {
+                                              setSelectedSkillGroupId(skill.skillGroupId);
+                                            }
+                                            setIsSkillDropdownOpen(false);
+                                            setSkillSearchQuery("");
+                                          }
+                                        }}
+                                        disabled={isDisabled}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineSkillForm.skillId === skill.id
+                                            ? "bg-secondary-50 text-secondary-700"
+                                            : isDisabled
+                                              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed italic"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {skill.name}{isDisabled ? ' (đã chọn)' : ''}
+                                      </button>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Trình độ</label>
+                          <select
+                            value={inlineSkillForm.level || "Beginner"}
+                            onChange={(e) => setInlineSkillForm({ ...inlineSkillForm, level: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                          >
+                            <option value="Beginner">Mới bắt đầu</option>
+                            <option value="Intermediate">Trung bình</option>
+                            <option value="Advanced">Nâng cao</option>
+                            <option value="Expert">Chuyên gia</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Số năm kinh nghiệm</label>
+                          <input
+                            type="number"
+                            value={inlineSkillForm.yearsExp || 1}
+                            onChange={(e) => setInlineSkillForm({ ...inlineSkillForm, yearsExp: Number(e.target.value) })}
+                            min="0"
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineSkill}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Kỹ năng của nhân sự</h3>
+                    <div className="flex gap-2">
+                      {showInlineForm !== "skill" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("skill")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm kỹ năng"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
+                      {selectedSkills.length > 0 && (
+                        <Button
+                          onClick={handleDeleteSkills}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa kỹ năng ({selectedSkills.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {analysisResult && (analysisResult.skills.newFromCV.length > 0 || analysisResult.skills.matched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-amber-900 uppercase tracking-wide">Đề xuất kỹ năng</h3>
+                        <span className="text-xs text-amber-700">
+                          {matchedSkillsNotInProfile.length} cần tạo mới · {matchedSkillsDetails.length} trùng CV · {unmatchedSkillSuggestions.length} chưa có trong hệ thống
+                        </span>
+                      </div>
+                      {(matchedSkillsNotInProfile.length > 0 || unmatchedSkillSuggestions.length > 0) && (
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                          <p className="font-medium mb-2 text-sm text-amber-900">So sánh khác với hồ sơ hiện tại:</p>
+                          {matchedSkillsNotInProfile.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Cần tạo mới (có trong hệ thống, chưa có trong hồ sơ) ({matchedSkillsNotInProfile.length}):</p>
+                              <ul className="space-y-1">
+                                {matchedSkillsNotInProfile.map((skill, index) => (
+                                  <li key={`missing-skill-system-${index}`} className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-sm">
+                                        {skill.skillName}
+                                        {skill.cvLevel && <span className="ml-1.5 text-amber-600">· {getLevelLabel(skill.cvLevel)}</span>}
+                                        {skill.cvYearsExp && <span className="ml-1.5 text-amber-600">· {skill.cvYearsExp} năm</span>}
+                                      </span>
+                                    </div>
+                                    <Button
+                                      onClick={() => handleQuickCreateSkill({
+                                        skillId: skill.skillId,
+                                        skillName: skill.skillName,
+                                        cvLevel: skill.cvLevel,
+                                        cvYearsExp: skill.cvYearsExp ?? undefined,
+                                      })}
                                       className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
                                     >
                                       <Plus className="w-4 h-4" />
                                       Tạo nhanh
                                     </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {unmatchedSkillSuggestions.length > 0 && (
+                            <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Chưa có trong hệ thống (cần đề xuất admin tạo mới) ({unmatchedSkillSuggestions.length}):</p>
+                              <ul className="mt-2 space-y-1">
+                                {unmatchedSkillSuggestions.map((skill, index) => (
+                                  <li key={`unmatched-skill-${index}`}>- {skill.skillName}</li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
+                                <Button
+                                  onClick={() =>
+                                    handleSuggestionRequest(
+                                      "skill",
+                                      skillSuggestionRequestKey,
+                                      skillSuggestionDisplayItems,
+                                      skillSuggestionDetailItems
+                                    )
+                                  }
+                                  disabled={
+                                    !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !skillSuggestionDisplayItems.length || isSuggestionPending(skillSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  {isSuggestionPending(skillSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm kỹ năng vào hệ thống"}
+                                </Button>
+                                {isSuggestionPending(skillSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {talentSkills.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSkills.length === talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length && talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
+                                      setSelectedSkills([...new Set([...selectedSkills, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
+                                      setSelectedSkills(selectedSkills.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kỹ năng</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trình độ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {talentSkills
+                              .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
+                              .map((skill) => (
+                                <tr 
+                                  key={skill.id} 
+                                  className="hover:bg-secondary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-skills/edit/${skill.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSkills.includes(skill.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedSkills([...selectedSkills, skill.id]);
+                                        } else {
+                                          setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-secondary-800">{skill.skillName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-700">{getLevelLabel(skill.level)}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-600">{skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageSkills}
+                        totalItems={talentSkills.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageSkills}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Star className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Lịch sẵn sàng của nhân sự */}
+            {activeTab === "availableTimes" && (
+              <div className="space-y-4">
+                {/* Inline AvailableTime Form */}
+                {showInlineForm === "availableTime" && (
+                  <div className="bg-white rounded-xl border-2 border-secondary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm thời gian sẵn sàng mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Thời gian bắt đầu <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={inlineAvailableTimeForm.startTime || ""}
+                            min={new Date().toISOString().slice(0, 16)}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, startTime: value });
+                              // Validate startTime
+                              const newErrors = { ...availableTimeFormErrors };
+                              if (value && !validateStartTime(value)) {
+                                newErrors.startTime = "⚠️ Thời gian bắt đầu phải nằm trong tương lai.";
+                              } else {
+                                delete newErrors.startTime;
+                              }
+                              // Re-validate endTime if startTime changes
+                              if (inlineAvailableTimeForm.endTime && value) {
+                                if (!validateEndTime(value, inlineAvailableTimeForm.endTime)) {
+                                  newErrors.endTime = "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu.";
+                                } else {
+                                  delete newErrors.endTime;
+                                }
+                              }
+                              setAvailableTimeFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              availableTimeFormErrors.startTime
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                            }`}
+                          />
+                          {availableTimeFormErrors.startTime && (
+                            <p className="text-xs text-red-600 mt-1">{availableTimeFormErrors.startTime}</p>
+                          )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Chọn ngày và giờ bắt đầu có sẵn (phải lớn hơn thời điểm hiện tại)
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Thời gian kết thúc (tùy chọn)</label>
+                          <input
+                            type="datetime-local"
+                            value={inlineAvailableTimeForm.endTime || ""}
+                            min={inlineAvailableTimeForm.startTime ? (() => {
+                              const startDate = new Date(inlineAvailableTimeForm.startTime);
+                              startDate.setMinutes(startDate.getMinutes() + 1);
+                              return startDate.toISOString().slice(0, 16);
+                            })() : undefined}
+                            onChange={(e) => {
+                              const value = e.target.value || undefined;
+                              setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, endTime: value });
+                              // Validate endTime
+                              const newErrors = { ...availableTimeFormErrors };
+                              if (value && inlineAvailableTimeForm.startTime) {
+                                if (!validateEndTime(inlineAvailableTimeForm.startTime, value)) {
+                                  newErrors.endTime = "⚠️ Thời gian kết thúc phải sau thời gian bắt đầu.";
+                                } else {
+                                  delete newErrors.endTime;
+                                }
+                              } else if (value && !inlineAvailableTimeForm.startTime) {
+                                newErrors.endTime = "⚠️ Vui lòng chọn thời gian bắt đầu trước.";
+                              } else {
+                                delete newErrors.endTime;
+                              }
+                              setAvailableTimeFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              availableTimeFormErrors.endTime
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500"
+                            }`}
+                          />
+                          {availableTimeFormErrors.endTime && (
+                            <p className="text-xs text-red-600 mt-1">{availableTimeFormErrors.endTime}</p>
+                          )}
+                          <p className="text-xs text-neutral-500 mt-1">
+                            Để trống nếu không có thời gian kết thúc cụ thể
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Ghi chú</label>
+                        <textarea
+                          value={inlineAvailableTimeForm.notes || ""}
+                          onChange={(e) => setInlineAvailableTimeForm({ ...inlineAvailableTimeForm, notes: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500 resize-none"
+                          placeholder="Nhập ghi chú"
+                        />
+                      </div>
+                      {availableTimeFormErrors.submit && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-sm text-red-700">{availableTimeFormErrors.submit}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineAvailableTime}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Lịch sẵn sàng của nhân sự</h3>
+                    <div className="flex gap-2">
+                      {showInlineForm !== "availableTime" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("availableTime")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-secondary-600 to-secondary-700 hover:from-secondary-700 hover:to-secondary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm thời gian"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
+                      {selectedAvailableTimes.length > 0 && (
+                        <Button
+                          onClick={handleDeleteAvailableTimes}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa thời gian ({selectedAvailableTimes.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {availableTimes.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAvailableTimes.length === availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).length && availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).map(time => time.id);
+                                      setSelectedAvailableTimes([...new Set([...selectedAvailableTimes, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = availableTimes.slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage).map(time => time.id);
+                                      setSelectedAvailableTimes(selectedAvailableTimes.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Từ ngày</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Đến ngày</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Ghi chú</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {availableTimes
+                              .slice((pageAvailableTimes - 1) * itemsPerPage, pageAvailableTimes * itemsPerPage)
+                              .map((time) => (
+                                <tr 
+                                  key={time.id} 
+                                  className="hover:bg-secondary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-available-times/edit/${time.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAvailableTimes.includes(time.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedAvailableTimes([...selectedAvailableTimes, time.id]);
+                                        } else {
+                                          setSelectedAvailableTimes(selectedAvailableTimes.filter(id => id !== time.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-secondary-700">{new Date(time.startTime).toLocaleDateString('vi-VN')}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-secondary-600">{time.endTime ? new Date(time.endTime).toLocaleDateString('vi-VN') : 'Không giới hạn'}</div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="text-sm text-gray-700">{time.notes || '—'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageAvailableTimes}
+                        totalItems={availableTimes.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageAvailableTimes}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Calendar className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có thông tin thời gian</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật thời gian có sẵn</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Chứng chỉ */}
+            {activeTab === "certificates" && (
+              <div className="space-y-4">
+                {/* Inline Certificate Form */}
+                {showInlineForm === "certificate" && (
+                  <div className="bg-white rounded-xl border-2 border-primary-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm chứng chỉ mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Loại chứng chỉ <span className="text-red-500">*</span>
+                        </label>
+                        {certificateFormErrors.certificateTypeId && (
+                          <p className="text-xs text-red-600 mb-1">{certificateFormErrors.certificateTypeId}</p>
+                        )}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCertificateTypeDropdownOpen(!isCertificateTypeDropdownOpen);
+                              const newErrors = { ...certificateFormErrors };
+                              delete newErrors.certificateTypeId;
+                              setCertificateFormErrors(newErrors);
+                            }}
+                            className={`w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 transition-all ${
+                              certificateFormErrors.certificateTypeId
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 text-sm text-neutral-700">
+                              <Award className="w-4 h-4 text-neutral-400" />
+                              <span>
+                                {inlineCertificateForm.certificateTypeId && inlineCertificateForm.certificateTypeId > 0
+                                  ? lookupCertificateTypes.find(t => t.id === inlineCertificateForm.certificateTypeId)?.name || "Chọn loại chứng chỉ"
+                                  : "Chọn loại chứng chỉ"}
+                              </span>
+                            </div>
+                          </button>
+                          {isCertificateTypeDropdownOpen && (
+                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div className="p-3 border-b border-neutral-100">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                  <input
+                                    type="text"
+                                    value={certificateTypeSearch}
+                                    onChange={(e) => setCertificateTypeSearch(e.target.value)}
+                                    placeholder="Tìm loại chứng chỉ..."
+                                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  const filtered = certificateTypeSearch
+                                    ? lookupCertificateTypes.filter(t => t.name.toLowerCase().includes(certificateTypeSearch.toLowerCase()))
+                                    : lookupCertificateTypes;
+                                  if (filtered.length === 0) {
+                                    return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại chứng chỉ nào</p>;
+                                  }
+                                  return filtered.map((type) => (
+                                    <button
+                                      type="button"
+                                      key={type.id}
+                                      onClick={() => {
+                                        setInlineCertificateForm({ ...inlineCertificateForm, certificateTypeId: type.id });
+                                        setIsCertificateTypeDropdownOpen(false);
+                                        setCertificateTypeSearch("");
+                                        const newErrors = { ...certificateFormErrors };
+                                        delete newErrors.certificateTypeId;
+                                        setCertificateFormErrors(newErrors);
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        inlineCertificateForm.certificateTypeId === type.id
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
+                                      {type.name}
+                                    </button>
+                                  ));
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Tên chứng chỉ <span className="text-red-500">*</span>
+                        </label>
+                        {certificateFormErrors.certificateName && (
+                          <p className="text-xs text-red-600 mb-1">{certificateFormErrors.certificateName}</p>
+                        )}
+                        <input
+                          type="text"
+                          value={inlineCertificateForm.certificateName || ""}
+                          onChange={(e) => {
+                            setInlineCertificateForm({ ...inlineCertificateForm, certificateName: e.target.value });
+                            const newErrors = { ...certificateFormErrors };
+                            delete newErrors.certificateName;
+                            setCertificateFormErrors(newErrors);
+                          }}
+                          maxLength={255}
+                          className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                            certificateFormErrors.certificateName
+                              ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                              : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                          }`}
+                          placeholder="Nhập tên chứng chỉ"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Ngày cấp</label>
+                          <input
+                            type="date"
+                            value={inlineCertificateForm.issuedDate || ""}
+                            max={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => {
+                              const value = e.target.value || undefined;
+                              setInlineCertificateForm({ ...inlineCertificateForm, issuedDate: value });
+                              // Validate issued date
+                              const newErrors = { ...certificateFormErrors };
+                              if (value && !validateIssuedDate(value)) {
+                                newErrors.issuedDate = "⚠️ Ngày cấp không được là ngày trong tương lai.";
+                              } else {
+                                delete newErrors.issuedDate;
+                              }
+                              setCertificateFormErrors(newErrors);
+                            }}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              certificateFormErrors.issuedDate
+                                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500"
+                                : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                          />
+                          {certificateFormErrors.issuedDate && (
+                            <p className="text-xs text-red-600 mt-1">{certificateFormErrors.issuedDate}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">URL hình ảnh</label>
+                          <input
+                            type="url"
+                            value={inlineCertificateForm.imageUrl || ""}
+                            onChange={(e) => {
+                              // Only allow manual URL input if not uploaded from Firebase
+                              if (!uploadedCertificateUrl || uploadedCertificateUrl !== inlineCertificateForm.imageUrl) {
+                                setInlineCertificateForm({ ...inlineCertificateForm, imageUrl: e.target.value });
+                              }
+                            }}
+                            disabled={!!(inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl)}
+                            className={`w-full px-4 py-2 border rounded-lg bg-white ${
+                              inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl
+                                ? "bg-gray-100 cursor-not-allowed opacity-75 border-gray-300"
+                                : "border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                            }`}
+                            placeholder="https://... hoặc upload từ file ảnh đã chọn"
+                          />
+                          {inlineCertificateForm.imageUrl && uploadedCertificateUrl === inlineCertificateForm.imageUrl && (
+                            <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              URL này được upload từ Firebase. Để thay đổi, hãy xóa và upload ảnh mới.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {/* Upload ảnh chứng chỉ */}
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                          Upload ảnh chứng chỉ
+                        </label>
+                        <div className="space-y-2">
+                          {/* File Input */}
+                          <div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCertificateImageFileChange}
+                              disabled={uploadingCertificateImage}
+                              className="w-full text-xs py-1.5 px-2 border rounded-lg bg-white border-neutral-300 focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                            {certificateImageFile && (
+                              <div className="flex items-center gap-2 text-xs text-neutral-600 mt-1">
+                                <FileText className="w-3 h-3" />
+                                <span>Đã chọn: <span className="font-medium">{certificateImageFile.name}</span> ({(certificateImageFile.size / 1024).toFixed(2)} KB)</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Upload Progress */}
+                          {uploadingCertificateImage && (
+                            <div className="space-y-1">
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-primary-500 to-blue-500 h-2 rounded-full transition-all duration-300 animate-pulse"
+                                  style={{ width: `${certificateUploadProgress}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-xs text-center text-primary-700 font-medium">
+                                Đang upload... {certificateUploadProgress}%
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Upload Button */}
+                          <button
+                            type="button"
+                            onClick={handleUploadCertificateImage}
+                            disabled={!certificateImageFile || uploadingCertificateImage}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-blue-600 hover:from-primary-700 hover:to-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                          >
+                            {uploadingCertificateImage ? (
+                              <>
+                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                Đang upload...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                Upload ảnh lên Firebase
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {inlineCertificateForm.imageUrl && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={handleDeleteCertificateImage}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all text-xs"
+                              title={uploadedCertificateUrl === inlineCertificateForm.imageUrl ? "Xóa URL và file trong Firebase" : "Xóa URL"}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              Xóa ảnh
+                            </button>
+                            <a
+                              href={inlineCertificateForm.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all text-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Xem ảnh
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineCertificateForm.certificateDescription || ""}
+                          onChange={(e) => setInlineCertificateForm({ ...inlineCertificateForm, certificateDescription: e.target.value })}
+                          rows={3}
+                          maxLength={1000}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
+                          placeholder="Nhập mô tả về chứng chỉ..."
+                        />
+                      </div>
+                      {/* Error messages */}
+                      {(certificateFormErrors.certificateTypeId || certificateFormErrors.certificateName || certificateFormErrors.issuedDate) && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
+                          {certificateFormErrors.certificateTypeId && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.certificateTypeId}</p>
+                          )}
+                          {certificateFormErrors.certificateName && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.certificateName}</p>
+                          )}
+                          {certificateFormErrors.issuedDate && (
+                            <p className="text-sm text-red-700">{certificateFormErrors.issuedDate}</p>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineCertificate}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Chứng chỉ</h3>
+                    <div className="flex gap-2">
+                      {showInlineForm !== "certificate" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("certificate")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm chứng chỉ"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
+                      {selectedCertificates.length > 0 && (
+                        <Button
+                          onClick={handleDeleteCertificates}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa chứng chỉ ({selectedCertificates.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {(certificatesRecognized.length > 0 || certificatesMatched.length > 0 || certificatesOnlyInTalent.length > 0 || certificatesUnmatched.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-rose-900 uppercase tracking-wide">Đề xuất chứng chỉ</h3>
+                        <span className="text-xs text-rose-700">
+                          {certificatesRecognized.length} đề xuất thêm · {certificatesMatched.length} trùng CV · {certificatesUnmatched.length} cần tạo mới
+                        </span>
+                      </div>
+                      {(certificatesRecognized.length > 0 || certificatesUnmatched.length > 0) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-3">
+                          {certificatesRecognized.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (đã có trong hệ thống):</p>
+                              <ul className="space-y-2">
+                                {certificatesRecognized.map(({ suggestion }, index) => (
+                                  <li key={`certificate-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm">{suggestion.certificateName}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          onClick={() => {
+                                            const certItem = certificatesRecognized.find(c => c.suggestion.certificateName === suggestion.certificateName);
+                                            if (certItem) {
+                                              handleQuickCreateCertificateFromRecognized(certItem);
+                                            }
+                                          }}
+                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
+                                        >
+                                          <Plus className="w-4 h-4" />
+                                          Tạo nhanh
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <p className="text-xs text-amber-600 mt-1">Gợi ý CV: Ngày cấp {suggestion.issuedDate ?? "Chưa rõ"}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {certificatesUnmatched.length > 0 && (
+                            <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
+                              <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
+                              <ul className="mt-2 space-y-1">
+                                {certificatesUnmatched.map((suggestion, index) => (
+                                  <li key={`certificate-unmatched-${index}`}>- {suggestion.certificateName}</li>
+                                ))}
+                              </ul>
+                              <div className="mt-3 flex flex-col items-end gap-1">
+                                <Button
+                                  onClick={() =>
+                                    handleSuggestionRequest(
+                                      "certificate",
+                                      certificateSuggestionRequestKey,
+                                      certificateSuggestionDisplayItems,
+                                      certificateSuggestionDetailItems
+                                    )
+                                  }
+                                  disabled={
+                                    !certificateSuggestionDisplayItems.length ||
+                                    isSuggestionPending(certificateSuggestionRequestKey)
+                                  }
+                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
+                                    !certificateSuggestionDisplayItems.length ||
+                                    isSuggestionPending(certificateSuggestionRequestKey)
+                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
+                                  }`}
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  {isSuggestionPending(certificateSuggestionRequestKey)
+                                    ? "Đã gửi đề xuất"
+                                    : "Đề xuất thêm loại chứng chỉ dựa vào tên chứng chỉ trên vào hệ thống"}
+                                </Button>
+                                {isSuggestionPending(certificateSuggestionRequestKey) && (
+                                  <span className="text-xs text-amber-600">
+                                    Đang chờ Admin xem xét đề xuất này.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {certificates.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCertificates.length === certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).length && certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).map(cert => cert.id);
+                                      setSelectedCertificates([...new Set([...selectedCertificates, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = certificates.slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage).map(cert => cert.id);
+                                      setSelectedCertificates(selectedCertificates.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Loại chứng chỉ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tên chứng chỉ</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Ngày cấp</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trạng thái</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {certificates
+                              .slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage)
+                              .map((cert) => (
+                                <tr 
+                                  key={cert.id} 
+                                  className="hover:bg-primary-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-certificates/edit/${cert.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedCertificates.includes(cert.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedCertificates([...selectedCertificates, cert.id]);
+                                        } else {
+                                          setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-primary-800">{cert.certificateTypeName}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-primary-800">{cert.certificateName || '—'}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-primary-700">{cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                      {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    {cert.imageUrl && (
+                                      <a
+                                        href={cert.imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Xem
+                                      </a>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageCertificates}
+                        totalItems={certificates.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageCertificates}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Award className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload chứng chỉ</p>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Tab: Kinh nghiệm làm việc */}
+            {activeTab === "experiences" && (
+              <div className="space-y-4">
+                {/* Inline Experience Form */}
+                {showInlineForm === "experience" && (
+                  <div className="bg-white rounded-xl border-2 border-accent-200 p-6 mb-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Thêm kinh nghiệm mới</h3>
+                      <button
+                        onClick={handleCloseInlineForm}
+                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Công ty <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={inlineExperienceForm.company || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, company: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                            placeholder="Nhập tên công ty"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Vị trí <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsWorkExperiencePositionDropdownOpen(!isWorkExperiencePositionDropdownOpen)}
+                              className="w-full flex items-center justify-between px-4 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-accent-500/20 transition-all border-neutral-300 focus:border-accent-500"
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Target className="w-4 h-4 text-neutral-400" />
+                                <span className={inlineExperienceForm.position ? "text-neutral-800" : "text-neutral-500"}>
+                                  {inlineExperienceForm.position || "Chọn vị trí"}
+                                </span>
+                              </div>
+                            </button>
+                            {isWorkExperiencePositionDropdownOpen && (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={workExperiencePositionSearch}
+                                      onChange={(e) => setWorkExperiencePositionSearch(e.target.value)}
+                                      placeholder="Tìm vị trí..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-accent-500 focus:ring-accent-500"
+                                    />
                                   </div>
                                 </div>
-                                <p className="text-xs text-amber-600 mt-1">Gợi ý CV: Ngày cấp {suggestion.issuedDate ?? "Chưa rõ"}</p>
+                                <div className="max-h-56 overflow-y-auto">
+                                  {(() => {
+                                    const filtered = workExperiencePositionSearch
+                                      ? workExperiencePositions.filter(p => p.toLowerCase().includes(workExperiencePositionSearch.toLowerCase()))
+                                      : workExperiencePositions;
+                                    if (filtered.length === 0) {
+                                      return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
+                                    }
+                                    return filtered.map((position) => (
+                                      <button
+                                        type="button"
+                                        key={position}
+                                        onClick={() => {
+                                          setInlineExperienceForm({ ...inlineExperienceForm, position: position });
+                                          setIsWorkExperiencePositionDropdownOpen(false);
+                                          setWorkExperiencePositionSearch("");
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          inlineExperienceForm.position === position
+                                            ? "bg-accent-50 text-accent-700"
+                                            : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {position}
+                                      </button>
+                                    ));
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                            Ngày bắt đầu <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={inlineExperienceForm.startDate || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, startDate: e.target.value })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Ngày kết thúc</label>
+                          <input
+                            type="date"
+                            value={inlineExperienceForm.endDate || ""}
+                            onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, endDate: e.target.value || undefined })}
+                            className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-neutral-700 mb-2">Mô tả</label>
+                        <textarea
+                          value={inlineExperienceForm.description || ""}
+                          onChange={(e) => setInlineExperienceForm({ ...inlineExperienceForm, description: e.target.value })}
+                          rows={3}
+                          className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+                          placeholder="Nhập mô tả kinh nghiệm"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleCloseInlineForm}
+                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSubmitInlineExperience}
+                          disabled={isSubmitting}
+                          className={`px-4 py-2 rounded-lg bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Đang lưu...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              Lưu
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Kinh nghiệm làm việc</h3>
+                    <div className="flex gap-2">
+                      {showInlineForm !== "experience" && (
+                        <Button
+                          onClick={() => handleOpenInlineForm("experience")}
+                          disabled={isSubmitting}
+                          className={`group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={isSubmitting ? "Đang xử lý..." : "Thêm kinh nghiệm"}
+                        >
+                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        </Button>
+                      )}
+                      {selectedExperiences.length > 0 && (
+                        <Button
+                          onClick={handleDeleteExperiences}
+                          className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                        >
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                          Xóa kinh nghiệm ({selectedExperiences.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {analysisResult && (analysisResult.workExperiences.newEntries.length > 0 || analysisResult.workExperiences.potentialDuplicates.length > 0) && (
+                    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/80 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">Đề xuất kinh nghiệm làm việc</h3>
+                        <span className="text-xs text-blue-700">{analysisResult.workExperiences.newEntries.length} mục mới · {analysisResult.workExperiences.potentialDuplicates.length} mục có thể trùng</span>
+                      </div>
+                      {analysisResult.workExperiences.newEntries.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-blue-700 font-medium">Kinh nghiệm mới nên thêm:</p>
+                          {analysisResult.workExperiences.newEntries.map((exp, index) => (
+                            <div key={`suggested-exp-${index}`} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm">
+                              <p className="font-semibold">{exp.position}</p>
+                              <p className="text-xs text-blue-700">{exp.company}</p>
+                              <p className="text-xs text-blue-600">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
+                              {exp.description && <p className="mt-1 text-xs text-blue-700 line-clamp-2">{exp.description}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {analysisResult.workExperiences.potentialDuplicates.length > 0 && (
+                        <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                          <p className="font-medium mb-1">Mục cần rà soát trùng lặp:</p>
+                          <ul className="space-y-1">
+                            {analysisResult.workExperiences.potentialDuplicates.map((dup, index) => (
+                              <li key={`dup-exp-${index}`}>
+                                - {dup.fromCV.position} tại {dup.fromCV.company} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
                               </li>
                             ))}
                           </ul>
                         </div>
                       )}
-                      {certificatesUnmatched.length > 0 && (
-                        <div className="rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-amber-700">
-                          <p className="font-semibold text-amber-900">Thiếu trong hồ sơ (chưa có trong hệ thống):</p>
-                          <ul className="mt-2 space-y-1">
-                            {certificatesUnmatched.map((suggestion, index) => (
-                              <li key={`certificate-unmatched-${index}`}>- {suggestion.certificateName}</li>
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-col items-end gap-1">
-                            <Button
-                              onClick={() =>
-                                handleSuggestionRequest(
-                                  "certificate",
-                                  certificateSuggestionRequestKey,
-                                  certificateSuggestionDisplayItems,
-                                  certificateSuggestionDetailItems
-                                )
-                              }
-                              disabled={
-                                !certificateSuggestionDisplayItems.length ||
-                                isSuggestionPending(certificateSuggestionRequestKey)
-                              }
-                              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                !certificateSuggestionDisplayItems.length ||
-                                isSuggestionPending(certificateSuggestionRequestKey)
-                                  ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                              }`}
-                            >
-                              <Plus className="w-4 h-4" />
-                              {isSuggestionPending(certificateSuggestionRequestKey)
-                                ? "Đã gửi đề xuất"
-                                : "Đề xuất thêm chứng chỉ vào hệ thống"}
-                            </Button>
-                            {isSuggestionPending(certificateSuggestionRequestKey) && (
-                              <span className="text-xs text-amber-600">
-                                Đang chờ Admin xem xét đề xuất này.
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
-                </div>
-              )}
-              {certificates.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {certificates
-                      .slice((pageCertificates - 1) * itemsPerPage, pageCertificates * itemsPerPage)
-                      .map((cert) => (
-                        <div key={cert.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200 hover:from-primary-100 hover:to-primary-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-certificates/edit/${cert.id}`)}>
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedCertificates.includes(cert.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedCertificates([...selectedCertificates, cert.id]);
-                                  } else {
-                                    setSelectedCertificates(selectedCertificates.filter(id => id !== cert.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                              />
-                              <h3 className="font-semibold text-primary-800 hover:text-primary-900 transition-colors duration-200">{cert.certificateTypeName}</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 text-xs rounded-full ${cert.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {cert.isVerified ? 'Đã xác thực' : 'Chưa xác thực'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            <p className="text-sm text-primary-700">
-                              <span className="font-medium">Ngày cấp:</span> {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString('vi-VN') : 'Chưa xác định'}
-                            </p>
-                          </div>
-                          {cert.imageUrl && (
-                            <a
-                              href={cert.imageUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 text-sm"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                              Xem chứng chỉ
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageCertificates}
-                    totalItems={certificates.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageCertificates}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Award className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có chứng chỉ nào</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa upload chứng chỉ</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Kinh nghiệm làm việc */}
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setIsExperiencesExpanded(!isExperiencesExpanded)}>
-                <button className="p-1 hover:bg-neutral-100 rounded-lg transition-colors">
-                  {isExperiencesExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-neutral-600" />
+                  {workExperiences.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedExperiences.length === workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).length && workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      const currentPageItems = workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).map(exp => exp.id);
+                                      setSelectedExperiences([...new Set([...selectedExperiences, ...currentPageItems])]);
+                                    } else {
+                                      const currentPageItems = workExperiences.slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage).map(exp => exp.id);
+                                      setSelectedExperiences(selectedExperiences.filter(id => !currentPageItems.includes(id)));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Công ty</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Thời gian</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-neutral-200">
+                            {workExperiences
+                              .slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage)
+                              .map((exp) => (
+                                <tr 
+                                  key={exp.id} 
+                                  className="hover:bg-accent-50 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => navigate(`/ta/talent-work-experiences/edit/${exp.id}`)}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExperiences.includes(exp.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (e.target.checked) {
+                                          setSelectedExperiences([...selectedExperiences, exp.id]);
+                                        } else {
+                                          setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-accent-800">{exp.position}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-accent-700">{exp.company}</div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="text-sm text-accent-600">{new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SectionPagination
+                        currentPage={pageExperiences}
+                        totalItems={workExperiences.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPageExperiences}
+                      />
+                    </>
                   ) : (
-                    <ChevronUp className="w-5 h-5 text-neutral-600" />
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Workflow className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
+                      <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kinh nghiệm</p>
+                    </div>
                   )}
-                </button>
-                <div className="p-2 bg-accent-100 rounded-lg">
-                  <Workflow className="w-5 h-5 text-accent-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900">Kinh nghiệm làm việc</h2>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleNavigateToCreate(`/hr/talent-work-experiences/create?talentId=${id}`)}
-                  className="group flex items-center justify-center bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-3 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                  title="Thêm kinh nghiệm"
-                >
-                  <Plus className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                {selectedExperiences.length > 0 && (
-                  <Button
-                    onClick={handleDeleteExperiences}
-                    className="group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    Xóa kinh nghiệm ({selectedExperiences.length})
-                  </Button>
-                )}
-              </div>
-            </div>
+            )}
           </div>
-          {isExperiencesExpanded && (
-            <div className="p-6">
-              {analysisResult && (analysisResult.workExperiences.newEntries.length > 0 || analysisResult.workExperiences.potentialDuplicates.length > 0) && (
-                <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/80 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wide">Đề xuất kinh nghiệm làm việc</h3>
-                    <span className="text-xs text-blue-700">{analysisResult.workExperiences.newEntries.length} mục mới · {analysisResult.workExperiences.potentialDuplicates.length} mục có thể trùng</span>
-                  </div>
-                  {analysisResult.workExperiences.newEntries.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-blue-700 font-medium">Kinh nghiệm mới nên thêm:</p>
-                      {analysisResult.workExperiences.newEntries.map((exp, index) => (
-                        <div key={`suggested-exp-${index}`} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm">
-                          <p className="font-semibold">{exp.position}</p>
-                          <p className="text-xs text-blue-700">{exp.company}</p>
-                          <p className="text-xs text-blue-600">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
-                          {exp.description && <p className="mt-1 text-xs text-blue-700 line-clamp-2">{exp.description}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {analysisResult.workExperiences.potentialDuplicates.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                      <p className="font-medium mb-1">Mục cần rà soát trùng lặp:</p>
-                      <ul className="space-y-1">
-                        {analysisResult.workExperiences.potentialDuplicates.map((dup, index) => (
-                          <li key={`dup-exp-${index}`}>
-                            - {dup.fromCV.position} tại {dup.fromCV.company} · Khuyến nghị: <span className="font-semibold">{dup.recommendation}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {workExperiences.length > 0 ? (
-                <>
-                  <div className="space-y-6">
-                    {workExperiences
-                      .slice((pageExperiences - 1) * itemsPerPage, pageExperiences * itemsPerPage)
-                      .map((exp) => (
-                        <div key={exp.id} className="p-4 bg-gradient-to-r from-accent-50 to-accent-100 rounded-xl border border-accent-200 hover:from-accent-100 hover:to-accent-200 transition-all duration-200 cursor-pointer" onClick={() => navigate(`/hr/talent-work-experiences/edit/${exp.id}`)}>
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedExperiences.includes(exp.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (e.target.checked) {
-                                    setSelectedExperiences([...selectedExperiences, exp.id]);
-                                  } else {
-                                    setSelectedExperiences(selectedExperiences.filter(id => id !== exp.id));
-                                  }
-                                }}
-                                className="w-4 h-4 text-accent-600 bg-gray-100 border-gray-300 rounded focus:ring-accent-500 focus:ring-2"
-                              />
-                              <div>
-                                <h3 className="font-semibold text-accent-800 hover:text-accent-900 transition-colors duration-200">{exp.position}</h3>
-                                <p className="text-sm text-accent-700">
-                                  <span className="font-medium">Công ty:</span> {exp.company}
-                                </p>
-                                <p className="text-sm text-accent-600">
-                                  <span className="font-medium">Thời gian:</span> {new Date(exp.startDate).toLocaleDateString('vi-VN')} - {exp.endDate ? new Date(exp.endDate).toLocaleDateString('vi-VN') : 'Hiện tại'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <SectionPagination
-                    currentPage={pageExperiences}
-                    totalItems={workExperiences.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setPageExperiences}
-                  />
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Workflow className="w-8 h-8 text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-500 text-lg font-medium">Chưa có kinh nghiệm làm việc</p>
-                  <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kinh nghiệm</p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
       </div>

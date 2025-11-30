@@ -190,7 +190,7 @@ export default function AdminDashboard() {
     if (roles.includes('Manager')) {
       return <UserCog className="w-5 h-5 text-purple-600 group-hover:text-purple-700 transition-colors duration-300" />;
     }
-    if (roles.includes('HR')) {
+    if (roles.includes('TA')) {
       return <UserCheck className="w-5 h-5 text-blue-600 group-hover:text-blue-700 transition-colors duration-300" />;
     }
     if (roles.includes('Sales')) {

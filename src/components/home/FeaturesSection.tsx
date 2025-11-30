@@ -14,7 +14,7 @@ const FeaturesSection: React.FC = () => {
     {
       icon: <Users className="w-8 h-8" />,
       title: "Quy trình chuyên nghiệp",
-      description: "Mọi bước đều có luồng rõ ràng, phê duyệt theo vai trò (HR, Sales, Manager, Accountant). Hệ thống giúp tránh sai sót và giảm thời gian xử lý thủ công",
+      description: "Mọi bước đều có luồng rõ ràng, phê duyệt theo vai trò (TA, Sales, Manager, Accountant). Hệ thống giúp tránh sai sót và giảm thời gian xử lý thủ công",
       color: "text-primary-600",
       bgColor: "bg-primary-50",
     },

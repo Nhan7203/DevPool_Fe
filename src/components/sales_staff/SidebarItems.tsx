@@ -1,72 +1,51 @@
 import {
   BarChart3,
   Layers,
-  FileText,
   Building,
   Briefcase,
-  ClipboardList,
   Mail,
+  Settings,
 } from "lucide-react";
 
 export const sidebarItems = [
+  // Phần chính
   {
-    label: 'Tổng Quan',
-    href: '/sales/dashboard',
-    icon: BarChart3, // biểu đồ tổng quan
+    label: "Tổng Quan",
+    href: "/sales/dashboard",
+    icon: BarChart3,
+    section: "main" as const,
   },
   {
-    label: 'Yêu Cầu Tuyển Dụng',
-    href: '/sales/job-requests',
-    icon: Briefcase, // hợp lý cho nhân sự
-    // subItems: [
-    //   { label: 'Danh sách yêu cầu', href: '/sales/job-requests' },
-    //   { label: 'Tạo yêu cầu', href: '/sales/job-requests/create' },
-    // ]
+    label: "Yêu Cầu Tuyển Dụng",
+    href: "/sales/job-requests",
+    icon: Briefcase,
+    section: "main" as const,
   },
   {
-    label: 'Hồ Sơ Ứng Tuyển',
-    href: '/sales/applications',
-    icon: ClipboardList,
-    subItems: [
-      { label: 'Danh Sách Hồ Sơ', href: '/sales/applications' },
-      { label: 'Mẫu Quy Trình', href: '/sales/apply-process-templates' },
-    ]
+    label: "Dự Án",
+    href: "/sales/projects",
+    icon: Layers,
+    section: "main" as const,
   },
   {
-    label: 'Quản Lý Công Ty KH',
-    href: '/sales/clients',
-    icon: Building, // công ty, doanh nghiệp
-    // subItems: [
-    //   { label: 'Danh Sách công ty', href: '/sales/clients' },
-    //   { label: 'Tạo công ty', href: '/sales/clients/create' },
-    // ]
+    label: "Công Ty KH",
+    href: "/sales/clients",
+    icon: Building,
+    section: "main" as const,
   },
+
   {
-    label: 'Quản Lý Dự Án',
-    href: '/sales/projects',
-    icon: Layers, // biểu tượng dự án/layer
-    // subItems: [
-    //   { label: 'Danh Sách dự án', href: '/sales/projects' },
-    //   { label: 'Tạo dự án', href: '/sales/projects/create' },
-    // ]
+    label: "Yêu cầu hỗ trợ",
+    href: "/sales/contact-inquiries",
+    icon: Mail,
+    section: "main" as const,
   },
+
+  // Phần cấu hình (ở dưới)
   {
-    label: 'Hợp Đồng KH',
-    href: '/sales/contracts',
-    icon: FileText, // hợp đồng
-    // subItems: [
-    //   { label: 'Danh Sách Hợp Đồng', href: '/sales/contracts' },
-    //   { label: 'Tạo Hợp Đồng', href: '/sales/contracts/create' },
-    // ]
+    label: "Mẫu Quy Trình",
+    href: "/sales/apply-process-templates",
+    icon: Settings,
+    section: "config" as const,
   },
-  {
-    label: 'Yêu Cầu Liên Hệ',
-    href: '/sales/contact-inquiries',
-    icon: Mail, // email/liên hệ
-  },
-  // {
-  //   label: 'Tạo tài liệu khách hàng',
-  //   href: '/sales/payment-periods/clients',
-  //   icon: FileUp
-  // },
 ];

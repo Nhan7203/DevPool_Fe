@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { type ExtractedSkill } from "../../../services/TalentCV";
 import { 
-  ArrowLeft, 
   Plus, 
   Save, 
   Star, 
@@ -170,7 +170,7 @@ export default function TalentSkillCreatePage() {
       await talentSkillService.create(form);
       clearSkillSuggestions();
       setSuccess(true);
-      setTimeout(() => navigate(`/hr/developers/${talentId}`), 1500);
+      setTimeout(() => navigate(`/ta/developers/${talentId}`), 1500);
     } catch (err) {
       console.error("❌ Error creating Talent Skill:", err);
       setError("Không thể tạo kỹ năng cho nhân sự. Vui lòng thử lại.");
@@ -181,20 +181,18 @@ export default function TalentSkillCreatePage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to={`/hr/developers/${talentId}`}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết nhân sự</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Nhân sự", to: "/ta/developers" },
+              { label: talentId ? `Chi tiết nhân sự` : "Chi tiết", to: `/ta/developers/${talentId}` },
+              { label: "Thêm kỹ năng" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -547,7 +545,7 @@ export default function TalentSkillCreatePage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to={`/hr/developers/${talentId}`}
+              to={`/ta/developers/${talentId}`}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

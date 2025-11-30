@@ -71,7 +71,7 @@ export default function DeveloperStatus() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         <div className="mb-8">

@@ -29,7 +29,7 @@ import { decodeJWT } from '../../services/Auth';
 import { talentService, type Talent } from '../../services/Talent';
 import { partnerContractService, type PartnerContract } from '../../services/PartnerContract';
 import { clientContractService, type ClientContract } from '../../services/ClientContract';
-import { partnerContractPaymentService, type PartnerContractPayment } from '../../services/PartnerContractPayment';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../services/PartnerContractPayment';
 import { talentSkillService, type TalentSkill } from '../../services/TalentSkill';
 import { skillService, type Skill } from '../../services/Skill';
 
@@ -82,7 +82,7 @@ export default function DeveloperDashboard() {
         if (talent) {
           setCurrentTalentId(talent.id);
         } else {
-          setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ HR.');
+          setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ TA.');
           setLoading(false);
         }
       } catch (err: any) {
@@ -114,7 +114,7 @@ export default function DeveloperDashboard() {
 
         const partnerContracts = Array.isArray(partnerContractsData) ? partnerContractsData : [];
         const clientContracts = Array.isArray(clientContractsData) ? clientContractsData : [];
-        const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.items || []);
+        const payments = Array.isArray(paymentsData) ? paymentsData : [];
 
         // Tính toán stats
         // 1. Current Assignments = số hợp đồng đang active
@@ -133,22 +133,22 @@ export default function DeveloperDashboard() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        const thisMonthPayments = payments.filter((p: PartnerContractPayment) => {
+        const thisMonthPayments = payments.filter((p: PartnerContractPaymentModel) => {
           if (!p.paymentDate) return false;
           const paymentDate = new Date(p.paymentDate);
           return paymentDate.getMonth() === currentMonth && paymentDate.getFullYear() === currentYear;
         });
         
-        const hoursThisMonth = thisMonthPayments.reduce((sum: number, p: PartnerContractPayment) => {
-          return sum + (p.actualWorkHours || 0) + (p.otHours || 0);
+        const hoursThisMonth = thisMonthPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
+          return sum + (p.reportedHours || 0);
         }, 0);
 
         // 3. Total Earnings = tổng số tiền đã thanh toán
-        const paidPayments = payments.filter((p: PartnerContractPayment) => 
-          p.status?.toLowerCase() === 'paid'
+        const paidPayments = payments.filter((p: PartnerContractPaymentModel) => 
+          p.paymentStatus?.toLowerCase() === 'paid'
         );
-        const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPayment) => {
-          return sum + (p.paidAmount || p.calculatedAmount || 0);
+        const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
+          return sum + (p.totalPaidAmount || p.finalAmount || 0);
         }, 0);
 
         // 4. Utilization Rate = (hours this month / 160) * 100 (giả sử 1 tháng = 160 giờ)
@@ -156,12 +156,12 @@ export default function DeveloperDashboard() {
 
         // 5. Monthly Earnings (6 tháng gần nhất)
         const monthlyEarningsMap = new Map<string, number>();
-        payments.forEach((p: PartnerContractPayment) => {
-          if (p.status?.toLowerCase() === 'paid' && p.paymentDate) {
+        payments.forEach((p: PartnerContractPaymentModel) => {
+          if (p.paymentStatus?.toLowerCase() === 'paid' && p.paymentDate) {
             const date = new Date(p.paymentDate);
             const monthLabel = `T${date.getMonth() + 1}/${String(date.getFullYear()).slice(-2)}`;
             const current = monthlyEarningsMap.get(monthLabel) || 0;
-            monthlyEarningsMap.set(monthLabel, current + (p.paidAmount || p.calculatedAmount || 0));
+            monthlyEarningsMap.set(monthLabel, current + (p.totalPaidAmount || p.finalAmount || 0));
           }
         });
         
@@ -386,7 +386,7 @@ export default function DeveloperDashboard() {
                   <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
                     <Code2 className="w-12 h-12 mb-4 text-gray-400" />
                     <p className="text-center">Chưa có kỹ năng nào được đăng ký</p>
-                    <p className="text-sm text-gray-400 mt-2">Vui lòng liên hệ HR để thêm kỹ năng vào hồ sơ</p>
+                    <p className="text-sm text-gray-400 mt-2">Vui lòng liên hệ TA để thêm kỹ năng vào hồ sơ</p>
                   </div>
                 )}
               </div>

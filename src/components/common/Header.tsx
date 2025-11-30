@@ -313,7 +313,7 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
           icon: <UserCog className="w-5 h-5 text-purple-600 group-hover:text-purple-700 transition-colors duration-300" />,
           containerClass: 'bg-purple-50',
         };
-      case 'Staff HR':
+      case 'Staff TA':
         return {
           icon: <UserCheck className="w-5 h-5 text-blue-600 group-hover:text-blue-700 transition-colors duration-300" />,
           containerClass: 'bg-blue-50',
@@ -351,10 +351,10 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       return;
     }
     
-    // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
+    // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
     // Vì backend có thể tạo actionUrl với format cũ hoặc có notification cũ
-    if (originalActionUrl.startsWith('/hr/talents/')) {
-      originalActionUrl = originalActionUrl.replace('/hr/talents/', '/hr/developers/');
+    if (originalActionUrl.startsWith('/ta/talents/')) {
+      originalActionUrl = originalActionUrl.replace('/ta/talents/', '/ta/developers/');
     }
     
     // Đóng notification dropdown ngay lập tức
@@ -401,7 +401,7 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
 
   const openReplyModal = async (notification: ExtendedNotification) => {
     setReplyNotification(notification);
-    setReplyMessage('HR sẽ sử dụng CV này để cập nhật hồ sơ talent của bạn trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
+    setReplyMessage('TA sẽ sử dụng CV này để cập nhật hồ sơ talent của bạn trong thời gian sớm nhất.\n\nCảm ơn bạn đã cập nhật CV!');
     setReplyModalOpen(true);
   };
 
@@ -465,8 +465,8 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       // Suppress unused variable warning - developerName may be used in future
       void developerName;
 
-      // Lấy tên HR từ user context thay vì email
-      const hrStaffName = user?.name || 'HR Staff';
+      // Lấy tên TA từ user context thay vì email
+      const hrStaffName = user?.name || 'TA Staff';
 
       // Tạo title với jobRoleLevel name
       const title = jobRoleLevelName 
@@ -810,7 +810,7 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                         Dashboard
                       </Link>
                       <Link
-                        to={user ? (user.role === 'Staff HR' ? ROUTES.HR_STAFF.PROFILE :
+                        to={user ? (user.role === 'Staff TA' ? ROUTES.HR_STAFF.PROFILE :
                                    user.role === 'Staff Sales' ? ROUTES.SALES_STAFF.PROFILE :
                                    user.role === 'Staff Accountant' ? ROUTES.ACCOUNTANT_STAFF.PROFILE :
                                    user.role === 'Developer' ? ROUTES.DEVELOPER.PROFILE :
@@ -962,9 +962,9 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                   onClick={() => {
                     let targetUrl = viewNotification.actionUrl;
                     
-                    // Fix: Convert /hr/talents/:id thành /hr/developers/:id (route đúng)
-                    if (targetUrl && targetUrl.startsWith('/hr/talents/')) {
-                      targetUrl = targetUrl.replace('/hr/talents/', '/hr/developers/');
+                    // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
+                    if (targetUrl && targetUrl.startsWith('/ta/talents/')) {
+                      targetUrl = targetUrl.replace('/ta/talents/', '/ta/developers/');
                     }
                     
                     handleCloseNotificationDetail();

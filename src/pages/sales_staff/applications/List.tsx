@@ -560,7 +560,7 @@ export default function SalesApplicationListPage() {
                     #
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    HR phụ trách
+                    TA phụ trách
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Ứng viên

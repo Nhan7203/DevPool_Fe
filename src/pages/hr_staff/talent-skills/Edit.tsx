@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
@@ -8,7 +9,6 @@ import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
-  ArrowLeft, 
   Save, 
   X, 
   Star, 
@@ -108,6 +108,16 @@ export default function TalentSkillEditPage() {
     fetchExistingSkills();
   }, [talentId, currentSkillId]);
 
+  // Tự động set nhóm kỹ năng khi skill đã được chọn
+  useEffect(() => {
+    if (formData.skillId && allSkills.length > 0) {
+      const selectedSkill = allSkills.find(s => s.id === formData.skillId);
+      if (selectedSkill?.skillGroupId) {
+        setSelectedSkillGroupId(selectedSkill.skillGroupId);
+      }
+    }
+  }, [formData.skillId, allSkills]);
+
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -153,7 +163,7 @@ export default function TalentSkillEditPage() {
       await talentSkillService.update(Number(id), formData);
 
       alert("✅ Cập nhật kỹ năng nhân sự thành công!");
-      navigate(`/hr/developers/${talentId}`);
+      navigate(`/ta/developers/${talentId}`);
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
       alert("Không thể cập nhật kỹ năng nhân sự!");
@@ -163,7 +173,7 @@ export default function TalentSkillEditPage() {
   if (loading)
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -175,20 +185,18 @@ export default function TalentSkillEditPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to={`/hr/developers/${talentId}`}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết nhân sự</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Nhân sự", to: "/ta/developers" },
+              { label: talentId ? `Chi tiết nhân sự` : "Chi tiết", to: `/ta/developers/${talentId}` },
+              { label: "Chỉnh sửa kỹ năng" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -396,6 +404,10 @@ export default function TalentSkillEditPage() {
                                     onClick={() => {
                                       if (!isDisabled) {
                                         setFormData(prev => ({ ...prev, skillId: skill.id }));
+                                        // Tự động set nhóm kỹ năng theo skill đã chọn
+                                        if (skill.skillGroupId) {
+                                          setSelectedSkillGroupId(skill.skillGroupId);
+                                        }
                                         setSkillSearchQuery("");
                                         setIsSkillDropdownOpen(false);
                                       }
@@ -445,10 +457,10 @@ export default function TalentSkillEditPage() {
                     className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   >
                     <option value="">-- Chọn cấp độ --</option>
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
+                    <option value="Beginner">Mới bắt đầu</option>
+                    <option value="Intermediate">Trung bình</option>
+                    <option value="Advanced">Nâng cao</option>
+                    <option value="Expert">Chuyên gia</option>
                   </select>
                 </div>
 
@@ -477,7 +489,7 @@ export default function TalentSkillEditPage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to={`/hr/developers/${talentId}`}
+              to={`/ta/developers/${talentId}`}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

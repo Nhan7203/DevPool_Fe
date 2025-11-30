@@ -13,7 +13,7 @@ export default function CreateAccount() {
   // Static list of available roles (since backend doesn't have getRoles API yet)
   const availableRoles = [
     'Manager', 
-    'HR',
+    'TA',
     'Sale',
     'Accountant'
   ];
@@ -23,7 +23,7 @@ export default function CreateAccount() {
     fullName: '',
     email: '',
     phoneNumber: '',
-    role: 'HR'
+    role: 'TA'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

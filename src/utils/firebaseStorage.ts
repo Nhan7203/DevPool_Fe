@@ -24,11 +24,6 @@ export const uploadTalentCV = async (
     console.error('Firebase auth: No current user');
     throw new Error('Bạn chưa đăng nhập Firebase. Vui lòng đăng nhập lại để có quyền upload file.');
   }
-  
-  console.log('Firebase auth: User authenticated', {
-    uid: currentUser.uid,
-    email: currentUser.email
-  });
 
   // Validate file type
   const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -118,11 +113,6 @@ export const uploadFile = async (
     throw new Error('Bạn chưa đăng nhập Firebase. Vui lòng đăng nhập lại để có quyền upload file.');
   }
   
-  console.log('Firebase auth: User authenticated', {
-    uid: currentUser.uid,
-    email: currentUser.email,
-    path
-  });
 
   // Validate file size (max 10MB)
   const maxSize = 10 * 1024 * 1024; // 10MB

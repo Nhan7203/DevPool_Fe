@@ -294,7 +294,7 @@ export default function TalentCVApplicationPage() {
   if (loading)
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -306,7 +306,7 @@ export default function TalentCVApplicationPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
@@ -608,7 +608,7 @@ export default function TalentCVApplicationPage() {
                       </td>
                       <td className="py-4 px-6 text-center">
                         <Link
-                          to={`/hr/applications/${app.id}`}
+                          to={`/ta/applications/${app.id}`}
                           className="group inline-flex items-center gap-2 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                         >
                           <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

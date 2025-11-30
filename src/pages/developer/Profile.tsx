@@ -301,13 +301,13 @@ export default function DeveloperProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !authUser || !talent) {
-      setError('Không tìm thấy thông tin talent. Vui lòng liên hệ HR.');
+      setError('Không tìm thấy thông tin talent. Vui lòng liên hệ TA.');
       return;
     }
 
     // Không cho phép sửa khi đang ứng tuyển hoặc đang làm việc
     if (talent.status === "Applying" || talent.status === "Working") {
-      setError('Không thể cập nhật thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ HR.');
+      setError('Không thể cập nhật thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ TA.');
       return;
     }
 
@@ -558,7 +558,7 @@ export default function DeveloperProfilePage() {
                 <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-yellow-600" />
                   <p className="text-yellow-800 font-medium">
-                    Không thể chỉnh sửa thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ HR nếu cần thay đổi.
+                    Không thể chỉnh sửa thông tin khi đang ứng tuyển hoặc đang làm việc. Vui lòng liên hệ TA nếu cần thay đổi.
                   </p>
                 </div>
               )}
@@ -1267,7 +1267,7 @@ export default function DeveloperProfilePage() {
 
           {!talent && (
             <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6 p-8 text-center">
-              <p className="text-neutral-500">Chưa có thông tin talent. Vui lòng liên hệ HR để được tạo hồ sơ.</p>
+              <p className="text-neutral-500">Chưa có thông tin talent. Vui lòng liên hệ TA để được tạo hồ sơ.</p>
             </div>
           )}
         </div>

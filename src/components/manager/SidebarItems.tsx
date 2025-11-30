@@ -1,10 +1,8 @@
 import {
   BarChart3,
   LineChart,
-  Users,
   DollarSign,
-  CalendarClock,
-  Wallet,
+  Briefcase,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -14,31 +12,27 @@ export const sidebarItems = [
     icon: BarChart3,
   },
   {
-    label: "Hợp Đồng",
-    href: "/manager/contract",
-    icon: Users,
-    subItems: [
-      { label: "Khách Hàng", href: "/manager/contracts/clients" },
-      { label: "Nhân Sự", href: "/manager/contracts/developers" },
-    ],
+    label: "Dự án",
+    href: "/manager/projects",
+    icon: Briefcase,
   },
-  {
-    label: "Kỳ Thanh Toán",
-    href: "/manager/payment-periods",
-    icon: CalendarClock,
-    subItems: [
-      {
-        label: "Khách hàng",
-        href: "/manager/payment-periods/clients",
-        icon: Wallet,
-      },
-      {
-        label: "Nhân sự",
-        href: "/manager/payment-periods/partners",
-        icon: Wallet,
-      },
-    ],
-  },
+  // {
+  //   label: "Kỳ Thanh Toán",
+  //   href: "/manager/payment-periods",
+  //   icon: CalendarClock,
+  //   subItems: [
+  //     {
+  //       label: "Khách hàng",
+  //       href: "/manager/payment-periods/clients",
+  //       icon: Wallet,
+  //     },
+  //     {
+  //       label: "Nhân sự",
+  //       href: "/manager/payment-periods/partners",
+  //       icon: Wallet,
+  //     },
+  //   ],
+  // },
   {
     label: "Báo cáo Kinh doanh",
     href: "/manager/business",

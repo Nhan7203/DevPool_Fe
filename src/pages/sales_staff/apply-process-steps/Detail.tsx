@@ -13,6 +13,7 @@ import {
   Hash,
   Building2,
   AlertCircle,
+  List,
 } from "lucide-react";
 
 interface ApplyProcessStepDetail {
@@ -33,6 +34,8 @@ export default function SalesApplyProcessStepDetailPage() {
     "/sales/apply-process-steps";
   const [step, setStep] = useState<ApplyProcessStepDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>('info');
+  const [templateSteps, setTemplateSteps] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,12 +44,25 @@ export default function SalesApplyProcessStepDetailPage() {
         const stepData = await applyProcessStepService.getById(Number(id));
 
         let templateName = "—";
+        let steps: any[] = [];
         try {
           const template = await applyProcessTemplateService.getById(stepData.templateId);
           templateName = template.name;
+          
+          // Fetch all steps from the template
+          try {
+            const allSteps = await applyProcessStepService.getAll({
+              templateId: stepData.templateId,
+              excludeDeleted: true
+            });
+            steps = Array.isArray(allSteps) ? allSteps : (allSteps?.data || allSteps?.items || []);
+            // Sort by stepOrder
+            steps.sort((a, b) => a.stepOrder - b.stepOrder);
+          } catch {}
         } catch {}
 
         setStep({ ...stepData, templateName });
+        setTemplateSteps(steps);
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết Apply Process Step:", err);
       } finally {
@@ -162,42 +178,138 @@ export default function SalesApplyProcessStepDetailPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InfoItem label="Tên bước" value={step.stepName} icon={<FileText className="w-4 h-4" />} />
-              <InfoItem
-                label="Mẫu quy trình"
-                value={step.templateName ?? "—"}
-                icon={<Building2 className="w-4 h-4" />}
-              />
-            </div>
-          </div>
-        </div>
-
+        {/* Content with Tabs */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-secondary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-secondary-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Mô tả</h3>
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setActiveTab('info')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'info'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Thông tin chung
+              </button>
+              <button
+                onClick={() => setActiveTab('description')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'description'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Mô tả
+              </button>
+              <button
+                onClick={() => setActiveTab('steps')}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === 'steps'
+                    ? 'border-primary-600 text-primary-600 bg-primary-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                Các bước quy trình
+                {templateSteps.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-neutral-200 text-neutral-700">
+                    {templateSteps.length}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
+
+          {/* Tab Content */}
           <div className="p-6">
-            <div className="prose prose-sm max-w-none">
-              <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                {step.description || "Chưa có mô tả cho bước này"}
-              </p>
-            </div>
+            {/* Tab: Thông tin chung */}
+            {activeTab === 'info' && (
+              <div className="animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InfoItem label="Tên bước" value={step.stepName} icon={<FileText className="w-4 h-4" />} />
+                  <InfoItem
+                    label="Mẫu quy trình"
+                    value={step.templateName ?? "—"}
+                    icon={<Building2 className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Thứ tự bước"
+                    value={`Bước ${step.stepOrder}`}
+                    icon={<Hash className="w-4 h-4" />}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Mô tả */}
+            {activeTab === 'description' && (
+              <div className="animate-fade-in">
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                    {step.description || "Chưa có mô tả cho bước này"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Các bước quy trình */}
+            {activeTab === 'steps' && (
+              <div className="animate-fade-in">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Danh sách các bước trong mẫu quy trình</h3>
+                {templateSteps.length > 0 ? (
+                  <div className="space-y-3">
+                    {templateSteps.map((s: any) => (
+                      <div
+                        key={s.id}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          s.id === step.id
+                            ? 'border-primary-500 bg-primary-50'
+                            : 'border-neutral-200 hover:border-primary-300 hover:bg-neutral-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm ${
+                              s.id === step.id
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-neutral-200 text-neutral-700'
+                            }`}>
+                              {s.stepOrder}
+                            </div>
+                            <div>
+                              <p className={`font-semibold ${
+                                s.id === step.id ? 'text-primary-900' : 'text-gray-900'
+                              }`}>
+                                {s.stepName}
+                              </p>
+                              {s.description && (
+                                <p className="text-sm text-neutral-600 mt-1 line-clamp-2">
+                                  {s.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {s.id === step.id && (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                              Bước hiện tại
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-neutral-500">
+                    <List className="w-12 h-12 mx-auto mb-3 text-neutral-400" />
+                    <p>Chưa có bước nào trong mẫu quy trình này</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

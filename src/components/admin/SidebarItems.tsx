@@ -7,7 +7,7 @@ export const sidebarItems = [
     icon: BarChart3
   },
   {
-    label: 'Quản Lý Người Dùng',
+    label: 'Người Dùng',
     href: '/admin/users',
     icon: Users,
     subItems: [

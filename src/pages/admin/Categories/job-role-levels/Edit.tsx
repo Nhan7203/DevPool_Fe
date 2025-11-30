@@ -182,7 +182,7 @@ export default function JobRoleLevelEditPage() {
                     placeholder="VD: Frontend Developer, Backend Engineer..."
                     required
                   />
-                  <p className="text-xs text-neutral-500 mt-1">Tên rõ ràng giúp HR/khách hàng dễ nhận biết.</p>
+                  <p className="text-xs text-neutral-500 mt-1">Tên rõ ràng giúp TA/khách hàng dễ nhận biết.</p>
                 </div>
 
                 {/* Loại vị trí */}

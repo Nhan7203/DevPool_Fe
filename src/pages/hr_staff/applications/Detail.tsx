@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyService, type Apply } from "../../../services/Apply";
+import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { projectService } from "../../../services/Project";
 import { clientCompanyService } from "../../../services/ClientCompany";
@@ -12,14 +14,12 @@ import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { userService } from "../../../services/User";
 import { applyActivityService, type ApplyActivity, ApplyActivityType, ApplyActivityStatus } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
-import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { locationService } from "../../../services/location";
 import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
 import { partnerContractService, type PartnerContract } from "../../../services/PartnerContract";
 import { Button } from "../../../components/ui/button";
 import {
-  ArrowLeft,
   XCircle,
   FileText,
   User as UserIcon,
@@ -582,6 +582,16 @@ export default function TalentCVApplicationDetailPage() {
         label: "Đã từ chối",
         color: "bg-red-100 text-red-800",
         bgColor: "bg-red-50"
+      },
+      "Expired": {
+        label: "Đã hết hạn",
+        color: "bg-gray-100 text-gray-800",
+        bgColor: "bg-gray-50"
+      },
+      "ClosedBySystem": {
+        label: "Đã đóng bởi hệ thống",
+        color: "bg-red-100 text-red-800",
+        bgColor: "bg-red-50"
       }
     };
 
@@ -597,7 +607,7 @@ export default function TalentCVApplicationDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -611,7 +621,7 @@ export default function TalentCVApplicationDetailPage() {
   if (!application) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -619,7 +629,7 @@ export default function TalentCVApplicationDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy hồ sơ ứng tuyển</p>
             <Link
-              to="/hr/applications"
+              to="/ta/applications"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách
@@ -631,7 +641,8 @@ export default function TalentCVApplicationDetailPage() {
   }
 
   const statusConfig = getStatusConfig(application.status);
-  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status);
+  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status) && 
+    application.status !== "Expired" && application.status !== "ClosedBySystem";
   const canCreateNextActivity = statusAllowsActivityCreation && hasRemainingSteps;
 
   const formatDate = (dateString?: string | null) => {
@@ -695,32 +706,42 @@ export default function TalentCVApplicationDetailPage() {
     // Chuyển đến trang tạo hợp đồng với query params
     // talentApplicationId: để pre-fill vào form
     // applicationId: để quay lại trang detail sau khi tạo
-    navigate(`/hr/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
+    navigate(`/ta/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
   };
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to="/hr/applications"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              ...(jobRequest ? [
+                { label: "Yêu cầu tuyển dụng", to: "/ta/job-requests" },
+                { label: jobRequest.title || "Chi tiết yêu cầu", to: `/ta/job-requests/${jobRequest.id}` }
+              ] : [
+                { label: "Hồ sơ ứng tuyển", to: "/ta/applications" }
+              ]),
+              { label: application ? `Hồ sơ #${application.id}` : "Chi tiết hồ sơ" }
+            ]}
+          />
 
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ sơ #{application.id}</h1>
               <p className="text-neutral-600 mb-4">Thông tin chi tiết hồ sơ ứng viên</p>
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
+              <div 
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200 relative group`}
+                title={application.status === "Expired" || application.status === "ClosedBySystem" 
+                  ? "Tự động đóng bởi hệ thống do quá 30 ngày không có hoạt động." 
+                  : ""}
+              >
                 <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
+                {(application.status === "Expired" || application.status === "ClosedBySystem") && (
+                  <AlertCircle className="w-4 h-4 text-gray-500" />
+                )}
               </div>
             </div>
 
@@ -789,7 +810,7 @@ export default function TalentCVApplicationDetailPage() {
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoRow label="Mã hồ sơ" value={`#${application.id}`} icon={<FileText className="w-4 h-4" />} />
-                <InfoRow label="HR phụ trách" value={submitterName || application.submittedBy} icon={<UserIcon className="w-4 h-4" />} />
+                <InfoRow label="TA phụ trách" value={submitterName || application.submittedBy} icon={<UserIcon className="w-4 h-4" />} />
                 <InfoRow label="Thời gian nộp hồ sơ" value={new Date(application.createdAt).toLocaleString('vi-VN')} icon={<Calendar className="w-4 h-4" />} />
               </div>
             </div>
@@ -826,11 +847,13 @@ export default function TalentCVApplicationDetailPage() {
                     label="Số lượng tuyển dụng"
                     value={(() => {
                       const qty = jobRequest.quantity ?? 0;
-                      const remain =
-                        remainingSlots === null || remainingSlots === undefined
-                          ? "—"
-                          : `${remainingSlots}/${qty} còn lại`;
-                      return `${qty} (${remain})`;
+                      if (remainingSlots === null || remainingSlots === undefined) {
+                        return `${qty} (—)`;
+                      }
+                      if (remainingSlots === 0) {
+                        return `${qty} (Đã đủ)`;
+                      }
+                      return `${qty} (${remainingSlots}/${qty} còn lại)`;
                     })()}
                     icon={<UserPlus className="w-4 h-4" />}
                   />
@@ -885,7 +908,7 @@ export default function TalentCVApplicationDetailPage() {
                   {canCreateNextActivity && (
                     <div className="flex gap-3">
                       <Button
-                        onClick={() => navigate(`/hr/apply-activities/create?applyId=${application.id}`)}
+                        onClick={() => navigate(`/ta/apply-activities/create?applyId=${application.id}`)}
                         disabled={!statusAllowsActivityCreation}
                         className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"}`}
                       >
@@ -909,6 +932,20 @@ export default function TalentCVApplicationDetailPage() {
                   <p className="text-sm text-neutral-500">Chưa có hoạt động nào.</p>
                 ) : (
                   <div className="space-y-4">
+                    {/* System log nếu application bị auto-close */}
+                    {(application.status === "Expired" || application.status === "ClosedBySystem") && (
+                      <div className="p-5 border border-neutral-200 rounded-xl bg-gray-50">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-200 rounded-lg">
+                            <AlertCircle className="w-4 h-4 text-gray-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900 mb-1">System auto-closed (Inactivity {'>'} 30 days).</p>
+                            <p className="text-xs text-gray-600">Hệ thống tự động đóng hồ sơ do không có hoạt động trong 30 ngày.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {[...activities].sort((a, b) => a.id - b.id).map((activity, index) => {
                       const processStep = processSteps[activity.processStepId];
                       const formattedDate = activity.scheduledDate
@@ -916,7 +953,7 @@ export default function TalentCVApplicationDetailPage() {
                         : null;
 
                       return (
-                        <Link key={activity.id} to={`/hr/apply-activities/${activity.id}`} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
+                        <Link key={activity.id} to={`/ta/apply-activities/${activity.id}`} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">{index + 1}</span>

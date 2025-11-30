@@ -2,78 +2,178 @@ import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
 // Interface cho ClientContractPayment (Model trả về từ API)
-export interface ClientContractPayment {
+export interface ClientContractPaymentModel {
   id: number;
-  clientPeriodId: number;
-  clientContractId: number;
-  billableHours: number;
-  calculatedAmount?: number | null;
-  invoicedAmount?: number | null;
-  receivedAmount?: number | null;
+  projectPeriodId: number;
+  talentAssignmentId: number;
+
+  // Contract Info
+  contractNumber: string;
+
+  // Currency & Exchange Rate
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+
+  // Calculation Method
+  calculationMethod: string;
+  percentageValue?: number | null;
+
+  // Legacy fields (for backward compatibility)
+  monthlyRate: number;
+  standardHours: number;
+  sowDescription?: string | null;
+
+  // Contract Dates
+  contractStartDate: string; // ISO string
+  contractEndDate: string; // ISO string
+
+  contractStatus: string;
+
+  // Payment Info
+  reportedHours?: number | null;
+  billableHours?: number | null;
+  manMonthCoefficient?: number | null;
+  finalAmount?: number | null;
+  finalAmountVND?: number | null;
+  plannedAmount?: number | null;
   invoiceNumber?: string | null;
-  invoiceDate?: string | null; // DateTime được trả về dưới dạng string ISO
-  paymentDate?: string | null; // DateTime được trả về dưới dạng string ISO
-  status: string;
+  invoiceDate?: string | null; // ISO string
+  totalPaidAmount: number;
+  lastPaymentDate?: string | null; // ISO string
+  paymentStatus: string;
+
+  // Rejection
+  rejectionReason?: string | null;
   notes?: string | null;
+  createdAt: string; // ISO string
+  updatedAt?: string | null; // ISO string
+
+  // Computed Property
+  isFinished: boolean;
+
+  // Navigation Properties (for display)
+  projectName?: string | null;
+  clientCompanyName?: string | null;
+  talentName?: string | null;
+  partnerName?: string | null;
 }
 
 // Interface cho ClientContractPaymentCreate (Payload để tạo mới)
-export interface ClientContractPaymentCreate {
-  clientPeriodId: number;
-  clientContractId: number;
-  billableHours: number;
-  calculatedAmount?: number | null;
-  invoicedAmount?: number | null;
-  receivedAmount?: number | null;
+export interface ClientContractPaymentCreateModel {
+  projectPeriodId: number;
+  talentAssignmentId: number;
+  contractNumber: string;
+
+  // Currency & Exchange Rate
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+
+  // Calculation Method
+  calculationMethod: string;
+  percentageValue?: number | null;
+
+  // Contract Dates
+  contractStartDate: string; // ISO string
+  contractEndDate: string; // ISO string
+
+  // Legacy fields
+  monthlyRate: number;
+  standardHours: number;
+  sowDescription?: string | null;
+
+  contractStatus: string;
+
+  plannedAmount?: number | null;
+  finalAmountVND?: number | null;
+  reportedHours?: number | null;
+  billableHours?: number | null;
+  manMonthCoefficient?: number | null;
+  finalAmount?: number | null;
   invoiceNumber?: string | null;
-  invoiceDate?: string | null; // DateTime dưới dạng string ISO
-  paymentDate?: string | null; // DateTime dưới dạng string ISO
-  status: string;
+  invoiceDate?: string | null; // ISO string
+  totalPaidAmount: number;
+  lastPaymentDate?: string | null; // ISO string
+  paymentStatus: string;
+  rejectionReason?: string | null;
   notes?: string | null;
 }
 
 // Interface cho ClientContractPaymentFilter (Filter để lấy danh sách)
 export interface ClientContractPaymentFilter {
-  clientPeriodId?: number;
-  clientContractId?: number;
-  status?: string;
-  invoiceDateFrom?: string; // DateTime dưới dạng string ISO
-  invoiceDateTo?: string; // DateTime dưới dạng string ISO
-  paymentDateFrom?: string; // DateTime dưới dạng string ISO
-  paymentDateTo?: string; // DateTime dưới dạng string ISO
+  projectPeriodId?: number;
+  talentAssignmentId?: number;
+  talentId?: number;
+  contractStatus?: string;
+  paymentStatus?: string;
+  isFinished?: boolean;
+  contractDateFrom?: string; // ISO string
+  contractDateTo?: string; // ISO string
+  invoiceDateFrom?: string; // ISO string
+  invoiceDateTo?: string; // ISO string
+  paymentDateFrom?: string; // ISO string
+  paymentDateTo?: string; // ISO string
   excludeDeleted?: boolean;
 }
 
-// Interface cho ClientContractPaymentCalculateModel (Payload để tính toán và submit)
+// Interface cho ClientContractPaymentCalculateModel (Payload để tính toán)
 export interface ClientContractPaymentCalculateModel {
-  billableHours?: number | null;
+  billableHours: number;
   notes?: string | null;
 }
 
-// Interface cho ApproveForInvoicingModel (Payload để approve for invoicing)
-export interface ApproveForInvoicingModel {
-  paymentIds: number[];
+// Interface cho SubmitContractModel (Payload để submit contract với SOW)
+export interface SubmitContractModel {
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+  calculationMethod: string;
+  percentageValue?: number | null;
+  fixedAmount?: number | null;
+  plannedAmount?: number | null;
+  sowDescription?: string | null;
+  sowExcelFileUrl: string;
+  monthlyRate: number;
+  standardHours: number;
   notes?: string | null;
 }
 
-// Interface cho RecordInvoiceModel (Payload để ghi nhận hóa đơn)
-export interface RecordInvoiceModel {
-  invoiceNumber: string;
-  invoiceDate: string; // DateTime dưới dạng string ISO
-  invoicedAmount: number;
+// Interface cho VerifyContractModel (Payload để verify contract)
+export interface VerifyContractModel {
   notes?: string | null;
+  // File hợp đồng chuẩn sẽ được upload riêng
 }
 
 // Interface cho RecordPaymentModel (Payload để ghi nhận thanh toán)
 export interface RecordPaymentModel {
   receivedAmount: number;
-  paymentDate: string; // DateTime dưới dạng string ISO
+  paymentDate: string; // ISO string
+  notes?: string | null;
+  clientReceiptFileUrl?: string | null;
+}
+
+// Interface cho CreateInvoiceModel (Payload để tạo hóa đơn)
+export interface CreateInvoiceModel {
+  invoiceNumber: string;
+  invoiceDate: string; // ISO string
+  notes?: string | null;
+  // File invoice sẽ được upload riêng
+}
+
+// Interface cho ApproveContractModel (Payload để duyệt hợp đồng)
+export interface ApproveContractModel {
   notes?: string | null;
 }
 
-// Interface cho RejectModel (Payload để reject)
-export interface RejectModel {
+// Interface cho RejectContractModel (Payload để reject contract)
+export interface RejectContractModel {
   rejectionReason: string;
+}
+
+// Interface cho RequestMoreInformationModel (Payload để yêu cầu thêm thông tin)
+export interface RequestMoreInformationModel {
+  notes?: string | null;
 }
 
 export const clientContractPaymentService = {
@@ -82,12 +182,22 @@ export const clientContractPaymentService = {
     try {
       const params = new URLSearchParams();
 
-      if (filter?.clientPeriodId)
-        params.append("ClientPeriodId", filter.clientPeriodId.toString());
-      if (filter?.clientContractId)
-        params.append("ClientContractId", filter.clientContractId.toString());
-      if (filter?.status)
-        params.append("Status", filter.status);
+      if (filter?.projectPeriodId)
+        params.append("ProjectPeriodId", filter.projectPeriodId.toString());
+      if (filter?.talentAssignmentId)
+        params.append("TalentAssignmentId", filter.talentAssignmentId.toString());
+      if (filter?.talentId)
+        params.append("TalentId", filter.talentId.toString());
+      if (filter?.contractStatus)
+        params.append("ContractStatus", filter.contractStatus);
+      if (filter?.paymentStatus)
+        params.append("PaymentStatus", filter.paymentStatus);
+      if (filter?.isFinished !== undefined)
+        params.append("IsFinished", filter.isFinished ? "true" : "false");
+      if (filter?.contractDateFrom)
+        params.append("ContractDateFrom", filter.contractDateFrom);
+      if (filter?.contractDateTo)
+        params.append("ContractDateTo", filter.contractDateTo);
       if (filter?.invoiceDateFrom)
         params.append("InvoiceDateFrom", filter.invoiceDateFrom);
       if (filter?.invoiceDateTo)
@@ -101,11 +211,11 @@ export const clientContractPaymentService = {
 
       const url = `/clientcontractpayment${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
-      return response.data;
+      return response.data as ClientContractPaymentModel[];
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải danh sách thanh toán hợp đồng khách hàng" };
-      throw { message: "Lỗi không xác định khi tải danh sách thanh toán hợp đồng khách hàng" };
+        throw error.response?.data || { message: "Không thể tải danh sách hợp đồng thanh toán khách hàng" };
+      throw { message: "Lỗi không xác định khi tải danh sách hợp đồng thanh toán khách hàng" };
     }
   },
 
@@ -113,119 +223,131 @@ export const clientContractPaymentService = {
   async getById(id: number) {
     try {
       const response = await axios.get(`/clientcontractpayment/${id}`);
-      return response.data;
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải thông tin thanh toán hợp đồng khách hàng" };
-      throw { message: "Lỗi không xác định khi tải dữ liệu" };
+        throw error.response?.data || { message: "Không thể tải thông tin hợp đồng thanh toán khách hàng" };
+      throw { message: "Lỗi không xác định khi tải thông tin hợp đồng thanh toán khách hàng" };
     }
   },
 
   // Tạo mới ClientContractPayment
-  async create(payload: ClientContractPaymentCreate) {
+  async create(payload: ClientContractPaymentCreateModel) {
     try {
       const response = await axios.post("/clientcontractpayment", payload);
-      return response.data;
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tạo thanh toán hợp đồng khách hàng" };
-      throw { message: "Lỗi không xác định khi tạo thanh toán hợp đồng khách hàng" };
+        throw error.response?.data || { message: "Không thể tạo hợp đồng thanh toán khách hàng" };
+      throw { message: "Lỗi không xác định khi tạo hợp đồng thanh toán khách hàng" };
     }
   },
 
   // Cập nhật ClientContractPayment
-  async update(id: number, payload: Partial<ClientContractPaymentCreate>) {
+  async update(id: number, payload: Partial<ClientContractPaymentCreateModel>) {
     try {
       const response = await axios.put(`/clientcontractpayment/${id}`, payload);
-      return response.data;
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể cập nhật thanh toán hợp đồng khách hàng" };
-      throw { message: "Lỗi không xác định khi cập nhật thanh toán hợp đồng khách hàng" };
+        throw error.response?.data || { message: "Không thể cập nhật hợp đồng thanh toán khách hàng" };
+      throw { message: "Lỗi không xác định khi cập nhật hợp đồng thanh toán khách hàng" };
     }
   },
 
-  // Tính toán và submit ClientContractPayment
-  async calculateAndSubmit(id: number, payload: ClientContractPaymentCalculateModel) {
+  // Request more information - Yêu cầu thêm thông tin
+  async requestMoreInformation(id: number, payload?: RequestMoreInformationModel) {
     try {
-      // Map sang PascalCase để khớp với C# model
-      const requestPayload = {
-        BillableHours: payload.billableHours ?? null,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/clientcontractpayment/${id}/calculate-and-submit`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/clientcontractpayment/${id}/request-more-information`, payload);
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tính toán và submit thanh toán hợp đồng khách hàng" };
-      throw { message: "Lỗi không xác định khi tính toán và submit thanh toán hợp đồng khách hàng" };
+        throw error.response?.data || { message: "Không thể yêu cầu thêm thông tin" };
+      throw { message: "Lỗi không xác định khi yêu cầu thêm thông tin" };
     }
   },
 
-  // Approve for invoicing - Duyệt để xuất hóa đơn
-  async approveForInvoicing(payload: ApproveForInvoicingModel) {
+  // Submit contract - Sales gửi hợp đồng kèm SOW
+  async submitContract(id: number, payload: SubmitContractModel) {
     try {
-      const requestPayload = {
-        PaymentIds: payload.paymentIds,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post("/clientcontractpayment/approve-for-invoicing", requestPayload);
-      return response.data;
+      const response = await axios.post(`/clientcontractpayment/${id}/submit-contract`, payload);
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể duyệt để xuất hóa đơn" };
-      throw { message: "Lỗi không xác định khi duyệt để xuất hóa đơn" };
+        throw error.response?.data || { message: "Không thể gửi hợp đồng" };
+      throw { message: "Lỗi không xác định khi gửi hợp đồng" };
     }
   },
 
-  // Record invoice - Ghi nhận hóa đơn
-  async recordInvoice(id: number, payload: RecordInvoiceModel) {
+  // Verify contract - Accountant xác minh hợp đồng
+  async verifyContract(id: number, payload: VerifyContractModel) {
     try {
-      const requestPayload = {
-        InvoiceNumber: payload.invoiceNumber,
-        InvoiceDate: payload.invoiceDate,
-        InvoicedAmount: payload.invoicedAmount,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/clientcontractpayment/${id}/record-invoice`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/clientcontractpayment/${id}/verify-contract`, payload);
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể ghi nhận hóa đơn" };
-      throw { message: "Lỗi không xác định khi ghi nhận hóa đơn" };
+        throw error.response?.data || { message: "Không thể xác minh hợp đồng" };
+      throw { message: "Lỗi không xác định khi xác minh hợp đồng" };
+    }
+  },
+
+  // Approve contract - Manager duyệt hợp đồng
+  async approveContract(id: number, payload?: ApproveContractModel) {
+    try {
+      const response = await axios.post(`/clientcontractpayment/${id}/approve-contract`, payload || {});
+      return response.data as ClientContractPaymentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể duyệt hợp đồng" };
+      throw { message: "Lỗi không xác định khi duyệt hợp đồng" };
+    }
+  },
+
+  // Reject contract - Từ chối hợp đồng
+  async rejectContract(id: number, payload: RejectContractModel) {
+    try {
+      const response = await axios.post(`/clientcontractpayment/${id}/reject-contract`, payload);
+      return response.data as ClientContractPaymentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể từ chối hợp đồng" };
+      throw { message: "Lỗi không xác định khi từ chối hợp đồng" };
+    }
+  },
+
+  // Start billing - Bắt đầu tính toán
+  async startBilling(id: number, payload: ClientContractPaymentCalculateModel) {
+    try {
+      const response = await axios.post(`/clientcontractpayment/${id}/start-billing`, payload);
+      return response.data as ClientContractPaymentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể bắt đầu tính toán" };
+      throw { message: "Lỗi không xác định khi bắt đầu tính toán" };
+    }
+  },
+
+  // Create invoice - Tạo hóa đơn
+  async createInvoice(id: number, payload: CreateInvoiceModel) {
+    try {
+      const response = await axios.post(`/clientcontractpayment/${id}/create-invoice`, payload);
+      return response.data as ClientContractPaymentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể tạo hóa đơn" };
+      throw { message: "Lỗi không xác định khi tạo hóa đơn" };
     }
   },
 
   // Record payment - Ghi nhận thanh toán
   async recordPayment(id: number, payload: RecordPaymentModel) {
     try {
-      const requestPayload = {
-        ReceivedAmount: payload.receivedAmount,
-        PaymentDate: payload.paymentDate,
-        Notes: payload.notes ?? null
-      };
-      const response = await axios.post(`/clientcontractpayment/${id}/record-payment`, requestPayload);
-      return response.data;
+      const response = await axios.post(`/clientcontractpayment/${id}/record-payment`, payload);
+      return response.data as ClientContractPaymentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể ghi nhận thanh toán" };
       throw { message: "Lỗi không xác định khi ghi nhận thanh toán" };
     }
   },
-
-  // Reject - Từ chối xuất hóa đơn
-  async reject(id: number, payload: RejectModel) {
-    try {
-      const requestPayload = {
-        RejectionReason: payload.rejectionReason
-      };
-      const response = await axios.post(`/clientcontractpayment/${id}/reject`, requestPayload);
-      return response.data;
-    } catch (error: unknown) {
-      if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể từ chối xuất hóa đơn" };
-      throw { message: "Lỗi không xác định khi từ chối xuất hóa đơn" };
-    }
-  },
 };
-

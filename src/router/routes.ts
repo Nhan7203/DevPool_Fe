@@ -28,117 +28,117 @@ export const ROUTES = {
   // HR_STAFF - Nhân viên hành chính nhân sự
   // =======================================
   HR_STAFF: {
-    DASHBOARD: '/hr/dashboard',
-    PROFILE: '/hr/profile',
+    DASHBOARD: '/ta/dashboard',
+    PROFILE: '/ta/profile',
 
     // Talent & nguồn cung
     DEVELOPERS: {
-      LIST: '/hr/developers',                    // Danh sách tất cả developers
-      DETAIL: '/hr/developers/:id',              // Chi tiết developer   
-      EDIT: '/hr/developers/edit/:id',           // Sửa thông tin developer
-      CREATE: '/hr/developers/create',
+      LIST: '/ta/developers',                    // Danh sách tất cả developers
+      DETAIL: '/ta/developers/:id',              // Chi tiết developer   
+      EDIT: '/ta/developers/edit/:id',           // Sửa thông tin developer
+      CREATE: '/ta/developers/create',
 
     },
     TALENT_AVAILABLE_TIMES: {
-      LIST: '/hr/talent-available-times',
-      EDIT: '/hr/talent-available-times/edit/:id',
-      CREATE: '/hr/talent-available-times/create',
+      LIST: '/ta/talent-available-times',
+      EDIT: '/ta/talent-available-times/edit/:id',
+      CREATE: '/ta/talent-available-times/create',
     },
     TALENT_CERTIFICATES: {
-      LIST: '/hr/talent-certificates',
-      EDIT: '/hr/talent-certificates/edit/:id',
-      CREATE: '/hr/talent-certificates/create',
+      LIST: '/ta/talent-certificates',
+      EDIT: '/ta/talent-certificates/edit/:id',
+      CREATE: '/ta/talent-certificates/create',
     },
     TALENT_CVS: {
-      LIST: '/hr/talent-cvs',
-      EDIT: '/hr/talent-cvs/edit/:id',
-      CREATE: '/hr/talent-cvs/create',
+      LIST: '/ta/talent-cvs',
+      EDIT: '/ta/talent-cvs/edit/:id',
+      CREATE: '/ta/talent-cvs/create',
     },
 
     TALENT_JOB_ROLE_LEVELS: {
-      LIST: '/hr/talent-job-role-levels',
-      EDIT: '/hr/talent-job-role-levels/edit/:id',
-      CREATE: '/hr/talent-job-role-levels/create',
+      LIST: '/ta/talent-job-role-levels',
+      EDIT: '/ta/talent-job-role-levels/edit/:id',
+      CREATE: '/ta/talent-job-role-levels/create',
     },
 
     TALENT_PROJECTS: {
-      LIST: '/hr/talent-projects',
-      EDIT: '/hr/talent-projects/edit/:id',
-      CREATE: '/hr/talent-projects/create',
+      LIST: '/ta/talent-projects',
+      EDIT: '/ta/talent-projects/edit/:id',
+      CREATE: '/ta/talent-projects/create',
     },
     TALENT_SKILLS: {
-      LIST: '/hr/talent-skills',
-      EDIT: '/hr/talent-skills/edit/:id',
-      CREATE: '/hr/talent-skills/create',
+      LIST: '/ta/talent-skills',
+      EDIT: '/ta/talent-skills/edit/:id',
+      CREATE: '/ta/talent-skills/create',
     },
     TALENT_WORK_EXPERIENCES: {
-      LIST: '/hr/talent-work-experiences',
-      EDIT: '/hr/talent-work-experiences/edit/:id',
-      CREATE: '/hr/talent-work-experiences/create',
+      LIST: '/ta/talent-work-experiences',
+      EDIT: '/ta/talent-work-experiences/edit/:id',
+      CREATE: '/ta/talent-work-experiences/create',
     },
 
     JOB_REQUESTS: {
-      LIST: '/hr/job-requests',
-      DETAIL: '/hr/job-requests/:id',
-      MATCHING: '/hr/job-requests/matching-cv', // Matching CV với yêu cầu
+      LIST: '/ta/job-requests',
+      DETAIL: '/ta/job-requests/:id',
+      MATCHING: '/ta/job-requests/matching-cv', // Matching CV với yêu cầu
     },
 
     APPLICATIONS: {
-      LIST: '/hr/applications',
-      DETAIL: '/hr/applications/:id',
+      LIST: '/ta/applications',
+      DETAIL: '/ta/applications/:id',
     },
 
     APPLY_ACTIVITIES: {
-      LIST: '/hr/apply-activities',
-      DETAIL: '/hr/apply-activities/:id',
-      EDIT: '/hr/apply-activities/edit/:id',
-      CREATE: '/hr/apply-activities/create',
+      LIST: '/ta/apply-activities',
+      DETAIL: '/ta/apply-activities/:id',
+      EDIT: '/ta/apply-activities/edit/:id',
+      CREATE: '/ta/apply-activities/create',
     },
 
     TEMPLATES: {
-      LIST: '/hr/templates',
-      CREATE: '/hr/templates/create',
-      Assign: '/hr/templates/assgin',
+      LIST: '/ta/templates',
+      CREATE: '/ta/templates/create',
+      Assign: '/ta/templates/assgin',
     },
 
     PARTNERS: {
-      LIST: '/hr/partners',
-      DETAIL: '/hr/partners/:id',
-      EDIT: '/hr/partners/edit/:id',
-      CREATE: '/hr/partners/create',
+      LIST: '/ta/partners',
+      DETAIL: '/ta/partners/:id',
+      EDIT: '/ta/partners/edit/:id',
+      CREATE: '/ta/partners/create',
     },
-    ASSIGNMENTS: '/hr/assignments',                // staffTalentAssignments
+    ASSIGNMENTS: '/ta/assignments',                // staffTalentAssignments
 
     // Quản lý Phỏng vấn
     INTERVIEWS: {
-      LIST: '/hr/interviews',                    // Danh sách phỏng vấn
-      SCHEDULE: '/hr/interviews/schedule',       // Sắp xếp lịch phỏng vấn
-      RESULT: '/hr/interviews/:id/result',       // Cập nhật kết quả phỏng vấn
-      HISTORY: '/hr/interviews/history',         // Lịch sử phỏng vấn
+      LIST: '/ta/interviews',                    // Danh sách phỏng vấn
+      SCHEDULE: '/ta/interviews/schedule',       // Sắp xếp lịch phỏng vấn
+      RESULT: '/ta/interviews/:id/result',       // Cập nhật kết quả phỏng vấn
+      HISTORY: '/ta/interviews/history',         // Lịch sử phỏng vấn
     },
 
     // Quản lý Hợp đồng 
     CONTRACTS: {
-      LIST: '/hr/contracts',                     // Danh sách hợp đồng
-      DETAIL: '/hr/contracts/:id',               // Chi tiết hợp đồng
-      CREATE: '/hr/contracts/create',            // Tạo hợp đồng mới
-      EDIT: '/hr/contracts/edit/:id',           // Chỉnh sửa hợp đồng
-      UPLOAD: '/hr/contracts/upload',        // Upload file hợp đồng
+      LIST: '/ta/contracts',                     // Danh sách hợp đồng
+      DETAIL: '/ta/contracts/:id',               // Chi tiết hợp đồng
+      CREATE: '/ta/contracts/create',            // Tạo hợp đồng mới
+      EDIT: '/ta/contracts/edit/:id',           // Chỉnh sửa hợp đồng
+      UPLOAD: '/ta/contracts/upload',        // Upload file hợp đồng
     },
 
-    // WorkReports: HR nhập & upload, submit để duyệt
+    // WorkReports: TA nhập & upload, submit để duyệt
     WORKREPORTS: {
-      LIST: '/hr/workreports',
-      CREATE: '/hr/workreports/create',
-      DETAIL: '/hr/workreports/:id',
-      UPLOAD: '/hr/workreports/:id/upload',
-      SUBMIT: '/hr/workreports/:id/submit',
+      LIST: '/ta/workreports',
+      CREATE: '/ta/workreports/create',
+      DETAIL: '/ta/workreports/:id',
+      UPLOAD: '/ta/workreports/:id/upload',
+      SUBMIT: '/ta/workreports/:id/submit',
     },
 
     // Báo cáo
     REPORTS: {
-      INTERVIEW_SUCCESS: '/hr/reports/interview-success', // Tỷ lệ PV thành công
-      DEVELOPER_STATUS: '/hr/reports/developer-status',   // Trạng thái developers
+      INTERVIEW_SUCCESS: '/ta/reports/interview-success', // Tỷ lệ PV thành công
+      DEVELOPER_STATUS: '/ta/reports/developer-status',   // Trạng thái developers
     }
   },
 
@@ -156,6 +156,10 @@ export const ROUTES = {
       DETAIL: '/sales/contracts/:id',               // Chi tiết hợp đồng
       CREATE: '/sales/contracts/create',        // Tạo hợp đồng mới
       EDIT: '/sales/contracts/edit/:id',        // Chỉnh sửa hợp đồng
+      CLIENTS: '/sales/contracts/clients',           // Danh sách hợp đồng khách hàng
+      CLIENT_DETAIL: '/sales/contracts/clients/:id', // Chi tiết hợp đồng khách hàng
+      PARTNERS: '/sales/contracts/partners',        // Danh sách hợp đồng đối tác
+      PARTNER_DETAIL: '/sales/contracts/partners/:id', // Chi tiết hợp đồng đối tác
     },
     APPLICATIONS: {
       LIST: '/sales/applications',
@@ -277,7 +281,7 @@ export const ROUTES = {
 
     // Thông tin cá nhân
     PROFILE: '/developer/profile',              // Xem/sửa thông tin cá nhân
-    CV: '/developer/cv',                        // submit thay đổi → HR duyệt
+    CV: '/developer/cv',                        // submit thay đổi → TA duyệt
     CV_CREATE: '/developer/cv/create',          // Tạo CV mới
 
     // Hợp đồng
@@ -322,6 +326,8 @@ export const ROUTES = {
       CLIENT_DETAIL: '/manager/contracts/clients/:id',
       DEVS: '/manager/contracts/developers',
       DEV_DETAIL: '/manager/contracts/developers/:id',
+      PARTNERS: '/manager/contracts/partners',
+      PARTNER_DETAIL: '/manager/contracts/partners/:id',
     },
     HUMAN_RESOURCES: {
       OVERVIEW: '/manager/hr/overview',
@@ -473,7 +479,7 @@ export const ROUTES = {
 export const NOTIFICATION_CENTER_ROUTE = '/notifications' as const;
 
 export type UserRole =
-  | 'Staff HR'
+  | 'Staff TA'
   | 'Staff Accountant'
   | 'Staff Sales'
   | 'Developer'
@@ -482,7 +488,7 @@ export type UserRole =
 
 export const getDashboardRoute = (role: string): string => {
   switch (role) {
-    case 'Staff HR':
+    case 'Staff TA':
       return ROUTES.HR_STAFF.DASHBOARD;
     case 'Staff Accountant':
       return ROUTES.ACCOUNTANT_STAFF.DASHBOARD;
@@ -501,7 +507,7 @@ export const getDashboardRoute = (role: string): string => {
 
 export const getRoleBasedRoutes = (role: UserRole) => {
   switch (role) {
-    case 'Staff HR':
+    case 'Staff TA':
       return ROUTES.HR_STAFF;
     case 'Manager':
       return ROUTES.MANAGER;

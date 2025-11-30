@@ -7,7 +7,6 @@ import {
   Globe2,
   Factory,
   CheckCircle,
-  ArrowLeft,
   Plus,
   Save,
   AlertCircle,
@@ -16,6 +15,7 @@ import {
   Layers
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectPayload } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -140,17 +140,29 @@ export default function ProjectCreatePage() {
       errors.industryIds = "Vui lòng chọn ít nhất một ngành!";
     }
 
-    // Validation: Trạng thái (bắt buộc)
-    if (!form.status?.trim()) {
+    // Validation: Trạng thái (bắt buộc, nhưng sẽ tự động set nếu không có EndDate)
+    if (!form.status?.trim() && form.endDate?.trim()) {
       errors.status = "Vui lòng chọn trạng thái dự án!";
     }
 
-    // Validation: Ngày kết thúc phải sau ngày bắt đầu (nếu có)
+    // Validation: StartDate - không cho ngày tương lai quá vô lý (> 5 năm)
+    if (form.startDate) {
+      const startDate = new Date(form.startDate);
+      const today = new Date();
+      const fiveYearsLater = new Date(today);
+      fiveYearsLater.setFullYear(today.getFullYear() + 5);
+      
+      if (startDate > fiveYearsLater) {
+        errors.startDate = "Ngày bắt đầu không được quá 5 năm trong tương lai!";
+      }
+    }
+
+    // Validation: EndDate - phải sau StartDate (nếu có)
     if (form.endDate && form.startDate) {
       const startDate = new Date(form.startDate);
       const endDate = new Date(form.endDate);
       if (endDate < startDate) {
-        errors.endDate = "Ngày kết thúc phải sau ngày bắt đầu!";
+        errors.endDate = "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu!";
       }
     }
 
@@ -163,13 +175,22 @@ export default function ProjectCreatePage() {
       return;
     }
 
+    // Nếu không có EndDate, tự động set status thành "Ongoing"
+    // Nếu có EndDate nhưng chưa có status, mặc định là "Planned"
+    let finalStatus = form.status;
+    if (!form.endDate || form.endDate.trim() === "") {
+      finalStatus = "Ongoing";
+    } else if (!finalStatus || finalStatus.trim() === "") {
+      finalStatus = "Planned";
+    }
+
     try {
       const payload: ProjectPayload = {
         name: form.name!,
         description: form.description ?? "",
         startDate: toUTCDateString(form.startDate) ?? "",
         endDate: toUTCDateString(form.endDate),
-        status: form.status!,
+        status: finalStatus!,
         clientCompanyId: Number(form.clientCompanyId),
         marketId: Number(form.marketId),
         industryIds: form.industryIds.map((id) => Number(id)),
@@ -207,15 +228,12 @@ export default function ProjectCreatePage() {
       <div className="flex-1 p-8">
           {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to="/sales/projects"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Dự án", to: "/sales/projects" },
+              { label: "Tạo dự án mới" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -320,6 +338,18 @@ export default function ProjectCreatePage() {
                           return newErrors;
                         });
                       }
+                      // Clear endDate error if startDate changes
+                      if (fieldErrors.endDate && form.endDate) {
+                        const newEndDate = new Date(form.endDate);
+                        const newStartDate = new Date(e.target.value);
+                        if (newEndDate >= newStartDate) {
+                          setFieldErrors((prev) => {
+                            const newErrors = { ...prev };
+                            delete newErrors.endDate;
+                            return newErrors;
+                          });
+                        }
+                      }
                     }}
                     required
                     max={form.endDate || undefined}
@@ -341,12 +371,28 @@ export default function ProjectCreatePage() {
                     <CalendarDays className="w-4 h-4" />
                     Ngày kết thúc
                   </label>
+                  <div className="relative">
                   <input
                     type="date"
                     name="endDate"
                     value={form.endDate ?? ""}
                     onChange={(e) => {
-                      handleChange(e);
+                      const newValue = e.target.value;
+                      // Nếu xóa EndDate, tự động set status thành "Ongoing" và disable status
+                      if (newValue === "") {
+                        setForm((prev) => ({ ...prev, endDate: "", status: "Ongoing" }));
+                      } else {
+                        // Nếu có EndDate, tự động set status thành "Planned" nếu chưa có hoặc đang là "Ongoing"
+                        handleChange(e);
+                        setForm((prev) => {
+                          const shouldSetPlanned = !prev.status || prev.status === "" || prev.status === "Ongoing";
+                          return {
+                            ...prev,
+                            endDate: newValue,
+                            status: shouldSetPlanned ? "Planned" : prev.status
+                          };
+                        });
+                      }
                       if (fieldErrors.endDate) {
                         setFieldErrors((prev) => {
                           const newErrors = { ...prev };
@@ -362,6 +408,12 @@ export default function ProjectCreatePage() {
                         : "border-neutral-200 focus:border-primary-500"
                     }`}
                   />
+                    {!form.endDate && (
+                      <div className="absolute -bottom-6 left-0 text-xs text-neutral-500 mt-1">
+                        💡 Dự án sẽ được xem là Ongoing nếu không có ngày kết thúc
+                      </div>
+                    )}
+                  </div>
                   {fieldErrors.endDate && (
                     <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
@@ -669,33 +721,31 @@ export default function ProjectCreatePage() {
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
-                  Trạng thái <span className="text-red-500">*</span>
+                  Trạng thái <span className="text-xs text-neutral-500 font-normal ml-2">(Tự động)</span>
                 </label>
                 <select
                 name="status"
-                value={form.status || ""}
-                onChange={(e) => {
-                  handleChange(e);
-                  if (fieldErrors.status) {
-                    setFieldErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors.status;
-                      return newErrors;
-                    });
-                  }
-                }}
-                required
-                  className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
-                    fieldErrors.status
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-neutral-200 focus:border-primary-500"
-                  }`}
+                value={!form.endDate ? "Ongoing" : "Planned"}
+                disabled={true}
+                  className="w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-neutral-50 cursor-not-allowed border-neutral-200"
                 >
-                  <option value="">-- Chọn trạng thái --</option>
-                  <option value="Planned">Đã lên kế hoạch</option>
-                  <option value="Ongoing">Đang thực hiện</option>
-                  <option value="Completed">Đã hoàn thành</option>
+                  <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                  <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                  <option value="Completed">Đã hoàn thành (Completed)</option>
+                  <option value="OnHold">Tạm dừng (OnHold)</option>
+                  <option value="Cancelled">Đã hủy (Cancelled)</option>
                 </select>
+                {!form.endDate ? (
+                  <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Trạng thái tự động là "Ongoing" khi không có ngày kết thúc
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    Trạng thái tự động là "Planned" khi có ngày kết thúc
+                  </p>
+                )}
                 {fieldErrors.status && (
                   <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />

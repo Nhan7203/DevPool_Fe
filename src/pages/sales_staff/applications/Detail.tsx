@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import {
   talentApplicationService,
@@ -171,6 +172,7 @@ export default function SalesApplicationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [application, setApplication] = useState<TalentApplicationDetailed | null>(null);
   const [jobInfo, setJobInfo] = useState<JobDisplayInfo | null>(null);
+  const [jobRequest] = useState<any>(null);
   const [talentLocationName, setTalentLocationName] = useState<string>("—");
   const [activities, setActivities] = useState<SalesActivity[]>([]);
   const [showDob, setShowDob] = useState(false);
@@ -520,15 +522,16 @@ export default function SalesApplicationDetailPage() {
       <Sidebar items={sidebarItems} title="Sales Staff" />
       <div className="flex-1 p-8">
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to="/sales/applications"
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Quay lại danh sách</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              ...(jobRequest ? [
+                { label: "Yêu cầu tuyển dụng", to: "/sales/job-requests" },
+                { label: jobRequest.title || "Chi tiết yêu cầu", to: `/sales/job-requests/${jobRequest.id}` }
+              ] : []),
+              { label: "Hồ sơ ứng tuyển", to: "/sales/applications" },
+              { label: application ? `Hồ sơ #${application.id}` : "Chi tiết hồ sơ" }
+            ]}
+          />
 
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
@@ -596,7 +599,7 @@ export default function SalesApplicationDetailPage() {
               </div>
             </div>
 
-            {/* Job info - sync fields and collapsed like HR */}
+            {/* Job info - sync fields and collapsed like TA */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -718,7 +721,7 @@ export default function SalesApplicationDetailPage() {
           </div>
 
           <div className="space-y-6">
-            {/* Candidate info - order + badge + DOB collapsed like HR */}
+            {/* Candidate info - order + badge + DOB collapsed like TA */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200">
                 <div className="flex items-center gap-3">

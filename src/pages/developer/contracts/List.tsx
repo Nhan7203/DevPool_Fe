@@ -65,7 +65,7 @@ export default function DeveloperContractsList() {
                 if (talent) {
                     setCurrentTalentId(talent.id);
                 } else {
-                    setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ HR.');
+                    setError('Không tìm thấy thông tin nhân sự của bạn. Vui lòng liên hệ TA.');
                 }
             } catch (err: any) {
                 console.error('❌ Lỗi tìm talent:', err);

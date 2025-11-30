@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentAvailableTimeService, type TalentAvailableTimeCreate, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
-  ArrowLeft, 
   Save, 
   X, 
   Calendar, 
@@ -226,7 +226,7 @@ export default function TalentAvailableTimeEditPage() {
       await talentAvailableTimeService.update(Number(id), updateData);
 
       alert("✅ Cập nhật thời gian có sẵn thành công!");
-      navigate(`/hr/developers/${talentId}`);
+      navigate(`/ta/developers/${talentId}`);
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật:", err);
       alert("Không thể cập nhật thời gian có sẵn!");
@@ -236,7 +236,7 @@ export default function TalentAvailableTimeEditPage() {
   if (loading)
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="HR Staff" />
+        <Sidebar items={sidebarItems} title="TA Staff" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -248,20 +248,18 @@ export default function TalentAvailableTimeEditPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="HR Staff" />
+      <Sidebar items={sidebarItems} title="TA Staff" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center gap-4 mb-6">
-            <Link 
-              to={`/hr/developers/${talentId}`}
-              className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
-            >
-              <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">Quay lại chi tiết nhân sự</span>
-            </Link>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Nhân sự", to: "/ta/developers" },
+              { label: talentId ? `Chi tiết nhân sự` : "Chi tiết", to: `/ta/developers/${talentId}` },
+              { label: "Chỉnh sửa thời gian có sẵn" }
+            ]}
+          />
 
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -360,7 +358,7 @@ export default function TalentAvailableTimeEditPage() {
           {/* Action Buttons */}
           <div className="flex justify-end gap-4 pt-6">
             <Link
-              to={`/hr/developers/${talentId}`}
+              to={`/ta/developers/${talentId}`}
               className="group flex items-center gap-2 px-6 py-3 border border-neutral-300 rounded-xl text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all duration-300 hover:scale-105 transform"
             >
               <X className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
