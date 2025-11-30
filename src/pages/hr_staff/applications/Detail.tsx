@@ -940,7 +940,7 @@ export default function TalentCVApplicationDetailPage() {
                             <AlertCircle className="w-4 h-4 text-gray-600" />
                           </div>
                           <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900 mb-1">System auto-closed (Inactivity > 30 days).</p>
+                            <p className="text-sm font-semibold text-gray-900 mb-1">System auto-closed (Inactivity {'>'} 30 days).</p>
                             <p className="text-xs text-gray-600">Hệ thống tự động đóng hồ sơ do không có hoạt động trong 30 ngày.</p>
                           </div>
                         </div>

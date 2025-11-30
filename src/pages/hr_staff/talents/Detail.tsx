@@ -57,10 +57,8 @@ import {
   X,
   Save,
   Search,
-  FileCheck,
   Layers,
 } from "lucide-react";
-import { Layer } from "recharts";
 
 // Mapping WorkingMode values to Vietnamese names
 const workingModeLabels: Record<number, string> = {
@@ -192,7 +190,7 @@ export default function TalentDetailPage() {
     }>;
     locationName?: string;
   }
-  const [extractedCVData, setExtractedCVData] = useState<ExtractedCVData | null>(null);
+  const [, setExtractedCVData] = useState<ExtractedCVData | null>(null);
   const [inlineCVAnalysisResult, setInlineCVAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
   const [showInlineCVAnalysisModal, setShowInlineCVAnalysisModal] = useState(false);
   const [showCVFullForm, setShowCVFullForm] = useState(false); // Hiện form đầy đủ sau khi xác nhận phân tích
@@ -960,37 +958,9 @@ export default function TalentDetailPage() {
   );
 
 
-  // Helper function để lưu CV ID đang được phân tích vào sessionStorage
-  const saveAnalysisCVId = () => {
-    if (!id || !analysisResultCVId) return;
-    try {
-      const cvIdStorageKey = `${ANALYSIS_STORAGE_PREFIX}-cv-id-${id}`;
-      sessionStorage.setItem(cvIdStorageKey, JSON.stringify(analysisResultCVId));
-    } catch (error) {
-      console.error("Không thể lưu CV ID vào bộ nhớ tạm:", error);
-    }
-  };
 
 
 
-  const handlePreparePrefillAndNavigate = (type: PrefillType, data: unknown, targetPath: string) => {
-    if (!id) return;
-    if (Array.isArray(data) && data.length === 0) {
-      alert("Không có gợi ý phù hợp để dùng cho việc tạo mới.");
-      return;
-    }
-    try {
-      sessionStorage.setItem(getPrefillStorageKey(type), JSON.stringify(data));
-      // Lưu CV ID đang được phân tích cho projects và experiences
-      if ((type === "projects" || type === "experiences") && analysisResultCVId) {
-        saveAnalysisCVId();
-      }
-    } catch (error) {
-      console.error("Không thể lưu dữ liệu gợi ý vào bộ nhớ tạm:", error);
-    }
-    const url = `${targetPath}${targetPath.includes("?") ? "&" : "?"}fromAnalysis=1`;
-    navigate(url);
-  };
 
   const systemSkillMap = useMemo(() => {
     const map = new Map<string, Skill>();
@@ -1018,48 +988,6 @@ export default function TalentDetailPage() {
     return { byId, byName, normalizedNames };
   }, [talentSkills]);
 
-  const skillsRecognizedForAddition = useMemo(() => {
-    if (!analysisResult) return [];
-
-    const suggestionsByName = new Map<string, { skillName: string; level?: string; yearsExp?: number | null }>();
-    
-    // Lấy danh sách skillName đã được match (để loại trừ khỏi "Đề xuất thêm")
-    const matchedSkillNames = new Set<string>();
-    analysisResult.skills.matched.forEach((match) => {
-      if (match.skillId) {
-        const normalized = match.skillName.trim().toLowerCase();
-        matchedSkillNames.add(normalized);
-      }
-    });
-
-    // Chỉ lấy từ newFromCV những skill:
-    // - Có trong hệ thống
-    // - Chưa có trong hồ sơ
-    // - KHÔNG nằm trong matched (đã được xử lý ở "Cần tạo mới")
-    analysisResult.skills.newFromCV.forEach((suggestion) => {
-      const normalized = suggestion.skillName?.trim().toLowerCase() ?? "";
-      if (!normalized) return;
-      
-      // Chỉ thêm nếu có trong hệ thống
-      if (!systemSkillMap.has(normalized)) return;
-      
-      // Chưa có trong hồ sơ
-      if (talentSkillLookup.normalizedNames.has(normalized)) return;
-      
-      // Không nằm trong matched (đã được xử lý ở "Cần tạo mới")
-      if (matchedSkillNames.has(normalized)) return;
-      
-      if (!suggestionsByName.has(normalized)) {
-        suggestionsByName.set(normalized, {
-          skillName: suggestion.skillName,
-          level: suggestion.level ?? undefined,
-          yearsExp: suggestion.yearsExp ?? null,
-        });
-      }
-    });
-
-    return Array.from(suggestionsByName.values());
-  }, [analysisResult, systemSkillMap, talentSkillLookup]);
 
   const unmatchedSkillSuggestions = useMemo(() => {
     if (!analysisResult) return [];
@@ -1158,49 +1086,6 @@ export default function TalentDetailPage() {
     }, 100);
   };
 
-  // Hàm tạo nhanh skill từ recognized skill (có trong hệ thống nhưng chưa có trong hồ sơ)
-  const handleQuickCreateSkillFromRecognized = (skill: { skillName: string; level?: string; yearsExp?: number | null }) => {
-    // Tìm skillId từ skillName
-    const normalized = skill.skillName.trim().toLowerCase();
-    const systemSkill = systemSkillMap.get(normalized);
-    if (!systemSkill) {
-      alert(`⚠️ Không tìm thấy kỹ năng "${skill.skillName}" trong hệ thống.`);
-      return;
-    }
-    
-    // Chuyển sang tab skills
-    setActiveTab("skills");
-    
-    // Mở form inline trước (sẽ reset form)
-    handleOpenInlineForm("skill");
-    
-    // Chuẩn bị và điền dữ liệu vào form sau khi form đã mở và reset
-    setTimeout(() => {
-      const levelMap: Record<string, string> = {
-        "beginner": "Beginner",
-        "intermediate": "Intermediate",
-        "advanced": "Advanced",
-        "expert": "Expert",
-      };
-      const level = skill.level ? (levelMap[skill.level.toLowerCase()] || "Beginner") : "Beginner";
-      const yearsExp = skill.yearsExp ? Number(skill.yearsExp) : 1;
-      
-      setInlineSkillForm({
-        skillId: systemSkill.id,
-        level: level as "Beginner" | "Intermediate" | "Advanced" | "Expert",
-        yearsExp: yearsExp,
-      });
-      
-      // Lọc theo nhóm kỹ năng nếu có (systemSkill đã có skillGroupId vì được tạo từ lookupSkills)
-      if (systemSkill.skillGroupId) {
-        setSelectedSkillGroupId(systemSkill.skillGroupId);
-      }
-      
-      // Tự động lọc để hiển thị kỹ năng đã chọn
-      setSkillSearchQuery(skill.skillName);
-      setIsSkillDropdownOpen(false);
-    }, 100);
-  };
 
   // Hàm tạo nhanh jobRoleLevel từ matched item
   const handleQuickCreateJobRoleLevel = (matchedJobRole: { jobRoleLevelId: number; position: string; level?: string; yearsOfExp?: number; ratePerMonth?: number }) => {
@@ -1220,27 +1105,6 @@ export default function TalentDetailPage() {
     }, 100);
   };
 
-  // Hàm tạo nhanh jobRoleLevel từ recognized (có trong hệ thống nhưng chưa có trong hồ sơ)
-  const handleQuickCreateJobRoleLevelFromRecognized = (item: { suggestion: JobRoleLevelSuggestion; system: JobRoleLevel }) => {
-    // Chuyển sang tab jobRoleLevels
-    setActiveTab("jobRoleLevels");
-    
-    // Mở form inline trước (sẽ reset form)
-    handleOpenInlineForm("jobRoleLevel");
-    
-    // Điền dữ liệu vào form sau khi form đã mở và reset
-    setTimeout(() => {
-      setInlineJobRoleLevelForm({
-        jobRoleLevelId: item.system.id,
-        yearsOfExp: item.suggestion.yearsOfExp ?? 1,
-        ratePerMonth: item.suggestion.ratePerMonth ?? undefined,
-      });
-      
-      // Tự động lọc để hiển thị vị trí đã chọn
-      setJobRoleLevelSearch(item.system.name);
-      setIsJobRoleLevelDropdownOpen(false);
-    }, 100);
-  };
 
   // Hàm tạo nhanh certificate từ recognized (có trong hệ thống nhưng chưa có trong hồ sơ)
   const handleQuickCreateCertificateFromRecognized = (item: { suggestion: CertificateSuggestion; system: CertificateType }) => {
@@ -1432,7 +1296,6 @@ export default function TalentDetailPage() {
   }, [analysisResult, certificateSystemMap, talentCertificateMap]);
 
   const {
-    recognized: jobRoleLevelsRecognized,
     matched: jobRoleLevelsMatched,
     unmatched: jobRoleLevelsUnmatched,
     onlyInTalent: jobRoleLevelsOnlyInTalent,

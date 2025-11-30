@@ -3,11 +3,10 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { projectService, type Project, type ProjectPayload, type ProjectDetailedModel } from "../../../services/Project";
+import { projectService, type Project, type ProjectPayload } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { marketService, type Market } from "../../../services/Market";
 import { industryService, type Industry } from "../../../services/Industry";
-import { clientContractService } from "../../../services/ClientContract";
 import {
   Briefcase,
   Save,
@@ -298,7 +297,7 @@ export default function ProjectEditPage() {
         };
 
         const payload: ProjectPayload = {
-            name: formData.name,
+            name: formData.name ?? "",
             description: formData.description ?? "",
             startDate: toUTCDateString(formData.startDate) ?? "",
             endDate: toUTCDateString(formData.endDate),

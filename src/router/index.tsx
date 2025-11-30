@@ -246,7 +246,7 @@ const ManagerDashboard = React.lazy(() => import('../pages/manager/dashboard/Das
 const ManagerProfile = React.lazy(() => import('../pages/manager/Profile'));
 
 // Contracts
-const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/clients/Detail'));
+const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/Clients/Detail'));
 const DevDetailPage = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
 const ManagerPartnerContractDetail = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
 
