@@ -61,12 +61,50 @@ const formatDate = (value?: string | null): string => {
   }
 };
 
+// Helper function to convert ISO date string to YYYY-MM-DD format for date input (handles timezone correctly)
+const toDateInputValue = (dateStr?: string | null): string | undefined => {
+  if (!dateStr) return undefined;
+  try {
+    const date = new Date(dateStr);
+    // Check if date is valid
+    if (isNaN(date.getTime())) return undefined;
+    // Format as YYYY-MM-DD using local timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return undefined;
+  }
+};
+
 const formatCurrency = (value?: number | null): string => {
   if (value === null || value === undefined) return "—";
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
   }).format(value);
+};
+
+// Tính khoảng ngày (YYYY-MM-DD) trong tháng của chu kỳ thanh toán
+const getPeriodDateRange = (
+  period: ProjectPeriodModel | null
+): { minDate: string | null; maxDate: string | null } => {
+  if (!period) return { minDate: null, maxDate: null };
+  const year = period.periodYear;
+  const monthIndex = period.periodMonth - 1; // JS month: 0-11
+
+  const first = new Date(year, monthIndex, 1);
+  const last = new Date(year, monthIndex + 1, 0); // ngày 0 của tháng sau = ngày cuối tháng hiện tại
+
+  const toYmd = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  return { minDate: toYmd(first), maxDate: toYmd(last) };
 };
 
 const contractStatusConfigMap: Record<
@@ -204,6 +242,7 @@ export default function ClientContractDetailPage() {
   const [billingForm, setBillingForm] = useState<ClientContractPaymentCalculateModel>({ billableHours: 0, notes: null });
   const [invoiceForm, setInvoiceForm] = useState<CreateInvoiceModel>({ invoiceNumber: "", invoiceDate: new Date().toISOString().split('T')[0], notes: null });
   const [paymentForm, setPaymentForm] = useState<RecordPaymentModel>({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
+  const [paymentDateError, setPaymentDateError] = useState<string | null>(null);
 
   // File states
   const [verifyContractFile, setVerifyContractFile] = useState<File | null>(null);
@@ -564,15 +603,33 @@ export default function ClientContractDetailPage() {
       alert("Vui lòng nhập số tiền nhận được hợp lệ");
       return;
     }
+
+    // Validation: File biên lai là bắt buộc
+    if (!receiptFile) {
+      alert("Vui lòng upload file biên lai");
+      return;
+    }
+
+    // Validation: Ngày thanh toán phải >= ngày hóa đơn
+    setPaymentDateError(null);
+    if (contractPayment.invoiceDate && paymentForm.paymentDate) {
+      const invoiceDate = new Date(contractPayment.invoiceDate);
+      const paymentDate = new Date(paymentForm.paymentDate);
+      invoiceDate.setHours(0, 0, 0, 0);
+      paymentDate.setHours(0, 0, 0, 0);
+      
+      if (paymentDate < invoiceDate) {
+        setPaymentDateError(`Ngày thanh toán phải lớn hơn hoặc bằng ngày hóa đơn (${formatDate(contractPayment.invoiceDate)})`);
+        return;
+      }
+    }
+
     try {
       setIsProcessing(true);
       
-      // Upload receipt file if provided
-      let receiptFileUrl: string | null = null;
-      if (receiptFile) {
-        const filePath = `client-receipts/${contractPayment.id}/receipt_${Date.now()}.${receiptFile.name.split('.').pop()}`;
-        receiptFileUrl = await uploadFile(receiptFile, filePath);
-      }
+      // Upload receipt file (required)
+      const filePath = `client-receipts/${contractPayment.id}/receipt_${Date.now()}.${receiptFile.name.split('.').pop()}`;
+      const receiptFileUrl = await uploadFile(receiptFile, filePath);
 
       // Format paymentDate to ISO string if it's in YYYY-MM-DD format
       const paymentPayload: RecordPaymentModel = {
@@ -581,7 +638,7 @@ export default function ClientContractDetailPage() {
           ? paymentForm.paymentDate 
           : new Date(paymentForm.paymentDate + 'T00:00:00').toISOString(),
         notes: paymentForm.notes || null,
-        clientReceiptFileUrl: receiptFileUrl || null
+        clientReceiptFileUrl: receiptFileUrl
       };
 
       await clientContractPaymentService.recordPayment(Number(id), paymentPayload);
@@ -590,6 +647,7 @@ export default function ClientContractDetailPage() {
       setShowRecordPaymentModal(false);
       setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
       setReceiptFile(null);
+      setPaymentDateError(null);
     } catch (err: unknown) {
       console.error("❌ Lỗi khi ghi nhận thanh toán:", err);
       const errorMessage = (err as { message?: string; response?: { data?: { message?: string } } })?.message || 
@@ -1450,14 +1508,23 @@ export default function ClientContractDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Ngày hóa đơn <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium mb-2">
+                  Ngày hóa đơn <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="date"
                   value={invoiceForm.invoiceDate}
                   onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceDate: e.target.value })}
                   className="w-full border rounded-lg p-2"
                   required
+                  min={getPeriodDateRange(projectPeriod).minDate || undefined}
+                  max={getPeriodDateRange(projectPeriod).maxDate || undefined}
                 />
+                {projectPeriod && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Chỉ được chọn trong tháng {projectPeriod.periodMonth}/{projectPeriod.periodYear}.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">File hóa đơn <span className="text-red-500">*</span></label>
@@ -1507,7 +1574,13 @@ export default function ClientContractDetailPage() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Ghi nhận thanh toán</h3>
-              <button onClick={() => setShowRecordPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button 
+                onClick={() => {
+                  setShowRecordPaymentModal(false);
+                  setPaymentDateError(null);
+                }} 
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1529,18 +1602,36 @@ export default function ClientContractDetailPage() {
                 <input
                   type="date"
                   value={paymentForm.paymentDate}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
-                  className="w-full border rounded-lg p-2"
+                  min={toDateInputValue(contractPayment?.invoiceDate)}
+                  onChange={(e) => {
+                    setPaymentForm({ ...paymentForm, paymentDate: e.target.value });
+                    // Clear error when user changes value
+                    if (paymentDateError) {
+                      setPaymentDateError(null);
+                    }
+                  }}
+                  className={`w-full border rounded-lg p-2 ${paymentDateError ? 'border-red-500' : ''}`}
                   required
                 />
+                {paymentDateError && (
+                  <p className="mt-1 text-sm text-red-500">{paymentDateError}</p>
+                )}
+                {contractPayment?.invoiceDate && !paymentDateError && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Ngày thanh toán phải lớn hơn hoặc bằng ngày hóa đơn ({formatDate(contractPayment.invoiceDate)})
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">File biên lai (tùy chọn)</label>
+                <label className="block text-sm font-medium mb-2">
+                  File biên lai <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                   onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
                   className="w-full border rounded-lg p-2"
+                  required
                 />
                 {receiptFile && (
                   <p className="text-sm text-gray-600 mt-1">Đã chọn: {receiptFile.name}</p>
@@ -1562,6 +1653,7 @@ export default function ClientContractDetailPage() {
                   setShowRecordPaymentModal(false);
                   setPaymentForm({ receivedAmount: 0, paymentDate: new Date().toISOString().split('T')[0], notes: null });
                   setReceiptFile(null);
+                  setPaymentDateError(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
@@ -1569,7 +1661,7 @@ export default function ClientContractDetailPage() {
               </button>
               <button
                 onClick={handleRecordPayment}
-                disabled={isProcessing || paymentForm.receivedAmount <= 0}
+                disabled={isProcessing || paymentForm.receivedAmount <= 0 || !receiptFile}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ghi nhận"}

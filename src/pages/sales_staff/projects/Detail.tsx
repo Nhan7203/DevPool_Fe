@@ -683,30 +683,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // Helper function to get today's date in Vietnam timezone (UTC+7)
-  const getTodayInVietnam = (): string => {
-    const now = new Date();
-    const vietnamTimeString = now.toLocaleString('en-US', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    // Format: "MM/DD/YYYY" -> "YYYY-MM-DD"
-    const [month, day, year] = vietnamTimeString.split('/');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Helper function to get today's Date object in Vietnam timezone
-  const getTodayDateInVietnam = (): Date => {
-    const todayStr = getTodayInVietnam();
-    const [year, month, day] = todayStr.split('-').map(Number);
-    const date = new Date();
-    date.setFullYear(year, month - 1, day);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  };
-
   const formatViDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
     try {
