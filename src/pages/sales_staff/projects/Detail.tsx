@@ -95,6 +95,7 @@ export default function ProjectDetailPage() {
   const [assignmentWarnings, setAssignmentWarnings] = useState<{ startDate?: string }>({});
   const [completedActivityDate, setCompletedActivityDate] = useState<string | null>(null); // Lưu CompletedDate của ApplyActivity
   const [updateErrors, setUpdateErrors] = useState<{ startDate?: string; endDate?: string }>({});
+  const [editLastActivityScheduledDate, setEditLastActivityScheduledDate] = useState<string | null>(null);
   
   // Form state for creating assignment
   const [assignmentForm, setAssignmentForm] = useState<TalentAssignmentCreateModel>({
@@ -315,6 +316,39 @@ export default function ProjectDetailPage() {
     }
   }, [assignmentForm.startDate, completedActivityDate]);
 
+  // Fetch activity khi mở update modal và assignment có talentApplicationId
+  useEffect(() => {
+    const fetchActivityForUpdate = async () => {
+      if (!showUpdateAssignmentModal || !selectedAssignment || !selectedAssignment.talentApplicationId) {
+        setEditLastActivityScheduledDate(null);
+        return;
+      }
+
+      try {
+        const activities = await applyActivityService.getAll({
+          applyId: selectedAssignment.talentApplicationId,
+          excludeDeleted: true,
+        });
+        const activitiesWithDate = activities.filter(a => a.scheduledDate);
+        if (activitiesWithDate.length > 0) {
+          const lastActivity = activitiesWithDate.reduce((latest, current) => {
+            if (!latest.scheduledDate) return current;
+            if (!current.scheduledDate) return latest;
+            return new Date(current.scheduledDate) > new Date(latest.scheduledDate) ? current : latest;
+          });
+          setEditLastActivityScheduledDate(lastActivity.scheduledDate || null);
+        } else {
+          setEditLastActivityScheduledDate(null);
+        }
+      } catch (error) {
+        console.error("❌ Lỗi tải activity của đơn ứng tuyển:", error);
+        setEditLastActivityScheduledDate(null);
+      }
+    };
+
+    fetchActivityForUpdate();
+  }, [showUpdateAssignmentModal, selectedAssignment?.talentApplicationId]);
+
   const handleDelete = async () => {
     if (!id || !project) return;
     
@@ -480,14 +514,21 @@ export default function ProjectDetailPage() {
     // Validation
     setUpdateErrors({});
     
-    // Check if start date is not in the past (always check when status is Draft)
-    if (selectedAssignment.status === "Draft" && updateForm.startDate) {
-      const startDate = new Date(updateForm.startDate);
-      const today = getTodayDateInVietnam();
-      startDate.setHours(0, 0, 0, 0);
-      if (startDate < today) {
-        setUpdateErrors({ startDate: "Ngày bắt đầu không được nhỏ hơn ngày hôm nay" });
-        return;
+    // Khi ở trạng thái Draft: ngày bắt đầu phải >= ngày lên lịch của activity cuối cùng của application gắn với TalentAssignment (nếu có)
+    if (selectedAssignment.status === "Draft" && editLastActivityScheduledDate) {
+      const effectiveStartIso = updateForm.startDate || selectedAssignment.startDate;
+      if (effectiveStartIso && isValidDate(effectiveStartIso)) {
+        const effectiveStart = new Date(effectiveStartIso);
+        const lastActivityDate = new Date(editLastActivityScheduledDate);
+        effectiveStart.setHours(0, 0, 0, 0);
+        lastActivityDate.setHours(0, 0, 0, 0);
+
+        if (effectiveStart < lastActivityDate) {
+          setUpdateErrors({
+            startDate: `Ngày bắt đầu phải lớn hơn hoặc bằng ngày đã thuê nhân sự (${formatViDate(editLastActivityScheduledDate)})`
+          });
+          return;
+        }
       }
     }
     
@@ -498,6 +539,7 @@ export default function ProjectDetailPage() {
     
     if (updateForm.endDate) {
       const endDate = new Date(updateForm.endDate);
+      endDate.setHours(23, 59, 59, 999);
       
       // End date must be >= start date
       if (endDate < startDateToCheck) {
@@ -508,8 +550,21 @@ export default function ProjectDetailPage() {
       // End date must be >= current end date (if exists)
       if (selectedAssignment.endDate) {
         const currentEndDate = new Date(selectedAssignment.endDate);
+        currentEndDate.setHours(23, 59, 59, 999);
         if (endDate < currentEndDate) {
           setUpdateErrors({ endDate: "Ngày kết thúc không được nhỏ hơn ngày kết thúc hiện tại" });
+          return;
+        }
+      }
+
+      // End date must be <= project end date (nếu dự án có ngày kết thúc)
+      if (project?.endDate) {
+        const projectEndDate = new Date(project.endDate);
+        projectEndDate.setHours(23, 59, 59, 999);
+        if (endDate > projectEndDate) {
+          setUpdateErrors({
+            endDate: `Ngày kết thúc không được lớn hơn ngày kết thúc dự án (${formatViDate(project.endDate)})`
+          });
           return;
         }
       }
@@ -666,6 +721,21 @@ export default function ProjectDetailPage() {
       return `${day}/${month}/${year}`;
     } catch {
       return "—";
+    }
+  };
+
+  // Chuyển ISO date string sang giá trị 'YYYY-MM-DD' cho input date, theo giờ local (VN)
+  const toVietnamDateInputValue = (dateStr?: string | null): string => {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1900) return "";
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch {
+      return "";
     }
   };
 
@@ -1866,12 +1936,12 @@ export default function ProjectDetailPage() {
                   </label>
                   <input
                     type="date"
-                    value={assignmentForm.startDate ? assignmentForm.startDate.split('T')[0] : ""}
-                    min={project?.startDate ? project.startDate.split('T')[0] : undefined}
-                    max={project?.endDate ? project.endDate.split('T')[0] : undefined}
+                    value={toVietnamDateInputValue(assignmentForm.startDate)}
+                    min={toVietnamDateInputValue(project?.startDate)}
+                    max={toVietnamDateInputValue(project?.endDate)}
                     onChange={(e) => {
                       const newStartDate = e.target.value 
-                        ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                        ? `${e.target.value}T00:00:00`
                         : "";
                       setAssignmentForm({ 
                         ...assignmentForm, 
@@ -1930,14 +2000,14 @@ export default function ProjectDetailPage() {
                   </label>
                   <input
                     type="date"
-                    value={assignmentForm.endDate ? assignmentForm.endDate.split('T')[0] : ""}
-                    min={assignmentForm.startDate ? assignmentForm.startDate.split('T')[0] : project?.startDate ? project.startDate.split('T')[0] : undefined}
-                    max={project?.endDate ? project.endDate.split('T')[0] : undefined}
+                    value={toVietnamDateInputValue(assignmentForm.endDate)}
+                    min={assignmentForm.startDate ? toVietnamDateInputValue(assignmentForm.startDate) : toVietnamDateInputValue(project?.startDate)}
+                    max={toVietnamDateInputValue(project?.endDate)}
                     onChange={(e) => {
                       setAssignmentForm({ 
                         ...assignmentForm, 
                         endDate: e.target.value 
-                          ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                          ? `${e.target.value}T00:00:00`
                           : null 
                       });
                       // Clear error when user changes value
@@ -2049,12 +2119,12 @@ export default function ProjectDetailPage() {
                     </label>
                     <input
                       type="date"
-                      value={updateForm.startDate ? updateForm.startDate.split('T')[0] : ""}
+                      value={toVietnamDateInputValue(updateForm.startDate)}
                       onChange={(e) => {
                         setUpdateForm({ 
                           ...updateForm, 
                           startDate: e.target.value 
-                            ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                            ? `${e.target.value}T00:00:00`
                             : "" 
                         });
                         // Clear error when user changes value
@@ -2062,7 +2132,7 @@ export default function ProjectDetailPage() {
                           setUpdateErrors({ ...updateErrors, startDate: undefined });
                         }
                       }}
-                      min={getTodayInVietnam()}
+                      min={editLastActivityScheduledDate ? toVietnamDateInputValue(editLastActivityScheduledDate) : undefined}
                       required
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
                         updateErrors.startDate 
@@ -2073,9 +2143,9 @@ export default function ProjectDetailPage() {
                     {updateErrors.startDate && (
                       <p className="mt-1 text-sm text-red-500">{updateErrors.startDate}</p>
                     )}
-                    {!selectedAssignment.startDate && !updateErrors.startDate && (
+                    {editLastActivityScheduledDate && !updateErrors.startDate && (
                       <p className="mt-1 text-sm text-neutral-500">
-                        Ngày bắt đầu phải từ hôm nay trở đi
+                        Ngày bắt đầu phải lớn hơn hoặc bằng ngày lên lịch của hoạt động cuối cùng ({formatViDate(editLastActivityScheduledDate)})
                       </p>
                     )}
                   </div>
@@ -2089,13 +2159,13 @@ export default function ProjectDetailPage() {
                 </label>
                 <input
                   type="date"
-                  value={updateForm.endDate ? updateForm.endDate.split('T')[0] : ""}
+                  value={toVietnamDateInputValue(updateForm.endDate)}
                   min={(() => {
                     // Min date should be the later of: start date or current end date
                     const startDate = selectedAssignment.status === "Draft" 
-                      ? (updateForm.startDate ? updateForm.startDate.split('T')[0] : selectedAssignment.startDate?.split('T')[0])
-                      : selectedAssignment.startDate?.split('T')[0];
-                    const currentEndDate = selectedAssignment.endDate?.split('T')[0];
+                      ? (updateForm.startDate ? toVietnamDateInputValue(updateForm.startDate) : toVietnamDateInputValue(selectedAssignment.startDate))
+                      : toVietnamDateInputValue(selectedAssignment.startDate);
+                    const currentEndDate = toVietnamDateInputValue(selectedAssignment.endDate);
                     
                     if (startDate && currentEndDate) {
                       return new Date(startDate) > new Date(currentEndDate) ? startDate : currentEndDate;
@@ -2106,7 +2176,7 @@ export default function ProjectDetailPage() {
                     setUpdateForm({ 
                       ...updateForm, 
                       endDate: e.target.value 
-                        ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                        ? `${e.target.value}T00:00:00`
                         : "" 
                     });
                     // Clear error when user changes value
@@ -2357,16 +2427,48 @@ export default function ProjectDetailPage() {
                 </button>
                 {(selectedAssignment.status === "Draft" || (selectedAssignment.status === "Active" && selectedAssignment.startDate)) && (
                   <button
-                    onClick={() => {
-                      // Nếu chưa có startDate hợp lệ, tự động fill hôm nay (theo giờ Việt Nam)
-                      let initialStartDate = "";
-                      if (selectedAssignment.status === "Draft" && !isValidDate(selectedAssignment.startDate)) {
-                        const today = getTodayDateInVietnam();
-                        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                        initialStartDate = new Date(todayStr + 'T00:00:00').toISOString();
-                      } else {
-                        initialStartDate = isValidDate(selectedAssignment.startDate) ? selectedAssignment.startDate : "";
+                  onClick={async () => {
+                    // Lấy ngày lên lịch của activity cuối cùng cho application gắn với assignment (nếu có)
+                    let lastActivityDate: string | null = null;
+                    if (selectedAssignment.talentApplicationId) {
+                      try {
+                        const activities = await applyActivityService.getAll({
+                          applyId: selectedAssignment.talentApplicationId,
+                          excludeDeleted: true,
+                        });
+                        const activitiesWithDate = activities.filter(a => a.scheduledDate);
+                        if (activitiesWithDate.length > 0) {
+                          const lastActivity = activitiesWithDate.reduce((latest, current) => {
+                            if (!latest.scheduledDate) return current;
+                            if (!current.scheduledDate) return latest;
+                            return new Date(current.scheduledDate) > new Date(latest.scheduledDate) ? current : latest;
+                          });
+                          lastActivityDate = lastActivity.scheduledDate || null;
+                          setEditLastActivityScheduledDate(lastActivityDate);
+                        } else {
+                          setEditLastActivityScheduledDate(null);
+                        }
+                      } catch (error) {
+                        console.error("❌ Lỗi tải activity của đơn ứng tuyển:", error);
+                        setEditLastActivityScheduledDate(null);
                       }
+                    } else {
+                      setEditLastActivityScheduledDate(null);
+                    }
+
+                    // Xác định initialStartDate: ưu tiên startDate hiện tại (nếu hợp lệ), nếu không thì dùng activity date (nếu có)
+                    let initialStartDate = "";
+                    if (selectedAssignment.status === "Draft") {
+                      if (isValidDate(selectedAssignment.startDate)) {
+                        initialStartDate = selectedAssignment.startDate;
+                      } else if (lastActivityDate) {
+                        // Nếu không có startDate hợp lệ, dùng activity date
+                        initialStartDate = lastActivityDate;
+                      }
+                      // Nếu không có cả hai, để trống (user sẽ phải nhập)
+                    } else {
+                      initialStartDate = isValidDate(selectedAssignment.startDate) ? selectedAssignment.startDate : "";
+                    }
                       
                       setUpdateForm({
                         startDate: initialStartDate,
