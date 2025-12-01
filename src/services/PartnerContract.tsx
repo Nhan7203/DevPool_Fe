@@ -11,7 +11,7 @@ export interface PartnerContract {
   id: number;
   contractNumber: string;
   talentId: number;
-  partnerId?: number;
+  partnerId: number;
   status: string;
   startDate: string;
   endDate?: string | null;

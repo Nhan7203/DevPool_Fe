@@ -331,10 +331,10 @@ export default function SalesApplicationDetailPage() {
           if (applicationData.status === 'Hired' && applicationData.talent?.id) {
             const contractsData = await clientContractPaymentService.getAll({
               talentId: applicationData.talent.id,
-              excludeDeleted: true
+              excludeDeleted: true,
             });
             // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo contractStartDate
-            const sortedContracts = (contracts as ClientContractPaymentModel[]).sort((a, b) => {
+            const sortedContracts = (contractsData as ClientContractPaymentModel[]).sort((a, b) => {
               const dateA = new Date(a.contractStartDate).getTime();
               const dateB = new Date(b.contractStartDate).getTime();
               return dateB - dateA;

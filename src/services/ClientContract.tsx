@@ -9,8 +9,8 @@ export interface ClientContract {
   id: number;
   contractNumber: string;
   talentId: number;
-  clientCompanyId?: number;
-  projectId?: number;
+  clientCompanyId: number;
+  projectId: number;
   status: string;
   startDate: string;
   endDate?: string | null;
