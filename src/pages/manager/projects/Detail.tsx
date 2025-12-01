@@ -23,7 +23,9 @@ import {
   Globe2,
   Factory,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  PlayCircle,
+  AlertTriangle
 } from "lucide-react";
 
 export default function ManagerProjectDetailPage() {
@@ -48,6 +50,7 @@ export default function ManagerProjectDetailPage() {
   const [partnerContractPayments, setPartnerContractPayments] = useState<PartnerContractPaymentModel[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [talentNamesMap, setTalentNamesMap] = useState<Record<number, string>>({});
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -269,10 +272,46 @@ export default function ManagerProjectDetailPage() {
     }).format(amount);
   };
 
+  const handleChangeStatusToOngoing = async () => {
+    if (!id || !project) return;
+    
+    const confirmChange = window.confirm(
+      "Bạn có chắc muốn thay đổi trạng thái dự án từ 'Tạm dừng' sang 'Đang thực hiện'?"
+    );
+    if (!confirmChange) return;
+
+    try {
+      setUpdatingStatus(true);
+      // Sử dụng API change-status mới
+      const result = await projectService.updateStatus(Number(id), {
+        newStatus: "Ongoing",
+        notes: null
+      });
+      
+      // Kiểm tra kết quả
+      if (!result.isSuccess && !result.success) {
+        throw new Error(result.message || "Không thể thay đổi trạng thái dự án");
+      }
+      
+      // Refresh project data
+      const updatedProject = await projectService.getDetailedById(Number(id));
+      setProject(updatedProject);
+      
+      alert("✅ Đã thay đổi trạng thái dự án thành công!");
+    } catch (error: any) {
+      console.error("❌ Lỗi khi thay đổi trạng thái:", error);
+      alert(error.message || "Không thể thay đổi trạng thái dự án");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const statusLabels: Record<string, string> = {
     Planned: "Đã lên kế hoạch",
     Ongoing: "Đang thực hiện",
     Completed: "Đã hoàn thành",
+    OnHold: "Tạm dừng",
+    Cancelled: "Đã hủy",
   };
 
   const contractStatusLabels: Record<string, string> = {
@@ -367,12 +406,58 @@ export default function ManagerProjectDetailPage() {
               </p>
               
               {/* Status Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50 border border-green-200">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">
-                  {project.status ? statusLabels[project.status] || project.status : "Đang hoạt động"}
-                </span>
+              <div className="flex items-center gap-3">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${
+                  project.status === "OnHold" 
+                    ? "bg-yellow-50 border-yellow-200"
+                    : project.status === "Ongoing"
+                    ? "bg-green-50 border-green-200"
+                    : project.status === "Completed"
+                    ? "bg-blue-50 border-blue-200"
+                    : "bg-gray-50 border-gray-200"
+                }`}>
+                  {project.status === "OnHold" ? (
+                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                  ) : project.status === "Ongoing" ? (
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-gray-600" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    project.status === "OnHold" 
+                      ? "text-yellow-800"
+                      : project.status === "Ongoing"
+                      ? "text-green-800"
+                      : project.status === "Completed"
+                      ? "text-blue-800"
+                      : "text-gray-800"
+                  }`}>
+                    {project.status ? statusLabels[project.status] || project.status : "Đang hoạt động"}
+                  </span>
+                </div>
+                
+                {/* Nút thay đổi trạng thái từ OnHold sang Ongoing */}
+                {project.status === "OnHold" && (
+                  <button
+                    onClick={handleChangeStatusToOngoing}
+                    disabled={updatingStatus}
+                    className="group flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PlayCircle className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    {updatingStatus ? "Đang cập nhật..." : "Tiếp tục dự án"}
+                  </button>
+                )}
               </div>
+              
+              {/* Cảnh báo khi dự án ở trạng thái OnHold */}
+              {project.status === "OnHold" && (
+                <div className="mt-4 flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-yellow-800">
+                    <span className="font-semibold">Cảnh báo:</span> Dự án tạm dừng – không thể tạo Job Request mới.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -383,7 +383,7 @@ const NotificationCenterPage = () => {
         return;
       }
 
-      // Lấy tên TA từ user context thay vì email
+      // Lấy tên TA từ user context thay vì email (backend vẫn dùng HR)
       const hrStaffName = user?.name || 'TA Staff';
 
       // Tạo title với jobRoleLevel name

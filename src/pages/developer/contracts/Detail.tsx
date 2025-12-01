@@ -186,7 +186,8 @@ export default function DeveloperContractDetailPage() {
         return new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ';
     };
 
-    const getRateTypeText = (rateType: string) => {
+    const getRateTypeText = (rateType?: string | null) => {
+        if (!rateType) return '—';
         switch (rateType) {
             case 'Hourly':
                 return 'Theo giờ';

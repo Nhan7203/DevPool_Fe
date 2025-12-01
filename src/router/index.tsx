@@ -105,6 +105,10 @@ const SkillGroupDetailPage = React.lazy(() => import('../pages/admin/Categories/
 const SkillGroupEditPage = React.lazy(() => import('../pages/admin/Categories/skill-groups/Edit'));
 const SkillGroupListPage = React.lazy(() => import('../pages/admin/Categories/skill-groups/List'));
 
+// Categories - Experts
+const ExpertListPage = React.lazy(() => import('../pages/admin/Categories/experts/List'));
+const ExpertDetailPage = React.lazy(() => import('../pages/admin/Categories/experts/Detail'));
+
 // ========================================
 // TA STAFF PAGES - Lazy Loading
 // ========================================
@@ -564,6 +568,10 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.DETAIL} element={<SkillGroupDetailPage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.CREATE} element={<SkillGroupCreatePage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.EDIT} element={<SkillGroupEditPage />} />
+
+              {/* Categories - Experts */}
+              <Route path="/admin/categories/experts" element={<ExpertListPage />} />
+              <Route path="/admin/categories/experts/:id" element={<ExpertDetailPage />} />
               
               {/* Audit Log */}
               <Route path={ROUTES.ADMIN.AUDIT.LIST} element={<AuditLogListPage />} />

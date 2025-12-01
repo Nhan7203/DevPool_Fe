@@ -585,7 +585,20 @@ export default function JobRequestEditPage() {
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
                             projectsFilteredBySearch.map(p => {
-                              const isDisabled = (p.status === "OnHold" || p.status === "Completed") && p.id !== formData.projectId;
+                              // Chỉ cho phép chọn dự án nếu status là "Ongoing" hoặc là dự án đã chọn trước đó
+                              const isDisabled = p.status !== "Ongoing" && p.id !== formData.projectId;
+                              
+                              // Map status sang tiếng Việt
+                              const statusLabels: Record<string, string> = {
+                                "Ongoing": "Đang thực hiện",
+                                "OnHold": "Tạm dừng",
+                                "Completed": "Hoàn thành",
+                                "Planned": "Đã lập kế hoạch",
+                                "Planning": "Lập kế hoạch",
+                                "Cancelled": "Đã hủy"
+                              };
+                              const statusLabel = statusLabels[p.status] || "Không xác định";
+                              
                               return (
                                 <button
                                   type="button"
@@ -605,9 +618,26 @@ export default function JobRequestEditPage() {
                                         ? "bg-primary-50 text-primary-700"
                                         : "hover:bg-neutral-50 text-neutral-700"
                                   }`}
-                                  title={isDisabled ? `Dự án này đang ở trạng thái "${p.status}" nên không thể chọn` : ""}
+                                  title={isDisabled && p.id !== formData.projectId ? `Dự án này đang ở trạng thái "${statusLabel}" nên không thể chọn. Chỉ có thể chọn dự án đang thực hiện.` : ""}
                                 >
-                                  {p.name} {isDisabled && `(${p.status})`}
+                                  <div className="flex items-center justify-between">
+                                    <span>{p.name}</span>
+                                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                                      p.status === "Ongoing" 
+                                        ? "bg-green-100 text-green-700"
+                                        : p.status === "OnHold"
+                                        ? "bg-yellow-100 text-yellow-700"
+                                        : p.status === "Completed"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : p.status === "Planned" || p.status === "Planning"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : p.status === "Cancelled"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-neutral-100 text-neutral-700"
+                                    }`}>
+                                      {statusLabel}
+                                    </span>
+                                  </div>
                                 </button>
                               );
                             })

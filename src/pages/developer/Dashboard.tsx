@@ -27,9 +27,8 @@ import Sidebar from '../../components/common/Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { decodeJWT } from '../../services/Auth';
 import { talentService, type Talent } from '../../services/Talent';
-import { partnerContractService, type PartnerContract } from '../../services/PartnerContract';
-import { clientContractService, type ClientContract } from '../../services/ClientContract';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../services/PartnerContractPayment';
+import { clientContractPaymentService, type ClientContractPaymentModel } from '../../services/ClientContractPayment';
 import { talentSkillService, type TalentSkill } from '../../services/TalentSkill';
 import { skillService, type Skill } from '../../services/Skill';
 
@@ -103,27 +102,29 @@ export default function DeveloperDashboard() {
         setLoading(true);
         setError('');
         
-        // Fetch contracts, payments, and skills in parallel
-        const [partnerContractsData, clientContractsData, paymentsData, talentSkillsData, allSkillsData] = await Promise.all([
-          partnerContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-          clientContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
+        // Fetch contract payments and skills in parallel
+        const [
+          partnerPayments,
+          clientPayments,
+          payments,
+          talentSkillsData,
+          allSkillsData,
+        ] = await Promise.all([
+          partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
+          clientContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           talentSkillService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-          skillService.getAll({ excludeDeleted: true })
+          skillService.getAll({ excludeDeleted: true }),
         ]);
 
-        const partnerContracts = Array.isArray(partnerContractsData) ? partnerContractsData : [];
-        const clientContracts = Array.isArray(clientContractsData) ? clientContractsData : [];
-        const payments = Array.isArray(paymentsData) ? paymentsData : [];
-
         // Tính toán stats
-        // 1. Current Assignments = số hợp đồng đang active
+        // 1. Current Assignments = số hợp đồng đang active (contractStatus = "Active" hoặc "Ongoing")
         const activeContracts = [
-          ...partnerContracts.filter((c: PartnerContract) => 
-            c.status === 'Active' || c.status === 'Ongoing'
+          ...partnerPayments.filter((c: PartnerContractPaymentModel) => 
+            c.contractStatus === 'Active' || c.contractStatus === 'Ongoing'
           ),
-          ...clientContracts.filter((c: ClientContract) => 
-            c.status === 'Active' || c.status === 'Ongoing'
+          ...clientPayments.filter((c: ClientContractPaymentModel) => 
+            c.contractStatus === 'Active' || c.contractStatus === 'Ongoing'
           )
         ];
         const currentAssignments = activeContracts.length;

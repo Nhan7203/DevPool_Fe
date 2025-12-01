@@ -1,64 +1,66 @@
 import axios from "../configs/axios";
-import { AxiosError } from "axios";
+import type { AxiosError } from "axios";
+
+// NOTE:
+// Backend hiện không có endpoint riêng cho PartnerContract trong FE này.
+// Để tránh lỗi TypeScript và vẫn hiển thị được thông tin cơ bản cho developer,
+// ta tạm thời định nghĩa PartnerContract tối thiểu dựa trên các trường đang được dùng trong UI.
+// Nếu backend có model chuẩn, bạn có thể cập nhật lại interface và các hàm service này cho khớp.
 
 export interface PartnerContract {
   id: number;
-  partnerId: number;
-  talentId: number;
-  devRate?: number | null;
-  rateType: string;
   contractNumber: string;
+  talentId: number;
+  partnerId: number;
   status: string;
   startDate: string;
   endDate?: string | null;
+  devRate?: number | null;
+  rateType?: string | null;
   contractFileUrl?: string | null;
 }
 
 export interface PartnerContractFilter {
-  partnerId?: number;
   talentId?: number;
-  status?: string;
-  startDateFrom?: string;
-  startDateTo?: string;
   excludeDeleted?: boolean;
 }
 
 export const partnerContractService = {
-  async getAll(filter?: PartnerContractFilter) {
+  async getAll(filter?: PartnerContractFilter): Promise<PartnerContract[]> {
     try {
       const params = new URLSearchParams();
 
-      if (filter?.partnerId)
-        params.append("PartnerId", filter.partnerId.toString());
-      if (filter?.talentId)
-        params.append("TalentId", filter.talentId.toString());
-      if (filter?.status)
-        params.append("Status", filter.status);
-      if (filter?.startDateFrom)
-        params.append("StartDateFrom", filter.startDateFrom);
-      if (filter?.startDateTo)
-        params.append("StartDateTo", filter.startDateTo);
-      if (filter?.excludeDeleted !== undefined)
+      if (filter?.talentId) params.append("TalentId", filter.talentId.toString());
+      if (filter?.excludeDeleted !== undefined) {
         params.append("ExcludeDeleted", filter.excludeDeleted ? "true" : "false");
+      }
 
       const url = `/partnercontract${params.toString() ? `?${params}` : ""}`;
       const response = await axios.get(url);
-      return response.data;
+      return response.data as PartnerContract[];
     } catch (error: unknown) {
-      if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải danh sách hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi tải danh sách hợp đồng đối tác" };
+      const axiosError = error as AxiosError;
+      throw (
+        axiosError.response?.data || {
+          message: "Không thể tải danh sách hợp đồng đối tác",
+        }
+      );
     }
   },
 
-  async getById(id: number) {
+  async getById(id: number): Promise<PartnerContract> {
     try {
       const response = await axios.get(`/partnercontract/${id}`);
-      return response.data;
+      return response.data as PartnerContract;
     } catch (error: unknown) {
-      if (error instanceof AxiosError)
-        throw error.response?.data || { message: "Không thể tải thông tin hợp đồng đối tác" };
-      throw { message: "Lỗi không xác định khi tải thông tin hợp tác đối tác" };
+      const axiosError = error as AxiosError;
+      throw (
+        axiosError.response?.data || {
+          message: "Không thể tải thông tin hợp đồng đối tác",
+        }
+      );
     }
   },
 };
+
+
