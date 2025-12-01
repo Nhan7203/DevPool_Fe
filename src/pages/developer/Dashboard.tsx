@@ -103,17 +103,19 @@ export default function DeveloperDashboard() {
         setError('');
         
         // Fetch contract payments and skills in parallel
-        const [partnerPaymentsData, clientPaymentsData, paymentsData, talentSkillsData, allSkillsData] = await Promise.all([
+        const [
+          partnerPayments,
+          clientPayments,
+          payments,
+          talentSkillsData,
+          allSkillsData,
+        ] = await Promise.all([
           partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           clientContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
           talentSkillService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-          skillService.getAll({ excludeDeleted: true })
+          skillService.getAll({ excludeDeleted: true }),
         ]);
-
-        const partnerPayments = Array.isArray(partnerPaymentsData) ? partnerPaymentsData : (partnerPaymentsData?.items || []);
-        const clientPayments = Array.isArray(clientPaymentsData) ? clientPaymentsData : (clientPaymentsData?.items || []);
-        const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.items || []);
 
         // Tính toán stats
         // 1. Current Assignments = số hợp đồng đang active (contractStatus = "Active" hoặc "Ongoing")

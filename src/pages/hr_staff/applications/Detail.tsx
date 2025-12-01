@@ -258,11 +258,10 @@ export default function TalentCVApplicationDetailPage() {
       // Fetch existing contract for this talent (if application is Hired)
       try {
         if (currentApplication.status === 'Hired' && foundApplication?.talent?.id) {
-          const contractsData = await partnerContractPaymentService.getAll({
+          const contracts = await partnerContractPaymentService.getAll({
             talentId: foundApplication.talent.id,
             excludeDeleted: true
           });
-          const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
           // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo createdAt
           const sortedContracts = (contracts as PartnerContractPaymentModel[]).sort((a, b) => {
             const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;

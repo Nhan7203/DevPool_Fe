@@ -38,7 +38,10 @@ import { jobRoleLevelService } from "../../../services/JobRoleLevel";
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
 import { jobRoleService } from "../../../services/JobRole";
-import { clientContractService, type ClientContract } from "../../../services/ClientContract";
+import {
+  clientContractPaymentService,
+  type ClientContractPaymentModel,
+} from "../../../services/ClientContractPayment";
 import { Button } from "../../../components/ui/button";
 
 interface SalesActivity extends ApplyActivity {
@@ -178,7 +181,7 @@ export default function SalesApplicationDetailPage() {
   const [showDob, setShowDob] = useState(false);
   const [showFullCVSummary, setShowFullCVSummary] = useState(false);
   const [showJobDetails, setShowJobDetails] = useState(false);
-  const [existingContract, setExistingContract] = useState<ClientContract | null>(null);
+  const [existingContract, setExistingContract] = useState<ClientContractPaymentModel | null>(null);
   const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -326,15 +329,14 @@ export default function SalesApplicationDetailPage() {
         // Fetch existing contract for this talent (if application is Hired)
         try {
           if (applicationData.status === 'Hired' && applicationData.talent?.id) {
-            const contractsData = await clientContractService.getAll({
+            const contractsData = await clientContractPaymentService.getAll({
               talentId: applicationData.talent.id,
               excludeDeleted: true
             });
-            const contracts = Array.isArray(contractsData) ? contractsData : (contractsData?.items || []);
-            // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo startDate
-            const sortedContracts = (contracts as ClientContract[]).sort((a, b) => {
-              const dateA = new Date(a.startDate).getTime();
-              const dateB = new Date(b.startDate).getTime();
+            // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo contractStartDate
+            const sortedContracts = (contracts as ClientContractPaymentModel[]).sort((a, b) => {
+              const dateA = new Date(a.contractStartDate).getTime();
+              const dateB = new Date(b.contractStartDate).getTime();
               return dateB - dateA;
             });
             setExistingContract(sortedContracts.length > 0 ? sortedContracts[0] : null);
@@ -440,7 +442,7 @@ export default function SalesApplicationDetailPage() {
     }
 
     // Nếu hợp đồng ở trạng thái "Rejected", hiển thị nút "Tạo hợp đồng khác"
-    if (existingContract.status === 'Rejected') {
+    if (existingContract.contractStatus === 'Rejected') {
       return true;
     }
 
@@ -548,8 +550,8 @@ export default function SalesApplicationDetailPage() {
                 <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 bg-white">
                   <FileText className="w-4 h-4 text-neutral-600" />
                   <span className="text-sm font-medium text-neutral-700">Đã có hợp đồng:</span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getContractStatusColor(existingContract.status)}`}>
-                    {getContractStatusLabel(existingContract.status)}
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getContractStatusColor(existingContract.contractStatus)}`}>
+                    {getContractStatusLabel(existingContract.contractStatus)}
                   </span>
                 </div>
               )}
@@ -559,7 +561,7 @@ export default function SalesApplicationDetailPage() {
                   className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
                 >
                   <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  {existingContract?.status === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
+                  {existingContract?.contractStatus === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
                 </Button>
               )}
             </div>
