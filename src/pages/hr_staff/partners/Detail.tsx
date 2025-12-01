@@ -5,6 +5,7 @@ import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { partnerService, type PartnerDetailedModel, type PartnerTalentModel } from "../../../services/Partner";
 import { talentService, type Talent } from "../../../services/Talent";
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { Button } from "../../../components/ui/button";
 import { 
   Edit, 
@@ -31,6 +32,8 @@ export default function PartnerDetailPage() {
   const [partner, setPartner] = useState<PartnerDetailedModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [talentDetails, setTalentDetails] = useState<Record<number, Talent>>({});
+  const [contractPayments, setContractPayments] = useState<PartnerContractPaymentModel[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'contracts' | 'talents'>('basic');
   
   // Pagination states
@@ -44,8 +47,56 @@ export default function PartnerDetailPage() {
     setActiveTab(tab);
     if (tab === 'contracts') {
       setPageContracts(1);
+      // Fetch contracts when switching to contracts tab
+      if (partner && partner.talents && partner.talents.length > 0) {
+        fetchContractPayments();
+      }
     } else if (tab === 'talents') {
       setPageTalents(1);
+    }
+  };
+
+  // Fetch contract payments for all talents of this partner
+  const fetchContractPayments = async () => {
+    if (!partner || !partner.talents || partner.talents.length === 0) {
+      setContractPayments([]);
+      return;
+    }
+
+    try {
+      setLoadingContracts(true);
+      const talentIds = partner.talents.map((t: PartnerTalentModel) => t.talentId);
+      
+      // Fetch contracts for all talents in parallel
+      const contractPromises = talentIds.map((talentId: number) =>
+        partnerContractPaymentService.getAll({ 
+          talentId: talentId, 
+          excludeDeleted: true 
+        })
+      );
+      
+      const contractResults = await Promise.all(contractPromises);
+      
+      // Flatten and combine all contracts
+      const allContracts: PartnerContractPaymentModel[] = [];
+      contractResults.forEach((result) => {
+        const contracts = Array.isArray(result) ? result : ((result as any)?.items || []);
+        allContracts.push(...contracts);
+      });
+      
+      // Sort by createdAt (newest first)
+      allContracts.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      });
+      
+      setContractPayments(allContracts);
+    } catch (err) {
+      console.error("❌ Lỗi khi tải hợp đồng:", err);
+      setContractPayments([]);
+    } finally {
+      setLoadingContracts(false);
     }
   };
 
@@ -117,12 +168,24 @@ export default function PartnerDetailPage() {
   const getStatusText = (status: string) => {
     const normalized = normalizeStatus(status);
     switch (normalized) {
+      // Contract Status
+      case 'draft':
+        return 'Nháp';
+      case 'needmoreinformation':
+        return 'Cần thêm thông tin';
+      case 'submitted':
+        return 'Đã gửi';
+      case 'verified':
+        return 'Đã xác minh';
+      case 'approved':
+        return 'Đã duyệt';
+      case 'rejected':
+        return 'Từ chối';
+      // Legacy status (for backward compatibility)
       case 'active':
         return 'Đang hiệu lực';
       case 'pending':
         return 'Chờ duyệt';
-      case 'draft':
-        return 'Bản nháp';
       case 'expired':
         return 'Đã hết hạn';
       case 'terminated':
@@ -135,12 +198,24 @@ export default function PartnerDetailPage() {
   const getStatusColor = (status: string) => {
     const normalized = normalizeStatus(status);
     switch (normalized) {
+      // Contract Status
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
+      case 'needmoreinformation':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'submitted':
+        return 'bg-blue-100 text-blue-800';
+      case 'verified':
+        return 'bg-purple-100 text-purple-800';
+      case 'approved':
+        return 'bg-green-100 text-green-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      // Legacy status (for backward compatibility)
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
       case 'expired':
         return 'bg-blue-100 text-blue-800';
       case 'terminated':
@@ -254,7 +329,7 @@ export default function PartnerDetailPage() {
                 >
                   <div className="flex items-center gap-2">
                     <FileCheck className="w-4 h-4" />
-                    Hợp đồng {partner.contracts && partner.contracts.length > 0 ? `(${partner.contracts.length})` : ''}
+                    Hợp đồng {contractPayments.length > 0 ? `(${contractPayments.length})` : ''}
                   </div>
                 </button>
                 <button
@@ -333,37 +408,27 @@ export default function PartnerDetailPage() {
               {/* Hợp đồng */}
               {activeTab === 'contracts' && (
                 <div>
-                  {partner.contracts && partner.contracts.length > 0 && partner.contracts.some(c => c.contractFileUrl) && (
-                    <div className="mb-4 flex justify-end">
-                      <a
-                        href={partner.contracts.find(c => c.contractFileUrl)?.contractFileUrl ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
-                      >
-                        <FileText className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                        <span>Xem file hợp đồng</span>
-                      </a>
+                  {loadingContracts ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                      <p className="text-neutral-500">Đang tải hợp đồng...</p>
                     </div>
-                  )}
-                  {partner.contracts && partner.contracts.length > 0 ? (
+                  ) : contractPayments.length > 0 ? (
                     <>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-neutral-200">
                               <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Mã hợp đồng</th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Trạng thái</th>
                               <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Mức giá</th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ngày bắt đầu</th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ngày kết thúc</th>
+                              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Trạng thái</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(() => {
                               const startIndex = (pageContracts - 1) * itemsPerPageContracts;
                               const endIndex = startIndex + itemsPerPageContracts;
-                              const paginatedContracts = partner.contracts.slice(startIndex, endIndex);
+                              const paginatedContracts = contractPayments.slice(startIndex, endIndex);
                               
                               return paginatedContracts.map((contract) => (
                                 <tr key={contract.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
@@ -371,24 +436,14 @@ export default function PartnerDetailPage() {
                                     <p className="text-sm font-medium text-gray-900">{contract.contractNumber}</p>
                                   </td>
                                   <td className="py-4 px-4">
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(contract.status)}`}>
-                                      {getStatusText(contract.status)}
+                                    <p className="text-sm text-gray-900">
+                                      {contract.monthlyRate ? `${contract.monthlyRate.toLocaleString('vi-VN')} VND/tháng` : '—'}
+                                    </p>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(contract.contractStatus)}`}>
+                                      {getStatusText(contract.contractStatus)}
                                     </span>
-                                  </td>
-                                  <td className="py-4 px-4">
-                                    <p className="text-sm text-gray-900">
-                                      {contract.devRate ? `${contract.devRate.toLocaleString('vi-VN')} ${contract.rateType}` : '—'}
-                                    </p>
-                                  </td>
-                                  <td className="py-4 px-4">
-                                    <p className="text-sm text-gray-900">
-                                      {new Date(contract.startDate).toLocaleDateString('vi-VN')}
-                                    </p>
-                                  </td>
-                                  <td className="py-4 px-4">
-                                    <p className="text-sm text-gray-900">
-                                      {contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Đang hoạt động'}
-                                    </p>
                                   </td>
                                 </tr>
                               ));
@@ -398,7 +453,7 @@ export default function PartnerDetailPage() {
                       </div>
                       <SectionPagination
                         currentPage={pageContracts}
-                        totalItems={partner.contracts.length}
+                        totalItems={contractPayments.length}
                         itemsPerPage={itemsPerPageContracts}
                         onPageChange={setPageContracts}
                       />

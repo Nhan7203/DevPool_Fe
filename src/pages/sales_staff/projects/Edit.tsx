@@ -3,10 +3,13 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
-import { projectService, type Project, type ProjectPayload } from "../../../services/Project";
+import { projectService, type Project, type ProjectPayload, type ProjectStatusUpdateModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { marketService, type Market } from "../../../services/Market";
 import { industryService, type Industry } from "../../../services/Industry";
+import { projectPeriodService } from "../../../services/ProjectPeriod";
+import { clientContractPaymentService } from "../../../services/ClientContractPayment";
+import { partnerContractPaymentService } from "../../../services/PartnerContractPayment";
 import {
   Briefcase,
   Save,
@@ -252,18 +255,57 @@ export default function ProjectEditPage() {
         // Kiểm tra chuyển status: Ongoing → Completed (check active contracts)
         if (originalStatus === "Ongoing" && formData.status === "Completed") {
             try {
-                const detailedProject = await projectService.getDetailedById(Number(id));
-                const activeContracts = (detailedProject.clientContracts || []).filter(
-                    (contract: any) => contract.status === "Active" || contract.status === "Ongoing"
-                );
+                // Lấy tất cả ProjectPeriod của project
+                const periods = await projectPeriodService.getAll({ 
+                    projectId: Number(id), 
+                    excludeDeleted: true 
+                });
+                const periodIds = Array.isArray(periods) 
+                    ? periods.map((p: any) => p.id)
+                    : [];
                 
-                if (activeContracts.length > 0) {
-                    const confirmed = window.confirm(
-                        `Dự án còn ${activeContracts.length} hợp đồng chưa kết thúc. Bạn có chắc chắn đóng dự án?`
-                    );
-                    if (!confirmed) {
-                        setSaving(false);
-                        return;
+                if (periodIds.length > 0) {
+                    // Lấy tất cả ClientContractPayment và PartnerContractPayment của các period
+                    const allClientPayments: any[] = [];
+                    const allPartnerPayments: any[] = [];
+                    
+                    for (const periodId of periodIds) {
+                        const [clientPayments, partnerPayments] = await Promise.all([
+                            clientContractPaymentService.getAll({ 
+                                projectPeriodId: periodId, 
+                                excludeDeleted: true 
+                            }),
+                            partnerContractPaymentService.getAll({ 
+                                projectPeriodId: periodId, 
+                                excludeDeleted: true 
+                            })
+                        ]);
+                        
+                        const clientArray = Array.isArray(clientPayments) ? clientPayments : ((clientPayments as any)?.items || []);
+                        const partnerArray = Array.isArray(partnerPayments) ? partnerPayments : ((partnerPayments as any)?.items || []);
+                        
+                        allClientPayments.push(...clientArray);
+                        allPartnerPayments.push(...partnerArray);
+                    }
+                    
+                    // Filter active contracts
+                    const activeContracts = [
+                        ...allClientPayments.filter((c: any) => 
+                            c.contractStatus === "Active" || c.contractStatus === "Ongoing"
+                        ),
+                        ...allPartnerPayments.filter((c: any) => 
+                            c.contractStatus === "Active" || c.contractStatus === "Ongoing"
+                        )
+                    ];
+                    
+                    if (activeContracts.length > 0) {
+                        const confirmed = window.confirm(
+                            `Dự án còn ${activeContracts.length} hợp đồng chưa kết thúc. Bạn có chắc chắn đóng dự án?`
+                        );
+                        if (!confirmed) {
+                            setSaving(false);
+                            return;
+                        }
                     }
                 }
             } catch (err) {
@@ -296,24 +338,52 @@ export default function ProjectEditPage() {
             return d.toISOString(); // => chuỗi UTC
         };
 
-        const payload: ProjectPayload = {
-            name: formData.name ?? "",
-            description: formData.description ?? "",
-            startDate: toUTCDateString(formData.startDate) ?? "",
-            endDate: toUTCDateString(formData.endDate),
-            status: formData.status,
-            clientCompanyId: formData.clientCompanyId!,
-            marketId: Number(formData.marketId),
-            industryIds: formData.industryIds.map(id => Number(id)),
-        };
+        // Kiểm tra xem có chỉ thay đổi status không
+        const onlyStatusChanged = project && 
+            formData.status !== originalStatus &&
+            formData.name === project.name &&
+            formData.description === (project.description ?? "") &&
+            formData.startDate === formatDate(project.startDate) &&
+            formData.endDate === formatDate(project.endDate) &&
+            formData.clientCompanyId === project.clientCompanyId &&
+            formData.marketId === project.marketId &&
+            JSON.stringify(formData.industryIds.sort()) === JSON.stringify((project.industryIds ?? []).sort());
 
         try {
-            await projectService.update(Number(id), payload);
+            if (onlyStatusChanged && formData.status) {
+                // Chỉ thay đổi status - dùng API change-status
+                const statusPayload: ProjectStatusUpdateModel = {
+                    newStatus: formData.status,
+                    notes: null
+                };
+                
+                const result = await projectService.updateStatus(Number(id), statusPayload);
+                
+                // Kiểm tra kết quả
+                if (!result.isSuccess && !result.success) {
+                    throw new Error(result.message || "Không thể thay đổi trạng thái dự án");
+                }
+            } else {
+                // Cập nhật toàn bộ - dùng API update
+                const payload: ProjectPayload = {
+                    name: formData.name ?? "",
+                    description: formData.description ?? "",
+                    startDate: toUTCDateString(formData.startDate) ?? "",
+                    endDate: toUTCDateString(formData.endDate),
+                    status: formData.status,
+                    clientCompanyId: formData.clientCompanyId!,
+                    marketId: Number(formData.marketId),
+                    industryIds: formData.industryIds.map(id => Number(id)),
+                };
+
+                await projectService.update(Number(id), payload);
+            }
+            
             setSuccess(true);
             setTimeout(() => navigate(`/sales/projects/${id}`), 1500);
-        } catch (err) {
+        } catch (err: any) {
             console.error("❌ Lỗi cập nhật dự án:", err);
-            setError("Không thể cập nhật dự án. Vui lòng thử lại.");
+            setError(err.message || "Không thể cập nhật dự án. Vui lòng thử lại.");
         } finally {
             setSaving(false);
         }
@@ -701,52 +771,63 @@ export default function ProjectEditPage() {
                                     <CheckCircle className="w-4 h-4" />
                                     Trạng thái <span className="text-red-500">*</span>
                                 </label>
-                                <select
-                                    name="status"
-                                    value={formData.status}
-                                    onChange={handleChange}
-                                    required
-                                    disabled={!canEditStatus || isStatusDisabled}
-                                    className={`w-full border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
-                                        (!canEditStatus || isStatusDisabled) ? "opacity-50 cursor-not-allowed bg-neutral-50" : ""
-                                    }`}
-                                >
-                                    <option value="">-- Chọn trạng thái --</option>
-                                    {originalStatus === "Planned" && (
-                                        <>
-                                            <option value="Planned">Đã lên kế hoạch (Planned)</option>
-                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
-                                        </>
-                                    )}
-                                    {originalStatus === "Ongoing" && (
-                                        <>
-                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                    <select
+                                        name="status"
+                                        value={formData.status}
+                                        onChange={handleChange}
+                                        required
+                                        disabled={!canEditStatus || isStatusDisabled}
+                                        className={`w-full md:w-auto flex-1 border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
+                                            (!canEditStatus || isStatusDisabled) ? "opacity-50 cursor-not-allowed bg-neutral-50" : ""
+                                        }`}
+                                    >
+                                        <option value="">-- Chọn trạng thái --</option>
+                                        {originalStatus === "Planned" && (
+                                            <>
+                                                <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                                                <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                            </>
+                                        )}
+                                        {originalStatus === "Ongoing" && (
+                                            <>
+                                                <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                                <option value="Completed">Đã hoàn thành (Completed)</option>
+                                                <option value="OnHold">Tạm dừng (OnHold)</option>
+                                            </>
+                                        )}
+                                        {originalStatus === "Completed" && (
                                             <option value="Completed">Đã hoàn thành (Completed)</option>
-                                            <option value="OnHold">Tạm dừng (OnHold)</option>
-                                        </>
-                                    )}
-                                    {originalStatus === "Completed" && (
-                                        <option value="Completed">Đã hoàn thành (Completed)</option>
-                                    )}
-                                    {originalStatus === "OnHold" && (
-                                        <>
-                                            <option value="OnHold">Tạm dừng (OnHold)</option>
-                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
-                                        </>
-                                    )}
-                                    {originalStatus === "Cancelled" && (
-                                        <option value="Cancelled">Đã hủy (Cancelled)</option>
-                                    )}
-                                    {!originalStatus && (
-                                        <>
-                                            <option value="Planned">Đã lên kế hoạch (Planned)</option>
-                                            <option value="Ongoing">Đang thực hiện (Ongoing)</option>
-                                            <option value="Completed">Đã hoàn thành (Completed)</option>
-                                            <option value="OnHold">Tạm dừng (OnHold)</option>
+                                        )}
+                                        {originalStatus === "OnHold" && (
+                                            <>
+                                                <option value="OnHold">Tạm dừng (OnHold)</option>
+                                                <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                            </>
+                                        )}
+                                        {originalStatus === "Cancelled" && (
                                             <option value="Cancelled">Đã hủy (Cancelled)</option>
-                                        </>
-                                    )}
-                                </select>
+                                        )}
+                                        {!originalStatus && (
+                                            <>
+                                                <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                                                <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+                                                <option value="Completed">Đã hoàn thành (Completed)</option>
+                                                <option value="OnHold">Tạm dừng (OnHold)</option>
+                                                <option value="Cancelled">Đã hủy (Cancelled)</option>
+                                            </>
+                                        )}
+                                    </select>
+
+                                    {/* Nút xác nhận thay đổi trạng thái riêng (submit form) */}
+                                    <button
+                                        type="submit"
+                                        disabled={saving || !formData.status || (!canEditStatus || isStatusDisabled)}
+                                        className="inline-flex items-center justify-center px-4 py-2 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Xác nhận thay đổi trạng thái
+                                    </button>
+                                </div>
                                 {isReadOnly && originalStatus !== "Completed" && originalStatus !== "Ongoing" && (
                                     <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
                                         <AlertCircle className="w-4 h-4" />

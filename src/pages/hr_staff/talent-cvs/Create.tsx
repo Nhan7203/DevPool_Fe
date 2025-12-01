@@ -632,7 +632,7 @@ export default function TalentCVCreatePage() {
             : (typeof userRoles === 'string' && (userRoles.toLowerCase().includes('developer') || userRoles.toLowerCase().includes('dev')));
         })();
       
-      // Backend đã tự động gửi thông báo đến TA khi tạo CV thành công
+      // Backend đã tự động gửi thông báo đến TA khi tạo CV thành công (backend vẫn dùng HR)
       
       // Navigate dựa trên role
       if (isDeveloper) {

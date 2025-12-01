@@ -39,6 +39,18 @@ export interface ProjectFilter {
   excludeDeleted?: boolean;
 }
 
+export interface ProjectStatusUpdateModel {
+  newStatus: string;
+  notes?: string | null;
+}
+
+export interface ProjectStatusTransitionResult {
+  success: boolean;
+  message?: string;
+  data?: any;
+  isSuccess?: boolean;
+}
+
 export interface ProjectDetailedModel {
   id: number;
   clientCompanyId?: number | null;
@@ -149,6 +161,17 @@ export const projectService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể xóa dự án" };
       throw { message: "Lỗi không xác định khi xóa dự án" };
+    }
+  },
+
+  async updateStatus(id: number, payload: ProjectStatusUpdateModel): Promise<ProjectStatusTransitionResult> {
+    try {
+      const response = await axios.put(`/project/${id}/change-status`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể thay đổi trạng thái dự án" };
+      throw { message: "Lỗi không xác định khi thay đổi trạng thái dự án" };
     }
   },
 };

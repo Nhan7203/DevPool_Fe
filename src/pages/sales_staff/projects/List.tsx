@@ -14,7 +14,9 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  Layers
+  Layers,
+  Pause,
+  XCircle
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -30,6 +32,10 @@ export default function ProjectListPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
+  
+  // Stats pagination
+  const statsPageSize = 4;
+  const [statsStartIndex, setStatsStartIndex] = useState(0);
 
   const formatViDate = (value?: string | null) => {
     if (!value) return "—";
@@ -63,12 +69,48 @@ export default function ProjectListPage() {
       icon: <CheckCircle className="w-6 h-6" />
     },
     {
+      title: 'Tạm Dừng',
+      value: projects.filter(p => p.status === 'OnHold').length.toString(),
+      color: 'yellow',
+      icon: <Pause className="w-6 h-6" />
+    },
+    {
       title: 'Đã Hoàn Thành',
       value: projects.filter(p => p.status === 'Completed').length.toString(),
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
+    },
+    {
+      title: 'Đã Hủy',
+      value: projects.filter(p => p.status === 'Cancelled').length.toString(),
+      color: 'red',
+      icon: <XCircle className="w-6 h-6" />
     }
   ];
+
+  // Stats slice và navigation
+  const statsSlice = stats.slice(
+    statsStartIndex,
+    Math.min(statsStartIndex + statsPageSize, stats.length)
+  );
+  const canShowStatsNav = stats.length > statsPageSize;
+  const canGoPrevStats = canShowStatsNav && statsStartIndex > 0;
+  const canGoNextStats = canShowStatsNav && statsStartIndex + statsPageSize < stats.length;
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, stats.length - statsPageSize);
+    setStatsStartIndex((prev) => Math.min(prev, maxIndex));
+  }, [stats.length, statsPageSize]);
+
+  const handlePrevStats = () => {
+    setStatsStartIndex((prev) => Math.max(0, prev - statsPageSize));
+  };
+
+  const handleNextStats = () => {
+    setStatsStartIndex((prev) =>
+      Math.min(Math.max(0, stats.length - statsPageSize), prev + statsPageSize)
+    );
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -140,10 +182,12 @@ export default function ProjectListPage() {
   };
 
   const statusLabels: Record<string, string> = {
-  Planned: "Đã lên kế hoạch",
-  Ongoing: "Đang thực hiện",
-  Completed: "Đã hoàn thành",
-};
+    Planned: "Đã lên kế hoạch",
+    Ongoing: "Đang thực hiện",
+    OnHold: "Tạm dừng",
+    Completed: "Đã hoàn thành",
+    Cancelled: "Đã hủy"
+  };
 
   if (loading) {
     return (
@@ -179,24 +223,92 @@ export default function ProjectListPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
-            {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+          <div className="mb-8 animate-fade-in">
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statsSlice.map((stat, index) => (
+                  <div key={`${stat.title}-${statsStartIndex + index}`} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                      </div>
+                      <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
+                          stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
+                            stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
+                              stat.color === 'yellow' ? 'bg-warning-100 text-warning-600 group-hover:bg-warning-200' :
+                                stat.color === 'red' ? 'bg-red-100 text-red-600 group-hover:bg-red-200' :
+                                  'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                        } transition-all duration-300`}>
+                        {stat.icon}
+                      </div>
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
-                    {stat.icon}
-                  </div>
+                ))}
+              </div>
+              {canShowStatsNav && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'h-9 w-9 bg-white/90 backdrop-blur border-neutral-200 text-neutral-600 shadow-soft hover:text-primary-600 hover:border-primary-300'
+                        : 'h-9 w-9 bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+            {canShowStatsNav && (
+              <div className="mt-3 flex justify-end text-xs text-neutral-500 lg:hidden">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrevStats}
+                    disabled={!canGoPrevStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoPrevStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê phía trước"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextStats}
+                    disabled={!canGoNextStats}
+                    className={`rounded-full border px-3 py-1 transition-all duration-300 ${
+                      canGoNextStats
+                        ? 'bg-white border-neutral-200 text-neutral-600 hover:text-primary-600 hover:border-primary-300'
+                        : 'bg-neutral-100 border-neutral-200 text-neutral-300 cursor-not-allowed'
+                    }`}
+                    aria-label="Xem thống kê tiếp theo"
+                  >
+                    Tiếp
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -247,7 +359,9 @@ export default function ProjectListPage() {
                       <option value="">Tất cả trạng thái</option>
                       <option value="Planned">Đã lên kế hoạch</option>
                       <option value="Ongoing">Đang thực hiện</option>
+                      <option value="OnHold">Tạm dừng</option>
                       <option value="Completed">Đã hoàn thành</option>
+                      <option value="Cancelled">Đã hủy</option>
                     </select>
                   </div>
                   <button
@@ -369,11 +483,17 @@ export default function ProjectListPage() {
                         <td className="py-4 px-4">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                              p.status === 'Completed'
+                              p.status === 'Ongoing'
                                 ? 'bg-green-100 text-green-800'
-                                : p.status === 'Ongoing'
+                                : p.status === 'Planned'
+                                ? 'bg-purple-100 text-purple-800'
+                                : p.status === 'OnHold'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : p.status === 'Completed'
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                : p.status === 'Cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-neutral-100 text-neutral-800'
                             }`}
                           >
                             <span>{statusLabels[p.status] || "—"}</span>

@@ -125,12 +125,14 @@ export default function JobRequestCreatePage() {
     return parseFloat(cleaned) || 0;
   };
 
+  // Gửi thông báo đến TA (HR) - FE hiển thị "TA" nhưng backend vẫn dùng role "HR"
   const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
     try {
-      const hrUsersResponse = await userService.getAll({ role: "TA", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+      // Backend vẫn dùng role "HR", chưa đổi thành "TA"
+      const hrUsersResponse = await userService.getAll({ role: "HR", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
       const hrUserIds = (hrUsersResponse.items || [])
-        .filter((u) => (u.roles || []).some((role) => role === "TA" || role === "Staff TA"))
-        .map((u) => u.id)
+        .filter((u) => (u.roles || []).some((role) => role === "HR")) // Filter theo role "HR" (backend)
+        .map((u) => String(u.id)) // Đảm bảo là string
         .filter(Boolean);
 
       if (!hrUserIds.length) {
@@ -634,7 +636,20 @@ export default function JobRequestCreatePage() {
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
                             projectsFilteredBySearch.map(p => {
-                              const isDisabled = p.status === "OnHold" || p.status === "Completed";
+                              // Chỉ cho phép chọn dự án nếu status là "Ongoing"
+                              const isDisabled = p.status !== "Ongoing";
+                              
+                              // Map status sang tiếng Việt
+                              const statusLabels: Record<string, string> = {
+                                "Ongoing": "Đang thực hiện",
+                                "OnHold": "Tạm dừng",
+                                "Completed": "Hoàn thành",
+                                "Planned": "Đã lập kế hoạch",
+                                "Planning": "Lập kế hoạch",
+                                "Cancelled": "Đã hủy"
+                              };
+                              const statusLabel = statusLabels[p.status] || "Không xác định";
+                              
                               return (
                                 <button
                                   type="button"
@@ -654,9 +669,26 @@ export default function JobRequestCreatePage() {
                                         ? "bg-primary-50 text-primary-700"
                                         : "hover:bg-neutral-50 text-neutral-700"
                                   }`}
-                                  title={isDisabled ? `Dự án này đang ở trạng thái "${p.status}" nên không thể chọn` : ""}
+                                  title={isDisabled ? `Dự án này đang ở trạng thái "${statusLabel}" nên không thể chọn. Chỉ có thể chọn dự án đang thực hiện.` : ""}
                                 >
-                                  {p.name} {isDisabled && `(${p.status})`}
+                                  <div className="flex items-center justify-between">
+                                    <span>{p.name}</span>
+                                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                                      p.status === "Ongoing" 
+                                        ? "bg-green-100 text-green-700"
+                                        : p.status === "OnHold"
+                                        ? "bg-yellow-100 text-yellow-700"
+                                        : p.status === "Completed"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : p.status === "Planned" || p.status === "Planning"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : p.status === "Cancelled"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-neutral-100 text-neutral-700"
+                                    }`}>
+                                      {statusLabel}
+                                    </span>
+                                  </div>
                                 </button>
                               );
                             })

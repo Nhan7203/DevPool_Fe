@@ -351,6 +351,11 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       return;
     }
     
+    // Fix: Remove /hr prefix nếu có (backend có thể thêm prefix này)
+    if (originalActionUrl.startsWith('/hr/')) {
+      originalActionUrl = originalActionUrl.replace('/hr/', '/');
+    }
+    
     // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
     // Vì backend có thể tạo actionUrl với format cũ hoặc có notification cũ
     if (originalActionUrl.startsWith('/ta/talents/')) {
@@ -374,7 +379,17 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   const handleNotificationDetail = async (notification: ExtendedNotification) => {
     try {
       // Lưu actionUrl gốc trước khi mark as read
-      const originalActionUrl = notification.actionUrl;
+      let originalActionUrl = notification.actionUrl;
+      
+      // Fix: Remove /hr prefix nếu có (backend có thể thêm prefix này)
+      if (originalActionUrl && originalActionUrl.startsWith('/hr/')) {
+        originalActionUrl = originalActionUrl.replace('/hr/', '/');
+      }
+      
+      // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
+      if (originalActionUrl && originalActionUrl.startsWith('/ta/talents/')) {
+        originalActionUrl = originalActionUrl.replace('/ta/talents/', '/ta/developers/');
+      }
       
       // Đánh dấu đã đọc trước, để UI cập nhật ngay
       const resolved = await markNotificationAsRead(notification);
@@ -383,15 +398,31 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       await new Promise(resolve => setTimeout(resolve, 200));
       setIsNotificationOpen(false);
       
-      // LUÔN giữ lại actionUrl gốc của notification, không dùng từ resolved
+      // LUÔN giữ lại actionUrl đã được fix, không dùng từ resolved
+      // Đảm bảo actionUrl luôn được giữ lại, kể cả khi resolved không có
+      const finalActionUrl = originalActionUrl || notification.actionUrl || resolved?.actionUrl || null;
       setViewNotification({
         ...resolved,
-        actionUrl: originalActionUrl || notification.actionUrl || resolved?.actionUrl,
+        ...notification, // Giữ lại tất cả thông tin gốc
+        actionUrl: finalActionUrl,
+        isRead: resolved?.isRead ?? notification.isRead,
+        readAt: resolved?.readAt ?? notification.readAt,
       });
     } catch (error) {
-      // Nếu có lỗi, vẫn hiển thị notification với actionUrl gốc
+      // Nếu có lỗi, vẫn hiển thị notification với actionUrl gốc đã được fix
+      console.error('Lỗi khi xem chi tiết thông báo:', error);
+      let fixedActionUrl = notification.actionUrl;
+      if (fixedActionUrl && fixedActionUrl.startsWith('/hr/')) {
+        fixedActionUrl = fixedActionUrl.replace('/hr/', '/');
+      }
+      if (fixedActionUrl && fixedActionUrl.startsWith('/ta/talents/')) {
+        fixedActionUrl = fixedActionUrl.replace('/ta/talents/', '/ta/developers/');
+      }
       setIsNotificationOpen(false);
-      setViewNotification(notification);
+      setViewNotification({
+        ...notification,
+        actionUrl: fixedActionUrl
+      });
     }
   };
 
@@ -465,7 +496,7 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       // Suppress unused variable warning - developerName may be used in future
       void developerName;
 
-      // Lấy tên TA từ user context thay vì email
+      // Lấy tên TA từ user context thay vì email (backend vẫn dùng HR)
       const hrStaffName = user?.name || 'TA Staff';
 
       // Tạo title với jobRoleLevel name
@@ -961,6 +992,11 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                 <button
                   onClick={() => {
                     let targetUrl = viewNotification.actionUrl;
+                    
+                    // Fix: Remove /hr prefix nếu có (backend có thể thêm prefix này)
+                    if (targetUrl && targetUrl.startsWith('/hr/')) {
+                      targetUrl = targetUrl.replace('/hr/', '/');
+                    }
                     
                     // Fix: Convert /ta/talents/:id thành /ta/developers/:id (route đúng)
                     if (targetUrl && targetUrl.startsWith('/ta/talents/')) {

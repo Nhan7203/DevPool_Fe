@@ -555,8 +555,8 @@ export default function ProjectDetailPage() {
         // Use update API for Draft status
         // Note: We need to include startDate even though it's not in the interface
         const payload: any = {
-          startDate: updateForm.startDate ? `${updateForm.startDate}T00:00:00Z` : selectedAssignment.startDate,
-          endDate: updateForm.endDate ? `${updateForm.endDate}T00:00:00Z` : null,
+          startDate: updateForm.startDate || selectedAssignment.startDate,
+          endDate: updateForm.endDate || null,
           commitmentFileUrl,
           status: "Active", // Change status to Active
           notes: updateForm.notes || null
@@ -566,7 +566,7 @@ export default function ProjectDetailPage() {
       } else if (isActiveWithStartDate) {
         // Use extend API for Active status with startDate
         const payload = {
-          endDate: updateForm.endDate ? `${updateForm.endDate}T00:00:00Z` : "",
+          endDate: updateForm.endDate || "",
           commitmentFileUrl,
           notes: updateForm.notes || null
         };
@@ -1870,7 +1870,9 @@ export default function ProjectDetailPage() {
                     min={project?.startDate ? project.startDate.split('T')[0] : undefined}
                     max={project?.endDate ? project.endDate.split('T')[0] : undefined}
                     onChange={(e) => {
-                      const newStartDate = e.target.value ? `${e.target.value}T00:00:00Z` : "";
+                      const newStartDate = e.target.value 
+                        ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                        : "";
                       setAssignmentForm({ 
                         ...assignmentForm, 
                         startDate: newStartDate
@@ -1934,7 +1936,9 @@ export default function ProjectDetailPage() {
                     onChange={(e) => {
                       setAssignmentForm({ 
                         ...assignmentForm, 
-                        endDate: e.target.value ? `${e.target.value}T00:00:00Z` : null 
+                        endDate: e.target.value 
+                          ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                          : null 
                       });
                       // Clear error when user changes value
                       if (assignmentErrors.endDate) {
@@ -2049,7 +2053,9 @@ export default function ProjectDetailPage() {
                       onChange={(e) => {
                         setUpdateForm({ 
                           ...updateForm, 
-                          startDate: e.target.value ? `${e.target.value}T00:00:00Z` : "" 
+                          startDate: e.target.value 
+                            ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                            : "" 
                         });
                         // Clear error when user changes value
                         if (updateErrors.startDate) {
@@ -2099,7 +2105,9 @@ export default function ProjectDetailPage() {
                   onChange={(e) => {
                     setUpdateForm({ 
                       ...updateForm, 
-                      endDate: e.target.value ? `${e.target.value}T00:00:00Z` : "" 
+                      endDate: e.target.value 
+                        ? new Date(e.target.value + 'T00:00:00').toISOString() 
+                        : "" 
                     });
                     // Clear error when user changes value
                     if (updateErrors.endDate) {
@@ -2354,7 +2362,8 @@ export default function ProjectDetailPage() {
                       let initialStartDate = "";
                       if (selectedAssignment.status === "Draft" && !isValidDate(selectedAssignment.startDate)) {
                         const today = getTodayDateInVietnam();
-                        initialStartDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T00:00:00Z`;
+                        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                        initialStartDate = new Date(todayStr + 'T00:00:00').toISOString();
                       } else {
                         initialStartDate = isValidDate(selectedAssignment.startDate) ? selectedAssignment.startDate : "";
                       }
