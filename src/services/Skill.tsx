@@ -6,12 +6,14 @@ export interface Skill {
   skillGroupId: number;
   name: string;
   description?: string;
+  isMandatory: boolean;
 }
 
 export interface SkillCreate {
   skillGroupId: number;
   name: string;
   description?: string;
+  isMandatory: boolean;
 }
 
 export interface SkillFilter {

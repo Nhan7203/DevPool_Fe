@@ -31,6 +31,7 @@ import {
 import { WorkingMode } from "../../../types/WorkingMode";
 import RichTextEditor from "../../../components/common/RichTextEditor";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { clientJobRoleLevelService, type ClientJobRoleLevel } from "../../../services/ClientJobRoleLevel";
 
 export default function JobRequestEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,8 @@ export default function JobRequestEditPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
+  const [clientJobRoleLevels, setClientJobRoleLevels] = useState<ClientJobRoleLevel[]>([]);
+  const [budgetCurrency, setBudgetCurrency] = useState<string>("VND");
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
@@ -75,6 +78,11 @@ export default function JobRequestEditPage() {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
+
+  // Phân trang kỹ năng: 16 kỹ năng mỗi trang
+  const SKILLS_PER_PAGE = 16;
+  const [skillPage, setSkillPage] = useState(1);
+
   const filteredSkills = allSkills.filter(skill => {
     const matchesSearch = !skillSearchQuery || skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase());
     const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
@@ -83,6 +91,10 @@ export default function JobRequestEditPage() {
   const filteredSkillGroups = skillGroups.filter(group =>
     group.name.toLowerCase().includes(skillGroupQuery.toLowerCase())
   );
+
+  const totalSkillPages = Math.max(1, Math.ceil(filteredSkills.length / SKILLS_PER_PAGE));
+  const startIndexSkills = (skillPage - 1) * SKILLS_PER_PAGE;
+  const paginatedSkills = filteredSkills.slice(startIndexSkills, startIndexSkills + SKILLS_PER_PAGE);
 
   const handleSkillGroupSelect = (groupId?: number) => {
     setSelectedSkillGroupId(groupId);
@@ -134,7 +146,12 @@ export default function JobRequestEditPage() {
 
         // Lấy clientCompanyId từ project tương ứng
         const project = projects.find(p => p.id === data.projectId);
-        if (project) setSelectedClientId(project.clientCompanyId);
+        if (project) {
+          setSelectedClientId(project.clientCompanyId);
+          
+          // Tự động điền thông tin từ ClientJobRoleLevel nếu có (sau khi fetch ClientJobRoleLevels)
+          // Logic này sẽ được xử lý trong useEffect khi clientJobRoleLevels thay đổi
+        }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin Job Request!");
@@ -233,6 +250,56 @@ export default function JobRequestEditPage() {
     fetchTemplates();
   }, [selectedClientId]);
 
+  // Fetch ClientJobRoleLevels khi chọn công ty
+  useEffect(() => {
+    const fetchClientJobRoleLevels = async () => {
+      if (!selectedClientId) {
+        setClientJobRoleLevels([]);
+        return;
+      }
+      try {
+        const result = await clientJobRoleLevelService.getAll({ clientCompanyId: selectedClientId, excludeDeleted: true });
+        const list = Array.isArray(result)
+          ? result
+          : Array.isArray((result as any)?.items)
+            ? (result as any).items
+            : Array.isArray((result as any)?.data)
+              ? (result as any).data
+              : [];
+        setClientJobRoleLevels(list as ClientJobRoleLevel[]);
+        
+        // Tự động điền thông tin từ ClientJobRoleLevel nếu đã có jobRoleLevelId
+        if (formData.jobRoleLevelId && selectedClientId) {
+          const clientJobRoleLevel = (list as ClientJobRoleLevel[]).find(
+            cjrl => cjrl.jobRoleLevelId === formData.jobRoleLevelId && cjrl.clientCompanyId === selectedClientId
+          );
+          
+          if (clientJobRoleLevel) {
+            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate) nếu chưa có
+            if (!formData.budgetPerMonth) {
+              if (clientJobRoleLevel.expectedMaxRate) {
+                setFormData(prev => ({ ...prev, budgetPerMonth: clientJobRoleLevel.expectedMaxRate }));
+              } else if (clientJobRoleLevel.expectedMinRate) {
+                setFormData(prev => ({ ...prev, budgetPerMonth: clientJobRoleLevel.expectedMinRate }));
+              }
+            }
+            
+            // Điền currency
+            if (clientJobRoleLevel.currency) {
+              setBudgetCurrency(clientJobRoleLevel.currency);
+            } else {
+              setBudgetCurrency("VND");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải vị trí tuyển dụng của công ty:", err);
+        setClientJobRoleLevels([]);
+      }
+    };
+    fetchClientJobRoleLevels();
+  }, [selectedClientId]);
+
   // chọn Company/Project được xử lý trực tiếp trong popover, không dùng handler <select>
 
   // ✍️ Cập nhật dữ liệu form
@@ -270,6 +337,37 @@ export default function JobRequestEditPage() {
         if (optionalNumeric.includes(name) && value === "") {
           return { ...prev, [name]: name === "clientCompanyCVTemplateId" ? null : undefined };
         }
+        
+        // Tự động điền thông tin từ ClientJobRoleLevel khi chọn jobRoleLevelId
+        if (name === "jobRoleLevelId" && selectedClientId) {
+          const jobRoleLevelId = Number(value);
+          const clientJobRoleLevel = clientJobRoleLevels.find(
+            cjrl => cjrl.jobRoleLevelId === jobRoleLevelId && cjrl.clientCompanyId === selectedClientId
+          );
+          
+          if (clientJobRoleLevel) {
+            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
+            let newBudget = prev.budgetPerMonth;
+            if (clientJobRoleLevel.expectedMaxRate) {
+              newBudget = clientJobRoleLevel.expectedMaxRate;
+            } else if (clientJobRoleLevel.expectedMinRate) {
+              newBudget = clientJobRoleLevel.expectedMinRate;
+            }
+            
+            // Điền currency
+            if (clientJobRoleLevel.currency) {
+              setBudgetCurrency(clientJobRoleLevel.currency);
+            } else {
+              setBudgetCurrency("VND");
+            }
+            
+            return { ...prev, [name]: jobRoleLevelId, budgetPerMonth: newBudget };
+          } else {
+            // Reset về mặc định nếu không tìm thấy
+            setBudgetCurrency("VND");
+          }
+        }
+        
         return { ...prev, [name]: Number(value) };
       }
 
@@ -469,7 +567,9 @@ export default function JobRequestEditPage() {
                               setSelectedClientId(0);
                               setCompanySearch("");
                               setClientTemplates([]);
-                              setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null }));
+                              setClientJobRoleLevels([]);
+                              setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
+                              setBudgetCurrency("VND");
                               setIsCompanyDropdownOpen(false);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -489,7 +589,8 @@ export default function JobRequestEditPage() {
                                 key={c.id}
                                 onClick={() => {
                                   setSelectedClientId(c.id);
-                                  setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null }));
+                                  setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
+                                  setBudgetCurrency("VND");
                                   setIsCompanyDropdownOpen(false);
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -585,19 +686,26 @@ export default function JobRequestEditPage() {
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
                             projectsFilteredBySearch.map(p => {
-                              // Chỉ cho phép chọn dự án nếu status là "Ongoing" hoặc là dự án đã chọn trước đó
-                              const isDisabled = p.status !== "Ongoing" && p.id !== formData.projectId;
+                              // Normalize status để so sánh chính xác (case-insensitive)
+                              const normalizedStatus = (p.status || "").trim();
                               
-                              // Map status sang tiếng Việt
-                              const statusLabels: Record<string, string> = {
-                                "Ongoing": "Đang thực hiện",
-                                "OnHold": "Tạm dừng",
-                                "Completed": "Hoàn thành",
-                                "Planned": "Đã lập kế hoạch",
-                                "Planning": "Lập kế hoạch",
-                                "Cancelled": "Đã hủy"
+                              // Chỉ cho phép chọn dự án nếu status là "Ongoing" hoặc là dự án đã chọn trước đó
+                              const isDisabled = normalizedStatus.toLowerCase() !== "ongoing" && p.id !== formData.projectId;
+                              
+                              // Map status sang tiếng Việt (case-insensitive)
+                              const getStatusLabel = (status: string): string => {
+                                if (!status) return "Không xác định";
+                                const normalized = status.trim().toLowerCase();
+                                const statusMap: Record<string, string> = {
+                                  "ongoing": "Đang thực hiện",
+                                  "onhold": "Tạm dừng",
+                                  "on hold": "Tạm dừng",
+                                  "completed": "Hoàn thành",
+                                  "planned": "Đã lập kế hoạch"
+                                };
+                                return statusMap[normalized] || status.trim() || "Không xác định";
                               };
-                              const statusLabel = statusLabels[p.status] || "Không xác định";
+                              const statusLabel = getStatusLabel(p.status);
                               
                               return (
                                 <button
@@ -605,8 +713,9 @@ export default function JobRequestEditPage() {
                                   key={p.id}
                                   onClick={() => {
                                     if (!isDisabled) {
-                                      setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null }));
+                                      setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
                                       setSelectedClientId(p.clientCompanyId);
+                                      setBudgetCurrency("VND");
                                       setIsProjectDropdownOpen(false);
                                     }
                                   }}
@@ -623,16 +732,14 @@ export default function JobRequestEditPage() {
                                   <div className="flex items-center justify-between">
                                     <span>{p.name}</span>
                                     <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                                      p.status === "Ongoing" 
+                                      normalizedStatus.toLowerCase() === "ongoing" 
                                         ? "bg-green-100 text-green-700"
-                                        : p.status === "OnHold"
+                                        : normalizedStatus.toLowerCase() === "onhold"
                                         ? "bg-yellow-100 text-yellow-700"
-                                        : p.status === "Completed"
+                                        : normalizedStatus.toLowerCase() === "completed"
                                         ? "bg-blue-100 text-blue-700"
-                                        : p.status === "Planned" || p.status === "Planning"
+                                        : normalizedStatus.toLowerCase() === "planned"
                                         ? "bg-purple-100 text-purple-700"
-                                        : p.status === "Cancelled"
-                                        ? "bg-red-100 text-red-700"
                                         : "bg-neutral-100 text-neutral-700"
                                     }`}>
                                       {statusLabel}
@@ -830,12 +937,12 @@ export default function JobRequestEditPage() {
                       className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl pr-12"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium pointer-events-none">
-                      VNĐ
+                      {budgetCurrency}
                     </span>
                   </div>
                   {formData.budgetPerMonth && (
                     <p className="mt-1 text-xs text-neutral-500">
-                      Số tiền: {formatCurrency(formData.budgetPerMonth)} VNĐ
+                      Số tiền: {formatCurrency(formData.budgetPerMonth)} {budgetCurrency}
                     </p>
                   )}
                 </div>
@@ -937,7 +1044,13 @@ export default function JobRequestEditPage() {
                     </div>
                   </button>
                   {isSkillGroupDropdownOpen && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                    <div 
+                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                      onMouseLeave={() => {
+                        setIsSkillGroupDropdownOpen(false);
+                        setSkillGroupQuery("");
+                      }}
+                    >
                       <div className="p-3 border-b border-neutral-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -986,7 +1099,7 @@ export default function JobRequestEditPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                {filteredSkills.map(skill => (
+                {paginatedSkills.map(skill => (
                   <label
                     key={skill.id}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${selectedSkills.includes(skill.id)
@@ -1027,6 +1140,41 @@ export default function JobRequestEditPage() {
               {allSkills.length > 0 && filteredSkills.length === 0 && (
                 <div className="text-center py-6 text-sm text-neutral-500">
                   Không tìm thấy kỹ năng phù hợp với bộ lọc hiện tại.
+                </div>
+              )}
+
+              {/* Skill pagination controls */}
+              {filteredSkills.length > 0 && (
+                <div className="mt-4 flex items-center justify-between text-xs text-neutral-600">
+                  <span>
+                    Trang {skillPage} / {totalSkillPages} (Hiển thị {paginatedSkills.length} / {filteredSkills.length} kỹ năng)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSkillPage(prev => Math.max(1, prev - 1))}
+                      disabled={skillPage === 1}
+                      className={`px-3 py-1 rounded-lg border text-xs font-medium transition-all duration-200 ${
+                        skillPage === 1
+                          ? "border-neutral-200 text-neutral-300 cursor-not-allowed"
+                          : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      Trước
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSkillPage(prev => Math.min(totalSkillPages, prev + 1))}
+                      disabled={skillPage === totalSkillPages}
+                      className={`px-3 py-1 rounded-lg border text-xs font-medium transition-all duration-200 ${
+                        skillPage === totalSkillPages
+                          ? "border-neutral-200 text-neutral-300 cursor-not-allowed"
+                          : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      Sau
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

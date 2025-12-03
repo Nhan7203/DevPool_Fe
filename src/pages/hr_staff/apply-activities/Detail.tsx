@@ -6,7 +6,11 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyService } from "../../../services/Apply";
+import { talentApplicationService } from "../../../services/TalentApplication";
 import { jobRequestService } from "../../../services/JobRequest";
+import { clientTalentBlacklistService, type ClientTalentBlacklistCreate } from "../../../services/ClientTalentBlacklist";
+import { projectService } from "../../../services/Project";
+import { useAuth } from "../../../contexts/AuthContext";
 import { Button } from "../../../components/ui/button";
 import {
   Edit,
@@ -15,7 +19,9 @@ import {
   AlertCircle,
   CheckCircle,
   Briefcase,
-  Tag
+  Tag,
+  Ban,
+  X
 } from "lucide-react";
 
 interface ApplyActivityDetail extends ApplyActivity {
@@ -74,16 +80,33 @@ export default function ApplyActivityDetailPage() {
   const [currentStepOrder, setCurrentStepOrder] = useState<number>(0);
   const [activityIndex, setActivityIndex] = useState<number | null>(null);
   const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [rejectNote, setRejectNote] = useState("");
+  const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [noteDialogTargetStatus, setNoteDialogTargetStatus] = useState<ApplyActivityStatus | null>(null);
+  const [noteInput, setNoteInput] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [jobRequest, setJobRequest] = useState<any>(null);
+  
+  // Blacklist modal state
+  const [showBlacklistModal, setShowBlacklistModal] = useState(false);
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [blacklistRequestedBy, setBlacklistRequestedBy] = useState("");
+  const [isAddingBlacklist, setIsAddingBlacklist] = useState(false);
+  const [talent, setTalent] = useState<any>(null);
+  const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
+  const { user } = useAuth();
   
   const quickRejectNotes = [
     "Ứng viên không đáp ứng yêu cầu kỹ năng kỹ thuật.",
     "Ứng viên thiếu kinh nghiệm làm việc cần thiết.",
     "Ứng viên không phù hợp với văn hóa công ty.",
     "Kết quả phỏng vấn không đạt yêu cầu.",
+  ];
+
+  const quickPassNotes = [
+    "Ứng viên đáp ứng đầy đủ yêu cầu kỹ năng kỹ thuật.",
+    "Ứng viên có kinh nghiệm phù hợp với vị trí.",
+    "Ứng viên phù hợp với văn hóa công ty.",
+    "Kết quả phỏng vấn tốt, đạt yêu cầu.",
   ];
 
   const fetchData = async () => {
@@ -112,10 +135,33 @@ export default function ApplyActivityDetailPage() {
           status: app.status
         };
 
+        // Fetch talent information for blacklist
+        try {
+          const detailedApp = await talentApplicationService.getDetailedById(app.id);
+          if (detailedApp?.talent) {
+            setTalent(detailedApp.talent);
+          }
+        } catch (err) {
+          console.error("⚠️ Không thể tải thông tin talent:", err);
+        }
+
         let resolvedSteps: ApplyProcessStep[] = [];
         try {
           const jobReq = await jobRequestService.getById(app.jobRequestId);
           setJobRequest(jobReq);
+          
+          // Get clientCompanyId from project
+          if (jobReq?.projectId) {
+            try {
+              const project = await projectService.getById(jobReq.projectId);
+              if (project?.clientCompanyId) {
+                setClientCompanyId(project.clientCompanyId);
+              }
+            } catch (err) {
+              console.error("⚠️ Không thể tải thông tin project:", err);
+            }
+          }
+          
           if (jobReq?.applyProcessTemplateId) {
             const stepsResponse = await applyProcessStepService.getAll({
               templateId: jobReq.applyProcessTemplateId,
@@ -233,7 +279,7 @@ export default function ApplyActivityDetailPage() {
           return [];
         }
       }
-    } catch {}
+    } catch { }
 
     const canUpdateStep = () => {
       if (currentStepOrder <= 1) return true;
@@ -262,10 +308,20 @@ export default function ApplyActivityDetailPage() {
   const handleStatusUpdate = async (newStatus: ApplyActivityStatus) => {
     if (!id || !activity) return;
 
-    // Nếu là trạng thái "Không đạt", hiển thị modal dialog
+    // Nếu đang ở Completed và chuyển sang Passed hoặc Failed, yêu cầu nhập note
+    if (activity.status === ApplyActivityStatus.Completed && 
+        (newStatus === ApplyActivityStatus.Passed || newStatus === ApplyActivityStatus.Failed)) {
+      setNoteDialogTargetStatus(newStatus);
+      setNoteInput("");
+      setShowNoteDialog(true);
+      return;
+    }
+
+    // Nếu là trạng thái "Không đạt" (không từ Completed), hiển thị modal dialog
     if (newStatus === ApplyActivityStatus.Failed) {
-      setShowRejectDialog(true);
-      setRejectNote("");
+      setNoteDialogTargetStatus(ApplyActivityStatus.Failed);
+      setNoteInput("");
+      setShowNoteDialog(true);
       return;
     }
 
@@ -275,21 +331,26 @@ export default function ApplyActivityDetailPage() {
     await performStatusUpdate(newStatus);
   };
 
-  const handleCancelReject = () => {
-    setShowRejectDialog(false);
-    setRejectNote("");
+  const handleCancelNoteDialog = () => {
+    setShowNoteDialog(false);
+    setNoteDialogTargetStatus(null);
+    setNoteInput("");
   };
 
-  const handleConfirmReject = async () => {
-    const note = rejectNote.trim();
+  const handleConfirmNoteDialog = async () => {
+    const note = noteInput.trim();
     if (!note) {
-      alert("⚠️ Vui lòng ghi rõ lý do từ chối");
+      const statusLabel = noteDialogTargetStatus === ApplyActivityStatus.Passed ? "Đạt" : "Không đạt";
+      alert(`⚠️ Vui lòng nhập ghi chú khi thay đổi trạng thái sang "${statusLabel}"`);
       return;
     }
     
-    await performStatusUpdate(ApplyActivityStatus.Failed, note);
-    setShowRejectDialog(false);
-    setRejectNote("");
+    if (!noteDialogTargetStatus) return;
+    
+    await performStatusUpdate(noteDialogTargetStatus, note);
+    setShowNoteDialog(false);
+    setNoteDialogTargetStatus(null);
+    setNoteInput("");
   };
 
   const performStatusUpdate = async (newStatus: ApplyActivityStatus, notes?: string) => {
@@ -395,6 +456,56 @@ export default function ApplyActivityDetailPage() {
       alert("Không thể cập nhật trạng thái!");
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle Add to Blacklist
+  const handleOpenBlacklistModal = () => {
+    if (!clientCompanyId || !talent?.id) {
+      alert("⚠️ Không thể thêm vào blacklist: Thiếu thông tin Client hoặc Talent!");
+      return;
+    }
+    setBlacklistRequestedBy(user?.name || "");
+    setBlacklistReason("");
+    setShowBlacklistModal(true);
+  };
+
+  const handleCloseBlacklistModal = () => {
+    setShowBlacklistModal(false);
+    setBlacklistReason("");
+    setBlacklistRequestedBy("");
+  };
+
+  const handleAddToBlacklist = async () => {
+    if (!clientCompanyId || !talent?.id) {
+      alert("⚠️ Không thể thêm vào blacklist: Thiếu thông tin Client hoặc Talent!");
+      return;
+    }
+
+    if (!blacklistReason.trim()) {
+      alert("⚠️ Vui lòng nhập lý do blacklist!");
+      return;
+    }
+
+    try {
+      setIsAddingBlacklist(true);
+      
+      const payload: ClientTalentBlacklistCreate = {
+        clientCompanyId,
+        talentId: talent.id,
+        reason: blacklistReason.trim(),
+        requestedBy: blacklistRequestedBy.trim() || user?.name || "",
+      };
+
+      await clientTalentBlacklistService.add(payload);
+      alert("✅ Đã thêm ứng viên vào blacklist thành công!");
+      handleCloseBlacklistModal();
+    } catch (error: any) {
+      console.error("❌ Lỗi thêm vào blacklist:", error);
+      const errorMessage = error?.message || error?.data?.message || "Không thể thêm vào blacklist!";
+      alert(`⚠️ ${errorMessage}`);
+    } finally {
+      setIsAddingBlacklist(false);
     }
   };
 
@@ -588,7 +699,7 @@ export default function ApplyActivityDetailPage() {
               <h2 className="text-xl font-semibold text-gray-900">Thông tin chung</h2>
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <InfoItem
                 label="Loại hoạt động"
@@ -607,7 +718,36 @@ export default function ApplyActivityDetailPage() {
                 value={formattedDate}
                 icon={<Calendar className="w-4 h-4" />}
               />
+              {processSteps.length > 0 && (
+                <InfoItem
+                  label="Tiến độ quy trình"
+                  value={`${allActivities.length}/${processSteps.length} bước đã có hoạt động${activityIndex ? ` · Bước hiện tại: ${activityIndex}/${processSteps.length}` : ""}`}
+                  icon={<Briefcase className="w-4 h-4" />}
+                />
+              )}
             </div>
+
+            {processSteps.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {processSteps
+                  .sort((a, b) => a.stepOrder - b.stepOrder)
+                  .map((step) => {
+                    const hasActivity = allActivities.some(a => a.processStepId === step.id);
+                    return (
+                      <span
+                        key={step.id}
+                        className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border ${
+                          hasActivity
+                            ? "bg-green-50 border-green-200 text-green-700"
+                            : "bg-neutral-50 border-neutral-200 text-neutral-600"
+                        }`}
+                      >
+                        {hasActivity ? "✓" : "•"} {step.stepName}
+                      </span>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -632,21 +772,53 @@ export default function ApplyActivityDetailPage() {
           </div>
         )}
 
-        {/* Reject Dialog */}
-        {showRejectDialog && (
+        {/* Add to Blacklist - hiển thị khi activity Failed */}
+        {activity.status === ApplyActivityStatus.Failed && clientCompanyId && talent?.id && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-soft mb-8 animate-fade-in">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Ban className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-amber-900">Thêm vào Blacklist</h3>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Ứng viên này đã không đạt phỏng vấn. Bạn có muốn thêm vào blacklist của Client không?
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleOpenBlacklistModal}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                >
+                  <Ban className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Thêm vào Blacklist
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Note Dialog - cho Passed hoặc Failed */}
+        {showNoteDialog && noteDialogTargetStatus !== null && (
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
             onClick={(e) => {
               if (e.target === e.currentTarget && !isUpdatingStatus) {
-                handleCancelReject();
+                handleCancelNoteDialog();
               }
             }}
           >
             <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
               <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Ghi rõ lý do từ chối</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {noteDialogTargetStatus === ApplyActivityStatus.Passed 
+                    ? "Ghi chú kết quả" 
+                    : "Ghi rõ lý do từ chối"}
+                </h3>
                 <button
-                  onClick={handleCancelReject}
+                  onClick={handleCancelNoteDialog}
                   className="text-neutral-400 hover:text-neutral-600 transition-colors"
                   aria-label="Đóng"
                   disabled={isUpdatingStatus}
@@ -656,14 +828,16 @@ export default function ApplyActivityDetailPage() {
               </div>
               <div className="px-6 py-4 space-y-4">
                 <p className="text-sm text-neutral-600">
-                  Vui lòng nhập lý do để ứng viên và các bộ phận liên quan dễ dàng xử lý và điều chỉnh.
+                  {noteDialogTargetStatus === ApplyActivityStatus.Passed
+                    ? "Vui lòng nhập ghi chú về kết quả để ứng viên và các bộ phận liên quan dễ dàng xử lý."
+                    : "Vui lòng nhập lý do để ứng viên và các bộ phận liên quan dễ dàng xử lý và điều chỉnh."}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {quickRejectNotes.map((note) => (
+                  {(noteDialogTargetStatus === ApplyActivityStatus.Failed ? quickRejectNotes : quickPassNotes).map((note) => (
                     <button
                       key={note}
                       type="button"
-                      onClick={() => setRejectNote((prev) => (prev ? `${prev}\n${note}` : note))}
+                      onClick={() => setNoteInput((prev) => (prev ? `${prev}\n${note}` : note))}
                       disabled={isUpdatingStatus}
                       className="px-3 py-1.5 text-xs font-medium rounded-full bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -672,18 +846,22 @@ export default function ApplyActivityDetailPage() {
                   ))}
                 </div>
                 <textarea
-                  value={rejectNote}
-                  onChange={(e) => setRejectNote(e.target.value)}
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
                   rows={4}
-                  placeholder="Nhập lý do từ chối..."
-                  className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-800 focus:border-red-500 focus:ring-2 focus:ring-red-200 resize-none"
+                  placeholder={noteDialogTargetStatus === ApplyActivityStatus.Passed ? "Nhập ghi chú kết quả..." : "Nhập lý do từ chối..."}
+                  className={`w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-800 focus:ring-2 resize-none ${
+                    noteDialogTargetStatus === ApplyActivityStatus.Passed
+                      ? "focus:border-green-500 focus:ring-green-200"
+                      : "focus:border-red-500 focus:ring-red-200"
+                  }`}
                   disabled={isUpdatingStatus}
                 />
               </div>
               <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={handleCancelReject}
+                  onClick={handleCancelNoteDialog}
                   disabled={isUpdatingStatus}
                   className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -691,12 +869,118 @@ export default function ApplyActivityDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmReject}
+                  onClick={handleConfirmNoteDialog}
                   disabled={isUpdatingStatus}
-                  className="px-4 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`px-4 py-2 rounded-xl text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    noteDialogTargetStatus === ApplyActivityStatus.Passed
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
                 >
-                  {isUpdatingStatus ? "Đang xử lý..." : "Xác nhận từ chối"}
+                  {isUpdatingStatus 
+                    ? "Đang xử lý..." 
+                    : noteDialogTargetStatus === ApplyActivityStatus.Passed
+                      ? "Xác nhận Đạt"
+                      : "Xác nhận từ chối"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Blacklist Modal */}
+        {showBlacklistModal && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isAddingBlacklist) {
+                handleCloseBlacklistModal();
+              }
+            }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <Ban className="w-5 h-5 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Thêm vào Blacklist</h3>
+                </div>
+                <button
+                  onClick={handleCloseBlacklistModal}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                  aria-label="Đóng"
+                  disabled={isAddingBlacklist}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <p className="text-sm text-neutral-600 mb-2">
+                    Bạn đang thêm <span className="font-semibold text-gray-900">{talent?.fullName || "ứng viên"}</span> vào blacklist của Client.
+                  </p>
+                  <p className="text-xs text-amber-600 mb-4">
+                    ⚠️ Sau khi thêm vào blacklist, ứng viên này sẽ không được gợi ý cho Client này trong các lần matching tiếp theo.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Người yêu cầu <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={blacklistRequestedBy}
+                    onChange={(e) => setBlacklistRequestedBy(e.target.value)}
+                    placeholder="Nhập tên người yêu cầu..."
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    disabled={isAddingBlacklist}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lý do blacklist <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={blacklistReason}
+                    onChange={(e) => setBlacklistReason(e.target.value)}
+                    placeholder="Ví dụ: Thái độ phỏng vấn kém, không phù hợp với văn hóa công ty..."
+                    rows={4}
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all resize-none"
+                    disabled={isAddingBlacklist}
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Vui lòng nhập lý do rõ ràng để tham khảo sau này.
+                  </p>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
+                <Button
+                  onClick={handleCloseBlacklistModal}
+                  disabled={isAddingBlacklist}
+                  className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  onClick={handleAddToBlacklist}
+                  disabled={isAddingBlacklist || !blacklistReason.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isAddingBlacklist ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-4 h-4" />
+                      Xác nhận thêm vào Blacklist
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>

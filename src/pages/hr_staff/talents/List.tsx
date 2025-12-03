@@ -13,11 +13,10 @@ import {
   XCircle,
   Mail,
   UserPlus,
-  CheckCircle,
-  X,
 } from "lucide-react";
 
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { Button } from "../../../components/ui/button";
 import { talentService, type Talent, type CreateDeveloperAccountModel } from "../../../services/Talent";
@@ -25,7 +24,7 @@ import { WorkingMode } from "../../../types/WorkingMode";
 
 const statusLabels: Record<string, { label: string; badgeClass: string }> = {
   Available: {
-    label: "Sẵn sàng làm việc",
+    label: "Sẵn sàng",
     badgeClass: "bg-green-100 text-green-800",
   },
   Busy: {
@@ -157,10 +156,13 @@ export default function ListDev() {
   useEffect(() => {
     let filtered = [...talents];
 
-    if (searchTerm)
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter((t) =>
-        t.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+        t.fullName.toLowerCase().includes(searchLower) ||
+        (t.email && t.email.toLowerCase().includes(searchLower))
       );
+    }
 
     if (filterLocation)
       filtered = filtered.filter((t) => {
@@ -301,6 +303,11 @@ export default function ListDev() {
       <div className="flex-1 p-8">
         {/* Tiêu đề */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Danh sách nhân sự" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
@@ -429,7 +436,7 @@ export default function ListDev() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm theo tên nhân sự..."
+                  placeholder="Tìm kiếm theo tên hoặc email nhân sự..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -549,9 +556,6 @@ export default function ListDev() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
                     Email
                   </th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
-                    Khu vực
-                  </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase">
                     Trạng thái
                   </th>
@@ -566,7 +570,7 @@ export default function ListDev() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredTalents.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12">
+                    <td colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Users className="w-8 h-8 text-neutral-400" />
@@ -578,9 +582,6 @@ export default function ListDev() {
                   </tr>
                 ) : (
                   paginatedTalents.map((t, i) => {
-                    const locationName =
-                      locations.find((loc) => loc.id === t.locationId)?.name ||
-                      "—";
                     const partnerName =
                       partners.find((p) => p.id === t.currentPartnerId)?.companyName ||
                       "—";
@@ -606,12 +607,6 @@ export default function ListDev() {
                             <span className="text-sm text-neutral-700">{t.email || "—"}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-neutral-400" />
-                            <span className="text-sm text-neutral-700">{locationName}</span>
-                          </div>
-                        </td>
                         <td className="py-4 px-6 text-center">
                           {(() => {
                             const statusInfo = statusLabels[t.status] || {
@@ -629,15 +624,13 @@ export default function ListDev() {
                         </td>
                         <td className="py-4 px-6 text-center">
                           {t.userId ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                              <span className="text-sm text-green-700 font-medium">Đã có</span>
-                            </div>
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-green-50 border border-green-200 text-green-700 text-xs font-semibold">
+                              Đã có
+                            </span>
                           ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              <X className="w-4 h-4 text-neutral-400" />
-                              <span className="text-sm text-neutral-500">Chưa có</span>
-                            </div>
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-neutral-50 border border-neutral-200 text-neutral-500 text-xs font-semibold">
+                              Chưa có
+                            </span>
                           )}
                         </td>
                         <td className="py-4 px-6 text-center">
@@ -645,27 +638,27 @@ export default function ListDev() {
                             <Link
                               to={`/ta/developers/${t.id}`}
                               state={{ tab: 'cvs' }}
-                              className="group inline-flex items-center gap-1 px-2 py-1.5 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
+                              className="group inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 rounded-lg transition-all duration-300 shadow-sm hover:shadow-md"
                             >
-                              <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                              <span className="text-xs font-medium hidden sm:inline">Xem</span>
+                              <Eye className="w-4 h-4" />
+                              <span className="text-xs font-medium">Xem</span>
                             </Link>
                             {t.status === "Working" && !t.userId && (
                               <button
                                 onClick={() => handleCreateAccount(t)}
                                 disabled={isCreatingAccount === t.id}
-                                className="group inline-flex items-center gap-1 px-2 py-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all duration-300 hover:scale-105 transform disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="group inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300 hover:text-green-700 rounded-lg transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-green-200"
                                 title="Cấp tài khoản"
                               >
                                 {isCreatingAccount === t.id ? (
                                   <>
                                     <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
-                                    <span className="text-xs font-medium hidden sm:inline">Đang tạo...</span>
+                                    <span className="text-xs font-medium">Đang tạo...</span>
                                   </>
                                 ) : (
                                   <>
-                                    <UserPlus className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    <span className="text-xs font-medium hidden sm:inline">Cấp account</span>
+                                    <UserPlus className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Cấp account</span>
                                   </>
                                 )}
                               </button>

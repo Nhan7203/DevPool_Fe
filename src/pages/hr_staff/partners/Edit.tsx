@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { partnerService, type Partner, type PartnerPayload } from "../../../services/Partner";
+import { partnerService, type Partner, type PartnerPayload, PartnerType } from "../../../services/Partner";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -23,6 +23,8 @@ export default function PartnerEditPage() {
   const navigate = useNavigate();
   const [partner, setPartner] = useState<Partner | null>(null);
   const [formData, setFormData] = useState<PartnerPayload>({
+    code: "",
+    partnerType: PartnerType.Partner,
     companyName: "",
     taxCode: "",
     contactPerson: "",
@@ -44,6 +46,8 @@ export default function PartnerEditPage() {
         if (foundPartner) {
           setPartner(foundPartner);
           setFormData({
+            code: foundPartner.code ?? "",
+            partnerType: foundPartner.partnerType ?? PartnerType.Partner,
             companyName: foundPartner.companyName,
             taxCode: foundPartner.taxCode ?? "",
             contactPerson: foundPartner.contactPerson ?? "",
@@ -87,10 +91,23 @@ export default function PartnerEditPage() {
 
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     const newErrors = { ...errors };
+
+    // Validate code
+    if (name === 'code') {
+      if (value && value.trim() !== '') {
+        if (value.length > 50) {
+          newErrors.code = 'Mã đối tác không được vượt quá 50 ký tự';
+        } else {
+          delete newErrors.code;
+        }
+      } else {
+        newErrors.code = 'Mã đối tác là bắt buộc';
+      }
+    }
 
     // Validate taxCode - chỉ cho phép nhập số
     if (name === 'taxCode') {
@@ -125,7 +142,13 @@ export default function PartnerEditPage() {
     }
 
     setErrors(newErrors);
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Handle partnerType separately (it's a number)
+    if (name === 'partnerType') {
+      setFormData(prev => ({ ...prev, [name]: Number(value) as PartnerType }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 💾 Submit form
@@ -140,6 +163,12 @@ export default function PartnerEditPage() {
     }
 
     const newErrors: Record<string, string> = {};
+
+    if (!formData.code || formData.code.trim() === '') {
+      newErrors.code = "Mã đối tác là bắt buộc";
+    } else if (formData.code.length > 50) {
+      newErrors.code = "Mã đối tác không được vượt quá 50 ký tự";
+    }
 
     if (!formData.companyName.trim()) {
       newErrors.companyName = "Tên công ty là bắt buộc";
@@ -255,6 +284,46 @@ export default function PartnerEditPage() {
               </div>
             </div>
             <div className="p-6 space-y-6">
+              {/* Grid: Mã đối tác + Loại đối tác */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Mã đối tác <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    name="code"
+                    value={formData.code}
+                    onChange={handleChange}
+                    maxLength={50}
+                    placeholder="VD: KMS, FPT, VNG"
+                    required
+                    className={`w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl ${errors.code ? 'border-red-500 focus:border-red-500' : ''}`}
+                  />
+                  {errors.code && (
+                    <p className="mt-1 text-sm text-red-500">{errors.code}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Loại đối tác <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="partnerType"
+                    value={formData.partnerType}
+                    onChange={handleChange}
+                    required
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <option value={PartnerType.OwnCompany}>Công ty mình</option>
+                    <option value={PartnerType.Partner}>Đối tác</option>
+                    <option value={PartnerType.Individual}>Cá nhân/Freelancer</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Tên công ty */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">

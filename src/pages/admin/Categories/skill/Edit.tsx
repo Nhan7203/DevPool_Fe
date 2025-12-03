@@ -19,10 +19,16 @@ export default function SkillEditPage() {
   const navigate = useNavigate();
   const [skill, setSkill] = useState<Skill | null>(null);
   const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
-  const [formData, setFormData] = useState<{ skillGroupId: number; name: string; description?: string }>({
+  const [formData, setFormData] = useState<{
+    skillGroupId: number;
+    name: string;
+    description?: string;
+    isMandatory: boolean;
+  }>({
     skillGroupId: 0,
     name: "",
     description: "",
+    isMandatory: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,10 +48,11 @@ export default function SkillEditPage() {
         // Load skill data
         const data = await skillService.getById(Number(id));
         setSkill(data);
-        setFormData({ 
-          skillGroupId: data.skillGroupId, 
-          name: data.name, 
-          description: data.description ?? "" 
+        setFormData({
+          skillGroupId: data.skillGroupId,
+          name: data.name,
+          description: data.description ?? "",
+          isMandatory: data.isMandatory ?? false,
         });
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
@@ -58,9 +65,19 @@ export default function SkillEditPage() {
   }, [id]);
 
   // ✍️ Handle change form
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: name === 'skillGroupId' ? Number(value) : value }));
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    setFormData((prev) => ({
+      ...prev,
+      [name]:
+        name === "skillGroupId"
+          ? Number(value)
+          : type === "checkbox"
+          ? checked
+          : value,
+    }));
   };
 
   // 💾 Submit form
@@ -240,6 +257,23 @@ export default function SkillEditPage() {
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                   placeholder="Nhập mô tả (tùy chọn)"
                 />
+              </div>
+
+              {/* Bắt buộc */}
+              <div>
+                <label className="flex items-center gap-2 text-gray-700 font-semibold mb-1">
+                  <input
+                    type="checkbox"
+                    name="isMandatory"
+                    checked={formData.isMandatory}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span>Kỹ năng bắt buộc cho các job thuộc nhóm này</span>
+                </label>
+                <p className="text-xs text-neutral-500 ml-6">
+                  Ảnh hưởng tới logic kiểm tra kỹ năng bắt buộc khi verify nhóm kỹ năng cho Talent.
+                </p>
               </div>
             </div>
           </div>

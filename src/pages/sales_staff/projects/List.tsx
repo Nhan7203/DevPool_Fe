@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type Project } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -15,8 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  Pause,
-  XCircle
+  Pause
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -79,12 +79,6 @@ export default function ProjectListPage() {
       value: projects.filter(p => p.status === 'Completed').length.toString(),
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
-    },
-    {
-      title: 'Đã Hủy',
-      value: projects.filter(p => p.status === 'Cancelled').length.toString(),
-      color: 'red',
-      icon: <XCircle className="w-6 h-6" />
     }
   ];
 
@@ -185,8 +179,7 @@ export default function ProjectListPage() {
     Planned: "Đã lên kế hoạch",
     Ongoing: "Đang thực hiện",
     OnHold: "Tạm dừng",
-    Completed: "Đã hoàn thành",
-    Cancelled: "Đã hủy"
+    Completed: "Đã hoàn thành"
   };
 
   if (loading) {
@@ -209,6 +202,11 @@ export default function ProjectListPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Dự án" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Dự án</h1>
@@ -361,7 +359,6 @@ export default function ProjectListPage() {
                       <option value="Ongoing">Đang thực hiện</option>
                       <option value="OnHold">Tạm dừng</option>
                       <option value="Completed">Đã hoàn thành</option>
-                      <option value="Cancelled">Đã hủy</option>
                     </select>
                   </div>
                   <button
@@ -491,8 +488,6 @@ export default function ProjectListPage() {
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : p.status === 'Completed'
                                 ? 'bg-blue-100 text-blue-800'
-                                : p.status === 'Cancelled'
-                                ? 'bg-red-100 text-red-800'
                                 : 'bg-neutral-100 text-neutral-800'
                             }`}
                           >

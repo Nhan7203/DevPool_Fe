@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../../../../components/common/Sidebar";
+import Breadcrumb from "../../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Button } from "../../../../components/ui/button";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../../services/JobRoleLevel";
@@ -86,7 +87,13 @@ export default function JobRoleLevelListPage() {
       <Sidebar items={sidebarItems} title="Admin" />
       <div className="flex-1 p-8">
         <div className="mb-8 animate-slide-up">
-          <div className="flex justify-between items-center mb-6">
+          <Breadcrumb
+            items={[
+              { label: "Danh mục" , to: "/admin/categories" },
+              { label: "Vị trí tuyển dụng" }
+            ]}
+          />
+          <div className="flex justify_between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Danh sách Vị trí Tuyển dụng (Job Role Levels)</h1>
             <p className="text-neutral-600 mt-1">Tổng hợp các vị trí tuyển dụng từ các công ty khách hàng.</p>

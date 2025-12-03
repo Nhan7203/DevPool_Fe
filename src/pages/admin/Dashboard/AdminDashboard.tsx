@@ -18,6 +18,13 @@ import {
   Code,
   Star,
   Grid,
+  Loader2,
+  AlertCircle,
+  BarChart3,
+  Activity,
+  FileCheck,
+  CreditCard,
+  AlertTriangle,
 } from 'lucide-react';
 import { userService } from '../../../services/User';
 import { skillService } from '../../../services/Skill';
@@ -29,9 +36,15 @@ import { jobRoleService } from '../../../services/JobRole';
 import { locationService } from '../../../services/location';
 import { marketService } from '../../../services/Market';
 import { industryService } from '../../../services/Industry';
+import { dashboardService, type OperationsDashboardModel } from '../../../services/Dashboard';
+
+type DashboardTab = 'overview' | 'operations';
 
 
 export default function AdminDashboard() {
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  
+  // Overview tab states
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -53,6 +66,11 @@ export default function AdminDashboard() {
   });
 
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
+
+  // Operations Dashboard states
+  const [loadingOperations, setLoadingOperations] = useState(false);
+  const [errorOperations, setErrorOperations] = useState<string | null>(null);
+  const [operationsData, setOperationsData] = useState<OperationsDashboardModel | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -133,6 +151,34 @@ export default function AdminDashboard() {
 
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'operations' && !operationsData && !loadingOperations && !errorOperations) {
+      fetchOperationsData();
+    }
+  }, [activeTab]);
+
+  const fetchOperationsData = async () => {
+    try {
+      setLoadingOperations(true);
+      setErrorOperations(null);
+      const data = await dashboardService.getOperationsDashboard();
+      setOperationsData(data);
+    } catch (err: any) {
+      // Chỉ log error nếu không phải là NOT_IMPLEMENTED (expected behavior)
+      if (err.code !== 'NOT_IMPLEMENTED' && !err.message?.includes('chưa được triển khai')) {
+        console.error('Error fetching operations data:', err);
+      }
+      
+      if (err.code === 'NOT_IMPLEMENTED' || err.message?.includes('chưa được triển khai')) {
+        setErrorOperations('NOT_IMPLEMENTED');
+      } else {
+        setErrorOperations(err.message || 'Không thể tải dữ liệu operations. Vui lòng thử lại sau.');
+      }
+    } finally {
+      setLoadingOperations(false);
+    }
+  };
 
   const kpiStats = [
     {
@@ -217,34 +263,21 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Admin" />
-        <div className="flex-1 flex justify-center items-center">
+  // Overview Dashboard Content
+  const renderOverviewDashboard = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Đang tải dữ liệu dashboard...</p>
+            <Loader2 className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Đang tải dữ liệu...</p>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Admin" />
-
-      <div className="flex-1 p-8">
-        {/* Header */}
-        <header className="mb-8 flex justify-between items-center">
-          <div className="mb-8 animate-slide-up">
-            <h1 className="text-3xl font-bold text-gray-900">Tổng Quan Hệ Thống</h1>
-            <p className="text-neutral-600 mt-1">Giám sát và quản lý toàn bộ hoạt động DevPool</p>
-          </div>
-        </header>
-
-
+    return (
+      <div className="space-y-6">
         {/* KPI Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
           {kpiStats.map((stat, index) => (
@@ -393,6 +426,305 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // Operations Dashboard Content
+  const renderOperationsDashboard = () => {
+    if (loadingOperations) {
+      return (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Đang tải dữ liệu operations...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (errorOperations) {
+      if (errorOperations === 'NOT_IMPLEMENTED' || errorOperations.includes('chưa được triển khai')) {
+        return (
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="text-center bg-amber-50 border border-amber-200 rounded-2xl p-8 max-w-lg">
+              <BarChart3 className="w-16 h-16 text-amber-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-amber-900 mb-2">Chức năng đang phát triển</h3>
+              <p className="text-amber-700 mb-4">
+                Operations Dashboard đang được phát triển và sẽ sớm có mặt trong phiên bản tiếp theo.
+              </p>
+              <button
+                onClick={() => setActiveTab('overview')}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Chuyển sang Tổng quan
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-center bg-red-50 border border-red-200 rounded-2xl p-8 max-w-md">
+            <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+            <p className="text-red-800 font-medium mb-2">Không thể tải dữ liệu</p>
+            <p className="text-red-600 text-sm mb-4">{errorOperations}</p>
+            <button
+              onClick={fetchOperationsData}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Thử lại
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (!operationsData) return null;
+
+    const getPriorityColor = (priority: string) => {
+      if (priority === 'High') return 'text-red-600 bg-red-50';
+      if (priority === 'Medium') return 'text-amber-600 bg-amber-50';
+      return 'text-blue-600 bg-blue-50';
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Contract Status Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Total Contracts</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{operationsData.totalContracts}</p>
+              </div>
+              <FileCheck className="w-8 h-8 text-primary-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <p className="text-sm font-medium text-neutral-600">Draft</p>
+            <p className="text-2xl font-bold text-gray-600 mt-2">{operationsData.draftContracts}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <p className="text-sm font-medium text-neutral-600">Submitted</p>
+            <p className="text-2xl font-bold text-blue-600 mt-2">{operationsData.submittedContracts}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <p className="text-sm font-medium text-neutral-600">Verified</p>
+            <p className="text-2xl font-bold text-cyan-600 mt-2">{operationsData.verifiedContracts}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <p className="text-sm font-medium text-neutral-600">Approved</p>
+            <p className="text-2xl font-bold text-green-600 mt-2">{operationsData.approvedContracts}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <p className="text-sm font-medium text-neutral-600">Rejected</p>
+            <p className="text-2xl font-bold text-red-600 mt-2">{operationsData.rejectedContracts}</p>
+          </div>
+        </div>
+
+        {/* Payment Status Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Total Payments</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{operationsData.totalPayments}</p>
+              </div>
+              <CreditCard className="w-8 h-8 text-primary-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Pending</p>
+            <p className="text-2xl font-bold text-amber-600 mt-2">{operationsData.pendingPayments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Processing</p>
+            <p className="text-2xl font-bold text-blue-600 mt-2">{operationsData.processingPayments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Invoiced</p>
+            <p className="text-2xl font-bold text-purple-600 mt-2">{operationsData.invoicedPayments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Partially Paid</p>
+            <p className="text-2xl font-bold text-cyan-600 mt-2">{operationsData.partiallyPaidPayments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Paid</p>
+            <p className="text-2xl font-bold text-green-600 mt-2">{operationsData.paidPayments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Overdue</p>
+            <p className="text-2xl font-bold text-red-600 mt-2">{operationsData.overduePayments}</p>
+          </div>
+        </div>
+
+        {/* Processing Times & Bottlenecks */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing Times</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-neutral-600">Average Contract Processing</p>
+                <p className="text-2xl font-bold text-primary-600 mt-1">
+                  {Math.round(operationsData.averageContractProcessingTime)} ngày
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-neutral-600">Average Payment Processing</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">
+                  {Math.round(operationsData.averagePaymentProcessingTime)} ngày
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Document Status</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-neutral-600">Total Documents</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{operationsData.totalDocuments}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-neutral-600">Client Documents</p>
+                  <p className="text-xl font-semibold text-blue-600 mt-1">{operationsData.clientDocuments}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-600">Partner Documents</p>
+                  <p className="text-xl font-semibold text-green-600 mt-1">{operationsData.partnerDocuments}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Actions */}
+        {operationsData.pendingActions && operationsData.pendingActions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Pending Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {operationsData.pendingActions.map((action, index) => (
+                <div key={index} className="p-4 bg-gray-50 rounded-lg border border-neutral-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-gray-900">{action.actionType}</p>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(action.priority)}`}>
+                      {action.priority}
+                    </span>
+                  </div>
+                  <p className="text-2xl font-bold text-primary-600">{action.count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Bottlenecks */}
+        {operationsData.bottlenecks && operationsData.bottlenecks.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              Bottlenecks
+            </h2>
+            <div className="space-y-3">
+              {operationsData.bottlenecks.slice(0, 5).map((bottleneck, index) => (
+                <div key={index} className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-red-900">{bottleneck.stage}</p>
+                    <span className="text-red-600 font-semibold">{bottleneck.stuckItems} items</span>
+                  </div>
+                  <p className="text-sm text-red-700 mb-1">
+                    Average stuck: {Math.round(bottleneck.averageStuckDays)} ngày
+                  </p>
+                  <p className="text-sm text-red-600">{bottleneck.reason}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Activities */}
+        {operationsData.recentActivities && operationsData.recentActivities.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h2>
+            <div className="space-y-3">
+              {operationsData.recentActivities.slice(0, 10).map((activity, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-neutral-200">
+                  <Activity className="w-5 h-5 text-primary-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{activity.description}</p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-neutral-600">
+                      <span>{activity.activityType}</span>
+                      <span>•</span>
+                      <span>{activity.userName}</span>
+                      <span>•</span>
+                      <span>{new Date(activity.timestamp).toLocaleString('vi-VN')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (loading && activeTab === 'overview') {
+    return (
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar items={sidebarItems} title="Admin" />
+        <div className="flex-1 flex justify-center items-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Đang tải dữ liệu dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex bg-gray-50 min-h-screen">
+      <Sidebar items={sidebarItems} title="Admin" />
+
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Tổng Quan Hệ Thống</h1>
+          <p className="text-neutral-600 mt-1">Giám sát và quản lý toàn bộ hoạt động DevPool</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-6 border-b border-neutral-200">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === 'overview'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Tổng quan
+            </button>
+            <button
+              onClick={() => setActiveTab('operations')}
+              className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === 'operations'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Operations
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' && renderOverviewDashboard()}
+        {activeTab === 'operations' && renderOperationsDashboard()}
       </div>
     </div>
   );

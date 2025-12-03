@@ -95,7 +95,9 @@ export default function ProjectCreatePage() {
 
   const toUTCDateString = (dateStr?: string | null) => {
     if (!dateStr) return null;
-    const d = new Date(dateStr + "T00:00:00");
+    // Parse date string (YYYY-MM-DD) và tạo UTC date để tránh timezone offset
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     return d.toISOString();
   };
 
@@ -733,7 +735,6 @@ export default function ProjectCreatePage() {
                   <option value="Ongoing">Đang thực hiện (Ongoing)</option>
                   <option value="Completed">Đã hoàn thành (Completed)</option>
                   <option value="OnHold">Tạm dừng (OnHold)</option>
-                  <option value="Cancelled">Đã hủy (Cancelled)</option>
                 </select>
                 {!form.endDate ? (
                   <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">

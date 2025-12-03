@@ -1,4 +1,4 @@
-import { BarChart3, Grid, Users, History } from "lucide-react";
+import { BarChart3, Grid, Users, History, UserCog } from "lucide-react";
 
 export const sidebarItems = [
   {
@@ -55,6 +55,7 @@ export const sidebarItems = [
         subItems: [
           { label: 'Lĩnh vực', href: '/admin/categories/industries' },
           { label: 'Loại tài liệu', href: '/admin/categories/document-types' },
+          { label: 'Chuyên gia đánh giá', href: '/admin/categories/experts', icon: UserCog },
         ]
       },
       // { label: 'Kiểu làm việc', href: '/admin/categories/working-styles' },

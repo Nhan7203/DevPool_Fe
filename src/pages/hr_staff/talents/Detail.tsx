@@ -9,6 +9,12 @@ import { partnerService, type Partner } from "../../../services/Partner";
 import { talentCVService, type TalentCV, type TalentCVCreate, type CVAnalysisComparisonResponse } from "../../../services/TalentCV";
 import { talentProjectService, type TalentProject } from "../../../services/TalentProject";
 import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
+import {
+  talentSkillGroupAssessmentService,
+  type TalentSkillGroupAssessment,
+  type SkillGroupVerificationStatus,
+} from "../../../services/TalentSkillGroupAssessment";
+import { expertService, type Expert } from "../../../services/Expert";
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
@@ -17,6 +23,7 @@ import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum 
 import { talentCertificateService, type TalentCertificate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { talentAvailableTimeService, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
+import { clientTalentBlacklistService, type ClientTalentBlacklist } from "../../../services/ClientTalentBlacklist";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
@@ -58,6 +65,7 @@ import {
   Save,
   Search,
   Layers,
+  Ban,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
@@ -81,13 +89,44 @@ export default function TalentDetailPage() {
   const [partnerName, setPartnerName] = useState<string>("—");
   const [talentCVs, setTalentCVs] = useState<(TalentCV & { jobRoleLevelName?: string })[]>([]);
   const [talentProjects, setTalentProjects] = useState<TalentProject[]>([]);
-  const [talentSkills, setTalentSkills] = useState<(TalentSkill & { skillName: string })[]>([]);
+  const [talentSkills, setTalentSkills] = useState<
+    (TalentSkill & { skillName: string; skillGroupId?: number })[]
+  >([]);
   const [workExperiences, setWorkExperiences] = useState<TalentWorkExperience[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<(TalentJobRoleLevel & { jobRoleLevelName: string })[]>([]);
   const [certificates, setCertificates] = useState<(TalentCertificate & { certificateTypeName: string })[]>([]);
   const [availableTimes, setAvailableTimes] = useState<TalentAvailableTime[]>([]);
   const [lookupSkills, setLookupSkills] = useState<Skill[]>([]);
   const [lookupSkillGroups, setLookupSkillGroups] = useState<SkillGroup[]>([]);
+
+  // 🔍 Trạng thái verify theo SkillGroup
+  const [skillGroupVerificationStatuses, setSkillGroupVerificationStatuses] = useState<
+    Record<number, SkillGroupVerificationStatus>
+  >({});
+  const [skillGroupVerifyModal, setSkillGroupVerifyModal] = useState<{
+    isOpen: boolean;
+    skillGroupId?: number;
+    skillGroupName?: string;
+  }>({ isOpen: false });
+  const [verifyExpertName, setVerifyExpertName] = useState<string>("");
+  const [verifyNote, setVerifyNote] = useState<string>("");
+  const [verifyResult, setVerifyResult] = useState<boolean>(true); // true = pass, false = fail
+  const [expertsForSkillGroup, setExpertsForSkillGroup] = useState<Expert[]>([]);
+  const [expertsForSkillGroupLoading, setExpertsForSkillGroupLoading] =
+    useState<boolean>(false);
+  const [selectedExpertId, setSelectedExpertId] = useState<number | "">("");
+  const [skillSnapshotEnabled, setSkillSnapshotEnabled] = useState<boolean>(true);
+  const [showAllSkillsInVerifyModal, setShowAllSkillsInVerifyModal] =
+    useState<boolean>(false);
+  const [isVerifyingSkillGroup, setIsVerifyingSkillGroup] = useState<boolean>(false);
+  const [historyModal, setHistoryModal] = useState<{
+    isOpen: boolean;
+    skillGroupId?: number;
+    skillGroupName?: string;
+    items: TalentSkillGroupAssessment[];
+    loading: boolean;
+  }>({ isOpen: false, items: [], loading: false });
+  const [showOnlyUnverifiedSkills, setShowOnlyUnverifiedSkills] = useState<boolean>(false);
   const [lookupJobRoleLevels, setLookupJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [lookupCertificateTypes, setLookupCertificateTypes] = useState<CertificateType[]>([]);
   const [analysisResult, setAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
@@ -115,6 +154,7 @@ export default function TalentDetailPage() {
   };
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences">(initialTab || "cvs");
+  const [basicInfoTab, setBasicInfoTab] = useState<"info" | "blacklist">("info"); // Tab cho phần Thông tin cơ bản
 
   // Inline form states
   const [showInlineForm, setShowInlineForm] = useState<"project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime" | "cv" | null>(null);
@@ -205,6 +245,11 @@ export default function TalentDetailPage() {
   const [skillGroupSearchQuery, setSkillGroupSearchQuery] = useState<string>("");
   const [isSkillGroupDropdownOpen, setIsSkillGroupDropdownOpen] = useState(false);
   const [selectedSkillGroupId, setSelectedSkillGroupId] = useState<number | undefined>(undefined);
+  // Tìm kiếm và lọc cho danh sách kỹ năng hiện có
+  const [skillListSearchQuery, setSkillListSearchQuery] = useState<string>("");
+  const [skillGroupListSearchQuery, setSkillGroupListSearchQuery] = useState<string>("");
+  const [isSkillGroupListDropdownOpen, setIsSkillGroupListDropdownOpen] = useState(false);
+  const [selectedSkillGroupIdForList, setSelectedSkillGroupIdForList] = useState<number | undefined>(undefined);
   const [certificateTypeSearch, setCertificateTypeSearch] = useState<string>("");
   const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState(false);
   const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
@@ -301,17 +346,21 @@ export default function TalentDetailPage() {
   // Pagination states for each section
   const [pageCVs, setPageCVs] = useState(1);
   const [pageProjects, setPageProjects] = useState(1);
-  const [pageSkills, setPageSkills] = useState(1);
   const [pageExperiences, setPageExperiences] = useState(1);
   const [pageJobRoleLevels, setPageJobRoleLevels] = useState(1);
   const [pageCertificates, setPageCertificates] = useState(1);
   const [pageAvailableTimes, setPageAvailableTimes] = useState(1);
+  const [pageSkills, setPageSkills] = useState(1);
   const itemsPerPage = 9;
+  const skillGroupsPerPage = 3; // Phân trang cho nhóm kỹ năng: 3 nhóm mỗi trang
 
   // Collapse/Expand states for each section
   const [isCVsExpanded, setIsCVsExpanded] = useState(true);
   // State để quản lý việc collapse/expand CV không hoạt động theo từng jobRoleLevelName
   const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
+
+  // Blacklist state
+  const [blacklists, setBlacklists] = useState<ClientTalentBlacklist[]>([]);
 
   const talentName = talent?.fullName ?? "";
 
@@ -320,24 +369,38 @@ export default function TalentDetailPage() {
       try {
         setLoading(true);
 
-        const talentData = await talentService.getById(Number(id));
+        // Fetch talent data và các lookup services song song (không phụ thuộc lẫn nhau)
+        const [
+          talentData,
+          allJobRoleLevels,
+          allSkills,
+          skillGroupsData,
+          allCertificateTypes,
+          partners,
+          blacklistData
+        ] = await Promise.all([
+          talentService.getById(Number(id)),
+          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true }),
+          skillService.getAll(),
+          skillGroupService.getAll({ excludeDeleted: true }).catch(() => null),
+          certificateTypeService.getAll(),
+          partnerService.getAll().catch(() => []),
+          clientTalentBlacklistService.getByTalentId(Number(id), true).catch(() => null)
+        ]);
 
-        // Resolve location name
-        if (talentData.locationId) {
-          try {
-            const location = await locationService.getById(talentData.locationId);
-            setLocationName(location?.name ?? "—");
-          } catch { }
-        }
+        // Set talent data ngay để UI có thể hiển thị
+        setTalent(talentData);
+
+        // Resolve location name (song song với các calls khác nếu có thể)
+        const locationPromise = talentData.locationId
+          ? locationService.getById(talentData.locationId).catch(() => null)
+          : Promise.resolve(null);
 
         // Resolve partner name
-        try {
-          const partner = await partnerService.getAll();
-          const talentPartner = partner.find((p: Partner) => p.id === talentData.currentPartnerId);
-          setPartnerName(talentPartner?.companyName ?? "—");
-        } catch { }
+        const talentPartner = partners.find((p: Partner) => p.id === talentData.currentPartnerId);
+        setPartnerName(talentPartner?.companyName ?? "—");
 
-        // Fetch all related data
+        // Fetch all related talent data song song
         const [
           cvs,
           projects,
@@ -345,7 +408,8 @@ export default function TalentDetailPage() {
           experiences,
           jobRoleLevelsData,
           certificatesData,
-          availableTimesData
+          availableTimesData,
+          location
         ] = await Promise.all([
           talentCVService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentProjectService.getAll({ talentId: Number(id), excludeDeleted: true }),
@@ -353,17 +417,46 @@ export default function TalentDetailPage() {
           talentWorkExperienceService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentCertificateService.getAll({ talentId: Number(id), excludeDeleted: true }),
-          talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true })
+          talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true }),
+          locationPromise
         ]);
 
+        // Set location name
+        if (location) {
+          setLocationName(location.name ?? "—");
+        }
+
+        // Set lookup data
+        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+        setLookupJobRoleLevels(jobRoleLevelsArray);
+        setLookupSkills(allSkills);
+        
+        // Set skill groups
+        try {
+          const skillGroupsArray = Array.isArray(skillGroupsData)
+            ? skillGroupsData
+            : (Array.isArray((skillGroupsData as any)?.items)
+              ? (skillGroupsData as any).items
+              : (Array.isArray((skillGroupsData as any)?.data)
+                ? (skillGroupsData as any).data
+                : []));
+          setLookupSkillGroups(skillGroupsArray);
+        } catch (skillGroupsError) {
+          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
+          setLookupSkillGroups([]);
+        }
+
+        setLookupCertificateTypes(allCertificateTypes);
+
+        // Set blacklist
+        if (blacklistData) {
+          setBlacklists(Array.isArray(blacklistData) ? blacklistData : blacklistData?.data || []);
+        }
+
+        // Set projects, experiences, available times
         setTalentProjects(projects);
         setWorkExperiences(experiences);
         setAvailableTimes(availableTimesData);
-
-        // Fetch job role levels once and reuse for both CVs and job role levels mapping
-        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
-        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
-        setLookupJobRoleLevels(jobRoleLevelsArray);
         
         // Map CVs with job role level names
         const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
@@ -390,35 +483,48 @@ export default function TalentDetailPage() {
         // Thu gọn tất cả các nhóm CV không hoạt động mặc định
         const inactiveGroups = new Set<string>();
         sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
-        if (!cv.isActive && cv.jobRoleLevelName) {
-          inactiveGroups.add(cv.jobRoleLevelName);
-        }
-      });
+          if (!cv.isActive && cv.jobRoleLevelName) {
+            inactiveGroups.add(cv.jobRoleLevelName);
+          }
+        });
 
-      // Fetch skill names
-        const allSkills = await skillService.getAll();
-        setLookupSkills(allSkills);
-        
-        // Fetch skill groups
-        try {
-          const skillGroupsData = await skillGroupService.getAll({ excludeDeleted: true });
-          const skillGroupsArray = Array.isArray(skillGroupsData)
-            ? skillGroupsData
-            : (Array.isArray((skillGroupsData as any)?.items)
-              ? (skillGroupsData as any).items
-              : (Array.isArray((skillGroupsData as any)?.data)
-                ? (skillGroupsData as any).data
-                : []));
-          setLookupSkillGroups(skillGroupsArray);
-        } catch (skillGroupsError) {
-          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
-          setLookupSkillGroups([]);
-        }
+        // Map skills with names
         const skillsWithNames = skills.map((skill: TalentSkill) => {
           const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
-          return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
+          return {
+            ...skill,
+            skillName: skillInfo?.name ?? "Unknown Skill",
+            skillGroupId: skillInfo?.skillGroupId,
+          };
         });
         setTalentSkills(skillsWithNames);
+
+        // Sau khi có danh sách kỹ năng, tải trạng thái verify theo SkillGroup
+        const distinctSkillGroupIds = Array.from(
+          new Set(
+            skillsWithNames
+              .map((s: any) => s.skillGroupId)
+              .filter((gid: number | undefined) => typeof gid === "number")
+          )
+        ) as number[];
+
+        if (distinctSkillGroupIds.length > 0 && id) {
+          try {
+            const statuses =
+              await talentSkillGroupAssessmentService.getVerificationStatuses(
+                Number(id),
+                distinctSkillGroupIds
+              );
+            const statusMap: Record<number, SkillGroupVerificationStatus> = {};
+            statuses.forEach((st) => {
+              statusMap[st.skillGroupId] = st;
+            });
+
+            setSkillGroupVerificationStatuses(statusMap);
+          } catch (err) {
+            console.error("❌ Lỗi khi tải trạng thái verify skill group:", err);
+          }
+        }
 
         // Map job role levels with names (reuse allJobRoleLevels)
         const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
@@ -427,17 +533,12 @@ export default function TalentDetailPage() {
         });
         setJobRoleLevels(jobRoleLevelsWithNames);
 
-        // Fetch certificate type names
-        const allCertificateTypes = await certificateTypeService.getAll();
-        setLookupCertificateTypes(allCertificateTypes);
+        // Map certificates with names
         const certificatesWithNames = certificatesData.map((cert: TalentCertificate) => {
           const certTypeInfo = allCertificateTypes.find((c: CertificateType) => c.id === cert.certificateTypeId);
           return { ...cert, certificateTypeName: certTypeInfo?.name ?? "Unknown Certificate" };
         });
         setCertificates(certificatesWithNames);
-
-        setTalent(talentData);
-        console.log("Nhân sự chi tiết:", talentData);
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết nhân sự:", err);
       } finally {
@@ -478,9 +579,10 @@ export default function TalentDetailPage() {
     setPageProjects(1);
   }, [talentProjects.length]);
 
+  // Reset pagination for skills when filters change or tab changes
   useEffect(() => {
     setPageSkills(1);
-  }, [talentSkills.length]);
+  }, [skillListSearchQuery, selectedSkillGroupIdForList, showOnlyUnverifiedSkills, talentSkills.length, activeTab]);
 
   useEffect(() => {
     setPageExperiences(1);
@@ -622,6 +724,28 @@ export default function TalentDetailPage() {
     } catch {
       return url;
     }
+  };
+
+  const handleOpenCVPreviewFromAnalysis = () => {
+    let url: string | null = null;
+
+    if (analysisResultCVId && talentCVs.length) {
+      const cv = talentCVs.find(c => c.id === analysisResultCVId && !!c.cvFileUrl);
+      if (cv && cv.cvFileUrl) {
+        url = normalizeFirebaseUrl(cv.cvFileUrl);
+      }
+    }
+
+    if (!url) {
+      url = uploadedCVUrl || cvPreviewUrl;
+    }
+
+    if (!url) {
+      alert("Không tìm thấy file CV để xem.");
+      return;
+    }
+
+    window.open(url, "_blank");
   };
 
   const handleAnalyzeCVFromUrl = async (cv: TalentCV & { jobRoleLevelName?: string }) => {
@@ -956,9 +1080,6 @@ export default function TalentDetailPage() {
     },
     [adminUserIds, id, isSuggestionPending, talentName]
   );
-
-
-
 
 
 
@@ -1440,6 +1561,34 @@ export default function TalentDetailPage() {
         return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
       });
       setTalentSkills(skillsWithNames);
+
+      // Refresh status để check needsReverification (khi xóa skill từ group đã verify)
+      const distinctSkillGroupIds = Array.from(
+        new Set(
+          skillsWithNames
+            .map((s: any) => s.skillGroupId)
+            .filter((gid: number | undefined) => typeof gid === "number")
+        )
+      ) as number[];
+
+      if (distinctSkillGroupIds.length > 0) {
+        try {
+          const statuses =
+            await talentSkillGroupAssessmentService.getVerificationStatuses(
+              Number(id),
+              distinctSkillGroupIds
+            );
+          if (Array.isArray(statuses)) {
+            const statusMap: Record<number, SkillGroupVerificationStatus> = {};
+            statuses.forEach((st) => {
+              statusMap[st.skillGroupId] = st;
+            });
+            setSkillGroupVerificationStatuses(statusMap);
+          }
+        } catch (statusError) {
+          console.error("❌ Lỗi khi refresh trạng thái verify sau khi xóa skill:", statusError);
+        }
+      }
     } catch (err) {
       console.error("❌ Lỗi khi xóa kỹ năng:", err);
       alert("Không thể xóa kỹ năng!");
@@ -1518,6 +1667,339 @@ export default function TalentDetailPage() {
     } catch (err) {
       console.error("❌ Lỗi khi xóa chứng chỉ:", err);
       alert("Không thể xóa chứng chỉ!");
+    }
+  };
+
+  // ✅ Helper function để đóng modal verify và reset state
+  const handleCloseVerifySkillGroupModal = () => {
+    setSkillGroupVerifyModal({ isOpen: false });
+    setVerifyExpertName("");
+    setVerifyNote("");
+    setVerifyResult(true);
+    setSelectedExpertId("");
+    setIsVerifyingSkillGroup(false);
+  };
+
+  // ✅ Xử lý verify kỹ năng theo SkillGroup cho nhân sự (verify cả nhóm)
+  const handleOpenVerifySkillGroup = (skillGroupId: number | undefined) => {
+    if (!skillGroupId) {
+      alert("⚠️ Kỹ năng này chưa được gắn nhóm kỹ năng, không thể verify theo group.");
+      return;
+    }
+    const group = lookupSkillGroups.find((g) => g.id === skillGroupId);
+    setSkillGroupVerifyModal({
+      isOpen: true,
+      skillGroupId,
+      skillGroupName: group?.name ?? "Nhóm kỹ năng",
+    });
+    setVerifyExpertName("");
+    setVerifyNote("");
+    setVerifyResult(true); // Mặc định là verify pass
+    setSelectedExpertId("");
+    setExpertsForSkillGroup([]);
+    setSkillSnapshotEnabled(true);
+    setShowAllSkillsInVerifyModal(false);
+    setIsVerifyingSkillGroup(false);
+    // Tải danh sách expert đã được gán nhóm kỹ năng này (nếu có)
+    const fetchExperts = async () => {
+      try {
+        setExpertsForSkillGroupLoading(true);
+        const data = await expertService.getAll({ excludeDeleted: true });
+        const arr: Expert[] = Array.isArray(data)
+          ? data
+          : Array.isArray((data as any)?.items)
+          ? (data as any).items
+          : Array.isArray((data as any)?.data)
+          ? (data as any).data
+          : [];
+
+        const result: Expert[] = [];
+        // Duyệt qua từng expert để xem có gán group này không
+        for (const ex of arr) {
+          try {
+            const groups = await expertService.getSkillGroups(ex.id);
+            if (groups.some((g) => g.skillGroupId === skillGroupId)) {
+              result.push(ex);
+            }
+          } catch (err) {
+            console.warn("Không thể tải nhóm kỹ năng của expert", ex.id, err);
+          }
+        }
+        setExpertsForSkillGroup(result);
+      } catch (err) {
+        console.error("❌ Lỗi khi tải danh sách chuyên gia cho skill group:", err);
+        setExpertsForSkillGroup([]);
+      } finally {
+        setExpertsForSkillGroupLoading(false);
+      }
+    };
+    fetchExperts();
+  };
+
+  // ✅ Xử lý vô hiệu hóa (invalidate) đánh giá nhóm kỹ năng
+  const handleInvalidateSkillGroup = async (skillGroupId: number | undefined) => {
+    if (!id || !skillGroupId) {
+      alert("⚠️ Không thể vô hiệu hóa đánh giá cho nhóm kỹ năng này.");
+      return;
+    }
+
+    const reason = window.prompt(
+      "Nhập lý do vô hiệu hóa đánh giá nhóm kỹ năng này (reason):",
+      ""
+    );
+    if (reason === null) return; // Người dùng bấm Cancel
+
+    try {
+      await talentSkillGroupAssessmentService.invalidateAssessment(
+        Number(id),
+        skillGroupId,
+        reason || undefined
+      );
+
+      // Đợi một chút để BE xử lý xong
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Refresh lại trạng thái để cập nhật UI cho tất cả nhóm kỹ năng
+      const distinctSkillGroupIds = Array.from(
+        new Set(
+          talentSkills
+            .map((s: any) => s.skillGroupId)
+            .filter((gid: number | undefined) => typeof gid === "number")
+        )
+      ) as number[];
+
+      if (distinctSkillGroupIds.length > 0) {
+        const statuses =
+          await talentSkillGroupAssessmentService.getVerificationStatuses(
+            Number(id),
+            distinctSkillGroupIds
+          );
+
+        if (Array.isArray(statuses)) {
+          const statusMap: Record<number, SkillGroupVerificationStatus> = {};
+          statuses.forEach((st) => {
+            statusMap[st.skillGroupId] = st;
+          });
+          setSkillGroupVerificationStatuses(statusMap);
+        }
+      }
+
+      alert("✅ Đã vô hiệu hóa đánh giá nhóm kỹ năng thành công!");
+    } catch (err) {
+      console.error("❌ Lỗi khi invalidate assessment:", err);
+      alert("Không thể vô hiệu hóa đánh giá, vui lòng thử lại.");
+    }
+  };
+
+  const handleConfirmVerifySkillGroup = async () => {
+    if (!id || !skillGroupVerifyModal.skillGroupId) return;
+
+    // Validation: Tên chuyên gia là bắt buộc
+    if (!verifyExpertName.trim()) {
+      alert("⚠️ Vui lòng nhập tên chuyên gia chịu trách nhiệm verify.");
+      return;
+    }
+
+    // Validation: Ghi chú là bắt buộc khi verify fail
+    if (verifyResult === false && !verifyNote.trim()) {
+      alert("⚠️ Vui lòng nhập ghi chú lý do khi verify fail.");
+      return;
+    }
+
+    // Hiển thị loading ngay lập tức
+    setIsVerifyingSkillGroup(true);
+
+    try {
+      const groupId = skillGroupVerifyModal.skillGroupId;
+
+      // Lấy danh sách kỹ năng thuộc skillGroup hiện tại
+      const skillsInGroup = talentSkills.filter(
+        (s: any) => s.skillGroupId === groupId
+      );
+      if (skillsInGroup.length === 0) {
+        alert("⚠️ Không tìm thấy kỹ năng nào trong nhóm để verify.");
+        setIsVerifyingSkillGroup(false);
+        return;
+      }
+
+      const skillsSnapshotArray = skillsInGroup.map((s: any) => ({
+        skillId: s.skillId,
+        skillName: s.skillName,
+        level: s.level,
+        yearsExp: s.yearsExp,
+      }));
+
+      const payload = {
+        talentId: Number(id),
+        skillGroupId: groupId,
+        assessmentDate: new Date().toISOString(),
+        isVerified: verifyResult, // Sử dụng giá trị từ state (có thể là true hoặc false)
+        expertId: typeof selectedExpertId === "number" ? selectedExpertId : undefined,
+        verifiedByName: verifyExpertName || undefined,
+        note: verifyNote || undefined,
+        skillSnapshot: verifyResult ? skillSnapshotEnabled ? JSON.stringify(skillsSnapshotArray) : undefined : undefined,
+        verifiedSkills: verifyResult ? skillsInGroup.map((s: any) => ({
+          skillId: s.skillId,
+          level: s.level,
+          yearsExp: s.yearsExp,
+        })) : undefined, // Chỉ gửi verifiedSkills khi verify pass
+      };
+
+      await talentSkillGroupAssessmentService.verifySkillGroup(payload);
+
+      // Đóng modal và hiển thị thông báo ngay lập tức
+      handleCloseVerifySkillGroupModal();
+
+      alert(verifyResult 
+        ? "✅ Đã verify nhóm kỹ năng thành công (Pass)!" 
+        : "⚠️ Đã đánh dấu nhóm kỹ năng không hợp lệ (Fail)!");
+
+      // Refresh status ở background (không block UI) - chỉ đợi một chút để backend xử lý xong
+      setTimeout(async () => {
+        try {
+          // Lấy tất cả skillGroupIds từ talentSkills hiện tại
+          const distinctSkillGroupIds = Array.from(
+            new Set(
+              talentSkills
+                .map((s: any) => s.skillGroupId)
+                .filter((gid: number | undefined) => typeof gid === "number")
+            )
+          ) as number[];
+
+          if (distinctSkillGroupIds.length > 0) {
+            // Chỉ retry 1 lần với delay ngắn để tối ưu tốc độ
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            
+            try {
+              const statuses =
+                await talentSkillGroupAssessmentService.getVerificationStatuses(
+                  Number(id),
+                  distinctSkillGroupIds
+                );
+              
+              if (Array.isArray(statuses)) {
+                const statusMap: Record<number, SkillGroupVerificationStatus> = {};
+                statuses.forEach((st) => {
+                  statusMap[st.skillGroupId] = st;
+                });
+                
+                // Kiểm tra và cập nhật status cho group vừa verify
+                const verifiedStatus = statusMap[groupId];
+                if (!verifiedStatus || verifiedStatus.isVerified !== verifyResult) {
+                  // Thử lấy từ getLatest nếu status chưa đúng
+                  try {
+                    const latest = await talentSkillGroupAssessmentService.getLatest(
+                      Number(id),
+                      groupId
+                    );
+                    if (latest && latest.isVerified === verifyResult && latest.isActive !== false) {
+                      statusMap[groupId] = {
+                        talentId: Number(id),
+                        skillGroupId: groupId,
+                        skillGroupName: skillGroupVerifyModal.skillGroupName || "",
+                        isVerified: latest.isVerified,
+                        lastVerifiedDate: latest.assessmentDate,
+                        lastVerifiedByExpertId: latest.expertId ?? undefined,
+                        lastVerifiedByExpertName: latest.verifiedByName ?? latest.expertName ?? undefined,
+                        needsReverification: false,
+                      };
+                    }
+                  } catch (latestError) {
+                    console.warn("Không thể lấy latest assessment:", latestError);
+                  }
+                }
+                
+                setSkillGroupVerificationStatuses(statusMap);
+              }
+            } catch (statusError) {
+              console.error("❌ Lỗi khi refresh trạng thái verify:", statusError);
+            }
+          }
+        } catch (error) {
+          console.error("❌ Lỗi khi refresh trạng thái verify:", error);
+        }
+      }, 100);
+    } catch (err: any) {
+      setIsVerifyingSkillGroup(false);
+      console.error("❌ Lỗi khi verify nhóm kỹ năng:", err);
+      
+      // Xử lý lỗi thiếu mandatory skills (400 error)
+      const errorMessage = err?.message || err?.response?.data?.message || "Không thể verify nhóm kỹ năng, vui lòng thử lại.";
+      
+      if (errorMessage.includes("Missing mandatory skills") || errorMessage.includes("mandatory")) {
+        // Parse danh sách skills thiếu từ error message
+        const missingSkillsMatch = errorMessage.match(/Missing mandatory skills:\s*(.+)/i);
+        const missingSkillsList = missingSkillsMatch 
+          ? missingSkillsMatch[1].split(',').map((s: string) => s.trim())
+          : [];
+
+        // Lấy thông tin về skill group và mandatory skills
+        const groupId = skillGroupVerifyModal.skillGroupId;
+        const group = lookupSkillGroups.find((g) => g.id === groupId);
+        const groupName = group?.name || skillGroupVerifyModal.skillGroupName || `Nhóm kỹ năng #${groupId}`;
+        
+        // Lấy tất cả mandatory skills trong group
+        const allMandatorySkillsInGroup = lookupSkills.filter(
+          (s: Skill) => s.skillGroupId === groupId && s.isMandatory === true
+        );
+        
+        // Lấy skills mandatory mà talent đang có
+        const talentMandatorySkills = talentSkills
+          .filter((ts: any) => ts.skillGroupId === groupId)
+          .map((ts: any) => {
+            const skillInfo = lookupSkills.find((s: Skill) => s.id === ts.skillId);
+            return skillInfo && skillInfo.isMandatory ? skillInfo : null;
+          })
+          .filter(Boolean) as Skill[];
+
+        // Tạo message chi tiết
+        let detailMessage = `⚠️ Không thể verify nhóm kỹ năng "${groupName}"!\n\n`;
+        detailMessage += `📋 Nhóm này có ${allMandatorySkillsInGroup.length} kỹ năng bắt buộc (mandatory):\n`;
+        allMandatorySkillsInGroup.forEach((skill: Skill) => {
+          const hasSkill = talentMandatorySkills.some((ts: Skill) => ts.id === skill.id);
+          detailMessage += `  ${hasSkill ? '✅' : '❌'} ${skill.name}\n`;
+        });
+        
+        if (missingSkillsList.length > 0) {
+          detailMessage += `\n❌ Còn thiếu ${missingSkillsList.length} kỹ năng bắt buộc:\n`;
+          missingSkillsList.forEach((skillName: string) => {
+            detailMessage += `  • ${skillName}\n`;
+          });
+        }
+        
+        detailMessage += `\n💡 Vui lòng thêm tất cả kỹ năng bắt buộc vào nhóm kỹ năng này trước khi verify.`;
+        
+        alert(detailMessage);
+      } else {
+        alert(`❌ ${errorMessage}`);
+      }
+    }
+  };
+
+  const handleOpenHistorySkillGroup = async (skillGroupId?: number) => {
+    if (!id || !skillGroupId) return;
+    const group = lookupSkillGroups.find((g) => g.id === skillGroupId);
+    setHistoryModal({
+      isOpen: true,
+      skillGroupId,
+      skillGroupName: group?.name ?? "Nhóm kỹ năng",
+      items: [],
+      loading: true,
+    });
+    try {
+      const items = await talentSkillGroupAssessmentService.getAssessmentHistory(
+        Number(id),
+        skillGroupId
+      );
+      setHistoryModal((prev) => ({
+        ...prev,
+        items,
+        loading: false,
+      }));
+    } catch (err) {
+      console.error("❌ Lỗi khi tải lịch sử đánh giá skill group:", err);
+      alert("Không thể tải lịch sử đánh giá, vui lòng thử lại.");
+      setHistoryModal((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -1784,9 +2266,41 @@ export default function TalentDetailPage() {
       setLookupSkills(allSkills);
       const skillsWithNames = skills.map((skill: TalentSkill) => {
         const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
-        return { ...skill, skillName: skillInfo?.name ?? "Unknown Skill" };
+        return { 
+          ...skill, 
+          skillName: skillInfo?.name ?? "Unknown Skill",
+          skillGroupId: skillInfo?.skillGroupId,
+        };
       });
       setTalentSkills(skillsWithNames);
+
+      // Refresh status để check needsReverification (khi thêm skill mới vào group đã verify)
+      const distinctSkillGroupIds = Array.from(
+        new Set(
+          skillsWithNames
+            .map((s: any) => s.skillGroupId)
+            .filter((gid: number | undefined) => typeof gid === "number")
+        )
+      ) as number[];
+
+      if (distinctSkillGroupIds.length > 0) {
+        try {
+          const statuses =
+            await talentSkillGroupAssessmentService.getVerificationStatuses(
+              Number(id),
+              distinctSkillGroupIds
+            );
+          if (Array.isArray(statuses)) {
+            const statusMap: Record<number, SkillGroupVerificationStatus> = {};
+            statuses.forEach((st) => {
+              statusMap[st.skillGroupId] = st;
+            });
+            setSkillGroupVerificationStatuses(statusMap);
+          }
+        } catch (statusError) {
+          console.error("❌ Lỗi khi refresh trạng thái verify sau khi thêm skill:", statusError);
+        }
+      }
     } catch (err) {
       console.error("❌ Lỗi khi thêm kỹ năng:", err);
       alert("Không thể thêm kỹ năng!");
@@ -2337,7 +2851,7 @@ export default function TalentDetailPage() {
           summaryParts.push(`Tên: ${result.basicInfo.suggested.fullName}`);
         }
         if (result.skills && result.skills.newFromCV.length > 0) {
-          const skills = result.skills.newFromCV.slice(0, 5).map(s => s.skillName).join(', ');
+          const skills = result.skills.newFromCV.slice(0, 5).map((s: any) => s.skillName).join(', ');
           summaryParts.push(`Kỹ năng: ${skills}`);
         }
         if (summaryParts.length > 0) {
@@ -2517,6 +3031,44 @@ export default function TalentDetailPage() {
       return;
     }
 
+    // ✅ Kiểm tra verification status: Talent có skills thuộc group chưa verify thì không được tạo CV
+    try {
+      const distinctSkillGroupIds = Array.from(
+        new Set(
+          talentSkills
+            .map((s: any) => s.skillGroupId)
+            .filter((gid: number | undefined) => typeof gid === "number")
+        )
+      ) as number[];
+
+      if (distinctSkillGroupIds.length > 0) {
+        const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
+          Number(id),
+          distinctSkillGroupIds
+        );
+
+        const unverifiedGroups: string[] = [];
+        statuses.forEach((status) => {
+          // Chưa verify nếu: không có status hoặc isVerified = false hoặc needsReverification = true
+          if (!status.isVerified || status.needsReverification) {
+            const groupName = status.skillGroupName || `Nhóm kỹ năng #${status.skillGroupId}`;
+            unverifiedGroups.push(groupName);
+          }
+        });
+
+        if (unverifiedGroups.length > 0) {
+          const errorMessage = `⚠️ Không thể tạo CV!\n\nTalent có ${unverifiedGroups.length} nhóm kỹ năng chưa được verify:\n\n${unverifiedGroups.map(g => `• ${g}`).join("\n")}\n\nVui lòng verify các nhóm kỹ năng này trước khi tạo CV.`;
+          alert(errorMessage);
+          setCvFormErrors({ submit: "Không thể tạo CV vì có nhóm kỹ năng chưa verify." });
+          return;
+        }
+      }
+    } catch (verificationError) {
+      console.error("❌ Lỗi khi kiểm tra verification status:", verificationError);
+      // Nếu lỗi khi check verification, vẫn cho phép tạo CV (không block)
+      console.warn("⚠️ Không thể kiểm tra verification status, cho phép tạo CV.");
+    }
+
     // Kiểm tra nếu có kết quả phân tích CV và có gợi ý chưa được xử lý
     if (analysisResult) {
       const hasBasicInfoChanges = analysisResult.basicInfo?.hasChanges || false;
@@ -2681,7 +3233,7 @@ export default function TalentDetailPage() {
     switch (status) {
       case "Available":
         return {
-          label: "Đang rảnh",
+          label: "Sẵn sàng",
           color: "bg-green-100 text-green-800",
           icon: <CheckCircle className="w-4 h-4" />,
           bgColor: "bg-green-50"
@@ -2799,84 +3351,160 @@ export default function TalentDetailPage() {
           </div>
         </div>
 
-        {/* Thông tin cơ bản */}
+        {/* Thông tin cơ bản với Tabs */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin cơ bản</h2>
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setBasicInfoTab("info")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  basicInfoTab === "info"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Thông tin cơ bản
+              </button>
+              {blacklists.length > 0 && (
+                <button
+                  onClick={() => setBasicInfoTab("blacklist")}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                    basicInfoTab === "blacklist"
+                      ? "border-red-600 text-red-600 bg-red-50"
+                      : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                  }`}
+                >
+                  <Ban className="w-4 h-4" />
+                  Cảnh báo Blacklist
+                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                    {blacklists.length}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Tab Content */}
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              <InfoItem
-                label="Họ và tên"
-                value={talent.fullName}
-                icon={<User className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Email"
-                value={talent.email || "—"}
-                icon={<Mail className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Số điện thoại"
-                value={talent.phone || "—"}
-                icon={<Phone className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Ngày sinh"
-                value={talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
-                icon={<Calendar className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Công ty"
-                value={partnerName}
-                icon={<Building2 className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Khu vực làm việc"
-                value={locationName}
-                icon={<MapPin className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Chế độ làm việc"
-                value={workingModeLabels[talent.workingMode] || "Không xác định"}
-                icon={<Globe className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="GitHub"
-                value={talent.githubUrl ? (
-                  <a
-                    href={talent.githubUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={talent.githubUrl}
-                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
-                  >
-                    {formatLinkDisplay(talent.githubUrl)}
-                  </a>
-                ) : "—"}
-                icon={<ExternalLink className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Portfolio"
-                value={talent.portfolioUrl ? (
-                  <a
-                    href={talent.portfolioUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={talent.portfolioUrl}
-                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
-                  >
-                    {formatLinkDisplay(talent.portfolioUrl)}
-                  </a>
-                ) : "—"}
-                icon={<ExternalLink className="w-4 h-4" />}
-              />
-            </div>
+            {basicInfoTab === "info" && (
+              <div className="animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <InfoItem
+                    label="Họ và tên"
+                    value={talent.fullName}
+                    icon={<User className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Email"
+                    value={talent.email || "—"}
+                    icon={<Mail className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Số điện thoại"
+                    value={talent.phone || "—"}
+                    icon={<Phone className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Ngày sinh"
+                    value={talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
+                    icon={<Calendar className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Công ty"
+                    value={partnerName}
+                    icon={<Building2 className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Khu vực làm việc"
+                    value={locationName}
+                    icon={<MapPin className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Chế độ làm việc"
+                    value={workingModeLabels[talent.workingMode] || "Không xác định"}
+                    icon={<Globe className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="GitHub"
+                    value={talent.githubUrl ? (
+                      <a
+                        href={talent.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={talent.githubUrl}
+                        className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                      >
+                        {formatLinkDisplay(talent.githubUrl)}
+                      </a>
+                    ) : "—"}
+                    icon={<ExternalLink className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Portfolio"
+                    value={talent.portfolioUrl ? (
+                      <a
+                        href={talent.portfolioUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={talent.portfolioUrl}
+                        className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                      >
+                        {formatLinkDisplay(talent.portfolioUrl)}
+                      </a>
+                    ) : "—"}
+                    icon={<ExternalLink className="w-4 h-4" />}
+                  />
+                </div>
+              </div>
+            )}
+
+            {basicInfoTab === "blacklist" && blacklists.length > 0 && (
+              <div className="animate-fade-in">
+                <div className="bg-red-50 border-l-4 border-red-500 rounded-xl p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
+                      <Ban className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-red-900 mb-2">
+                        ⚠️ Cảnh báo: Ứng viên này đã bị blacklist
+                      </h3>
+                      <p className="text-sm text-red-800 mb-3">
+                        Ứng viên này đã bị thêm vào blacklist bởi {blacklists.length} {blacklists.length === 1 ? "Client" : "Clients"}:
+                      </p>
+                      <div className="space-y-2">
+                        {blacklists.map((blacklist) => (
+                          <div
+                            key={blacklist.id}
+                            className="bg-white border border-red-200 rounded-lg p-3"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-semibold text-red-900">
+                                  {blacklist.clientCompanyName || `Client #${blacklist.clientCompanyId}`}
+                                </p>
+                                <p className="text-sm text-red-700 mt-1">
+                                  Lý do: {blacklist.reason || "—"}
+                                </p>
+                                <p className="text-xs text-red-600 mt-1">
+                                  Ngày: {blacklist.blacklistedDate ? new Date(blacklist.blacklistedDate).toLocaleDateString("vi-VN") : "—"}
+                                  {blacklist.requestedBy && ` • Yêu cầu bởi: ${blacklist.requestedBy}`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-red-700 mt-3 font-medium">
+                        💡 Lưu ý: Vui lòng không giới thiệu ứng viên này cho các Client đã blacklist. Matching tự động sẽ loại bỏ ứng viên này khỏi kết quả tìm kiếm cho các Client tương ứng.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2973,6 +3601,18 @@ export default function TalentDetailPage() {
                 <Workflow className="w-4 h-4" />
                 Kinh nghiệm
               </button>
+
+              {analysisResult && (
+                <button
+                  type="button"
+                  onClick={handleOpenCVPreviewFromAnalysis}
+                  className="ml-auto mr-4 flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg border border-transparent hover:border-primary-200 transition-all"
+                  title="Xem CV đã phân tích"
+                >
+                  <Eye className="w-4 h-4" />
+                  Xem CV
+                </button>
+              )}
             </div>
           </div>
 
@@ -3364,8 +4004,6 @@ export default function TalentDetailPage() {
                                     <div key={`skill-matched-notin-${index}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs text-amber-900">
                                       <span>
                                         {skill.skillName}
-                                        {skill.cvLevel && <span className="ml-1.5 text-amber-600">· {getLevelLabel(skill.cvLevel)}</span>}
-                                        {skill.cvYearsExp && <span className="ml-1.5 text-amber-600">· {skill.cvYearsExp} năm</span>}
                                       </span>
                                       <button
                                         onClick={() => handleQuickCreateSkill({
@@ -3681,23 +4319,63 @@ export default function TalentDetailPage() {
                         </div>
                         {expandedBasicInfo && (
                           <div className="px-4 pb-4 pt-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-neutral-700">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-neutral-700">
                               <div>
-                                <p className="font-medium text-neutral-900">Hiện tại</p>
-                                <ul className="space-y-1 mt-1">
-                                  <li>Họ tên: {analysisResult.basicInfo.current.fullName ?? "—"}</li>
-                                  <li>Email: {analysisResult.basicInfo.current.email ?? "—"}</li>
-                                  <li>Điện thoại: {analysisResult.basicInfo.current.phone ?? "—"}</li>
-                                  <li>Nơi ở: {analysisResult.basicInfo.current.locationName ?? "—"}</li>
+                                <p className="font-medium text-neutral-900 mb-2">Hiện tại</p>
+                                <ul className="space-y-2 bg-white p-3 rounded-lg border border-neutral-200">
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.fullName, analysisResult.basicInfo.suggested.fullName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Họ tên:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.fullName, analysisResult.basicInfo.suggested.fullName) ? 'text-red-700' : ''}`}>
+                                      {analysisResult.basicInfo.current.fullName ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.email, analysisResult.basicInfo.suggested.email) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Email:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.email, analysisResult.basicInfo.suggested.email) ? 'text-red-700' : ''}`}>
+                                      {analysisResult.basicInfo.current.email ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.phone, analysisResult.basicInfo.suggested.phone) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Điện thoại:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.phone, analysisResult.basicInfo.suggested.phone) ? 'text-red-700' : ''}`}>
+                                      {analysisResult.basicInfo.current.phone ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.locationName, analysisResult.basicInfo.suggested.locationName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Nơi ở:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.locationName, analysisResult.basicInfo.suggested.locationName) ? 'text-red-700' : ''}`}>
+                                      {analysisResult.basicInfo.current.locationName ?? "—"}
+                                    </span>
+                                  </li>
                                 </ul>
                               </div>
                               <div>
-                                <p className="font-medium text-neutral-900">Gợi ý</p>
-                                <ul className="space-y-1 mt-1">
-                                  <li>Họ tên: {analysisResult.basicInfo.suggested.fullName ?? "—"}</li>
-                                  <li>Email: {analysisResult.basicInfo.suggested.email ?? "—"}</li>
-                                  <li>Điện thoại: {analysisResult.basicInfo.suggested.phone ?? "—"}</li>
-                                  <li>Nơi ở: {analysisResult.basicInfo.suggested.locationName ?? "—"}</li>
+                                <p className="font-medium text-neutral-900 mb-2">Gợi ý</p>
+                                <ul className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.fullName, analysisResult.basicInfo.suggested.fullName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Họ tên:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.fullName, analysisResult.basicInfo.suggested.fullName) ? 'text-red-700' : 'text-blue-700'}`}>
+                                      {analysisResult.basicInfo.suggested.fullName ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.email, analysisResult.basicInfo.suggested.email) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Email:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.email, analysisResult.basicInfo.suggested.email) ? 'text-red-700' : 'text-blue-700'}`}>
+                                      {analysisResult.basicInfo.suggested.email ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.phone, analysisResult.basicInfo.suggested.phone) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Điện thoại:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.phone, analysisResult.basicInfo.suggested.phone) ? 'text-red-700' : 'text-blue-700'}`}>
+                                      {analysisResult.basicInfo.suggested.phone ?? "—"}
+                                    </span>
+                                  </li>
+                                  <li className={`flex justify-between ${isValueDifferent(analysisResult.basicInfo.current.locationName, analysisResult.basicInfo.suggested.locationName) ? 'bg-red-50 p-2 rounded border border-red-200' : ''}`}>
+                                    <span className="text-neutral-500">Nơi ở:</span>
+                                    <span className={`font-medium ${isValueDifferent(analysisResult.basicInfo.current.locationName, analysisResult.basicInfo.suggested.locationName) ? 'text-red-700' : 'text-blue-700'}`}>
+                                      {analysisResult.basicInfo.suggested.locationName ?? "—"}
+                                    </span>
+                                  </li>
                                 </ul>
                               </div>
                             </div>
@@ -4537,7 +5215,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isJobRoleLevelDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsJobRoleLevelDropdownOpen(false);
+                                setJobRoleLevelSearch("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -4882,7 +5566,13 @@ export default function TalentDetailPage() {
                                 </div>
                               </button>
                               {isSkillGroupDropdownOpen && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsSkillGroupDropdownOpen(false);
+                                    setSkillGroupSearchQuery("");
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -4968,7 +5658,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isSkillDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsSkillDropdownOpen(false);
+                                setSkillSearchQuery("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -5134,8 +5830,6 @@ export default function TalentDetailPage() {
                                     <div className="flex flex-col">
                                       <span className="font-semibold text-sm">
                                         {skill.skillName}
-                                        {skill.cvLevel && <span className="ml-1.5 text-amber-600">· {getLevelLabel(skill.cvLevel)}</span>}
-                                        {skill.cvYearsExp && <span className="ml-1.5 text-amber-600">· {skill.cvYearsExp} năm</span>}
                                       </span>
                                     </div>
                                     <Button
@@ -5201,75 +5895,417 @@ export default function TalentDetailPage() {
                   )}
                   {talentSkills.length > 0 ? (
                     <>
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                          <thead>
-                            <tr className="bg-neutral-50 border-b border-neutral-200">
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider w-12">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedSkills.length === talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length && talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).length > 0}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
-                                      setSelectedSkills([...new Set([...selectedSkills, ...currentPageItems])]);
-                                    } else {
-                                      const currentPageItems = talentSkills.slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage).map(skill => skill.id);
-                                      setSelectedSkills(selectedSkills.filter(id => !currentPageItems.includes(id)));
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-sm text-neutral-600">
+                          Tổng cộng{" "}
+                          <span className="font-semibold text-neutral-900">
+                            {talentSkills.length}
+                          </span>{" "}
+                          kỹ năng
+                        </p>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                            checked={showOnlyUnverifiedSkills}
+                            onChange={(e) => setShowOnlyUnverifiedSkills(e.target.checked)}
+                          />
+                          <span>Chỉ xem nhóm kỹ năng chưa verify</span>
+                        </label>
+                      </div>
+                      {/* Tìm kiếm và lọc danh sách kỹ năng */}
+                      <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Tìm kiếm theo tên kỹ năng */}
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={skillListSearchQuery}
+                            onChange={(e) => setSkillListSearchQuery(e.target.value)}
+                            placeholder="Tìm kiếm theo tên kỹ năng..."
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 bg-white"
+                          />
+                        </div>
+                        {/* Lọc theo nhóm kỹ năng */}
+                        {lookupSkillGroups.length > 0 && (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsSkillGroupListDropdownOpen(!isSkillGroupListDropdownOpen)}
+                              className="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all border-neutral-300"
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Filter className="w-4 h-4 text-neutral-400" />
+                                <span>
+                                  {selectedSkillGroupIdForList
+                                    ? lookupSkillGroups.find(g => g.id === selectedSkillGroupIdForList)?.name || "Nhóm kỹ năng"
+                                    : "Tất cả nhóm kỹ năng"}
+                                </span>
+                              </div>
+                            </button>
+                            {isSkillGroupListDropdownOpen && (
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsSkillGroupListDropdownOpen(false);
+                                  setSkillGroupListSearchQuery("");
+                                }}
+                              >
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={skillGroupListSearchQuery}
+                                      onChange={(e) => setSkillGroupListSearchQuery(e.target.value)}
+                                      placeholder="Tìm nhóm kỹ năng..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSkillGroupIdForList(undefined);
+                                      setIsSkillGroupListDropdownOpen(false);
+                                      setSkillGroupListSearchQuery("");
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm ${
+                                      !selectedSkillGroupIdForList
+                                        ? "bg-primary-50 text-primary-700"
+                                        : "hover:bg-neutral-50 text-neutral-700"
+                                    }`}
+                                  >
+                                    Tất cả nhóm kỹ năng
+                                  </button>
+                                  {(() => {
+                                    const filtered = skillGroupListSearchQuery
+                                      ? lookupSkillGroups.filter(g =>
+                                        g.name.toLowerCase().includes(skillGroupListSearchQuery.toLowerCase()) ||
+                                        (g.description && g.description.toLowerCase().includes(skillGroupListSearchQuery.toLowerCase()))
+                                      )
+                                      : lookupSkillGroups;
+                                    if (filtered.length === 0) {
+                                      return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy nhóm kỹ năng</p>;
                                     }
-                                  }}
-                                  className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                                />
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kỹ năng</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Trình độ</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-neutral-200">
-                            {talentSkills
-                              .slice((pageSkills - 1) * itemsPerPage, pageSkills * itemsPerPage)
-                              .map((skill) => (
-                                <tr 
-                                  key={skill.id} 
-                                  className="hover:bg-secondary-50 transition-colors duration-200 cursor-pointer"
-                                  onClick={() => navigate(`/ta/talent-skills/edit/${skill.id}`)}
+                                    return filtered.map((group) => (
+                                      <button
+                                        type="button"
+                                        key={group.id}
+                                        onClick={() => {
+                                          setSelectedSkillGroupIdForList(group.id);
+                                          setIsSkillGroupListDropdownOpen(false);
+                                          setSkillGroupListSearchQuery("");
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          selectedSkillGroupIdForList === group.id
+                                            ? "bg-primary-50 text-primary-700"
+                                            : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {group.name}
+                                      </button>
+                                    ));
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {(() => {
+                        // Filter skills theo tên kỹ năng và nhóm kỹ năng trước khi gom nhóm
+                        let filteredSkills = talentSkills;
+                        
+                        // Filter theo tên kỹ năng
+                        if (skillListSearchQuery) {
+                          filteredSkills = filteredSkills.filter((skill) => {
+                            const skillName = skill.skillName?.toLowerCase() || "";
+                            const searchLower = skillListSearchQuery.toLowerCase();
+                            return skillName.includes(searchLower);
+                          });
+                        }
+                        
+                        // Filter theo nhóm kỹ năng
+                        if (selectedSkillGroupIdForList !== undefined) {
+                          filteredSkills = filteredSkills.filter((skill) => {
+                            return skill.skillGroupId === selectedSkillGroupIdForList;
+                          });
+                        }
+
+                        // Gom skill theo nhóm
+                        const groupMap: Record<
+                          string,
+                          {
+                            key: string;
+                            skillGroupId?: number;
+                            groupName: string;
+                            skills: (TalentSkill & { skillName: string; skillGroupId?: number })[];
+                          }
+                        > = {};
+
+                        filteredSkills.forEach((skill) => {
+                          const groupId = skill.skillGroupId;
+                          const key = groupId ? `group-${groupId}` : "group-ungrouped";
+                          if (!groupMap[key]) {
+                            const group = groupId
+                              ? lookupSkillGroups.find((g) => g.id === groupId)
+                              : undefined;
+                            groupMap[key] = {
+                              key,
+                              skillGroupId: groupId,
+                              groupName: group?.name ?? (groupId ? `Nhóm #${groupId}` : "Khác"),
+                              skills: [],
+                            };
+                          }
+                          groupMap[key].skills.push(skill);
+                        });
+
+                        let groups = Object.values(groupMap);
+
+                        // Áp dụng filter: chỉ xem NHÓM kỹ năng chưa verify (bao gồm cả cần verify lại)
+                        if (showOnlyUnverifiedSkills) {
+                          groups = groups.filter((g) => {
+                            if (!g.skillGroupId) return true; // nhóm không có ID vẫn hiển thị
+                            const status =
+                              skillGroupVerificationStatuses[g.skillGroupId];
+                            const isVerified = status?.isVerified === true;
+                            const needsReverification = status?.needsReverification === true;
+                            // Hiển thị nếu chưa verify HOẶC cần verify lại
+                            return !isVerified || needsReverification;
+                          });
+                        }
+
+                        if (groups.length === 0) {
+                          return (
+                            <div className="text-center py-6 text-sm text-neutral-500">
+                              Không có kỹ năng nào phù hợp với bộ lọc.
+                            </div>
+                          );
+                        }
+
+                        // Áp dụng phân trang: chỉ hiển thị 3 nhóm mỗi trang
+                        const totalGroups = groups.length;
+                        const startIndex = (pageSkills - 1) * skillGroupsPerPage;
+                        const endIndex = startIndex + skillGroupsPerPage;
+                        const paginatedGroups = groups.slice(startIndex, endIndex);
+
+                        return (
+                          <>
+                            <div className="space-y-3">
+                              {paginatedGroups.map((group) => {
+                              const status: SkillGroupVerificationStatus | undefined =
+                                group.skillGroupId !== undefined
+                                  ? skillGroupVerificationStatuses[group.skillGroupId] ?? undefined
+                                  : undefined;
+                              // Logic hiển thị trạng thái verify theo quy trình mới:
+                              // Backend đã tính: IsVerified = latestAssessment.IsVerified && latestAssessment.IsActive && !needsReverification
+                              // FE chỉ cần check status.isVerified từ API response
+                              // Nếu không có status thì coi như chưa verify
+                              const needsReverification = status?.needsReverification === true;
+                              const isVerified = status?.isVerified === true; // Backend đã tính toán đầy đủ
+                              const hasBeenVerified = status?.lastVerifiedDate != null; // Đã từng verify (pass hoặc fail)
+
+                              // Tính toán checkbox chọn cả nhóm
+                              const groupSkillIds = group.skills.map((s) => s.id);
+                              const allSelected =
+                                groupSkillIds.length > 0 &&
+                                groupSkillIds.every((id) => selectedSkills.includes(id));
+
+                              return (
+                                <div
+                                  key={group.key}
+                                  className="border border-neutral-200 rounded-xl bg-white shadow-sm overflow-hidden"
                                 >
-                                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-between px-4 py-3 bg-neutral-50 border-b border-neutral-200">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        {group.skills.length > 0 && (
+                                          <input
+                                            type="checkbox"
+                                            className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
+                                            checked={allSelected}
+                                            onChange={(e) => {
+                                              const shouldSelect = e.target.checked;
+                                              setSelectedSkills((prev) => {
+                                                if (shouldSelect) {
+                                                  const newIds = groupSkillIds.filter(
+                                                    (id) => !prev.includes(id)
+                                                  );
+                                                  return [...prev, ...newIds];
+                                                }
+                                                // Bỏ chọn toàn bộ skill thuộc group
+                                                return prev.filter(
+                                                  (id) => !groupSkillIds.includes(id)
+                                                );
+                                              });
+                                            }}
+                                          />
+                                        )}
+                                        <h4 className="text-sm font-semibold text-neutral-900">
+                                          {group.groupName}
+                                        </h4>
+                                        {group.skillGroupId && (
+                                          needsReverification ? (
+                                            <span 
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                                              title={status?.reason || "Có kỹ năng được thêm hoặc cập nhật sau lần verify cuối"}
+                                            >
+                                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                              Cần verify lại
+                                              {status?.reason && (
+                                                <span className="ml-1 text-[10px] opacity-75" title={status.reason}>
+                                                  ⚠️
+                                                </span>
+                                              )}
+                                            </span>
+                                          ) : isVerified ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                              Đã verify
+                                            </span>
+                                          ) : hasBeenVerified ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 border border-red-200">
+                                              <span className="w-2 h-2 rounded-full bg-red-500" />
+                                              Không hợp lệ / bị hủy
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-300">
+                                              <span className="w-2 h-2 rounded-full bg-neutral-400" />
+                                              Chưa verify
+                                            </span>
+                                          )
+                                        )}
+                                      </div>
+                                      {status?.lastVerifiedDate && (
+                                        <div className="mt-1 space-y-0.5">
+                                          <p className="text-[11px] text-neutral-500">
+                                            Lần cuối:{" "}
+                                            {new Date(
+                                              status.lastVerifiedDate
+                                            ).toLocaleString("vi-VN")}
+                                            {status.lastVerifiedByExpertName && (
+                                              <>
+                                                {" "}
+                                                · Bởi{" "}
+                                                <span className="font-medium">
+                                                  {status.lastVerifiedByExpertName}
+                                                </span>
+                                              </>
+                                            )}
+                                          </p>
+                                          {needsReverification && status?.reason && (
+                                            <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                              <span className="font-medium">Lý do:</span> {status.reason}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {group.skillGroupId && (
+                                        <>
+                                          {/* Nếu chưa verify -> cho phép Verify group */}
+                                          {!isVerified && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleOpenVerifySkillGroup(group.skillGroupId)
+                                              }
+                                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-secondary-600 text-white hover:bg-secondary-700"
+                                            >
+                                              Verify group
+                                            </button>
+                                          )}
+
+                                          {/* Nếu đã có đánh giá (status) -> luôn cho xem lịch sử */}
+                                          {status && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleOpenHistorySkillGroup(group.skillGroupId)
+                                              }
+                                              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                                            >
+                                              Lịch sử
+                                            </button>
+                                          )}
+
+                                          {/* Chỉ khi nhóm đang ở trạng thái đã verify mới cho phép Hủy đánh giá */}
+                                          {status && isVerified && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleInvalidateSkillGroup(group.skillGroupId)
+                                              }
+                                              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                                            >
+                                              Hủy đánh giá
+                                            </button>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="divide-y divide-neutral-100">
+                                    {group.skills.map((skill) => (
+                                      <div
+                                  key={skill.id} 
+                                        className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary-50 cursor-pointer transition-colors"
+                                        onClick={() =>
+                                          navigate(`/ta/talent-skills/edit/${skill.id}`)
+                                        }
+                                      >
+                                        <div
+                                          className="flex items-center gap-3"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                     <input
                                       type="checkbox"
+                                            className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
                                       checked={selectedSkills.includes(skill.id)}
                                       onChange={(e) => {
-                                        e.stopPropagation();
                                         if (e.target.checked) {
                                           setSelectedSkills([...selectedSkills, skill.id]);
                                         } else {
-                                          setSelectedSkills(selectedSkills.filter(id => id !== skill.id));
-                                        }
-                                      }}
-                                      className="w-4 h-4 text-secondary-600 bg-gray-100 border-gray-300 rounded focus:ring-secondary-500 focus:ring-2"
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-secondary-800">{skill.skillName}</div>
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="text-sm text-secondary-700">{getLevelLabel(skill.level)}</div>
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="text-sm text-secondary-600">{skill.yearsExp === 0 ? 'không có' : `${skill.yearsExp} năm`}</div>
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
+                                                setSelectedSkills(
+                                                  selectedSkills.filter((id) => id !== skill.id)
+                                                );
+                                              }
+                                            }}
+                                          />
+                                          <div>
+                                            <div className="text-sm font-medium text-neutral-900">
+                                              {skill.skillName}
+                                            </div>
+                                            <div className="text-xs text-neutral-500">
+                                              Level: {getLevelLabel(skill.level)} ·{" "}
+                                              {skill.yearsExp === 0
+                                                ? "0 năm"
+                                                : `${skill.yearsExp} năm`}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
                       </div>
-                      <SectionPagination
-                        currentPage={pageSkills}
-                        totalItems={talentSkills.length}
-                        itemsPerPage={itemsPerPage}
-                        onPageChange={setPageSkills}
-                      />
+                                </div>
+                              );
+                            })}
+                            </div>
+                            {totalGroups > skillGroupsPerPage && (
+                              <SectionPagination
+                                currentPage={pageSkills}
+                                totalItems={totalGroups}
+                                itemsPerPage={skillGroupsPerPage}
+                                onPageChange={setPageSkills}
+                              />
+                            )}
+                          </>
+                        );
+                      })()}
                     </>
                   ) : (
                     <div className="text-center py-8">
@@ -5278,6 +6314,374 @@ export default function TalentDetailPage() {
                       </div>
                       <p className="text-neutral-500 text-lg font-medium">Chưa có kỹ năng nào</p>
                       <p className="text-neutral-400 text-sm mt-1">Nhân sự chưa cập nhật kỹ năng</p>
+                    </div>
+                  )}
+
+                  {/* Modal verify nhóm kỹ năng */}
+                  {skillGroupVerifyModal.isOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Verify nhóm kỹ năng
+                            </h3>
+                            <p className="text-sm text-neutral-600 mt-1">
+                              Nhóm kỹ năng:{" "}
+                              <span className="font-medium text-secondary-700">
+                                {skillGroupVerifyModal.skillGroupName}
+                              </span>
+                            </p>
+              </div>
+                          <button
+                            onClick={handleCloseVerifySkillGroupModal}
+                            className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {/* Kết quả verify */}
+                          <div>
+                            <label className="block text-sm font-semibold text-neutral-700 mb-1.5">
+                              Kết quả verify <span className="text-red-500">*</span>
+                            </label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="verifyResult"
+                                  checked={verifyResult === true}
+                                  onChange={() => setVerifyResult(true)}
+                                  className="w-4 h-4 text-emerald-600 border-neutral-300 focus:ring-emerald-500"
+                                />
+                                <span className={`text-sm font-medium ${verifyResult === true ? 'text-emerald-700' : 'text-neutral-600'}`}>
+                                  ✅ Verify Pass (Hợp lệ)
+                                </span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="verifyResult"
+                                  checked={verifyResult === false}
+                                  onChange={() => setVerifyResult(false)}
+                                  className="w-4 h-4 text-red-600 border-neutral-300 focus:ring-red-500"
+                                />
+                                <span className={`text-sm font-medium ${verifyResult === false ? 'text-red-700' : 'text-neutral-600'}`}>
+                                  ❌ Verify Fail (Không hợp lệ)
+                                </span>
+                              </label>
+                            </div>
+                            {verifyResult === false && (
+                              <p className="text-xs text-amber-600 mt-1 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                ⚠️ Khi chọn Fail, bạn cần nhập ghi chú lý do để giải thích tại sao không hợp lệ.
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-neutral-700 mb-1.5">
+                              Chuyên gia (Expert) verify <span className="text-red-500">*</span>
+                            </label>
+                            <div className="space-y-2">
+                              {expertsForSkillGroupLoading ? (
+                                <p className="text-xs text-neutral-500">
+                                  Đang tải danh sách chuyên gia cho nhóm kỹ năng này...
+                                </p>
+                              ) : expertsForSkillGroup.length > 0 ? (
+                                <select
+                                  value={selectedExpertId === "" ? "" : selectedExpertId}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    const idNum = v ? Number(v) : "";
+                                    setSelectedExpertId(idNum);
+                                    const found =
+                                      typeof idNum === "number"
+                                        ? expertsForSkillGroup.find((ex) => ex.id === idNum)
+                                        : undefined;
+                                    if (found) {
+                                      setVerifyExpertName(found.name);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500 bg-white"
+                                >
+                                      <option value="">
+                                    Chọn chuyên gia đã được gán cho nhóm kỹ năng này
+                                  </option>
+                                  {expertsForSkillGroup.map((ex) => (
+                                    <option key={ex.id} value={ex.id}>
+                                      {ex.name}
+                                      {ex.specialization ? ` · ${ex.specialization}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : null}
+                              <input
+                                type="text"
+                                value={verifyExpertName}
+                                onChange={(e) => setVerifyExpertName(e.target.value)}
+                                placeholder="Nhập tên chuyên gia chịu trách nhiệm (bắt buộc)"
+                                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-secondary-500/20 ${
+                                  !verifyExpertName.trim()
+                                    ? "border-amber-300 focus:border-amber-500"
+                                    : "border-neutral-300 focus:border-secondary-500"
+                                }`}
+                              />
+                              <p className="text-[11px] text-neutral-500">
+                                Nếu chọn ở trên, hệ thống sẽ tự điền tên chuyên gia vào ô này. Bạn
+                                vẫn có thể chỉnh sửa thủ công nếu cần.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-neutral-700 mb-1.5">
+                              Ghi chú {verifyResult === false && <span className="text-red-500">*</span>}
+                            </label>
+                            <textarea
+                              value={verifyNote}
+                              onChange={(e) => setVerifyNote(e.target.value)}
+                              rows={3}
+                              placeholder={verifyResult === false 
+                                ? "Nhập lý do tại sao không hợp lệ (bắt buộc khi verify fail)..."
+                                : "Ghi chú thêm (ví dụ: phạm vi đánh giá, tiêu chí, ... )"}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-secondary-500/20 resize-none ${
+                                verifyResult === false && !verifyNote.trim()
+                                  ? "border-amber-300 focus:border-amber-500"
+                                  : "border-neutral-300 focus:border-secondary-500"
+                              }`}
+                            />
+                            {verifyResult === false && !verifyNote.trim() && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                ⚠️ Vui lòng nhập ghi chú lý do khi verify fail.
+                              </p>
+                            )}
+                          </div>
+
+                          {skillGroupVerifyModal.skillGroupId && verifyResult && (
+                            <div className="bg-secondary-50 border border-secondary-100 rounded-lg p-3 text-xs text-secondary-800 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold">
+                                  Các kỹ năng trong nhóm sẽ được verify:
+                                </p>
+                                <label className="flex items-center gap-1 text-[11px] text-secondary-900">
+                                  <input
+                                    type="checkbox"
+                                    checked={skillSnapshotEnabled}
+                                    onChange={(e) => setSkillSnapshotEnabled(e.target.checked)}
+                                    className="w-3.5 h-3.5 text-secondary-600 border-secondary-300 rounded focus:ring-secondary-500"
+                                  />
+                                  <span>Lưu snapshot kỹ năng (skillSnapshot)</span>
+                                </label>
+                              </div>
+
+                              {(() => {
+                                // Lấy tất cả skills trong group
+                                const groupSkills = talentSkills.filter(
+                                  (s: TalentSkill & {
+                                    skillName: string;
+                                    skillGroupId?: number;
+                                  }) => s.skillGroupId === skillGroupVerifyModal.skillGroupId
+                                );
+
+                                // Nếu có nhiều skill thì mới cần pagination
+                                const MAX_VISIBLE = 8;
+                                const needsPagination = groupSkills.length > MAX_VISIBLE;
+                                const visibleSkills = needsPagination && !showAllSkillsInVerifyModal
+                                  ? groupSkills.slice(0, MAX_VISIBLE)
+                                  : groupSkills;
+
+                                return (
+                                  <>
+                                    <ul className="list-disc list-inside space-y-0.5 max-h-40 overflow-y-auto pr-1">
+                                      {visibleSkills.map((s) => (
+                                        <li key={s.id}>
+                                          {s.skillName} – {getLevelLabel(s.level)} ({s.yearsExp}{" "}
+                                          năm)
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    {needsPagination && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setShowAllSkillsInVerifyModal((prev) => !prev)
+                                        }
+                                        className="mt-1 text-[11px] font-medium text-secondary-700 hover:text-secondary-900 underline"
+                                      >
+                                        {showAllSkillsInVerifyModal
+                                          ? "Thu gọn danh sách kỹ năng"
+                                          : `Xem đầy đủ ${groupSkills.length} kỹ năng`}
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={handleCloseVerifySkillGroupModal}
+                            disabled={isVerifyingSkillGroup}
+                            className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleConfirmVerifySkillGroup}
+                            disabled={isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()}
+                            className={`px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm flex items-center justify-center gap-2 ${
+                              isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()
+                                ? "bg-neutral-300 cursor-not-allowed"
+                                : verifyResult === false
+                                ? "bg-red-600 hover:bg-red-700"
+                                : "bg-secondary-600 hover:bg-secondary-700"
+                            }`}
+                          >
+                            {isVerifyingSkillGroup && (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            )}
+                            {isVerifyingSkillGroup 
+                              ? "Đang xử lý..." 
+                              : verifyResult === false 
+                              ? "Xác nhận Fail" 
+                              : "Xác nhận Verify"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modal lịch sử đánh giá nhóm kỹ năng */}
+                  {historyModal.isOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Lịch sử đánh giá nhóm kỹ năng
+                            </h3>
+                            <p className="text-sm text-neutral-600 mt-1">
+                              Nhóm kỹ năng:{" "}
+                              <span className="font-medium text-secondary-700">
+                                {historyModal.skillGroupName}
+                              </span>
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setHistoryModal((prev) => ({ ...prev, isOpen: false }))}
+                            className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto border border-neutral-100 rounded-lg">
+                          {historyModal.loading ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-neutral-500">
+                              Đang tải lịch sử đánh giá...
+                            </div>
+                          ) : historyModal.items.length === 0 ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-neutral-500">
+                              Chưa có lịch sử đánh giá nào cho nhóm kỹ năng này.
+                            </div>
+                          ) : (
+                            <table className="min-w-full border-collapse">
+                              <thead className="bg-neutral-50 border-b border-neutral-200">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                                    Thời gian đánh giá
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                                    Expert
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                                    Trạng thái
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                                    Đang active
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                                    Ghi chú
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-100 bg-white">
+                                {historyModal.items.map((item) => (
+                                  <tr key={item.id}>
+                                    <td className="px-4 py-2 text-sm text-neutral-800 whitespace-nowrap">
+                                      {new Date(item.assessmentDate).toLocaleString("vi-VN")}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-neutral-800 whitespace-nowrap">
+                                      {item.expertName || item.verifiedByName || "—"}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm whitespace-nowrap">
+                                      <span
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                          item.isVerified
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : "bg-red-50 text-red-700 border-red-200"
+                                        }`}
+                                      >
+                                        {item.isVerified ? "Đã verify" : "Không hợp lệ / bị hủy"}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-sm whitespace-nowrap">
+                                      <span
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                          item.isActive
+                                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                                            : "bg-neutral-50 text-neutral-500 border-neutral-200"
+                                        }`}
+                                      >
+                                        {item.isActive ? "✓ Active" : "✗ Inactive"}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-neutral-700 max-w-md">
+                                      {item.note ? (
+                                        <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                                          {item.note.split("\n").map((line, idx) => {
+                                            const isInvalidated = line.trim().startsWith("Invalidated:");
+                                            return (
+                                              <div
+                                                key={idx}
+                                                className={
+                                                  isInvalidated
+                                                    ? "text-red-700 font-medium bg-red-50 px-2 py-1 rounded border border-red-200 break-words"
+                                                    : "text-neutral-700 break-words"
+                                                }
+                                              >
+                                                {line.trim() || "\u00A0"}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        "—"
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setHistoryModal((prev) => ({ ...prev, isOpen: false }))}
+                            className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg"
+                          >
+                            Đóng
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
               </div>
@@ -5582,7 +6986,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isCertificateTypeDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsCertificateTypeDropdownOpen(false);
+                                setCertificateTypeSearch("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -6105,7 +7515,13 @@ export default function TalentDetailPage() {
                               </div>
                             </button>
                             {isWorkExperiencePositionDropdownOpen && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsWorkExperiencePositionDropdownOpen(false);
+                                  setWorkExperiencePositionSearch("");
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -6245,11 +7661,15 @@ export default function TalentDetailPage() {
                         <div className="mt-3 space-y-2">
                           <p className="text-xs text-blue-700 font-medium">Kinh nghiệm mới nên thêm:</p>
                           {analysisResult.workExperiences.newEntries.map((exp, index) => (
-                            <div key={`suggested-exp-${index}`} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm">
+                            <div
+                              key={`suggested-exp-${index}`}
+                              className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm"
+                            >
                               <p className="font-semibold">{exp.position}</p>
                               <p className="text-xs text-blue-700">{exp.company}</p>
-                              <p className="text-xs text-blue-600">{exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}</p>
-                              {exp.description && <p className="mt-1 text-xs text-blue-700 line-clamp-2">{exp.description}</p>}
+                              <p className="text-xs text-blue-600">
+                                {exp.startDate ?? "—"} - {exp.endDate ?? "Hiện tại"}
+                              </p>
                             </div>
                           ))}
                         </div>

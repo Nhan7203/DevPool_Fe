@@ -6,6 +6,7 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
+import { talentSkillGroupAssessmentService } from "../../../services/TalentSkillGroupAssessment";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -162,6 +163,29 @@ export default function TalentSkillEditPage() {
       console.log("Payload gửi đi:", formData);
       await talentSkillService.update(Number(id), formData);
 
+      // Refresh verification status sau khi update skill (auto-invalidate nếu cần)
+      try {
+        // Lấy skill info để biết skillGroupId
+        const updatedSkill = allSkills.find(s => s.id === formData.skillId);
+        if (updatedSkill?.skillGroupId) {
+          // Đợi một chút để backend xử lý auto-invalidate
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          // Refresh verification status
+          try {
+            await talentSkillGroupAssessmentService.getVerificationStatuses(
+              talentId,
+              [updatedSkill.skillGroupId]
+            );
+          } catch (e) {
+            // Ignore error khi refresh status
+          }
+        }
+      } catch (statusError) {
+        console.warn("⚠️ Không thể refresh verification status:", statusError);
+        // Không block việc update nếu refresh status lỗi
+      }
+
       alert("✅ Cập nhật kỹ năng nhân sự thành công!");
       navigate(`/ta/developers/${talentId}`);
     } catch (err) {
@@ -253,7 +277,13 @@ export default function TalentSkillEditPage() {
                       <span className="text-neutral-400 text-xs uppercase">Chọn</span>
                     </button>
                     {isSkillGroupDropdownOpen && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div 
+                        className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                        onMouseLeave={() => {
+                          setIsSkillGroupDropdownOpen(false);
+                          setSkillGroupSearchQuery("");
+                        }}
+                      >
                         <div className="p-3 border-b border-neutral-100">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -350,7 +380,13 @@ export default function TalentSkillEditPage() {
                     <span className="text-neutral-400 text-xs uppercase">Chọn</span>
                   </button>
                   {isSkillDropdownOpen && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                    <div 
+                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                      onMouseLeave={() => {
+                        setIsSkillDropdownOpen(false);
+                        setSkillSearchQuery("");
+                      }}
+                    >
                       <div className="p-3 border-b border-neutral-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

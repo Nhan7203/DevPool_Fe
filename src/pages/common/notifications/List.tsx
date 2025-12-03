@@ -14,6 +14,7 @@ import { useNotification } from '../../../contexts/NotificationContext';
 import { talentCVService } from '../../../services/TalentCV';
 import { talentService } from '../../../services/Talent';
 import { jobRoleLevelService } from '../../../services/JobRoleLevel';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 
@@ -295,6 +296,61 @@ const NotificationCenterPage = () => {
     }
   };
 
+  const handleDeleteAllRead = async () => {
+    const readNotifications = notifications.filter(n => n.isRead);
+    const readCount = totalCount - unreadCount; // Số lượng thông báo đã đọc trong toàn bộ hệ thống
+    
+    if (readCount === 0 && readNotifications.length === 0) {
+      alert('Không có thông báo đã đọc nào để xóa.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn xóa tất cả thông báo đã đọc? Hành động này không thể hoàn tác.\n\n` +
+      `(Trang hiện tại: ${readNotifications.length} thông báo đã đọc)\n` +
+      `(Tổng số: ${readCount} thông báo đã đọc)`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Xóa tất cả thông báo đã đọc trong trang hiện tại
+      const deletePromises = readNotifications.map(notif => 
+        notificationService.delete(notif.id).catch(err => {
+          console.error(`❌ Lỗi xóa notification ${notif.id}:`, err);
+          return null; // Tiếp tục xóa các notification khác dù có lỗi
+        })
+      );
+      
+      await Promise.all(deletePromises);
+      
+      // Xóa ngay lập tức khỏi NotificationContext
+      readNotifications.forEach(notif => removeItemById(notif.id));
+      
+      // Cập nhật local state - chỉ giữ lại thông báo chưa đọc
+      setNotifications((prev) => prev.filter(item => !item.isRead));
+      
+      // Cập nhật total count (giảm số lượng đã xóa)
+      const deletedCount = readNotifications.length;
+      setTotalCount((prev) => Math.max(prev - deletedCount, 0));
+      
+      // Xử lý pagination nếu cần
+      const remainingNotifications = notifications.filter(n => !n.isRead);
+      if (remainingNotifications.length === 0 && pageNumber > 1) {
+        setPageNumber((prev) => Math.max(1, prev - 1));
+      } else {
+        // Fetch lại để đồng bộ với server và lấy thêm thông báo đã đọc từ các trang khác nếu có
+        fetchNotifications();
+      }
+      
+      alert(`✅ Đã xóa ${deletedCount} thông báo đã đọc thành công!`);
+    } catch (error) {
+      console.error('❌ Lỗi khi xóa thông báo đã đọc:', error);
+      alert('Không thể xóa một số thông báo. Vui lòng thử lại sau.');
+      // Fetch lại để đồng bộ với server
+      fetchNotifications();
+    }
+  };
+
   const handleNavigate = async (notification: Notification) => {
     // Chỉ đánh dấu đã đọc nếu không phải là notification CVUploadedByDeveloper chưa được phản hồi
     // Để giữ nút phản hồi hiển thị sau khi xem chi tiết
@@ -313,7 +369,13 @@ const NotificationCenterPage = () => {
       if (targetUrl.startsWith('/ta/talents/')) {
         targetUrl = targetUrl.replace('/ta/talents/', '/ta/developers/');
       }
-      navigate(targetUrl);
+      
+      // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+      if (notification.type === NotificationType.SkillGroupAutoInvalidated && targetUrl.includes('/ta/developers/')) {
+        navigate(targetUrl, { state: { tab: 'skills' } });
+      } else {
+        navigate(targetUrl);
+      }
     }
   };
 
@@ -456,6 +518,11 @@ const NotificationCenterPage = () => {
     <div className="min-h-screen bg-gray-50 py-10">
       <div className="max-w-5xl mx-auto px-4">
         <div className="mb-8">
+          <Breadcrumb
+            items={[
+              { label: 'Trung tâm thông báo' }
+            ]}
+          />
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-primary-100 text-primary-700">
@@ -631,6 +698,15 @@ const NotificationCenterPage = () => {
                 >
                   <CheckCircle className="w-4 h-4" />
                   Đánh dấu tất cả đã đọc
+                </button>
+                <button
+                  onClick={handleDeleteAllRead}
+                  disabled={notifications.filter(n => n.isRead).length === 0 && (totalCount - unreadCount) === 0}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 disabled:text-neutral-300 disabled:border-neutral-200 disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                  title={notifications.filter(n => n.isRead).length === 0 && (totalCount - unreadCount) === 0 ? "Không có thông báo đã đọc" : "Xóa tất cả thông báo đã đọc"}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Xóa tất cả đã đọc
                 </button>
               </div>
             </div>

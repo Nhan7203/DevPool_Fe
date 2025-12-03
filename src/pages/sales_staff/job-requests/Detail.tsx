@@ -36,7 +36,8 @@ import {
   FileUser,
   User,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle
 } from "lucide-react";
 
 interface JobRequestDetail {
@@ -634,10 +635,30 @@ export default function JobRequestDetailPage() {
                                     </td>
                                   </tr>
                                 ) : (
-                                  paginatedApplications.map((app, i) => (
+                                  paginatedApplications.map((app, i) => {
+                                    // Tính toán idle và cảnh báo
+                                    const getLastUpdatedTime = () => {
+                                      if (app.updatedAt) return new Date(app.updatedAt);
+                                      return new Date(app.createdAt);
+                                    };
+                                    const lastUpdated = getLastUpdatedTime();
+                                    const daysSinceUpdate = Math.floor(
+                                      (new Date().getTime() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24)
+                                    );
+                                    const isIdle5Days = daysSinceUpdate >= 5;
+                                    const isIdle10Days = daysSinceUpdate > 10;
+                                    const isIdle7Days = daysSinceUpdate >= 7; // Giữ cho tag "Idle 7d+"
+
+                                    return (
                                     <tr
                                       key={app.id}
-                                      className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
+                                      className={`group transition-all duration-300 ${
+                                        isIdle5Days 
+                                          ? isIdle10Days
+                                            ? "bg-red-50/50 hover:bg-red-100/70 border-l-4 border-red-500"
+                                            : "bg-amber-50/50 hover:bg-amber-100/70 border-l-4 border-amber-500"
+                                          : "hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50"
+                                      }`}
                                     >
                                       <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                                       <td className="py-4 px-6">
@@ -650,15 +671,38 @@ export default function JobRequestDetailPage() {
                                         <div className="flex items-center gap-2">
                                           <UserStar className="w-4 h-4 text-neutral-400" />
                                           <span className="text-sm text-neutral-700">{app.talentName ?? "—"}</span>
+                                          {/* Icon cảnh báo bên cạnh tên ứng viên */}
+                                          {isIdle5Days && (
+                                            <span
+                                              title={isIdle10Days 
+                                                ? `⚠️ Cần chú ý: Đã ${daysSinceUpdate} ngày không cập nhật (Quá 10 ngày)` 
+                                                : `⚠️ Cần chú ý: Đã ${daysSinceUpdate} ngày không cập nhật (5-10 ngày)`
+                                              }
+                                              className="inline-flex items-center"
+                                            >
+                                              <AlertTriangle 
+                                                className={`w-4 h-4 flex-shrink-0 ${
+                                                  isIdle10Days ? "text-red-600" : "text-amber-600"
+                                                }`}
+                                              />
+                                            </span>
+                                          )}
                                         </div>
                                       </td>
                                       <td className="py-4 px-6">
                                         <span className="text-sm text-neutral-700">{app.talentCV?.version ? `v${app.talentCV.version}` : "—"}</span>
                                       </td>
                                       <td className="py-4 px-6 text-center">
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>
-                                          {statusLabels[app.status] ?? app.status}
-                                        </span>
+                                        <div className="flex flex-col items-center gap-2">
+                                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColors[app.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                                            {statusLabels[app.status] ?? app.status}
+                                          </span>
+                                          {isIdle7Days && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                                              Idle {daysSinceUpdate}d+
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
                                       <td className="py-4 px-6 text-center">
                                         <span className="text-sm text-neutral-700">{new Date(app.createdAt).toLocaleDateString('vi-VN')}</span>
@@ -673,7 +717,8 @@ export default function JobRequestDetailPage() {
                                         </Link>
                                       </td>
                                     </tr>
-                                  ))
+                                    );
+                                  })
                                 )}
                               </tbody>
                             </table>

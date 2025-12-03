@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, Filter, Plus, Shield, ShieldCheck, MoreVertical, UserRound, Trash2, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
 import { sidebarItems } from "../../../components/admin/SidebarItems";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { userService, type User, type UserFilter, type PagedResult } from "../../../services/User";
 
 // ------ Types ------
@@ -159,6 +160,11 @@ export default function StaffManagementPage() {
       <Sidebar items={sidebarItems} title="Admin" />
 
       <div className="flex-1 p-8">
+        <Breadcrumb
+          items={[
+            { label: "Người dùng" }
+          ]}
+        />
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Quản lý Nhân viên</h1>

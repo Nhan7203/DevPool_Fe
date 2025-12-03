@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { User, Mail, Phone, Shield } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/admin/SidebarItems';
-import { userService, type UserRegister } from '../../../services/User';
+import { userService, type UserCreate } from '../../../services/User';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -10,12 +10,23 @@ export default function CreateAccount() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Static list of available roles (since backend doesn't have getRoles API yet)
+  
+  // Role mapping: FE display name -> BE enum value
+  const roleMapping = {
+    'Admin': 1,
+    'Manager': 2,
+    'TA': 3,      // FE hiển thị "TA", BE là "HR" (3)
+    'Accountant': 4,
+    'Sale': 5,
+    'Dev': 6
+  };
+  
+  // Available roles for display (FE)
   const availableRoles = [
-    'Manager', 
-    'TA',
-    'Sale',
-    'Accountant'
+    { label: 'Manager', value: 'Manager' },
+    { label: 'TA', value: 'TA' },
+    { label: 'Sale', value: 'Sale' },
+    { label: 'Accountant', value: 'Accountant' }
   ];
   
   // Form state
@@ -42,14 +53,23 @@ export default function CreateAccount() {
     setError(null);
 
     try {
-      const payload: UserRegister = {
+      // Map role từ FE display name sang BE enum value
+      const roleValue = roleMapping[formData.role as keyof typeof roleMapping];
+      if (!roleValue) {
+        setError("Vai trò không hợp lệ");
+        setLoading(false);
+        return;
+      }
+
+      const payload: UserCreate = {
         email: formData.email,
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber || undefined,
-        role: formData.role
+        password: '', // Backend sẽ tự động generate và gửi qua email
+        role: roleValue.toString() // Gửi role là string của số enum
       };
 
-      await userService.register(payload);
+      await userService.create(payload);
       
       // Success - redirect to user list
       navigate('/admin/users');
@@ -169,8 +189,8 @@ export default function CreateAccount() {
                     className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500/20 transition-all duration-300 hover:shadow-soft text-neutral-900 border-neutral-300 focus:border-primary-500 hover:border-neutral-400"
                   >
                     {availableRoles.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
+                      <option key={role.value} value={role.value}>
+                        {role.label}
                       </option>
                     ))}
                   </select>

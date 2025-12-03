@@ -2,17 +2,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, FileText, Calendar, Building2, CheckCircle, Clock, Eye, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
-import { clientContractService, type ClientContract } from '../../../services/ClientContract';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
-import { projectService, type Project } from '../../../services/Project';
 import { talentService, type Talent } from '../../../services/Talent';
+import { talentAssignmentService } from '../../../services/TalentAssignment';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
 
-type ContractUnion = (PartnerContract & { type: 'partner' }) | (ClientContract & { type: 'client' });
+type ContractUnion = PartnerContractPaymentModel & { 
+    type: 'partner';
+    status?: string;
+    startDate?: string;
+    endDate?: string | null;
+};
 
 export default function DeveloperContractsList() {
     const { user } = useAuth();
@@ -27,8 +31,6 @@ export default function DeveloperContractsList() {
     
     // Store related data for display
     const [partnersMap, setPartnersMap] = useState<Map<number, Partner>>(new Map());
-    const [clientsMap, setClientsMap] = useState<Map<number, ClientCompany>>(new Map());
-    const [projectsMap, setProjectsMap] = useState<Map<number, Project>>(new Map());
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -84,29 +86,59 @@ export default function DeveloperContractsList() {
                 setLoading(true);
                 setError('');
                 
-                // Fetch contracts, partners, clients, and projects in parallel
-                const [partnerContractsData, clientContractsData, partnersData, clientsData, projectsData] = await Promise.all([
-                    partnerContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-                    clientContractService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
-                    partnerService.getAll(),
-                    clientCompanyService.getAll({ excludeDeleted: true }),
-                    projectService.getAll({ excludeDeleted: true })
+                // Fetch contracts and partners in parallel
+                // Chỉ lấy hợp đồng ở trạng thái Approved (hoặc Active nếu Approved được map thành Active)
+                const [partnerContractsData, partnersData] = await Promise.all([
+                    partnerContractPaymentService.getAll({ talentId: currentTalentId, excludeDeleted: true }),
+                    partnerService.getAll()
                 ]);
-
-                // Combine và đánh dấu loại contract
-                const partnerContracts: ContractUnion[] = (Array.isArray(partnerContractsData) ? partnerContractsData : []).map((c: PartnerContract) => ({
-                    ...c,
-                    type: 'partner' as const
-                }));
                 
-                const clientContracts: ContractUnion[] = (Array.isArray(clientContractsData) ? clientContractsData : []).map((c: ClientContract) => ({
-                    ...c,
-                    type: 'client' as const
-                }));
+                // Filter chỉ lấy hợp đồng Approved hoặc Active
+                const approvedContracts = (Array.isArray(partnerContractsData) ? partnerContractsData : []).filter((c: PartnerContractPaymentModel) => {
+                    const status = (c.contractStatus || '').toLowerCase();
+                    return status === 'approved' || status === 'active';
+                });
 
-                const allContracts = [...partnerContracts, ...clientContracts].sort((a, b) => {
-                    const dateA = new Date(a.startDate).getTime();
-                    const dateB = new Date(b.startDate).getTime();
+                // Map PartnerContractPayment sang format hiển thị
+                const partnerContracts: ContractUnion[] = approvedContracts.map((c: PartnerContractPaymentModel) => ({
+                    ...c,
+                    type: 'partner' as const,
+                    status: c.contractStatus || 'approved', // Map contractStatus sang status
+                    // Sử dụng createdAt làm startDate tạm thời, hoặc có thể lấy từ projectPeriod
+                    startDate: c.createdAt || new Date().toISOString(),
+                    endDate: null,
+                    // Thêm partnerId tạm thời, sẽ cần fetch từ talentAssignment
+                    partnerId: 0, // Sẽ được cập nhật sau
+                } as ContractUnion));
+                
+                // Fetch talentAssignments để lấy partnerId cho partner contracts
+                try {
+                    const assignmentPromises = partnerContracts.map(async (contract) => {
+                        try {
+                            const assignment = await talentAssignmentService.getById(contract.talentAssignmentId);
+                            return { contractId: contract.id, partnerId: assignment.partnerId };
+                        } catch {
+                            return { contractId: contract.id, partnerId: null };
+                        }
+                    });
+                    const assignmentResults = await Promise.all(assignmentPromises);
+                    
+                    // Cập nhật partnerId cho các contracts
+                    assignmentResults.forEach((result) => {
+                        if (result) {
+                            const contract = partnerContracts.find(c => c.id === result.contractId);
+                            if (contract) {
+                                (contract as any).partnerId = result.partnerId || 0;
+                            }
+                        }
+                    });
+                } catch (err) {
+                    console.error("⚠️ Không thể tải thông tin talent assignment:", err);
+                }
+
+                const allContracts = partnerContracts.sort((a, b) => {
+                    const dateA = new Date(a.startDate || a.createdAt || new Date().toISOString()).getTime();
+                    const dateB = new Date(b.startDate || b.createdAt || new Date().toISOString()).getTime();
                     return dateB - dateA; // Mới nhất trước
                 });
 
@@ -119,18 +151,6 @@ export default function DeveloperContractsList() {
                     partnersMapData.set(p.id, p);
                 });
                 setPartnersMap(partnersMapData);
-
-                const clientsMapData = new Map<number, ClientCompany>();
-                (Array.isArray(clientsData) ? clientsData : []).forEach((c: ClientCompany) => {
-                    clientsMapData.set(c.id, c);
-                });
-                setClientsMap(clientsMapData);
-
-                const projectsMapData = new Map<number, Project>();
-                (Array.isArray(projectsData) ? projectsData : []).forEach((p: Project) => {
-                    projectsMapData.set(p.id, p);
-                });
-                setProjectsMap(projectsMapData);
             } catch (err: any) {
                 console.error("❌ Lỗi tải danh sách hợp đồng:", err);
                 setError(err.message || "Không thể tải danh sách hợp đồng");
@@ -147,29 +167,21 @@ export default function DeveloperContractsList() {
     useEffect(() => {
         let filtered = [...contracts];
         
+        // Tất cả contracts đã được filter chỉ lấy Approved/Active ở fetchData, nên không cần filter thêm theo status
+        
         if (searchTerm) {
             filtered = filtered.filter(c => {
                 const contractNumber = c.contractNumber?.toLowerCase() || '';
                 const searchLower = searchTerm.toLowerCase();
-                
-                if (c.type === 'partner') {
-                    const partnerName = partnersMap.get((c as PartnerContract).partnerId)?.companyName?.toLowerCase() || '';
-                    return contractNumber.includes(searchLower) || partnerName.includes(searchLower);
-                } else {
-                    const clientName = clientsMap.get((c as ClientContract).clientCompanyId)?.name?.toLowerCase() || '';
-                    const projectName = projectsMap.get((c as ClientContract).projectId)?.name?.toLowerCase() || '';
-                    return contractNumber.includes(searchLower) || clientName.includes(searchLower) || projectName.includes(searchLower);
-                }
+                const partnerId = (c as any).partnerId || 0;
+                const partnerName = partnersMap.get(partnerId)?.companyName?.toLowerCase() || '';
+                return contractNumber.includes(searchLower) || partnerName.includes(searchLower);
             });
-        }
-        
-        if (filterStatus) {
-            filtered = filtered.filter(c => matchesStatus(c.status, filterStatus));
         }
         
         setFilteredContracts(filtered);
         setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
-    }, [searchTerm, filterStatus, contracts, partnersMap, clientsMap, projectsMap]);
+    }, [searchTerm, contracts, partnersMap]);
 
     // Tính toán pagination
     const totalPages = Math.ceil(filteredContracts.length / itemsPerPage);
@@ -185,6 +197,7 @@ export default function DeveloperContractsList() {
         const normalized = normalizeStatus(status);
         switch (normalized) {
             case 'active':
+            case 'approved':
                 return 'bg-green-100 text-green-800';
             case 'pending':
                 return 'bg-yellow-100 text-yellow-800';        
@@ -205,7 +218,8 @@ export default function DeveloperContractsList() {
         const normalized = normalizeStatus(status);
         switch (normalized) {
             case 'active':
-                return 'Đang hiệu lực';
+            case 'approved':
+                return 'Đã duyệt';
             case 'pending':
                 return 'Chờ duyệt';
             case 'draft':
@@ -239,18 +253,8 @@ export default function DeveloperContractsList() {
         contracts.filter(c => statuses.some(status => matchesStatus(c.status, status))).length;
 
     const getCompanyName = (contract: ContractUnion) => {
-        if (contract.type === 'partner') {
-            return partnersMap.get((contract as PartnerContract).partnerId)?.companyName || '—';
-        } else {
-            return clientsMap.get((contract as ClientContract).clientCompanyId)?.name || '—';
-        }
-    };
-
-    const getProjectName = (contract: ContractUnion) => {
-        if (contract.type === 'client') {
-            return projectsMap.get((contract as ClientContract).projectId)?.name || '—';
-        }
-        return '—';
+        const partnerId = (contract as any).partnerId || 0;
+        return partnersMap.get(partnerId)?.companyName || '—';
     };
 
     const stats = useMemo(() => [
@@ -348,6 +352,11 @@ export default function DeveloperContractsList() {
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
+                    <Breadcrumb
+                        items={[
+                            { label: "Hợp đồng" }
+                        ]}
+                    />
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng Của Tôi</h1>
@@ -463,7 +472,7 @@ export default function DeveloperContractsList() {
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                                 <input
                                     type="text"
-                                    placeholder="Tìm kiếm theo mã hợp đồng, công ty, dự án..."
+                                    placeholder="Tìm kiếm theo mã hợp đồng, đối tác..."
                                     className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -482,24 +491,6 @@ export default function DeveloperContractsList() {
                         {showFilters && (
                             <div className="mt-6 pt-6 border-t border-neutral-200">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {/* Filter by Status */}
-                                    <div className="relative">
-                                        <CheckCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
-                                        <select
-                                            value={filterStatus}
-                                            onChange={(e) => setFilterStatus(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
-                                        >
-                                            <option value="">Tất cả trạng thái</option>
-                                            <option value="pending">Chờ duyệt</option>
-                                            <option value="draft">Bản nháp</option>
-                                            <option value="active">Đang hiệu lực</option>
-                                            <option value="expired">Đã hết hạn</option>
-                                            <option value="terminated">Đã chấm dứt</option>
-                                            <option value="rejected">Đã từ chối</option>
-                                        </select>
-                                    </div>
-                                    
                                     {/* Reset Button */}
                                     <button
                                         onClick={() => {
@@ -565,8 +556,7 @@ export default function DeveloperContractsList() {
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã hợp đồng</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Loại</th>
-                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty / Dự án</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Đối tác</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thời hạn</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
@@ -575,7 +565,7 @@ export default function DeveloperContractsList() {
                             <tbody className="divide-y divide-neutral-200">
                                 {filteredContracts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center py-12">
+                                        <td colSpan={6} className="text-center py-12">
                                             <div className="flex flex-col items-center justify-center">
                                                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                                                     <FileText className="w-8 h-8 text-neutral-400" />
@@ -601,47 +591,31 @@ export default function DeveloperContractsList() {
                                                     {contract.contractNumber}
                                                 </div>
                                             </td>
-                                            <td className="py-4 px-6 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                                                    contract.type === 'partner'
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-purple-100 text-purple-800'
-                                                }`}>
-                                                    {contract.type === 'partner' ? 'Hợp đồng đối tác' : 'Hợp đồng khách hàng'}
-                                                </span>
-                                            </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <Building2 className="w-4 h-4 text-neutral-400" />
-                                                    <div>
-                                                        <p className="text-sm font-medium text-neutral-700">
-                                                            {getCompanyName(contract)}
-                                                        </p>
-                                                        {contract.type === 'client' && (
-                                                            <p className="text-xs text-neutral-500">
-                                                                Dự án: {getProjectName(contract)}
-                                                            </p>
-                                                        )}
-                                                    </div>
+                                                    <span className="text-sm font-medium text-neutral-700">
+                                                        {getCompanyName(contract)}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <Calendar className="w-4 h-4 text-neutral-400" />
                                                     <span className="text-sm text-neutral-700">
-                                                        {new Date(contract.startDate).toLocaleDateString('vi-VN')} {contract.endDate ? `- ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
+                                                        {contract.startDate ? new Date(contract.startDate).toLocaleDateString('vi-VN') : '—'} {contract.endDate ? `- ${new Date(contract.endDate).toLocaleDateString('vi-VN')}` : ''}
                                                     </span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
-                                                    {getStatusText(contract.status)}
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status || '')}`}>
+                                                    {getStatusText(contract.status || '')}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-center">
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Link
-                                                        to={`/developer/contracts/${contract.type === 'partner' ? 'partner' : 'client'}/${contract.id}`}
+                                                        to={`/developer/contracts/${contract.id}`}
                                                         className="group inline-flex items-center gap-1 px-3 py-2 text-primary-600 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-300 hover:scale-105 transform"
                                                     >
                                                         <Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />

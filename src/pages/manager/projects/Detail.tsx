@@ -311,7 +311,6 @@ export default function ManagerProjectDetailPage() {
     Ongoing: "Đang thực hiện",
     Completed: "Đã hoàn thành",
     OnHold: "Tạm dừng",
-    Cancelled: "Đã hủy",
   };
 
   const contractStatusLabels: Record<string, string> = {

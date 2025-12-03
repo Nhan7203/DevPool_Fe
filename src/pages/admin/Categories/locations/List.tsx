@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../../../../components/common/Sidebar";
+import Breadcrumb from "../../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
@@ -111,6 +112,12 @@ export default function LocationListPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Danh mục" , to: "/admin/categories" },
+              { label: "Khu vực làm việc" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Khu vực làm việc (Locations)</h1>

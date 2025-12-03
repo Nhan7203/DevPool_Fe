@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/accountant_staff/SidebarItems";
 import { clientDocumentService, type ClientDocument } from "../../../services/ClientDocument";
 import { partnerDocumentService, type PartnerDocument } from "../../../services/PartnerDocument";
@@ -124,6 +125,11 @@ const AccountantDocumentsList: React.FC = () => {
 
       <div className="flex-1 p-8">
         <div className="mb-6">
+          <Breadcrumb
+            items={[
+              { label: "Tài liệu" }
+            ]}
+          />
           <h1 className="text-3xl font-bold text-gray-900">Danh sách tài liệu</h1>
           <p className="text-neutral-600 mt-1">Xem tài liệu của Khách hàng và Đối tác</p>
         </div>

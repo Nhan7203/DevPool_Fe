@@ -195,6 +195,11 @@ export default function SkillDetailPage() {
                   icon={<Building2 className="w-4 h-4" />}
                 />
                 <InfoItem 
+                  label="Bắt buộc" 
+                  value={skill.isMandatory ? "Có" : "Không"}
+                  icon={<CheckCircle className="w-4 h-4" />}
+                />
+                <InfoItem 
                   label="Mô tả" 
                   value={skill.description || "Không có mô tả"}
                   icon={<FileText className="w-4 h-4" />}

@@ -59,6 +59,28 @@ const formatCurrency = (value?: number | null): string => {
   }).format(value);
 };
 
+// Helper function to get date range for a project period (first day to last day of the month)
+const getPeriodDateRange = (period: ProjectPeriodModel | null): { minDate: string | null; maxDate: string | null } => {
+  if (!period) {
+    return { minDate: null, maxDate: null };
+  }
+
+  try {
+    // Create date for the first day of the period month/year
+    const firstDay = new Date(period.periodYear, period.periodMonth - 1, 1);
+    const minDate = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`;
+
+    // Create date for the last day of the period month/year
+    const lastDay = new Date(period.periodYear, period.periodMonth, 0); // Day 0 of next month = last day of current month
+    const maxDate = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+
+    return { minDate, maxDate };
+  } catch (error) {
+    console.error("❌ Lỗi tính toán khoảng ngày của chu kỳ:", error);
+    return { minDate: null, maxDate: null };
+  }
+};
+
 const contractStatusConfigMap: Record<
   string,
   {
@@ -422,14 +444,38 @@ export default function PartnerContractDetailPage() {
   const handleMarkAsPaid = async () => {
     if (!id || !contractPayment) return;
 
+    // Validation: Số tiền đã thanh toán phải = số tiền cuối cùng
+    if (!contractPayment.finalAmount || contractPayment.finalAmount <= 0) {
+      alert("Hợp đồng chưa có số tiền cuối cùng. Vui lòng xác minh hợp đồng trước.");
+      return;
+    }
+
     if (!markAsPaidForm.paidAmount || markAsPaidForm.paidAmount <= 0) {
       alert("Vui lòng nhập số tiền đã thanh toán");
+      return;
+    }
+
+    // Đảm bảo số tiền đã thanh toán = số tiền cuối cùng
+    if (Math.abs(markAsPaidForm.paidAmount - contractPayment.finalAmount) > 0.01) {
+      alert(`Số tiền đã thanh toán phải bằng số tiền cuối cùng (${formatCurrency(contractPayment.finalAmount)})`);
       return;
     }
 
     if (!markAsPaidForm.paymentDate) {
       alert("Vui lòng chọn ngày thanh toán");
       return;
+    }
+
+    // Validation: Ngày thanh toán phải nằm trong tháng của chu kỳ thanh toán
+    if (projectPeriod) {
+      const dateRange = getPeriodDateRange(projectPeriod);
+      if (dateRange.minDate && dateRange.maxDate) {
+        const paymentDate = markAsPaidForm.paymentDate.split('T')[0];
+        if (paymentDate < dateRange.minDate || paymentDate > dateRange.maxDate) {
+          alert(`Ngày thanh toán phải nằm trong tháng ${projectPeriod.periodMonth}/${projectPeriod.periodYear} (từ ${dateRange.minDate} đến ${dateRange.maxDate})`);
+          return;
+        }
+      }
     }
 
     if (!paymentProofFile) {
@@ -454,8 +500,9 @@ export default function PartnerContractDetailPage() {
       const partnerReceiptFileUrl = await uploadFile(partnerReceiptFile, partnerReceiptFilePath);
 
       // Format paymentDate to ISO string if it's in YYYY-MM-DD format
+      // Đảm bảo paidAmount = finalAmount
       const paymentPayload: PartnerContractPaymentMarkAsPaidModel = {
-        paidAmount: markAsPaidForm.paidAmount,
+        paidAmount: contractPayment.finalAmount,
         paymentDate: markAsPaidForm.paymentDate.includes('T')
           ? markAsPaidForm.paymentDate
           : new Date(markAsPaidForm.paymentDate + 'T00:00:00').toISOString(),
@@ -1219,13 +1266,17 @@ export default function PartnerContractDetailPage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={markAsPaidForm.paidAmount || ""}
-                  onChange={(e) =>
-                    setMarkAsPaidForm({ ...markAsPaidForm, paidAmount: parseFloat(e.target.value) || 0 })
-                  }
-                  className="w-full border rounded-lg p-2"
+                  value={contractPayment?.finalAmount || markAsPaidForm.paidAmount || ""}
+                  readOnly
+                  disabled
+                  className="w-full border rounded-lg p-2 bg-gray-100 cursor-not-allowed"
                   required
                 />
+                {contractPayment?.finalAmount && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Số tiền đã thanh toán phải bằng số tiền cuối cùng ({formatCurrency(contractPayment.finalAmount)})
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -1234,10 +1285,17 @@ export default function PartnerContractDetailPage() {
                 <input
                   type="date"
                   value={markAsPaidForm.paymentDate}
+                  min={getPeriodDateRange(projectPeriod).minDate || undefined}
+                  max={getPeriodDateRange(projectPeriod).maxDate || undefined}
                   onChange={(e) => setMarkAsPaidForm({ ...markAsPaidForm, paymentDate: e.target.value })}
                   className="w-full border rounded-lg p-2"
                   required
                 />
+                {projectPeriod && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Chỉ được chọn trong tháng {projectPeriod.periodMonth}/{projectPeriod.periodYear}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -1301,8 +1359,8 @@ export default function PartnerContractDetailPage() {
                 onClick={handleMarkAsPaid}
                 disabled={
                   isProcessing ||
-                  !markAsPaidForm.paidAmount ||
-                  markAsPaidForm.paidAmount <= 0 ||
+                  !contractPayment?.finalAmount ||
+                  contractPayment.finalAmount <= 0 ||
                   !markAsPaidForm.paymentDate ||
                   !paymentProofFile ||
                   !partnerReceiptFile

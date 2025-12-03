@@ -31,6 +31,7 @@ export default function SkillCreatePage() {
     skillGroupId: initialSkillGroupId,
     name: "",
     description: "",
+    isMandatory: false,
   });
 
   // Load skill groups
@@ -46,9 +47,19 @@ export default function SkillCreatePage() {
     loadSkillGroups();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: name === 'skillGroupId' ? Number(value) : value }));
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    setForm((prev) => ({
+      ...prev,
+      [name]:
+        name === "skillGroupId"
+          ? Number(value)
+          : type === "checkbox"
+          ? checked
+          : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,6 +205,23 @@ export default function SkillCreatePage() {
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white resize-none"
                   placeholder="Nhập mô tả chi tiết về kỹ năng (tùy chọn)"
                 />
+              </div>
+
+              {/* Bắt buộc */}
+              <div>
+                <label className="flex items-center gap-2 text-gray-700 font-semibold mb-1">
+                  <input
+                    type="checkbox"
+                    name="isMandatory"
+                    checked={form.isMandatory}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span>Kỹ năng bắt buộc cho các job thuộc nhóm này</span>
+                </label>
+                <p className="text-xs text-neutral-500 ml-6">
+                  Nếu bật, BE có thể dùng để kiểm tra bắt buộc khi verify nhóm kỹ năng cho Talent.
+                </p>
               </div>
             </div>
           </div>

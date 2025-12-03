@@ -18,8 +18,8 @@ export default function UnauthorizedRedirectListener() {
       try {
         await logout();
       } finally {
-        if (location.pathname !== ROUTES.LOGIN) {
-          navigate(ROUTES.LOGIN, { replace: true, state: { from: location.pathname } });
+        if (location.pathname !== ROUTES.GUEST.LOGIN) {
+          navigate(ROUTES.GUEST.LOGIN, { replace: true, state: { from: location.pathname } });
         }
         // Cho phép xử lý lại sau một vòng lặp event loop để tránh spam
         setTimeout(() => {

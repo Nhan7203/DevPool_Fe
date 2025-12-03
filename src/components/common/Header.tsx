@@ -365,8 +365,13 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
     // Đóng notification dropdown ngay lập tức
     setIsNotificationOpen(false);
     
-    // Navigate ngay với actionUrl đã được fix, không đợi mark as read
-    navigate(originalActionUrl);
+    // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+    if (notification.type === NotificationType.SkillGroupAutoInvalidated && originalActionUrl.includes('/ta/developers/')) {
+      navigate(originalActionUrl, { state: { tab: 'skills' } });
+    } else {
+      // Navigate ngay với actionUrl đã được fix, không đợi mark as read
+      navigate(originalActionUrl);
+    }
     
     // Mark as read sau khi navigate (không block navigation)
     try {
@@ -401,6 +406,13 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       // LUÔN giữ lại actionUrl đã được fix, không dùng từ resolved
       // Đảm bảo actionUrl luôn được giữ lại, kể cả khi resolved không có
       const finalActionUrl = originalActionUrl || notification.actionUrl || resolved?.actionUrl || null;
+      
+      // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+      if (notification.type === NotificationType.SkillGroupAutoInvalidated && finalActionUrl && finalActionUrl.includes('/ta/developers/')) {
+        navigate(finalActionUrl, { state: { tab: 'skills' } });
+        return; // Return early, không hiển thị modal
+      }
+      
       setViewNotification({
         ...resolved,
         ...notification, // Giữ lại tất cả thông tin gốc
@@ -549,24 +561,24 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
   const handleLogout = () => {
     logout();
     // Reload trang để reset tất cả state và đảm bảo Header được remount
-    window.location.href = ROUTES.LOGIN;
+    window.location.href = ROUTES.GUEST.LOGIN;
   };
 
   const desktopLinks = showPublicBranding
     ? [
-        { label: 'Trang Chủ', to: '/' },
-        { label: 'Nhân Sự IT', to: '/professionals' },
-        { label: 'Về Chúng Tôi', to: '/about' },
-        { label: 'Liên Hệ', to: '/contact' },
+        { label: 'Trang Chủ', to: ROUTES.GUEST.HOME },
+        { label: 'Nhân Sự IT', to: ROUTES.GUEST.DEVELOPERS },
+        { label: 'Về Chúng Tôi', to: ROUTES.GUEST.ABOUT },
+        { label: 'Liên Hệ', to: ROUTES.GUEST.CONTACT },
       ]
     : [];
 
   const mobileLinks = showPublicBranding
     ? [
-        { label: 'Trang Chủ', to: '/' },
-        { label: 'Dự Án', to: '/projects' },
-        { label: 'Chuyên Gia IT', to: '/professionals' },
-        { label: 'Doanh Nghiệp', to: '/companies' },
+        { label: 'Trang Chủ', to: ROUTES.GUEST.HOME },
+        { label: 'Nhân Sự IT', to: ROUTES.GUEST.DEVELOPERS },
+        { label: 'Về Chúng Tôi', to: ROUTES.GUEST.ABOUT },
+        { label: 'Liên Hệ', to: ROUTES.GUEST.CONTACT },
       ]
     : [];
 
@@ -629,7 +641,10 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                   </button>
 
                   {isNotificationOpen && (
-                    <div className="absolute right-0 mt-3 w-80 max-h-[420px] bg-white rounded-2xl shadow-medium border border-neutral-200 z-50 animate-slide-down flex flex-col">
+                    <div 
+                      className="absolute right-0 mt-3 w-80 max-h-[420px] bg-white rounded-2xl shadow-medium border border-neutral-200 z-50 animate-slide-down flex flex-col"
+                      onMouseLeave={() => setIsNotificationOpen(false)}
+                    >
                       <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 flex-shrink-0">
                         <div>
                           <p className="text-sm font-semibold text-neutral-800">Thông báo</p>
@@ -831,7 +846,10 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
                   </button>
 
                   {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-medium py-2 z-50 border border-neutral-200 animate-slide-down">
+                    <div 
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-medium py-2 z-50 border border-neutral-200 animate-slide-down"
+                      onMouseLeave={() => setIsUserMenuOpen(false)}
+                    >
                       <Link
                         to={user ? getDashboardRoute(user.role) : '/login'}
                         className="group flex items-center px-4 py-2 text-neutral-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-300"

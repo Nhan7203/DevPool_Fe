@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Mail, Phone, MapPin, User, FileText } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
-import { partnerService, type Partner, type PartnerPayload } from '../../../services/Partner';
+import { partnerService, type Partner, type PartnerPayload, PartnerType } from '../../../services/Partner';
 import { ROUTES } from '../../../router/routes';
 
 export default function CreatePartner() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<PartnerPayload>({
+    code: '',
+    partnerType: PartnerType.Partner,
     companyName: '',
     taxCode: '',
     contactPerson: '',
@@ -48,9 +50,57 @@ export default function CreatePartner() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Auto-generate code from company name
+  const generateCodeFromCompanyName = (companyName: string): string => {
+    if (!companyName) return '';
+    
+    // Remove common words and special characters, take first letters of words
+    const words = companyName
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 0 && !['CÔNG', 'TY', 'TNHH', 'CP', 'CTY', 'COMPANY', 'LTD', 'INC'].includes(word));
+    
+    // Take first 3-4 words, max 50 chars
+    let code = words.slice(0, 4).map(word => word.charAt(0)).join('');
+    
+    // If still too long, truncate
+    if (code.length > 50) {
+      code = code.substring(0, 50);
+    }
+    
+    return code;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     const newErrors = { ...errors };
+
+    // Auto-generate code when company name changes
+    if (name === 'companyName') {
+      if (value && value.trim() !== '') {
+        delete newErrors.companyName;
+        // Auto-suggest code if code is empty or was auto-generated
+        if (!formData.code || formData.code === generateCodeFromCompanyName(formData.companyName)) {
+          const suggestedCode = generateCodeFromCompanyName(value);
+          setFormData(prev => ({ ...prev, companyName: value, code: suggestedCode }));
+          return;
+        }
+      }
+    }
+
+    // Validate code
+    if (name === 'code') {
+      if (value && value.trim() !== '') {
+        if (value.length > 50) {
+          newErrors.code = 'Mã đối tác không được vượt quá 50 ký tự';
+        } else {
+          delete newErrors.code;
+        }
+      } else {
+        newErrors.code = 'Mã đối tác là bắt buộc';
+      }
+    }
 
     // Validate companyName
     if (name === 'companyName') {
@@ -113,7 +163,13 @@ export default function CreatePartner() {
     }
 
     setErrors(newErrors);
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Handle partnerType separately (it's a number)
+    if (name === 'partnerType') {
+      setFormData((prev) => ({ ...prev, [name]: Number(value) as PartnerType }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,6 +177,12 @@ export default function CreatePartner() {
     
     // Validate all required fields
     const newErrors: Record<string, string> = {};
+
+    if (!formData.code || formData.code.trim() === '') {
+      newErrors.code = 'Mã đối tác là bắt buộc';
+    } else if (formData.code.length > 50) {
+      newErrors.code = 'Mã đối tác không được vượt quá 50 ký tự';
+    }
 
     if (!formData.companyName || formData.companyName.trim() === '') {
       newErrors.companyName = 'Tên công ty là bắt buộc';
@@ -197,6 +259,54 @@ export default function CreatePartner() {
           {/* Form Container */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50 animate-fade-in-up">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Grid: Mã đối tác + Loại đối tác */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                    Mã đối tác <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative group">
+                    <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
+                    <input
+                      type="text"
+                      name="code"
+                      value={formData.code}
+                      onChange={handleChange}
+                      required
+                      maxLength={50}
+                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.code ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
+                      placeholder="VD: KMS, FPT, VNG"
+                    />
+                  </div>
+                  {errors.code && (
+                    <p className="mt-1 text-sm text-red-500">{errors.code}</p>
+                  )}
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Mã duy nhất cho đối tác (tối đa 50 ký tự). Hệ thống sẽ tự động gợi ý từ tên công ty.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                    Loại đối tác <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative group">
+                    <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500 pointer-events-none" />
+                    <select
+                      name="partnerType"
+                      value={formData.partnerType}
+                      onChange={handleChange}
+                      required
+                      className="w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all border-neutral-300 focus:border-primary-500 appearance-none"
+                    >
+                      <option value={PartnerType.OwnCompany}>Công ty mình</option>
+                      <option value={PartnerType.Partner}>Đối tác</option>
+                      <option value={PartnerType.Individual}>Cá nhân/Freelancer</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* Tên công ty */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">

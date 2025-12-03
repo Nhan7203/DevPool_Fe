@@ -39,7 +39,6 @@ const AdminProfile = React.lazy(() => import('../pages/admin/Profile'));
 // Users
 const CreateAccount = React.lazy(() => import('../pages/admin/Users/Create'));
 const StaffManagementPage = React.lazy(() => import('../pages/admin/Users/UserList'));
-const TalentListPage = React.lazy(() => import('../pages/admin/Users/TalentList'));
 
 // Categories - Certificate Types
 const CertificateTypeCreatePage = React.lazy(() => import('../pages/admin/Categories/certificate-types/Create'));
@@ -105,6 +104,10 @@ const SkillGroupDetailPage = React.lazy(() => import('../pages/admin/Categories/
 const SkillGroupEditPage = React.lazy(() => import('../pages/admin/Categories/skill-groups/Edit'));
 const SkillGroupListPage = React.lazy(() => import('../pages/admin/Categories/skill-groups/List'));
 
+// Categories - Experts
+const ExpertListPage = React.lazy(() => import('../pages/admin/Categories/experts/List'));
+const ExpertDetailPage = React.lazy(() => import('../pages/admin/Categories/experts/Detail'));
+
 // ========================================
 // TA STAFF PAGES - Lazy Loading
 // ========================================
@@ -153,16 +156,6 @@ const TalentCVApplicationPage = React.lazy(() => import('../pages/hr_staff/appli
 const ApplyActivityCreatePage = React.lazy(() => import('../pages/hr_staff/apply-activities/Create'));
 const ApplyActivityDetailPage = React.lazy(() => import('../pages/hr_staff/apply-activities/Detail'));
 const ApplyActivityEditPage = React.lazy(() => import('../pages/hr_staff/apply-activities/Edit'));
-
-// Interviews
-const InterviewHistory = React.lazy(() => import('../pages/hr_staff/interviews/History'));
-const InterviewList = React.lazy(() => import('../pages/hr_staff/interviews/List'));
-const ScheduleInterview = React.lazy(() => import('../pages/hr_staff/interviews/Schedule'));
-
-
-// Reports
-const DeveloperStatus = React.lazy(() => import('../pages/hr_staff/reports/Developer_status'));
-const InterviewSuccess = React.lazy(() => import('../pages/hr_staff/reports/Interview_success'));
 
 // Assignments
 const Assignments = React.lazy(() => import('../pages/hr_staff/assignments'));
@@ -213,10 +206,6 @@ const SalesApplyProcessStepListPage = React.lazy(() => import('../pages/sales_st
 const ContactInquiryListPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/List'));
 const ContactInquiryDetailPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/Detail'));
 
-// Contracts
-const SalesClientContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/clients/Detail'));
-const SalesPartnerContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/partners/Detail'));
-
 // ========================================
 // ACCOUNTANT STAFF PAGES - Lazy Loading
 // ========================================
@@ -245,30 +234,13 @@ const DeveloperPaymentDetail = React.lazy(() => import('../pages/developer/payme
 const ManagerDashboard = React.lazy(() => import('../pages/manager/dashboard/Dashboard'));
 const ManagerProfile = React.lazy(() => import('../pages/manager/Profile'));
 
-// Contracts
-const ClientDetailPage = React.lazy(() => import('../pages/manager/contract/Clients/Detail'));
-const DevDetailPage = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
-const ManagerPartnerContractDetail = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
+// Client Companies
+const ManagerClientCompanyListPage = React.lazy(() => import('../pages/manager/client-companies/List'));
+const ManagerClientCompanyDetailPage = React.lazy(() => import('../pages/manager/client-companies/Detail'));
 
 // Projects
 const ManagerProjectListPage = React.lazy(() => import('../pages/manager/projects/List'));
 const ManagerProjectDetailPage = React.lazy(() => import('../pages/manager/projects/Detail'));
-
-// Business
-const BusinessOverview = React.lazy(() => import('../pages/manager/business/Overview'));
-const Revenue = React.lazy(() => import('../pages/manager/business/Revenue'));
-
-// Human Resources
-const HROverview = React.lazy(() => import('../pages/manager/hr/Overview'));
-const HRPerformance = React.lazy(() => import('../pages/manager/hr/Performance'));
-const HRDevelopers = React.lazy(() => import('../pages/manager/hr/Dev'));
-const Utilization = React.lazy(() => import('../pages/manager/hr/Utilization'));
-
-// Finance
-const Overview = React.lazy(() => import('../pages/manager/finance/Overview'));
-const CashFlow = React.lazy(() => import('../pages/manager/finance/Cashflow'));
-const Debt = React.lazy(() => import('../pages/manager/finance/Debt'));
-const Profit = React.lazy(() => import('../pages/manager/finance/Profit'));
 
 
 const AppRouter: React.FC = () => {
@@ -284,14 +256,14 @@ const AppRouter: React.FC = () => {
           {/* ======================================== */}
           <Route element={<PublicLayout />}>
             {/* Guest Routes */}
-            <Route path={ROUTES.HOME} element={<HomePage />} />
-            <Route path={ROUTES.PROFESSIONALS} element={<ProfessionalPage />} />
+            <Route path={ROUTES.GUEST.HOME} element={<HomePage />} />
+            <Route path={ROUTES.GUEST.DEVELOPERS} element={<ProfessionalPage />} />
             <Route path={ROUTES.GUEST.ABOUT} element={<AboutPage />} />
             <Route path={ROUTES.GUEST.CONTACT} element={<ContactPage />} />
             
             {/* Auth Routes */}
             <Route 
-              path={ROUTES.LOGIN} 
+              path={ROUTES.GUEST.LOGIN} 
               element={user ? <Navigate to={getDashboardRoute(user.role)} replace /> : <Auth />} 
             />
             <Route 
@@ -354,18 +326,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.CREATE} element={<ApplyActivityCreatePage />} />
               <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.DETAIL} element={<ApplyActivityDetailPage />} />
               <Route path={ROUTES.HR_STAFF.APPLY_ACTIVITIES.EDIT} element={<ApplyActivityEditPage />} />
-
-              {/* Interviews */}
-              <Route path={ROUTES.HR_STAFF.INTERVIEWS.LIST} element={<InterviewList />} />
-              <Route path={ROUTES.HR_STAFF.INTERVIEWS.SCHEDULE} element={<ScheduleInterview />} />
-              <Route path={ROUTES.HR_STAFF.INTERVIEWS.HISTORY} element={<InterviewHistory />} />
-              
-              {/* Contracts - Removed (files deleted) */}
-
-              {/* Reports */}
-              <Route path={ROUTES.HR_STAFF.REPORTS.INTERVIEW_SUCCESS} element={<InterviewSuccess />} />
-              <Route path={ROUTES.HR_STAFF.REPORTS.DEVELOPER_STATUS} element={<DeveloperStatus />} />
-              
+           
               {/* Assignments */}
               <Route path={ROUTES.HR_STAFF.ASSIGNMENTS} element={<Assignments />} />
             </Route>
@@ -396,10 +357,6 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.SALES_STAFF.PROJECTS.DETAIL} element={<ProjectDetailPage />} />
               <Route path={ROUTES.SALES_STAFF.PROJECTS.CREATE} element={<ProjectCreatePage />} />
               <Route path={ROUTES.SALES_STAFF.PROJECTS.EDIT} element={<ProjectEditPage />} />
-
-              {/* Contracts */}
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.CLIENT_DETAIL} element={<SalesClientContractDetail />} />
-              <Route path={ROUTES.SALES_STAFF.CONTRACTS.PARTNER_DETAIL} element={<SalesPartnerContractDetail />} />
 
               {/* Contact Inquiries */}
               <Route path={ROUTES.SALES_STAFF.CONTACT_INQUIRIES.LIST} element={<ContactInquiryListPage />} />
@@ -432,11 +389,11 @@ const AppRouter: React.FC = () => {
             <Route element={<ProtectedRoute requiredRole="Staff Accountant"><Outlet /></ProtectedRoute>}>
               <Route path={ROUTES.ACCOUNTANT_STAFF.DASHBOARD} element={<AccountantDashboard />} />
               <Route path={ROUTES.ACCOUNTANT_STAFF.PROFILE} element={<AccountantStaffProfile />} />
-              <Route path="/accountant/projects" element={<AccountantProjectListPage />} />
-              <Route path="/accountant/projects/:id" element={<AccountantProjectDetailPage />} />
-              <Route path="/accountant/documents" element={<AccountantDocumentsList />} />
-              <Route path="/accountant/contracts/clients/:id" element={<AccountantClientContractDetail />} />
-              <Route path="/accountant/contracts/partners/:id" element={<AccountantPartnerContractDetail />} />
+              <Route path={ROUTES.ACCOUNTANT_STAFF.PROJECTS.LIST} element={<AccountantProjectListPage />} />
+              <Route path={ROUTES.ACCOUNTANT_STAFF.PROJECTS.DETAIL} element={<AccountantProjectDetailPage />} />
+              <Route path={ROUTES.ACCOUNTANT_STAFF.DOCUMENTS.LIST} element={<AccountantDocumentsList />} />
+              <Route path={ROUTES.ACCOUNTANT_STAFF.CONTRACTS.CLIENT_DETAIL} element={<AccountantClientContractDetail />} />
+              <Route path={ROUTES.ACCOUNTANT_STAFF.CONTRACTS.PARTNER_DETAIL} element={<AccountantPartnerContractDetail />} />
             </Route>
           </Route>
 
@@ -449,7 +406,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.DEVELOPER.PROFILE} element={<DeveloperProfile />} />
               <Route path={ROUTES.DEVELOPER.CV_CREATE} element={<TalentCVCreatePage />} />
               <Route path={ROUTES.DEVELOPER.CONTRACTS.LIST} element={<DeveloperContractsList />} />
-              <Route path="/developer/contracts/:type/:id" element={<DeveloperContractDetail />} />
+              <Route path="/developer/contracts/:id" element={<DeveloperContractDetail />} />
               <Route path={ROUTES.DEVELOPER.PAYMENTS.LIST} element={<DeveloperPaymentsList />} />
               <Route path={ROUTES.DEVELOPER.PAYMENTS.DETAIL} element={<DeveloperPaymentDetail />} />
             </Route>
@@ -463,32 +420,14 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.MANAGER.DASHBOARD} element={<ManagerDashboard />} />
               <Route path={ROUTES.MANAGER.PROFILE} element={<ManagerProfile />} />
               
-              {/* Contracts */}
-              <Route path={ROUTES.MANAGER.CONTRACT.CLIENT_DETAIL} element={<ClientDetailPage />} />
-              <Route path={ROUTES.MANAGER.CONTRACT.DEV_DETAIL} element={<DevDetailPage />} />
-              <Route path={ROUTES.MANAGER.CONTRACT.PARTNER_DETAIL} element={<ManagerPartnerContractDetail />} />
+              {/* Client Companies */}
+              <Route path={ROUTES.MANAGER.CLIENT_COMPANY.LIST} element={<ManagerClientCompanyListPage />} />
+              <Route path={ROUTES.MANAGER.CLIENT_COMPANY.DETAIL} element={<ManagerClientCompanyDetailPage />} />
               
               {/* Projects */}
               <Route path="/manager/projects" element={<ManagerProjectListPage />} />
               <Route path="/manager/projects/:id" element={<ManagerProjectDetailPage />} />
-              
-              {/* Business */}
-              <Route path={ROUTES.MANAGER.BUSINESS.OVERVIEW} element={<BusinessOverview />} />
-              <Route path={ROUTES.MANAGER.BUSINESS.REVENUE} element={<Revenue />} />
-              
-              {/* Human Resources */}
-              <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.OVERVIEW} element={<HROverview />} />
-              <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.PERFORMANCE} element={<HRPerformance />} />
-              <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.DEVELOPERS} element={<HRDevelopers />} />
-              <Route path={ROUTES.MANAGER.HUMAN_RESOURCES.UTILIZATION} element={<Utilization />} />
-              
-              {/* Finance */}
-              <Route path={ROUTES.MANAGER.FINANCE.OVERVIEW} element={<Overview />} />
-              <Route path={ROUTES.MANAGER.FINANCE.CASHFLOW} element={<CashFlow />} />
-              <Route path={ROUTES.MANAGER.FINANCE.DEBT} element={<Debt />} />
-              <Route path={ROUTES.MANAGER.FINANCE.PROFIT} element={<Profit />} />
-              
-              {/* Payment Periods */}
+                            
             </Route>
           </Route>
 
@@ -503,7 +442,6 @@ const AppRouter: React.FC = () => {
               {/* Users */}
               <Route path={ROUTES.ADMIN.USERS.LIST} element={<StaffManagementPage />} />
               <Route path={ROUTES.ADMIN.USERS.CREATE_ACCOUNT} element={<CreateAccount />} />
-              <Route path={ROUTES.ADMIN.USERS.TALENT_LIST} element={<TalentListPage />} />
               
               {/* Categories - Certificate Types */}
               <Route path={ROUTES.ADMIN.CATEGORIES.CERTIFICATE_TYPES.LIST} element={<CertificateTypeListPage />} />
@@ -564,6 +502,10 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.DETAIL} element={<SkillGroupDetailPage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.CREATE} element={<SkillGroupCreatePage />} />
               <Route path={ROUTES.ADMIN.CATEGORIES.SKILL_GROUPS.EDIT} element={<SkillGroupEditPage />} />
+
+              {/* Categories - Experts */}
+              <Route path="/admin/categories/experts" element={<ExpertListPage />} />
+              <Route path="/admin/categories/experts/:id" element={<ExpertDetailPage />} />
               
               {/* Audit Log */}
               <Route path={ROUTES.ADMIN.AUDIT.LIST} element={<AuditLogListPage />} />
@@ -574,7 +516,7 @@ const AppRouter: React.FC = () => {
           {/* ======================================== */}
           {/* CATCH ALL ROUTE */}
           {/* ======================================== */}
-          <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+          <Route path="*" element={<Navigate to={ROUTES.GUEST.HOME} replace />} />
         </Routes>
       </Suspense>
     </>

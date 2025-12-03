@@ -16,6 +16,7 @@ import {
     ClipboardList
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -292,6 +293,11 @@ const stats = [
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
+                    <Breadcrumb
+                        items={[
+                            { label: "Yêu cầu tuyển dụng" }
+                        ]}
+                    />
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Quản lý yêu cầu tuyển dụng</h1>

@@ -1843,13 +1843,19 @@ export default function CreateTalent() {
         } catch (parseError) {
           console.error("Lỗi parse JSON:", parseError);
           alert("❌ Lỗi khi phân tích dữ liệu CV!");
+          // Reset checkbox & trạng thái nếu lỗi parse
+          setUseExtractCV(false);
         }
       } else {
         alert("❌ Không thể trích xuất thông tin từ CV!");
+        // Reset checkbox & trạng thái nếu BE trả về isSuccess = false
+        setUseExtractCV(false);
       }
     } catch (error) {
       console.error("Lỗi extract CV:", error);
       alert("❌ Lỗi khi trích xuất CV!");
+      // Reset checkbox & trạng thái nếu call API lỗi
+      setUseExtractCV(false);
     } finally {
       setExtractingCV(false);
     }
@@ -2571,7 +2577,13 @@ export default function CreateTalent() {
                                     </div>
                                   </button>
                                   {isJobRoleLevelDropdownOpen[index] && !isUploadedFromFirebase && (
-                                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                    <div 
+                                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                      onMouseLeave={() => {
+                                        setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                        setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                      }}
+                                    >
                                       <div className="p-3 border-b border-neutral-100">
                                         <div className="relative">
                                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3016,7 +3028,13 @@ export default function CreateTalent() {
                       </div>
                     </button>
                     {isPartnerDropdownOpen && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div 
+                        className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                        onMouseLeave={() => {
+                          setIsPartnerDropdownOpen(false);
+                          setPartnerSearchQuery("");
+                        }}
+                      >
                         <div className="p-3 border-b border-neutral-100">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3173,7 +3191,13 @@ export default function CreateTalent() {
                               </div>
                             </button>
                             {isJobRoleLevelDropdownOpen[index] && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                  setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3416,7 +3440,13 @@ export default function CreateTalent() {
                             </div>
                           </button>
                           {isSkillGroupDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsSkillGroupDropdownOpen(false);
+                                setSkillGroupSearchQuery("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3512,7 +3542,13 @@ export default function CreateTalent() {
                               </div>
                             </button>
                             {isSkillDropdownOpen[index] && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsSkillDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                  setSkillSearchQuery(prev => ({ ...prev, [index]: "" }));
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3667,7 +3703,13 @@ export default function CreateTalent() {
                                 </div>
                               </button>
                               {isCertificateTypeDropdownOpen[index] && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                    setCertificateTypeSearch(prev => ({ ...prev, [index]: "" }));
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3995,7 +4037,13 @@ export default function CreateTalent() {
                                 </div>
                               </button>
                               {isWorkExperiencePositionDropdownOpen[index] && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsWorkExperiencePositionDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                    setWorkExperiencePositionSearch(prev => ({ ...prev, [index]: "" }));
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -4428,47 +4476,46 @@ export default function CreateTalent() {
             </div>
 
             {/* Extracted Data Sidebar - Sticky với Tab Navigation Dọc */}
-            {extractedData && (
-              <div className="lg:col-span-1">
-                <div className="sticky top-4 bg-white rounded-2xl shadow-lg border border-neutral-200 max-h-[calc(100vh-1rem)] flex flex-col overflow-hidden">
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b border-neutral-200 bg-gradient-to-r from-primary-50 to-secondary-50">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-lg flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-neutral-900">
-                          Dữ Liệu Đã Trích Xuất
-                        </h3>
-                        <p className="text-xs text-neutral-600">Tham khảo khi điền form</p>
-                      </div>
+            <div className="lg:col-span-1">
+              <div className="sticky top-4 bg-white rounded-2xl shadow-lg border border-neutral-200 max-h-[calc(100vh-1rem)] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-neutral-200 bg-gradient-to-r from-primary-50 to-secondary-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-lg flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-neutral-900">
+                        Dữ Liệu Đã Trích Xuất
+                      </h3>
+                      <p className="text-xs text-neutral-600">Tham khảo khi điền form</p>
                     </div>
                   </div>
+                </div>
 
-                  {/* CV Viewer Button - Mở popup xem CV */}
-                  {cvPreviewUrl && (
-                    <div className="border-b border-neutral-200 bg-white">
-                      <div className="p-4">
-                        <button
-                          type="button"
-                          onClick={() => setShowCVViewerModal(true)}
-                          className="w-full flex items-center justify-between gap-3 p-3 bg-gradient-to-r from-primary-50 to-secondary-50 hover:from-primary-100 hover:to-secondary-100 border border-primary-200 rounded-lg transition-all group"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center group-hover:bg-primary-200 transition-colors">
-                              <Eye className="w-4 h-4 text-primary-600" />
-                            </div>
-                            <div className="text-left">
-                              <h4 className="text-sm font-semibold text-neutral-900">Xem CV</h4>
-                              <p className="text-xs text-neutral-600">Đối chiếu CV với dữ liệu đã trích xuất</p>
-                            </div>
+                {/* CV Viewer Button - Mở popup xem CV */}
+                {cvPreviewUrl && (
+                  <div className="border-b border-neutral-200 bg-white">
+                    <div className="p-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowCVViewerModal(true)}
+                        className="w-full flex items-center justify-between gap-3 p-3 bg-gradient-to-r from-primary-50 to-secondary-50 hover:from-primary-100 hover:to-secondary-100 border border-primary-200 rounded-lg transition-all group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                            <Eye className="w-4 h-4 text-primary-600" />
                           </div>
-                          <Eye className="w-4 h-4 text-primary-600 group-hover:text-primary-700 transition-colors" />
-                        </button>
-                      </div>
+                          <div className="text-left">
+                            <h4 className="text-sm font-semibold text-neutral-900">Xem CV</h4>
+                            <p className="text-xs text-neutral-600">Đối chiếu CV với dữ liệu đã trích xuất</p>
+                          </div>
+                        </div>
+                        <Eye className="w-4 h-4 text-primary-600 group-hover:text-primary-700 transition-colors" />
+                      </button>
                     </div>
-                  )}
+                  </div>
+                )}
 
                   {/* Layout với Content bên trái và Tab dọc bên phải */}
                   <div className="flex flex-1 overflow-hidden">
@@ -4476,222 +4523,286 @@ export default function CreateTalent() {
                     <div className="flex-1 overflow-y-auto p-4">
                       <div className="space-y-4">
                       {/* Tab: Tổng quan */}
-                      {activeSidebarTab === "overview" && (extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
-                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                          <div className="space-y-2.5">
-                            {extractedData.fullName && (
-                              <div className="flex items-start gap-2">
-                                <User className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Họ và tên</p>
-                                  <p className="text-sm font-medium text-neutral-900 break-words">{extractedData.fullName}</p>
+                      {activeSidebarTab === "overview" && (
+                        extractedData &&
+                        (extractedData.fullName ||
+                          extractedData.email ||
+                          extractedData.phone ||
+                          extractedData.locationName ||
+                          extractedData.workingMode ||
+                          extractedData.githubUrl ||
+                          extractedData.portfolioUrl ||
+                          extractedData.dateOfBirth) ? (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <div className="space-y-2.5">
+                              {extractedData.fullName && (
+                                <div className="flex items-start gap-2">
+                                  <User className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Họ và tên</p>
+                                    <p className="text-sm font-medium text-neutral-900 break-words">{extractedData.fullName}</p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.email && (
-                              <div className="flex items-start gap-2">
-                                <Mail className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Email</p>
-                                  <a href={`mailto:${extractedData.email}`} className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all">{extractedData.email}</a>
+                              )}
+                              {extractedData.email && (
+                                <div className="flex items-start gap-2">
+                                  <Mail className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Email</p>
+                                    <a
+                                      href={`mailto:${extractedData.email}`}
+                                      className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all"
+                                    >
+                                      {extractedData.email}
+                                    </a>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.phone && (
-                              <div className="flex items-start gap-2">
-                                <Phone className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Số điện thoại</p>
-                                  <p className="text-sm font-medium text-neutral-900">{extractedData.phone}</p>
+                              )}
+                              {extractedData.phone && (
+                                <div className="flex items-start gap-2">
+                                  <Phone className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Số điện thoại</p>
+                                    <p className="text-sm font-medium text-neutral-900">{extractedData.phone}</p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.dateOfBirth && (
-                              <div className="flex items-start gap-2">
-                                <Calendar className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Ngày sinh</p>
-                                  <p className="text-sm font-medium text-neutral-900">{extractedData.dateOfBirth}</p>
+                              )}
+                              {extractedData.dateOfBirth && (
+                                <div className="flex items-start gap-2">
+                                  <Calendar className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Ngày sinh</p>
+                                    <p className="text-sm font-medium text-neutral-900">{extractedData.dateOfBirth}</p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.locationName && (
-                              <div className="flex items-start gap-2">
-                                <MapPin className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Khu vực làm việc</p>
-                                  <p className="text-sm font-medium text-neutral-900">{extractedData.locationName}</p>
+                              )}
+                              {extractedData.locationName && (
+                                <div className="flex items-start gap-2">
+                                  <MapPin className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Khu vực làm việc</p>
+                                    <p className="text-sm font-medium text-neutral-900">{extractedData.locationName}</p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.workingMode && (
-                              <div className="flex items-start gap-2">
-                                <Globe className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Chế độ làm việc</p>
-                                  <p className="text-sm font-medium text-neutral-900">
-                                    {extractedData.workingMode === 'Remote' ? 'Từ xa' :
-                                      extractedData.workingMode === 'Onsite' ? 'Tại văn phòng' :
-                                        extractedData.workingMode === 'Hybrid' ? 'Kết hợp' :
-                                          extractedData.workingMode === 'Flexible' ? 'Linh hoạt' :
-                                            extractedData.workingMode}
-                                  </p>
+                              )}
+                              {extractedData.workingMode && (
+                                <div className="flex items-start gap-2">
+                                  <Globe className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Chế độ làm việc</p>
+                                    <p className="text-sm font-medium text-neutral-900">
+                                      {extractedData.workingMode === "Remote"
+                                        ? "Từ xa"
+                                        : extractedData.workingMode === "Onsite"
+                                          ? "Tại văn phòng"
+                                          : extractedData.workingMode === "Hybrid"
+                                            ? "Kết hợp"
+                                            : extractedData.workingMode === "Flexible"
+                                              ? "Linh hoạt"
+                                              : extractedData.workingMode}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.githubUrl && (
-                              <div className="flex items-start gap-2">
-                                <Github className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Github URL</p>
-                                  <a href={extractedData.githubUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline">
-                                    {extractedData.githubUrl}
-                                  </a>
+                              )}
+                              {extractedData.githubUrl && (
+                                <div className="flex items-start gap-2">
+                                  <Github className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Github URL</p>
+                                    <a
+                                      href={extractedData.githubUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline"
+                                    >
+                                      {extractedData.githubUrl}
+                                    </a>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {extractedData.portfolioUrl && (
-                              <div className="flex items-start gap-2">
-                                <LinkIcon className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-neutral-600 mb-0.5">Portfolio URL</p>
-                                  <a href={extractedData.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline">
-                                    {extractedData.portfolioUrl}
-                                  </a>
+                              )}
+                              {extractedData.portfolioUrl && (
+                                <div className="flex items-start gap-2">
+                                  <LinkIcon className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-neutral-600 mb-0.5">Portfolio URL</p>
+                                    <a
+                                      href={extractedData.portfolioUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm font-medium text-primary-600 hover:text-primary-700 break-all underline"
+                                    >
+                                      {extractedData.portfolioUrl}
+                                    </a>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
 
                       {/* Tab: Kỹ năng */}
-                      {activeSidebarTab === "skills" && extractedData.skills && extractedData.skills.length > 0 && (
-                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Star className="w-4 h-4 text-primary-600" />
-                            <span className="text-sm font-semibold text-neutral-900">Kỹ năng ({extractedData.skills.length})</span>
+                      {activeSidebarTab === "skills" && (
+                        extractedData && extractedData.skills && extractedData.skills.length > 0 ? (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Star className="w-4 h-4 text-primary-600" />
+                              <span className="text-sm font-semibold text-neutral-900">Kỹ năng ({extractedData.skills.length})</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {extractedData.skills.map((skill, index: number) => {
+                                const skillName = typeof skill === 'string' ? skill : skill.skillName;
+                                const skillLevel = typeof skill === 'object' ? skill.level : null;
+                                return (
+                                  <div key={index} className="px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-medium text-neutral-900 shadow-sm">
+                                    <span>{skillName}</span>
+                                    {skillLevel && <span className="text-primary-600 ml-1">({skillLevel})</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {extractedData.skills.map((skill, index: number) => {
-                              const skillName = typeof skill === 'string' ? skill : skill.skillName;
-                              const skillLevel = typeof skill === 'object' ? skill.level : null;
-                              return (
-                                <div key={index} className="px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-medium text-neutral-900 shadow-sm">
-                                  <span>{skillName}</span>
-                                  {skillLevel && <span className="text-primary-600 ml-1">({skillLevel})</span>}
-                                </div>
-                              );
-                            })}
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
                           </div>
-                        </div>
+                        )
                       )}
 
                       {/* Tab: Kinh nghiệm */}
-                      {activeSidebarTab === "experience" && extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
-                        <div className="space-y-3">
-                          {extractedData.workExperiences.map((exp, index: number) => (
-                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
-                              <div className="flex items-start gap-2 mb-2">
-                                <Briefcase className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-neutral-900">{exp.position || 'N/A'}</p>
-                                  <p className="text-xs text-neutral-600">{exp.company || 'N/A'}</p>
-                                  <p className="text-xs text-neutral-500 mt-1">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</p>
-                                  {exp.description && (
-                                    <p className="text-xs text-neutral-700 mt-2 italic line-clamp-2">{exp.description}</p>
-                                  )}
+                      {activeSidebarTab === "experience" && (
+                        extractedData && extractedData.workExperiences && extractedData.workExperiences.length > 0 ? (
+                          <div className="space-y-3">
+                            {extractedData.workExperiences.map((exp, index: number) => (
+                              <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <Briefcase className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-neutral-900">{exp.position || 'N/A'}</p>
+                                    <p className="text-xs text-neutral-600">{exp.company || 'N/A'}</p>
+                                    <p className="text-xs text-neutral-500 mt-1">{exp.startDate || 'N/A'} - {exp.endDate || 'Hiện tại'}</p>
+                                    {exp.description && (
+                                      <p className="text-xs text-neutral-700 mt-2 italic line-clamp-2">{exp.description}</p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
 
                       {/* Tab: Dự án */}
-                      {activeSidebarTab === "projects" && extractedData.projects && extractedData.projects.length > 0 && (
-                        <div className="space-y-3">
-                          {extractedData.projects.map((project, index: number) => (
-                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
-                              <div className="flex items-start gap-2 mb-2">
-                                <FolderOpen className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-neutral-900">{project.projectName || 'N/A'}</p>
-                                  {project.technologies && (
-                                    <p className="text-xs text-neutral-600 mt-1">Tech: {project.technologies}</p>
-                                  )}
-                                  {project.description && (
-                                    <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{project.description}</p>
-                                  )}
+                      {activeSidebarTab === "projects" && (
+                        extractedData && extractedData.projects && extractedData.projects.length > 0 ? (
+                          <div className="space-y-3">
+                            {extractedData.projects.map((project, index: number) => (
+                              <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <FolderOpen className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-neutral-900">{project.projectName || 'N/A'}</p>
+                                    {project.technologies && (
+                                      <p className="text-xs text-neutral-600 mt-1">Tech: {project.technologies}</p>
+                                    )}
+                                    {project.description && (
+                                      <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{project.description}</p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
 
                       {/* Tab: Chứng chỉ */}
-                      {activeSidebarTab === "certificates" && extractedData.certificates && extractedData.certificates.length > 0 && (
-                        <div className="space-y-3">
-                          {extractedData.certificates.map((cert, index: number) => (
-                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
-                              <div className="flex items-start gap-2 mb-2">
-                                <Award className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-neutral-900">{cert.certificateName || 'N/A'}</p>
-                                  {cert.issuedDate && (
-                                    <p className="text-xs text-neutral-600 mt-1">Ngày cấp: {cert.issuedDate}</p>
-                                  )}
-                                  {cert.certificateDescription && (
-                                    <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{cert.certificateDescription}</p>
-                                  )}
-                                  {cert.imageUrl && (
-                                    <a href={cert.imageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 hover:text-primary-700 underline mt-1 inline-block">
-                                      Xem hình ảnh →
-                                    </a>
-                                  )}
+                      {activeSidebarTab === "certificates" && (
+                        extractedData && extractedData.certificates && extractedData.certificates.length > 0 ? (
+                          <div className="space-y-3">
+                            {extractedData.certificates.map((cert, index: number) => (
+                              <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <Award className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-neutral-900">{cert.certificateName || 'N/A'}</p>
+                                    {cert.issuedDate && (
+                                      <p className="text-xs text-neutral-600 mt-1">Ngày cấp: {cert.issuedDate}</p>
+                                    )}
+                                    {cert.certificateDescription && (
+                                      <p className="text-xs text-neutral-700 mt-2 line-clamp-2">{cert.certificateDescription}</p>
+                                    )}
+                                    {cert.imageUrl && (
+                                      <a href={cert.imageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 hover:text-primary-700 underline mt-1 inline-block">
+                                        Xem hình ảnh →
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
 
                       {/* Tab: Vị trí */}
-                      {activeSidebarTab === "jobRole" && extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
-                        <div className="space-y-3">
-                          {extractedData.jobRoleLevels.map((jrl, index: number) => (
-                            <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
-                              <div className="flex items-start gap-2 mb-2">
-                                <Target className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-neutral-900">{jrl.position || 'N/A'}</p>
-                                  {jrl.level && (
-                                    <p className="text-xs text-neutral-600 mt-1">Cấp độ: {jrl.level}</p>
-                                  )}
-                                  {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
-                                    <p className="text-xs text-neutral-600">Kinh nghiệm: {jrl.yearsOfExp} năm</p>
-                                  )}
-                                  {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
-                                    <p className="text-xs text-primary-600 font-medium mt-1">Mức lương: {jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</p>
-                                  )}
+                      {activeSidebarTab === "jobRole" && (
+                        extractedData && extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 ? (
+                          <div className="space-y-3">
+                            {extractedData.jobRoleLevels.map((jrl, index: number) => (
+                              <div key={index} className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <Target className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-neutral-900">{jrl.position || 'N/A'}</p>
+                                    {jrl.level && (
+                                      <p className="text-xs text-neutral-600 mt-1">Cấp độ: {jrl.level}</p>
+                                    )}
+                                    {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
+                                      <p className="text-xs text-neutral-600">Kinh nghiệm: {jrl.yearsOfExp} năm</p>
+                                    )}
+                                    {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
+                                      <p className="text-xs text-primary-600 font-medium mt-1">Mức lương: {jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
 
                       {/* Tab: Cảnh báo */}
-                      {activeSidebarTab === "warnings" && (unmatchedData.location ||
-                        (unmatchedData.skills && unmatchedData.skills.length > 0) ||
-                        (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) ||
-                        (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) && (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 mb-3">
-                            <X className="w-4 h-4 text-orange-600" />
-                            <span className="text-sm font-semibold text-orange-700">⚠️ Hệ thống thiếu dữ liệu</span>
-                          </div>
+                      {activeSidebarTab === "warnings" && (
+                        (unmatchedData.location ||
+                          (unmatchedData.skills && unmatchedData.skills.length > 0) ||
+                          (unmatchedData.jobRoles && unmatchedData.jobRoles.length > 0) ||
+                          (unmatchedData.certificateTypes && unmatchedData.certificateTypes.length > 0)) ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 mb-3">
+                              <X className="w-4 h-4 text-orange-600" />
+                              <span className="text-sm font-semibold text-orange-700">⚠️ Hệ thống thiếu dữ liệu</span>
+                            </div>
                           {unmatchedData.location && (
                             <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
                               <div className="flex items-center justify-between mb-2">
@@ -4826,13 +4937,18 @@ export default function CreateTalent() {
                             </div>
                           )}
                         </div>
+                        ) : (
+                          <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            <p className="text-sm text-neutral-500 text-center">Chưa có thông tin</p>
+                          </div>
+                        )
                       )}
                     </div>
                     </div>
 
                     {/* Tab Navigation - Dọc bên phải */}
                     <div className="w-16 border-l border-neutral-200 bg-neutral-50/50 flex flex-col overflow-y-auto flex-shrink-0">
-                      {(extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
+                      {extractedData && (extractedData.fullName || extractedData.email || extractedData.phone || extractedData.locationName || extractedData.workingMode || extractedData.githubUrl || extractedData.portfolioUrl || extractedData.dateOfBirth) && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("overview")}
@@ -4847,7 +4963,7 @@ export default function CreateTalent() {
                           <span className="text-[10px] leading-tight text-center">Tổng quan</span>
                         </button>
                       )}
-                      {extractedData.skills && extractedData.skills.length > 0 && (
+                      {extractedData && extractedData.skills && extractedData.skills.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("skills")}
@@ -4862,7 +4978,7 @@ export default function CreateTalent() {
                           <span className="text-[10px] leading-tight text-center">Kỹ năng</span>
                         </button>
                       )}
-                      {extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
+                      {extractedData && extractedData.workExperiences && extractedData.workExperiences.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("experience")}
@@ -4877,7 +4993,7 @@ export default function CreateTalent() {
                           <span className="text-[10px] leading-tight text-center">Kinh nghiệm</span>
                         </button>
                       )}
-                      {extractedData.projects && extractedData.projects.length > 0 && (
+                      {extractedData && extractedData.projects && extractedData.projects.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("projects")}
@@ -4892,7 +5008,7 @@ export default function CreateTalent() {
                           <span className="text-[10px] leading-tight text-center">Dự án</span>
                         </button>
                       )}
-                      {extractedData.certificates && extractedData.certificates.length > 0 && (
+                      {extractedData && extractedData.certificates && extractedData.certificates.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("certificates")}
@@ -4907,7 +5023,7 @@ export default function CreateTalent() {
                           <span className="text-[10px] leading-tight text-center">Chứng chỉ</span>
                         </button>
                       )}
-                      {extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
+                      {extractedData && extractedData.jobRoleLevels && extractedData.jobRoleLevels.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setActiveSidebarTab("jobRole")}
@@ -4941,7 +5057,6 @@ export default function CreateTalent() {
                   </div>
                 </div>
               </div>
-            )}
           </div>
         </div>
       </div>

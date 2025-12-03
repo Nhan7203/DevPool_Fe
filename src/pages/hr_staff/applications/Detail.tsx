@@ -17,7 +17,6 @@ import { applyProcessStepService, type ApplyProcessStep } from "../../../service
 import { applyProcessTemplateService } from "../../../services/ApplyProcessTemplate";
 import { locationService } from "../../../services/location";
 import { WorkingMode as WorkingModeEnum } from "../../../types/WorkingMode";
-import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { Button } from "../../../components/ui/button";
 import {
   XCircle,
@@ -38,6 +37,10 @@ import {
   User,
   Building2,
   FileCheck,
+  Edit,
+  Trash2,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 const talentStatusLabels: Record<string, string> = {
@@ -115,7 +118,7 @@ export default function TalentCVApplicationDetailPage() {
   const [applyProcessTemplateName, setApplyProcessTemplateName] = useState<string>("—");
   const [showDob, setShowDob] = useState(false);
   const [showFullCVSummary, setShowFullCVSummary] = useState(false);
-  const [existingContract, setExistingContract] = useState<PartnerContractPaymentModel | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const fetchData = useCallback(async () => {
     let currentApplication: Apply | null = null;
@@ -235,9 +238,16 @@ export default function TalentCVApplicationDetailPage() {
       // Fetch detailed application info (talent, project, client company)
       let foundApplication: TalentApplicationDetailed | null = null;
       try {
-        const detailedResponse = await talentApplicationService.getByJobRequest(appData.jobRequestId);
-        foundApplication = detailedResponse?.data?.applications?.find(app => app.id === appData.id) ?? null;
-        setDetailedApplication(foundApplication);
+        // Thử dùng getDetailedById để lấy updatedAt chính xác
+        try {
+          foundApplication = await talentApplicationService.getDetailedById(appData.id);
+          setDetailedApplication(foundApplication);
+        } catch {
+          // Fallback: dùng getByJobRequest nếu getDetailedById không có
+          const detailedResponse = await talentApplicationService.getByJobRequest(appData.jobRequestId);
+          foundApplication = detailedResponse?.data?.applications?.find(app => app.id === appData.id) ?? null;
+          setDetailedApplication(foundApplication);
+        }
 
         if (foundApplication?.talent?.locationId) {
           try {
@@ -253,28 +263,6 @@ export default function TalentCVApplicationDetailPage() {
         console.error("❌ Lỗi tải thông tin chi tiết ứng viên:", err);
         setDetailedApplication(null);
         setTalentLocationName("—");
-      }
-
-      // Fetch existing contract for this talent (if application is Hired)
-      try {
-        if (currentApplication.status === 'Hired' && foundApplication?.talent?.id) {
-          const contracts = await partnerContractPaymentService.getAll({
-            talentId: foundApplication.talent.id,
-            excludeDeleted: true
-          });
-          // Lấy hợp đồng mới nhất (nếu có nhiều hợp đồng) - sắp xếp theo createdAt
-          const sortedContracts = (contracts as PartnerContractPaymentModel[]).sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-          });
-          setExistingContract(sortedContracts.length > 0 ? sortedContracts[0] : null);
-        } else {
-          setExistingContract(null);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi tải thông tin hợp đồng:", err);
-        setExistingContract(null);
       }
 
       // Fetch submitter name
@@ -323,6 +311,31 @@ export default function TalentCVApplicationDetailPage() {
     }
   }, [id]);
 
+  const handleDeleteAllActivities = async () => {
+    if (!application || activities.length === 0) return;
+    
+    const confirmed = window.confirm(
+      `Bạn có chắc muốn xóa tất cả ${activities.length} hoạt động? Hành động này không thể hoàn tác.`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setDeletingAll(true);
+      // Xóa tất cả activities
+      await Promise.all(activities.map(activity => applyActivityService.delete(activity.id)));
+      
+      // Refresh data
+      await fetchData();
+      alert(`✅ Đã xóa ${activities.length} hoạt động thành công!`);
+    } catch (err) {
+      console.error("❌ Lỗi xóa activities:", err);
+      alert("Không thể xóa tất cả hoạt động. Vui lòng thử lại.");
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   const handleAutoCreateActivities = async () => {
     if (!application || !jobRequest || autoCreating) return;
 
@@ -357,6 +370,10 @@ export default function TalentCVApplicationDetailPage() {
         }
       });
 
+      // Lấy thời gian hiện tại để set cho activity đầu tiên
+      const now = new Date();
+      const nowUTC = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
+
       // Tự động tạo tối đa có thể: duyệt theo thứ tự, tôn trọng ràng buộc "bước trước phải Passed"
       const createdList: ApplyActivity[] = [];
       for (let i = 0; i < sortedSteps.length; i++) {
@@ -364,7 +381,9 @@ export default function TalentCVApplicationDetailPage() {
         if (existingByStepId.has(step.id)) continue;
         // BỎ VALID: không cần bước trước phải đạt mới được thêm activity
         try {
-          const created = await applyActivityService.create({
+          // Activity đầu tiên (i === 0 trong danh sách sẽ tạo) được set scheduledDate = thời gian hiện tại
+          const isFirstActivity = createdList.length === 0;
+          const payload: any = {
             applyId: application.id,
             processStepId: step.id,
             activityType: ApplyActivityType.Online,
@@ -372,7 +391,14 @@ export default function TalentCVApplicationDetailPage() {
             notes: step.description
               ? `Tự động tạo từ bước "${step.stepName}": ${step.description}`
               : `Tự động tạo từ bước "${step.stepName}"`
-          });
+          };
+          
+          // Chỉ activity đầu tiên mới có scheduledDate
+          if (isFirstActivity) {
+            payload.scheduledDate = nowUTC;
+          }
+
+          const created = await applyActivityService.create(payload);
           createdList.push(created);
           existingByStepId.set(step.id, created as any);
         } catch (e) {
@@ -427,68 +453,52 @@ export default function TalentCVApplicationDetailPage() {
     return templateSteps.some(step => !existingByStepId.has(step.id));
   }, [templateSteps, activities]);
 
-  // Hàm lấy nhãn trạng thái hợp đồng
-  const getContractStatusLabel = (status: string) => {
-    const normalized = status?.toLowerCase();
-    switch (normalized) {
-      case 'active':
-        return 'Đang hiệu lực';
-      case 'pending':
-        return 'Chờ duyệt';
-      case 'draft':
-        return 'Bản nháp';
-      case 'expired':
-        return 'Đã hết hạn';
-      case 'terminated':
-        return 'Đã chấm dứt';
-      case 'rejected':
-        return 'Đã từ chối';
-      default:
-        return status || '—';
+  // Tính toán last updated time và kiểm tra idle 7 ngày - DI CHUYỂN LÊN TRƯỚC EARLY RETURN
+  const getLastUpdatedTime = useMemo(() => {
+    // Ưu tiên: updatedAt > last activity scheduledDate > createdAt
+    let lastUpdated: Date | null = null;
+    
+    if (detailedApplication?.updatedAt) {
+      lastUpdated = new Date(detailedApplication.updatedAt);
+    } else if (activities.length > 0) {
+      // Lấy activity có scheduledDate gần nhất
+      const sortedActivities = [...activities]
+        .filter(a => a.scheduledDate)
+        .sort((a, b) => {
+          const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+          const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+          return dateB - dateA;
+        });
+      
+      if (sortedActivities.length > 0 && sortedActivities[0].scheduledDate) {
+        lastUpdated = new Date(sortedActivities[0].scheduledDate);
+      }
     }
-  };
-
-  // Hàm lấy màu trạng thái hợp đồng
-  const getContractStatusColor = (status: string) => {
-    const normalized = status?.toLowerCase();
-    switch (normalized) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'expired':
-        return 'bg-blue-100 text-blue-800';
-      case 'terminated':
-        return 'bg-red-100 text-red-800';
-      case 'rejected':
-        return 'bg-rose-100 text-rose-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    
+    if (!lastUpdated && application?.createdAt) {
+      lastUpdated = new Date(application.createdAt);
     }
-  };
+    
+    return lastUpdated;
+  }, [detailedApplication, activities, application]);
 
-  // Kiểm tra xem có nên hiển thị nút "Tạo hợp đồng" hay không
-  const shouldShowCreateContractButton = useMemo(() => {
-    // Chỉ hiển thị khi application ở trạng thái Hired
-    if (application?.status !== 'Hired') {
-      return false;
-    }
+  const isIdle7Days = useMemo(() => {
+    if (!getLastUpdatedTime) return false;
+    const daysSinceUpdate = Math.floor(
+      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return daysSinceUpdate >= 7;
+  }, [getLastUpdatedTime]);
 
-    // Nếu chưa có hợp đồng nào, hiển thị nút "Tạo hợp đồng"
-    if (!existingContract) {
-      return true;
-    }
-
-    // Nếu hợp đồng ở trạng thái "Rejected", hiển thị nút "Tạo hợp đồng khác"
-    if (existingContract.contractStatus === 'Rejected') {
-      return true;
-    }
-
-    // Các trạng thái khác thì không hiển thị nút tạo hợp đồng
-    return false;
-  }, [application?.status, existingContract]);
+  // Kiểm tra xem có activity nào đã hoàn thành không (Completed, Passed, Failed, NoShow)
+  const hasCompletedActivity = useMemo(() => {
+    return activities.some(activity => 
+      activity.status === ApplyActivityStatus.Completed ||
+      activity.status === ApplyActivityStatus.Passed ||
+      activity.status === ApplyActivityStatus.Failed ||
+      activity.status === ApplyActivityStatus.NoShow
+    );
+  }, [activities]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!id || !application) return;
@@ -549,6 +559,7 @@ export default function TalentCVApplicationDetailPage() {
   //   return activities.some(activity_result => activity.status === ApplyActivityStatus.Approved);
   // };
 
+  // Helper functions - moved after all hooks
   interface StatusConfig {
     label: string;
     color: string;
@@ -640,9 +651,16 @@ export default function TalentCVApplicationDetailPage() {
   }
 
   const statusConfig = getStatusConfig(application.status);
-  const statusAllowsActivityCreation = ["Submitted", "Interviewing"].includes(application.status) && 
-    application.status !== "Expired" && application.status !== "ClosedBySystem";
+  const statusAllowsActivityCreation =
+    ["Submitted", "Interviewing"].includes(application.status) &&
+    application.status !== "Expired" &&
+    application.status !== "ClosedBySystem";
+
+  // Cho phép tạo hoạt động (thủ công) khi còn bước chưa tạo và trạng thái cho phép
   const canCreateNextActivity = statusAllowsActivityCreation && hasRemainingSteps;
+
+  // Chỉ cho phép tự động tạo khi chưa có hoạt động nào
+  const canAutoCreateActivities = canCreateNextActivity && activities.length === 0;
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return "—";
@@ -687,25 +705,26 @@ export default function TalentCVApplicationDetailPage() {
     }
   };
 
-  // Hàm xử lý khi click nút "Tạo hợp đồng"
-  const handleCreateContract = () => {
-    if (!detailedApplication?.talent) {
-      alert("Không tìm thấy thông tin nhân sự");
-      return;
+  const formatLastUpdatedTime = () => {
+    if (!getLastUpdatedTime) return "—";
+    try {
+      return getLastUpdatedTime.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "—";
     }
+  };
 
-    const talentId = detailedApplication.talent.id;
-    const partnerId = detailedApplication.talent.currentPartnerId;
-
-    if (!partnerId) {
-      alert("Nhân sự này chưa có đối tác được gán");
-      return;
-    }
-
-    // Chuyển đến trang tạo hợp đồng với query params
-    // talentApplicationId: để pre-fill vào form
-    // applicationId: để quay lại trang detail sau khi tạo
-    navigate(`/ta/contracts/create?partnerId=${partnerId}&talentId=${talentId}&talentApplicationId=${application?.id}&applicationId=${application?.id}`);
+  const getDaysSinceUpdate = () => {
+    if (!getLastUpdatedTime) return 0;
+    return Math.floor(
+      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+    );
   };
 
   return (
@@ -727,42 +746,54 @@ export default function TalentCVApplicationDetailPage() {
             ]}
           />
 
+          {/* Banner cảnh báo khi idle 7 ngày */}
+          {isIdle7Days && (
+            <div className="mt-4 mb-6 bg-amber-50 border-l-4 border-amber-500 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                  ⚠️ Cảnh báo: Ứng viên này đã không được cập nhật {getDaysSinceUpdate()} ngày
+                </h3>
+                <p className="text-sm text-amber-800">
+                  Vui lòng cập nhật trạng thái để theo dõi tiến độ ứng viên.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ sơ #{application.id}</h1>
               <p className="text-neutral-600 mb-4">Thông tin chi tiết hồ sơ ứng viên</p>
-              <div 
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200 relative group`}
-                title={application.status === "Expired" || application.status === "ClosedBySystem" 
-                  ? "Tự động đóng bởi hệ thống do quá 30 ngày không có hoạt động." 
-                  : ""}
-              >
-                <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
-                {(application.status === "Expired" || application.status === "ClosedBySystem") && (
-                  <AlertCircle className="w-4 h-4 text-gray-500" />
-                )}
+              <div className="flex flex-wrap items-center gap-3">
+                <div 
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200 relative group`}
+                  title={application.status === "Expired" || application.status === "ClosedBySystem" 
+                    ? "Tự động đóng bởi hệ thống do quá 30 ngày không có hoạt động." 
+                    : ""}
+                >
+                  <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
+                  {(application.status === "Expired" || application.status === "ClosedBySystem") && (
+                    <AlertCircle className="w-4 h-4 text-gray-500" />
+                  )}
+                </div>
+                {/* Last updated time */}
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${
+                  isIdle7Days 
+                    ? "bg-amber-50 border-amber-200" 
+                    : "bg-neutral-50 border-neutral-200"
+                }`}>
+                  <Clock className={`w-4 h-4 ${isIdle7Days ? "text-amber-600" : "text-neutral-500"}`} />
+                  <span className={`text-sm font-medium ${
+                    isIdle7Days ? "text-amber-900" : "text-neutral-700"
+                  }`}>
+                    Cập nhật lần cuối: {formatLastUpdatedTime()}
+                  </span>
+                </div>
               </div>
             </div>
 
             <div className="flex gap-3 flex-wrap">
-              {application?.status === 'Hired' && existingContract && (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 bg-white">
-                  <FileText className="w-4 h-4 text-neutral-600" />
-                  <span className="text-sm font-medium text-neutral-700">Đã có hợp đồng:</span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getContractStatusColor(existingContract.contractStatus)}`}>
-                    {getContractStatusLabel(existingContract.contractStatus)}
-                  </span>
-                </div>
-              )}
-              {shouldShowCreateContractButton && (
-                <Button
-                  onClick={handleCreateContract}
-                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
-                >
-                  <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  {existingContract?.contractStatus === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
-                </Button>
-              )}
               {application.status === 'Submitted' ? (
                 <Button
                   onClick={() => handleStatusUpdate('Withdrawn')}
@@ -897,33 +928,60 @@ export default function TalentCVApplicationDetailPage() {
             {/* Hoạt động */}
             <div className="bg-white border border-neutral-100 rounded-2xl shadow-soft">
               <div className="p-6 border-b border-neutral-200">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-purple-100 rounded-lg">
                       <Calendar className="w-5 h-5 text-purple-600" />
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900">Hoạt động tuyển dụng</h2>
-                  </div>
-                  {canCreateNextActivity && (
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={() => navigate(`/ta/apply-activities/create?applyId=${application.id}`)}
-                        disabled={!statusAllowsActivityCreation}
-                        className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"}`}
-                      >
-                        <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                        Tạo hoạt động
-                      </Button>
-                      <Button
-                        onClick={handleAutoCreateActivities}
-                        disabled={!statusAllowsActivityCreation || autoCreating}
-                        className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation || autoCreating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"}`}
-                      >
-                        <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                        {autoCreating ? "Đang tạo..." : "Tự động tạo"}
-                      </Button>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Hoạt động tuyển dụng</h2>
+                      {templateSteps.length > 0 && (
+                        <p className="mt-1 text-xs text-neutral-500">
+                          Tiến độ quy trình:{" "}
+                          <span className="font-semibold text-neutral-700">
+                            {activities.length}/{templateSteps.length} bước đã có hoạt động
+                          </span>
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </div>
+                  <div className="flex gap-3">
+                    {canCreateNextActivity && (
+                      <>
+                        {/* Nút tạo hoạt động thủ công: luôn hiển thị khi còn bước và trạng thái cho phép */}
+                        <Button
+                          onClick={() => navigate(`/ta/apply-activities/create?applyId=${application.id}`)}
+                          disabled={!statusAllowsActivityCreation}
+                          className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"}`}
+                        >
+                          <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                          Tạo hoạt động
+                        </Button>
+
+                        {/* Nút tự động tạo: chỉ hiển thị khi chưa có hoạt động nào */}
+                        {canAutoCreateActivities && (
+                          <Button
+                            onClick={handleAutoCreateActivities}
+                            disabled={!statusAllowsActivityCreation || autoCreating}
+                            className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${!statusAllowsActivityCreation || autoCreating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"}`}
+                          >
+                            <Calendar className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            {autoCreating ? "Đang tạo..." : "Tự động tạo"}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {activities.length > 0 && !hasCompletedActivity && (
+                      <Button
+                        onClick={handleDeleteAllActivities}
+                        disabled={deletingAll}
+                        className={`group flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${deletingAll ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"}`}
+                      >
+                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        {deletingAll ? "Đang xóa..." : "Xóa hết"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="p-6">
@@ -952,19 +1010,39 @@ export default function TalentCVApplicationDetailPage() {
                         : null;
 
                       return (
-                        <Link key={activity.id} to={`/ta/apply-activities/${activity.id}`} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
+                        <div key={activity.id} className="block p-5 border border-neutral-200 rounded-xl hover:border-purple-300 transition-all duration-300 bg-gradient-to-br from-white to-neutral-50 hover:shadow-medium">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">{index + 1}</span>
                               <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.activityType === ApplyActivityType.Online ? 'bg-blue-100 text-blue-800' : activity.activityType === ApplyActivityType.Offline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{getActivityTypeLabel(activity.activityType)}</span>
                               <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${activity.status === ApplyActivityStatus.Scheduled ? 'bg-gray-100 text-gray-800' : activity.status === ApplyActivityStatus.Completed ? 'bg-blue-100 text-blue-800' : activity.status === ApplyActivityStatus.Passed ? 'bg-green-100 text-green-800' : activity.status === ApplyActivityStatus.Failed ? 'bg-red-100 text-red-800' : activity.status === ApplyActivityStatus.NoShow ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800'}`}>{getActivityStatusLabel(activity.status)}</span>
                             </div>
-                            {formattedDate && (
-                              <div className="flex items-center gap-1.5 bg-neutral-100 px-3 py-1.5 rounded-lg">
-                                <Calendar className="w-4 h-4 text-neutral-500" />
-                                <span className="text-xs text-neutral-700 font-medium">{formattedDate}</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {formattedDate && (
+                                <div className="flex items-center gap-1.5 bg-neutral-100 px-3 py-1.5 rounded-lg">
+                                  <Calendar className="w-4 h-4 text-neutral-500" />
+                                  <span className="text-xs text-neutral-700 font-medium">{formattedDate}</span>
+                                </div>
+                              )}
+                              <Button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  navigate(`/ta/apply-activities/edit/${activity.id}`);
+                                }}
+                                className="group flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 transition-all duration-300"
+                              >
+                                <Edit className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                Sửa
+                              </Button>
+                              <Link
+                                to={`/ta/apply-activities/${activity.id}`}
+                                className="group flex items-center gap-1 px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-all duration-300"
+                              >
+                                <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                Xem
+                              </Link>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
@@ -988,7 +1066,7 @@ export default function TalentCVApplicationDetailPage() {
                               <p className="text-sm text-neutral-700 leading-relaxed">{activity.notes}</p>
                             </div>
                           )}
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>

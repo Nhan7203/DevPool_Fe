@@ -2,8 +2,18 @@
 import axios from "../configs/axios";
 import { AxiosError } from "axios";
 
+export const PartnerType = {
+  OwnCompany: 1,
+  Partner: 2,
+  Individual: 3,
+} as const;
+
+export type PartnerType = typeof PartnerType[keyof typeof PartnerType];
+
 export interface Partner {
   id: number;
+  code: string;
+  partnerType: PartnerType;
   companyName: string;
   taxCode?: string;
   contactPerson?: string;
@@ -13,6 +23,8 @@ export interface Partner {
 }
 
 export interface PartnerPayload {
+  code: string;
+  partnerType: PartnerType;
   companyName: string;
   taxCode?: string;
   contactPerson?: string;
@@ -54,7 +66,10 @@ export interface PartnerPaymentPeriodModel {
 
 export interface PartnerDetailedModel {
   id: number;
+  code: string;
+  partnerType: PartnerType;
   companyName: string;
+  taxCode?: string | null;
   contactPerson?: string | null;
   email?: string | null;
   phoneNumber?: string | null;

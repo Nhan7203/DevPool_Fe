@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../../../../components/common/Sidebar";
+import Breadcrumb from "../../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { Link } from "react-router-dom";
 import { marketService, type Market } from "../../../../services/Market";
@@ -102,6 +103,12 @@ export default function MarketListPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Danh mục" , to: "/admin/categories" },
+              { label: "Thị trường" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Thị trường (Markets)</h1>

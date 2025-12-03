@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { Button } from "../../../components/ui/button";
 import { applyProcessTemplateService, type ApplyProcessTemplate } from "../../../services/ApplyProcessTemplate";
@@ -88,6 +89,11 @@ export default function SalesApplyProcessTemplateListPage() {
       <Sidebar items={sidebarItems} title="Sales Staff" />
       <div className="flex-1 p-8">
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Mẫu quy trình ứng tuyển" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Mẫu Quy Trình</h1>
