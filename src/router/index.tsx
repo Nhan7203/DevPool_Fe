@@ -206,6 +206,10 @@ const SalesApplyProcessStepListPage = React.lazy(() => import('../pages/sales_st
 const ContactInquiryListPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/List'));
 const ContactInquiryDetailPage = React.lazy(() => import('../pages/sales_staff/contact-inquiries/Detail'));
 
+// Contracts - Sales có thể xem và thao tác client contract, chỉ xem partner contract
+const SalesClientContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/clients/Detail'));
+const SalesPartnerContractDetail = React.lazy(() => import('../pages/sales_staff/contracts/partners/Detail'));
+
 // ========================================
 // ACCOUNTANT STAFF PAGES - Lazy Loading
 // ========================================
@@ -241,6 +245,10 @@ const ManagerClientCompanyDetailPage = React.lazy(() => import('../pages/manager
 // Projects
 const ManagerProjectListPage = React.lazy(() => import('../pages/manager/projects/List'));
 const ManagerProjectDetailPage = React.lazy(() => import('../pages/manager/projects/Detail'));
+
+// Contracts
+const ManagerClientContractDetail = React.lazy(() => import('../pages/manager/contract/clients/Detail'));
+const ManagerPartnerContractDetail = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
 
 
 const AppRouter: React.FC = () => {
@@ -378,7 +386,9 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.CREATE} element={<SalesApplyProcessStepCreatePage />} />
               <Route path={ROUTES.SALES_STAFF.APPLY_PROCESS_STEPS.EDIT} element={<SalesApplyProcessStepEditPage />} />
 
-              {/* Payment Periods */}
+              {/* Contracts */}
+              <Route path={ROUTES.SALES_STAFF.CONTRACTS.CLIENT_DETAIL} element={<SalesClientContractDetail />} />
+              <Route path={ROUTES.SALES_STAFF.CONTRACTS.PARTNER_DETAIL} element={<SalesPartnerContractDetail />} />
             </Route>
           </Route>
 
@@ -427,6 +437,10 @@ const AppRouter: React.FC = () => {
               {/* Projects */}
               <Route path="/manager/projects" element={<ManagerProjectListPage />} />
               <Route path="/manager/projects/:id" element={<ManagerProjectDetailPage />} />
+              
+              {/* Contracts */}
+              <Route path={ROUTES.MANAGER.CONTRACTS.CLIENT_DETAIL} element={<ManagerClientContractDetail />} />
+              <Route path={ROUTES.MANAGER.CONTRACTS.PARTNER_DETAIL} element={<ManagerPartnerContractDetail />} />
                             
             </Route>
           </Route>

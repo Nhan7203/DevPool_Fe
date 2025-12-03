@@ -219,6 +219,10 @@ export const ROUTES = {
       LIST: '/sales/contact-inquiries',
       DETAIL: '/sales/contact-inquiries/:id',
     },
+    CONTRACTS: {
+      CLIENT_DETAIL: '/sales/contracts/clients/:id',
+      PARTNER_DETAIL: '/sales/contracts/partners/:id',
+    },
 
   },
 
@@ -232,6 +236,10 @@ export const ROUTES = {
     CLIENT_COMPANY: {
       LIST: '/manager/client-companies',
       DETAIL: '/manager/client-companies/:id',
+    },
+    CONTRACTS: {
+      CLIENT_DETAIL: '/manager/contracts/clients/:id',
+      PARTNER_DETAIL: '/manager/contracts/partners/:id',
     },
 
     // BUSINESS: {
