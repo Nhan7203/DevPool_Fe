@@ -313,7 +313,13 @@ const NotificationCenterPage = () => {
       if (targetUrl.startsWith('/ta/talents/')) {
         targetUrl = targetUrl.replace('/ta/talents/', '/ta/developers/');
       }
-      navigate(targetUrl);
+      
+      // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+      if (notification.type === NotificationType.SkillGroupAutoInvalidated && targetUrl.includes('/ta/developers/')) {
+        navigate(targetUrl, { state: { tab: 'skills' } });
+      } else {
+        navigate(targetUrl);
+      }
     }
   };
 

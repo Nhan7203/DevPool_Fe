@@ -334,8 +334,10 @@ export default function ProjectEditPage() {
 
         const toUTCDateString = (dateStr?: string | null) => {
             if (!dateStr) return null;
-            const d = new Date(dateStr + "T00:00:00"); // giả định giờ 00:00
-            return d.toISOString(); // => chuỗi UTC
+            // Parse date string (YYYY-MM-DD) và tạo UTC date để tránh timezone offset
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const d = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+            return d.toISOString();
         };
 
         // Kiểm tra xem có chỉ thay đổi status không
@@ -805,16 +807,12 @@ export default function ProjectEditPage() {
                                                 <option value="Ongoing">Đang thực hiện (Ongoing)</option>
                                             </>
                                         )}
-                                        {originalStatus === "Cancelled" && (
-                                            <option value="Cancelled">Đã hủy (Cancelled)</option>
-                                        )}
                                         {!originalStatus && (
                                             <>
                                                 <option value="Planned">Đã lên kế hoạch (Planned)</option>
                                                 <option value="Ongoing">Đang thực hiện (Ongoing)</option>
                                                 <option value="Completed">Đã hoàn thành (Completed)</option>
                                                 <option value="OnHold">Tạm dừng (OnHold)</option>
-                                                <option value="Cancelled">Đã hủy (Cancelled)</option>
                                             </>
                                         )}
                                     </select>

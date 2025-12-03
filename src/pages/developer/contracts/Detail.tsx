@@ -1,26 +1,22 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Calendar, Building2, DollarSign, CheckCircle, AlertCircle, Clock as ClockIcon, Briefcase, Eye } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, Building2, DollarSign, CheckCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
-import { partnerContractService, type PartnerContract } from '../../../services/PartnerContract';
-import { clientContractService, type ClientContract } from '../../../services/ClientContract';
+import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerService, type Partner } from '../../../services/Partner';
-import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
-import { projectService, type Project } from '../../../services/Project';
 import { talentService, type Talent } from '../../../services/Talent';
+import { talentAssignmentService } from '../../../services/TalentAssignment';
 import { useAuth } from '../../../contexts/AuthContext';
 import { decodeJWT } from '../../../services/Auth';
 
 export default function DeveloperContractDetailPage() {
-    const { type, id } = useParams<{ type: 'partner' | 'client'; id: string }>();
+    const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
-    const [contract, setContract] = useState<PartnerContract | ClientContract | null>(null);
+    const [contract, setContract] = useState<PartnerContractPaymentModel | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [partner, setPartner] = useState<Partner | null>(null);
-    const [client, setClient] = useState<ClientCompany | null>(null);
-    const [project, setProject] = useState<Project | null>(null);
     const [talent, setTalent] = useState<Talent | null>(null);
     const [currentTalentId, setCurrentTalentId] = useState<number | null>(null);
 
@@ -59,7 +55,7 @@ export default function DeveloperContractDetailPage() {
     }, [user]);
 
     const fetchData = async (showLoading = true) => {
-        if (!id || !type) return;
+        if (!id) return;
         
         try {
             if (showLoading) {
@@ -67,47 +63,50 @@ export default function DeveloperContractDetailPage() {
             }
             setError('');
             
-            // Fetch contract detail based on type
-            let contractData: PartnerContract | ClientContract;
-            if (type === 'partner') {
-                contractData = await partnerContractService.getById(Number(id));
-            } else {
-                contractData = await clientContractService.getById(Number(id));
+            // Fetch partner contract detail
+            const contractData = await partnerContractPaymentService.getById(Number(id));
+            
+            // Chỉ cho phép xem hợp đồng ở trạng thái Approved hoặc Active
+            const status = (contractData.contractStatus || '').toLowerCase();
+            if (status !== 'approved' && status !== 'active') {
+                setError('Bạn chỉ có thể xem hợp đồng đã được duyệt');
+                return;
+            }
+            
+            // Verify this contract belongs to current user by checking talentAssignment
+            if (currentTalentId) {
+                try {
+                    const assignment = await talentAssignmentService.getById(contractData.talentAssignmentId);
+                    if (assignment.talentId !== currentTalentId) {
+                        setError('Bạn không có quyền xem hợp đồng này');
+                        return;
+                    }
+                } catch (err) {
+                    console.error("⚠️ Không thể verify quyền:", err);
+                }
             }
             
             setContract(contractData);
             
-            // Verify this contract belongs to current user
-            if (currentTalentId && contractData.talentId !== currentTalentId) {
-                setError('Bạn không có quyền xem hợp đồng này');
-                return;
-            }
-            
             // Fetch related data
             try {
-                if (type === 'partner') {
-                    const pc = contractData as PartnerContract;
-                    const [partnerData, talentData] = await Promise.all([
-                        partnerService.getAll().then(partners => 
-                            Array.isArray(partners) 
-                                ? partners.find((p: Partner) => p.id === pc.partnerId)
-                                : null
-                        ),
-                        talentService.getById(pc.talentId)
-                    ]);
-                    setPartner(partnerData || null);
-                    setTalent(talentData);
-                } else {
-                    const cc = contractData as ClientContract;
-                    const [clientData, projectData, talentData] = await Promise.all([
-                        clientCompanyService.getById(cc.clientCompanyId),
-                        projectService.getById(cc.projectId),
-                        talentService.getById(cc.talentId)
-                    ]);
-                    setClient(clientData);
-                    setProject(projectData);
-                    setTalent(talentData);
-                }
+                // Fetch talentAssignment để lấy partnerId và talentId
+                const [assignmentData, talentData] = await Promise.all([
+                    talentAssignmentService.getById(contractData.talentAssignmentId),
+                    currentTalentId ? talentService.getById(currentTalentId) : Promise.resolve(null)
+                ]);
+                
+                // Fetch partner từ assignment
+                const partnerData = assignmentData.partnerId 
+                    ? await partnerService.getAll().then(partners => 
+                        Array.isArray(partners) 
+                            ? partners.find((p: Partner) => p.id === assignmentData.partnerId)
+                            : null
+                    )
+                    : null;
+                
+                setPartner(partnerData || null);
+                setTalent(talentData);
             } catch (err) {
                 console.error("⚠️ Lỗi tải thông tin liên quan:", err);
             }
@@ -125,13 +124,15 @@ export default function DeveloperContractDetailPage() {
         if (currentTalentId) {
             fetchData();
         }
-    }, [id, type, currentTalentId]);
+    }, [id, currentTalentId]);
 
     const getStatusConfig = (status: string) => {
-        switch (status?.toLowerCase()) {
+        const normalized = status?.toLowerCase();
+        switch (normalized) {
             case 'active':
+            case 'approved':
                 return {
-                    label: 'Đang hiệu lực',
+                    label: 'Đã duyệt',
                     color: 'bg-green-100 text-green-800',
                     icon: <CheckCircle className="w-4 h-4" />,
                     bgColor: 'bg-green-50'
@@ -186,22 +187,6 @@ export default function DeveloperContractDetailPage() {
         return new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ';
     };
 
-    const getRateTypeText = (rateType?: string | null) => {
-        if (!rateType) return '—';
-        switch (rateType) {
-            case 'Hourly':
-                return 'Theo giờ';
-            case 'Daily':
-                return 'Theo ngày';
-            case 'Monthly':
-                return 'Theo tháng';
-            case 'Fixed':
-                return 'Cố định';
-            default:
-                return rateType;
-        }
-    };
-
     if (loading) {
         return (
             <div className="flex bg-gray-50 min-h-screen">
@@ -240,8 +225,9 @@ export default function DeveloperContractDetailPage() {
         );
     }
 
-    const statusConfig = getStatusConfig(contract.status);
-    const isPartnerContract = type === 'partner';
+    // Lấy contractStatus từ contract
+    const contractStatus = contract?.contractStatus || '';
+    const statusConfig = getStatusConfig(contractStatus);
 
     return (
         <div className="flex bg-gray-50 min-h-screen">
@@ -264,9 +250,7 @@ export default function DeveloperContractDetailPage() {
                         <div className="flex-1">
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">{contract.contractNumber}</h1>
                             <p className="text-neutral-600 mb-4">
-                                {isPartnerContract 
-                                    ? 'Thông tin chi tiết hợp đồng đối tác'
-                                    : 'Thông tin chi tiết hợp đồng khách hàng'}
+                                Thông tin chi tiết hợp đồng đối tác
                             </p>
                             
                             {/* Status Badge */}
@@ -297,71 +281,26 @@ export default function DeveloperContractDetailPage() {
                                 value={contract.contractNumber} 
                                 icon={<FileText className="w-4 h-4" />}
                             />
-                            {isPartnerContract && (
-                                <>
-                                    <InfoItem 
-                                        label="Hình thức tính lương" 
-                                        value={(contract as PartnerContract).rateType ? getRateTypeText((contract as PartnerContract).rateType) : '—'} 
-                                        icon={<FileText className="w-4 h-4" />}
-                                    />
-                                    <InfoItem 
-                                        label="Đối tác" 
-                                        value={partner?.companyName || '—'} 
-                                        icon={<Building2 className="w-4 h-4" />}
-                                    />
-                                    <InfoItem 
-                                        label="Mức lương nhân sự" 
-                                        value={formatCurrency((contract as PartnerContract).devRate)} 
-                                        icon={<DollarSign className="w-4 h-4" />}
-                                    />
-                                </>
-                            )}
-                            {!isPartnerContract && (
-                                <>
-                                    <InfoItem 
-                                        label="Khách hàng" 
-                                        value={client?.name || '—'} 
-                                        icon={<Building2 className="w-4 h-4" />}
-                                    />
-                                    <InfoItem 
-                                        label="Dự án" 
-                                        value={project?.name || '—'} 
-                                        icon={<Briefcase className="w-4 h-4" />}
-                                    />
-                                </>
-                            )}
+                            <InfoItem 
+                                label="Đối tác" 
+                                value={partner?.companyName || '—'} 
+                                icon={<Building2 className="w-4 h-4" />}
+                            />
+                            <InfoItem 
+                                label="Mức lương tháng" 
+                                value={formatCurrency(contract.monthlyRate)} 
+                                icon={<DollarSign className="w-4 h-4" />}
+                            />
                             <InfoItem 
                                 label="Nhân sự" 
                                 value={talent?.fullName || '—'} 
                                 icon={<FileText className="w-4 h-4" />}
                             />
                             <InfoItem 
-                                label="Ngày bắt đầu" 
-                                value={new Date(contract.startDate).toLocaleDateString('vi-VN')} 
+                                label="Ngày tạo" 
+                                value={new Date(contract.createdAt).toLocaleDateString('vi-VN')} 
                                 icon={<Calendar className="w-4 h-4" />}
                             />
-                            <InfoItem 
-                                label="Ngày kết thúc" 
-                                value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'} 
-                                icon={<Calendar className="w-4 h-4" />}
-                            />
-                            {contract.contractFileUrl && (
-                                <InfoItem 
-                                    label="File hợp đồng" 
-                                    value={
-                                        <a 
-                                            href={contract.contractFileUrl} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 underline"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                            Xem file
-                                        </a>
-                                    } 
-                                    icon={<FileText className="w-4 h-4" />}
-                                />
-                            )}
                         </div>
                     </div>
                 </div>

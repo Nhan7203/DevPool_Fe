@@ -288,7 +288,7 @@ export const ROUTES = {
     CONTRACTS: {
       LIST: '/developer/contracts',             // Danh sách hợp đồng của mình
       CURRENT: '/developer/contracts/current',  // Hợp đồng đang thực hiện
-      DETAIL: '/developer/contracts/:type/:id',       // Chi tiết hợp đồng (type: partner hoặc client)
+      DETAIL: '/developer/contracts/:id',       // Chi tiết hợp đồng đối tác
     },
 
     // Timesheet/WorkReport: chỉ xem

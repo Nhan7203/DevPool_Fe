@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, Calendar, Building2, DollarSign, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, CreditCard, Eye } from 'lucide-react';
+import { Search, Filter, Calendar, Building2, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, CreditCard, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
@@ -88,8 +88,8 @@ export default function DeveloperPaymentsList() {
                 ]);
 
                 // Process partner payments (thanh toán từ DevPool cho talent)
-                // Chỉ hiển thị các trạng thái: pendingcalculation, pendingapproval, paid, rejected
-                const allowedStatuses = ['pendingcalculation', 'pendingapproval', 'paid', 'rejected'];
+                // Chỉ hiển thị các trạng thái: pending, processing, paid
+                const allowedStatuses = ['pending', 'processing', 'paid'];
                 const partnerPayments = Array.isArray(partnerPaymentsData) ? partnerPaymentsData : []
                     .filter((p: PartnerContractPaymentModel) => {
                         const normalizedStatus = (p.paymentStatus || '').toLowerCase();
@@ -191,6 +191,10 @@ export default function DeveloperPaymentsList() {
         switch (normalized) {
             case 'paid':
                 return 'bg-green-100 text-green-800';
+            case 'pending':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'processing':
+                return 'bg-blue-100 text-blue-800';
             case 'pendingcalculation':
                 return 'bg-yellow-100 text-yellow-800';
             case 'pendingapproval':
@@ -213,6 +217,10 @@ export default function DeveloperPaymentsList() {
         switch (normalized) {
             case 'paid':
                 return 'Đã thanh toán';
+            case 'pending':
+                return 'Chờ xử lý';
+            case 'processing':
+                return 'Đang xử lý';
             case 'pendingcalculation':
                 return 'Chờ tính toán';
             case 'pendingapproval':
@@ -269,16 +277,16 @@ export default function DeveloperPaymentsList() {
             icon: <CheckCircle className="w-6 h-6" />
         },
         {
-            title: 'Chờ Duyệt',
-            value: countStatus('pendingapproval', 'pendingcalculation').toString(),
+            title: 'Chờ Xử Lý',
+            value: countStatus('pending', 'processing').toString(),
             color: 'orange',
             icon: <Clock className="w-6 h-6" />
         },
         {
-            title: 'Tổng Số Tiền',
-            value: `${(payments.reduce((sum, p) => sum + getAmount(p), 0) / 1000000).toFixed(1)}M`,
+            title: 'Đang xử lý',
+            value: countStatus('processing').toString(),
             color: 'purple',
-            icon: <DollarSign className="w-6 h-6" />
+            icon: <Clock className="w-6 h-6" />
         }
     ], [payments]);
 
@@ -481,10 +489,9 @@ export default function DeveloperPaymentsList() {
                                             className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-white"
                                         >
                                             <option value="">Tất cả trạng thái</option>
-                                            <option value="pendingcalculation">Chờ tính toán</option>
-                                            <option value="pendingapproval">Chờ duyệt</option>
+                                            <option value="pending">Chờ xử lý</option>
+                                            <option value="processing">Đang xử lý</option>
                                             <option value="paid">Đã thanh toán</option>
-                                            <option value="rejected">Đã từ chối</option>
                                         </select>
                                     </div>
                                     

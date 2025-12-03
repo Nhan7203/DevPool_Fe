@@ -75,6 +75,11 @@ export default function JobRequestEditPage() {
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
+
+  // Phân trang kỹ năng: 16 kỹ năng mỗi trang
+  const SKILLS_PER_PAGE = 16;
+  const [skillPage, setSkillPage] = useState(1);
+
   const filteredSkills = allSkills.filter(skill => {
     const matchesSearch = !skillSearchQuery || skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase());
     const matchesGroup = !selectedSkillGroupId || skill.skillGroupId === selectedSkillGroupId;
@@ -83,6 +88,10 @@ export default function JobRequestEditPage() {
   const filteredSkillGroups = skillGroups.filter(group =>
     group.name.toLowerCase().includes(skillGroupQuery.toLowerCase())
   );
+
+  const totalSkillPages = Math.max(1, Math.ceil(filteredSkills.length / SKILLS_PER_PAGE));
+  const startIndexSkills = (skillPage - 1) * SKILLS_PER_PAGE;
+  const paginatedSkills = filteredSkills.slice(startIndexSkills, startIndexSkills + SKILLS_PER_PAGE);
 
   const handleSkillGroupSelect = (groupId?: number) => {
     setSelectedSkillGroupId(groupId);
@@ -585,19 +594,26 @@ export default function JobRequestEditPage() {
                             <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy dự án phù hợp</p>
                           ) : (
                             projectsFilteredBySearch.map(p => {
-                              // Chỉ cho phép chọn dự án nếu status là "Ongoing" hoặc là dự án đã chọn trước đó
-                              const isDisabled = p.status !== "Ongoing" && p.id !== formData.projectId;
+                              // Normalize status để so sánh chính xác (case-insensitive)
+                              const normalizedStatus = (p.status || "").trim();
                               
-                              // Map status sang tiếng Việt
-                              const statusLabels: Record<string, string> = {
-                                "Ongoing": "Đang thực hiện",
-                                "OnHold": "Tạm dừng",
-                                "Completed": "Hoàn thành",
-                                "Planned": "Đã lập kế hoạch",
-                                "Planning": "Lập kế hoạch",
-                                "Cancelled": "Đã hủy"
+                              // Chỉ cho phép chọn dự án nếu status là "Ongoing" hoặc là dự án đã chọn trước đó
+                              const isDisabled = normalizedStatus.toLowerCase() !== "ongoing" && p.id !== formData.projectId;
+                              
+                              // Map status sang tiếng Việt (case-insensitive)
+                              const getStatusLabel = (status: string): string => {
+                                if (!status) return "Không xác định";
+                                const normalized = status.trim().toLowerCase();
+                                const statusMap: Record<string, string> = {
+                                  "ongoing": "Đang thực hiện",
+                                  "onhold": "Tạm dừng",
+                                  "on hold": "Tạm dừng",
+                                  "completed": "Hoàn thành",
+                                  "planned": "Đã lập kế hoạch"
+                                };
+                                return statusMap[normalized] || status.trim() || "Không xác định";
                               };
-                              const statusLabel = statusLabels[p.status] || "Không xác định";
+                              const statusLabel = getStatusLabel(p.status);
                               
                               return (
                                 <button
@@ -623,16 +639,14 @@ export default function JobRequestEditPage() {
                                   <div className="flex items-center justify-between">
                                     <span>{p.name}</span>
                                     <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                                      p.status === "Ongoing" 
+                                      normalizedStatus.toLowerCase() === "ongoing" 
                                         ? "bg-green-100 text-green-700"
-                                        : p.status === "OnHold"
+                                        : normalizedStatus.toLowerCase() === "onhold"
                                         ? "bg-yellow-100 text-yellow-700"
-                                        : p.status === "Completed"
+                                        : normalizedStatus.toLowerCase() === "completed"
                                         ? "bg-blue-100 text-blue-700"
-                                        : p.status === "Planned" || p.status === "Planning"
+                                        : normalizedStatus.toLowerCase() === "planned"
                                         ? "bg-purple-100 text-purple-700"
-                                        : p.status === "Cancelled"
-                                        ? "bg-red-100 text-red-700"
                                         : "bg-neutral-100 text-neutral-700"
                                     }`}>
                                       {statusLabel}
@@ -986,7 +1000,7 @@ export default function JobRequestEditPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
-                {filteredSkills.map(skill => (
+                {paginatedSkills.map(skill => (
                   <label
                     key={skill.id}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 border ${selectedSkills.includes(skill.id)
@@ -1027,6 +1041,41 @@ export default function JobRequestEditPage() {
               {allSkills.length > 0 && filteredSkills.length === 0 && (
                 <div className="text-center py-6 text-sm text-neutral-500">
                   Không tìm thấy kỹ năng phù hợp với bộ lọc hiện tại.
+                </div>
+              )}
+
+              {/* Skill pagination controls */}
+              {filteredSkills.length > 0 && (
+                <div className="mt-4 flex items-center justify-between text-xs text-neutral-600">
+                  <span>
+                    Trang {skillPage} / {totalSkillPages} (Hiển thị {paginatedSkills.length} / {filteredSkills.length} kỹ năng)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSkillPage(prev => Math.max(1, prev - 1))}
+                      disabled={skillPage === 1}
+                      className={`px-3 py-1 rounded-lg border text-xs font-medium transition-all duration-200 ${
+                        skillPage === 1
+                          ? "border-neutral-200 text-neutral-300 cursor-not-allowed"
+                          : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      Trước
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSkillPage(prev => Math.min(totalSkillPages, prev + 1))}
+                      disabled={skillPage === totalSkillPages}
+                      className={`px-3 py-1 rounded-lg border text-xs font-medium transition-all duration-200 ${
+                        skillPage === totalSkillPages
+                          ? "border-neutral-200 text-neutral-300 cursor-not-allowed"
+                          : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      Sau
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

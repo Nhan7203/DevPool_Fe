@@ -25,7 +25,6 @@ export default function ApplyActivityEditPage() {
   const [success, setSuccess] = useState(false);
   const [processSteps, setProcessSteps] = useState<ApplyProcessStep[]>([]);
   const [jobRequest, setJobRequest] = useState<any>(null);
-  const [application, setApplication] = useState<any>(null); // Lưu application để lấy createdAt
   
   const [form, setForm] = useState({
     applyId: 0,
@@ -36,6 +35,7 @@ export default function ApplyActivityEditPage() {
     notes: "",
   });
   const [activitySchedules, setActivitySchedules] = useState<Record<number, string>>({});
+  const [dateValidationError, setDateValidationError] = useState<string>("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,7 +67,6 @@ export default function ApplyActivityEditPage() {
         let templateSteps: ApplyProcessStep[] = [];
         try {
           const apply = await applyService.getById(activityData.applyId);
-          setApplication(apply); // Lưu application để dùng cho validation
           if (apply?.jobRequestId) {
             const jobReq = await jobRequestService.getById(apply.jobRequestId);
             setJobRequest(jobReq);
@@ -140,14 +139,51 @@ export default function ApplyActivityEditPage() {
     return null;
   }, [form.processStepId, sortedSteps, activitySchedules]);
 
-  const formatDateTimeInput = (date: Date) => {
-    const tzOffset = date.getTimezoneOffset() * 60000;
-    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // Reset validation error khi thay đổi bước quy trình (mặc dù bước bị disabled trong Edit)
+    if (name === 'processStepId') {
+      setDateValidationError("");
+    }
+    
     if (name === 'scheduledDate') {
+      setDateValidationError(""); // Reset error
+      
+      // Validation theo thứ tự bước
+      if (value && form.processStepId) {
+        const selectedStep = processSteps.find(step => step.id === form.processStepId);
+        if (selectedStep) {
+          const orderedSteps = [...processSteps].sort((a, b) => a.stepOrder - b.stepOrder);
+          const selectedIndex = orderedSteps.findIndex(step => step.id === selectedStep.id);
+          const selectedDate = new Date(value);
+          
+          // Kiểm tra với bước trước
+          if (selectedIndex > 0) {
+            const previousSteps = orderedSteps.slice(0, selectedIndex).reverse();
+            const previousWithSchedule = previousSteps.find(step => activitySchedules[step.id]);
+            if (previousWithSchedule) {
+              const previousDate = new Date(activitySchedules[previousWithSchedule.id]);
+              if (selectedDate.getTime() < previousDate.getTime()) {
+                setDateValidationError(`⚠️ Thời gian cho bước "${selectedStep.stepName}" phải sau hoặc bằng bước "${previousWithSchedule.stepName}" (${new Date(activitySchedules[previousWithSchedule.id]).toLocaleString('vi-VN')}).`);
+                return; // Không cập nhật nếu vi phạm
+              }
+            }
+          }
+          
+          // Kiểm tra với bước sau
+          const nextSteps = orderedSteps.slice(selectedIndex + 1);
+          const nextWithSchedule = nextSteps.find(step => activitySchedules[step.id]);
+          if (nextWithSchedule) {
+            const nextDate = new Date(activitySchedules[nextWithSchedule.id]);
+            if (selectedDate.getTime() > nextDate.getTime()) {
+              setDateValidationError(`⚠️ Thời gian cho bước "${selectedStep.stepName}" phải trước hoặc bằng bước "${nextWithSchedule.stepName}" (${new Date(activitySchedules[nextWithSchedule.id]).toLocaleString('vi-VN')}).`);
+              return; // Không cập nhật nếu vi phạm
+            }
+          }
+        }
+      }
+      
       // Smart UX: Nếu chọn ngày quá khứ khi Status = Scheduled → tự chuyển sang Completed
       if (value && form.status === ApplyActivityStatus.Scheduled) {
         const selectedDate = new Date(value);
@@ -193,37 +229,6 @@ export default function ApplyActivityEditPage() {
       return;
     }
 
-    // Validation theo Status
-    if (form.scheduledDate) {
-      const selectedDate = new Date(form.scheduledDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (form.status === ApplyActivityStatus.Scheduled) {
-        // Scheduled: Date >= Today
-        selectedDate.setHours(0, 0, 0, 0);
-        if (selectedDate < today) {
-          setError("⚠️ Khi trạng thái là 'Scheduled', ngày phải từ hôm nay trở đi.");
-          setSaving(false);
-          return;
-        }
-      } else if (form.status === ApplyActivityStatus.Completed || 
-                 form.status === ApplyActivityStatus.Passed || 
-                 form.status === ApplyActivityStatus.Failed) {
-        // Completed / Passed / Failed: Date >= Application.CreatedAt
-        if (application?.createdAt) {
-          const createdAt = new Date(application.createdAt);
-          createdAt.setHours(0, 0, 0, 0);
-          selectedDate.setHours(0, 0, 0, 0);
-          
-          if (selectedDate < createdAt) {
-            setError(`⚠️ Khi trạng thái là '${form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : "Failed"}', ngày phải sau hoặc bằng ngày tạo hồ sơ ứng tuyển (${createdAt.toLocaleDateString('vi-VN')}).`);
-            setSaving(false);
-            return;
-          }
-        }
-      }
-    }
 
     // Validation: scheduledDate (startDate) là bắt buộc
     if (!form.scheduledDate || form.scheduledDate.trim() === "") {
@@ -450,13 +455,15 @@ export default function ApplyActivityEditPage() {
                     name="scheduledDate"
                     value={form.scheduledDate}
                     onChange={handleChange}
-                    min={form.status === ApplyActivityStatus.Scheduled ? formatDateTimeInput(new Date()) : undefined}
                     className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
                   />
                   {form.scheduledDate && (
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, scheduledDate: "" }))}
+                      onClick={() => {
+                        setDateValidationError("");
+                        setForm(prev => ({ ...prev, scheduledDate: "" }));
+                      }}
                       className="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                       title="Xóa lịch"
                     >
@@ -464,24 +471,18 @@ export default function ApplyActivityEditPage() {
                     </button>
                   )}
                 </div>
-                {form.status === ApplyActivityStatus.Scheduled && (
-                  <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                {dateValidationError && (
+                  <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
-                    Khi trạng thái là "Scheduled", chỉ có thể chọn ngày từ hôm nay trở đi
+                    {dateValidationError}
                   </p>
                 )}
-                {form.status !== ApplyActivityStatus.Scheduled && application?.createdAt && (
-                  <p className="text-sm text-blue-600 mt-2 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    Khi trạng thái là "{form.status === ApplyActivityStatus.Completed ? "Completed" : form.status === ApplyActivityStatus.Passed ? "Passed" : form.status === ApplyActivityStatus.Failed ? "Failed" : ""}", ngày phải sau hoặc bằng {new Date(application.createdAt).toLocaleDateString('vi-VN')} (ngày tạo hồ sơ)
-                  </p>
-                )}
-                {form.scheduledDate && previousConstraint && (
+                {!dateValidationError && form.scheduledDate && previousConstraint && (
                   <div className="mt-3 px-4 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm font-medium">
                     ⚠️ Phải sau {new Date(previousConstraint.date).toLocaleString('vi-VN')} (bước {previousConstraint.step.stepOrder}. {previousConstraint.step.stepName})
                   </div>
                 )}
-                {form.scheduledDate && (() => {
+                {!dateValidationError && form.scheduledDate && (() => {
                   const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
                   const nextSteps = sortedSteps.slice(selectedIndex + 1);
                   const nextWithSchedule = nextSteps.find(step => activitySchedules[step.id]);

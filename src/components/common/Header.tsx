@@ -365,8 +365,13 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
     // Đóng notification dropdown ngay lập tức
     setIsNotificationOpen(false);
     
-    // Navigate ngay với actionUrl đã được fix, không đợi mark as read
-    navigate(originalActionUrl);
+    // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+    if (notification.type === NotificationType.SkillGroupAutoInvalidated && originalActionUrl.includes('/ta/developers/')) {
+      navigate(originalActionUrl, { state: { tab: 'skills' } });
+    } else {
+      // Navigate ngay với actionUrl đã được fix, không đợi mark as read
+      navigate(originalActionUrl);
+    }
     
     // Mark as read sau khi navigate (không block navigation)
     try {
@@ -401,6 +406,13 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
       // LUÔN giữ lại actionUrl đã được fix, không dùng từ resolved
       // Đảm bảo actionUrl luôn được giữ lại, kể cả khi resolved không có
       const finalActionUrl = originalActionUrl || notification.actionUrl || resolved?.actionUrl || null;
+      
+      // Xử lý đặc biệt cho notification về skill group - navigate với state để mở tab "skills"
+      if (notification.type === NotificationType.SkillGroupAutoInvalidated && finalActionUrl && finalActionUrl.includes('/ta/developers/')) {
+        navigate(finalActionUrl, { state: { tab: 'skills' } });
+        return; // Return early, không hiển thị modal
+      }
+      
       setViewNotification({
         ...resolved,
         ...notification, // Giữ lại tất cả thông tin gốc

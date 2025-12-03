@@ -32,6 +32,7 @@ export default function DeveloperPaymentDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [currentTalentId, setCurrentTalentId] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState<'info' | 'money' | 'time' | 'documents'>('info');
 
     // Lấy talentId từ user hiện tại
     useEffect(() => {
@@ -95,6 +96,15 @@ export default function DeveloperPaymentDetailPage() {
                 
                 // Fetch payment detail
                 const paymentData = await partnerContractPaymentService.getById(Number(id));
+                
+                // Chỉ cho phép xem thanh toán ở trạng thái Pending, Processing, hoặc Paid
+                const normalizedStatus = (paymentData.paymentStatus || '').toLowerCase();
+                const allowedStatuses = ['pending', 'processing', 'paid'];
+                if (!allowedStatuses.includes(normalizedStatus)) {
+                    setError('Bạn chỉ có thể xem thanh toán ở trạng thái Pending, Processing hoặc Paid');
+                    setLoading(false);
+                    return;
+                }
                 
                 // Fetch TalentAssignment để lấy talentId
                 const assignmentData = await talentAssignmentService.getById(paymentData.talentAssignmentId);
@@ -223,6 +233,10 @@ export default function DeveloperPaymentDetailPage() {
         switch (normalized) {
             case 'paid':
                 return 'bg-green-100 text-green-800';
+            case 'pending':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'processing':
+                return 'bg-blue-100 text-blue-800';
             case 'pendingcalculation':
                 return 'bg-yellow-100 text-yellow-800';
             case 'pendingapproval':
@@ -245,6 +259,10 @@ export default function DeveloperPaymentDetailPage() {
         switch (normalized) {
             case 'paid':
                 return 'Đã thanh toán';
+            case 'pending':
+                return 'Chờ xử lý';
+            case 'processing':
+                return 'Đang xử lý';
             case 'pendingcalculation':
                 return 'Chờ tính toán';
             case 'pendingapproval':
@@ -398,22 +416,80 @@ export default function DeveloperPaymentDetailPage() {
                     <p className="text-neutral-600">Thông tin chi tiết về khoản thanh toán từ DevPool</p>
                 </div>
 
-                {/* Payment Details */}
+                {/* Main Content Card with Tabs */}
                 <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
+                    {/* Header with ID */}
                     <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary-100 rounded-lg">
-                                <CreditCard className="w-5 h-5 text-primary-600" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900">Thông Tin Thanh Toán</h2>
-                                <p className="text-xs text-neutral-600">ID: #{payment.id}</p>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary-100 rounded-lg">
+                                    <CreditCard className="w-5 h-5 text-primary-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">Chi Tiết Thanh Toán</h2>
+                                    <p className="text-xs text-neutral-600">ID: #{payment.id}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
+                    {/* Tab Navigation */}
+                    <div className="border-b border-neutral-200 bg-white">
+                        <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                            <button
+                                onClick={() => setActiveTab('info')}
+                                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                                    activeTab === 'info'
+                                        ? 'border-primary-600 text-primary-600 bg-primary-50'
+                                        : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                                }`}
+                            >
+                                <CreditCard className="w-4 h-4" />
+                                Thông Tin Thanh Toán
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('money')}
+                                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                                    activeTab === 'money'
+                                        ? 'border-primary-600 text-primary-600 bg-primary-50'
+                                        : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                                }`}
+                            >
+                                <DollarSign className="w-4 h-4" />
+                                Chi Tiết Tiền
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('time')}
+                                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                                    activeTab === 'time'
+                                        ? 'border-primary-600 text-primary-600 bg-primary-50'
+                                        : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                                }`}
+                            >
+                                <Clock className="w-4 h-4" />
+                                Thời Gian Làm Việc
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('documents')}
+                                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                                    activeTab === 'documents'
+                                        ? 'border-primary-600 text-primary-600 bg-primary-50'
+                                        : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                                }`}
+                            >
+                                <FileText className="w-4 h-4" />
+                                File Chứng Từ
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Tab Content */}
                     <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <>
+                        {/* Thông Tin Thanh Toán Tab */}
+                        {activeTab === 'info' && (
+                            <div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Công ty đối tác */}
                             <div className="bg-neutral-50 rounded-lg p-3 border border-neutral-200">
                                 <div className="flex items-center gap-2 mb-1">
@@ -532,32 +608,20 @@ export default function DeveloperPaymentDetailPage() {
                             </div>
                         </div>
 
-                        {/* Ghi chú */}
-                        {payment.notes && (
-                            <div className="mt-4 bg-neutral-50 rounded-lg p-3 border border-neutral-200">
-                                <label className="text-xs font-medium text-neutral-600 mb-1.5 block">Ghi chú</label>
-                                <p className="text-sm text-gray-900 whitespace-pre-wrap">{payment.notes}</p>
+                                {/* Ghi chú */}
+                                {payment.notes && (
+                                    <div className="mt-4 bg-neutral-50 rounded-lg p-3 border border-neutral-200">
+                                        <label className="text-xs font-medium text-neutral-600 mb-1.5 block">Ghi chú</label>
+                                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{payment.notes}</p>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                </div>
 
-                {/* Chi tiết tiền */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mt-6">
-                    <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary-100 rounded-lg">
-                                <DollarSign className="w-5 h-5 text-primary-600" />
-                            </div>
+                        {/* Chi Tiết Tiền Tab */}
+                        {activeTab === 'money' && (
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Chi Tiết Tiền</h2>
-                                <p className="text-xs text-neutral-600">Phân tích chi tiết số tiền thanh toán</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-6">
-                        <div className="space-y-4">
+                                <div className="space-y-4">
                             {/* Đơn giá */}
                             <div className="flex items-center justify-between py-3 border-b border-neutral-200">
                                 <div className="flex items-center gap-2">
@@ -641,26 +705,14 @@ export default function DeveloperPaymentDetailPage() {
                                     </p>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Thời gian làm việc */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mt-6">
-                    <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary-100 rounded-lg">
-                                <Clock className="w-5 h-5 text-primary-600" />
+                                </div>
                             </div>
+                        )}
+
+                        {/* Thời Gian Làm Việc Tab */}
+                        {activeTab === 'time' && (
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Thời Gian Làm Việc</h2>
-                                <p className="text-xs text-neutral-600">Chi tiết về số giờ làm việc được duyệt</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-6">
-                        <div className="space-y-4">
+                                <div className="space-y-4">
                             {/* Tổng số giờ làm việc được duyệt */}
                             <div className="flex items-center justify-between py-3 border-b border-neutral-200 bg-green-50 rounded-lg px-4">
                                 <div className="flex items-center gap-2">
@@ -707,26 +759,14 @@ export default function DeveloperPaymentDetailPage() {
                                     )}
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* File chứng từ */}
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mt-6">
-                    <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-primary-100 rounded-lg">
-                                <FileText className="w-5 h-5 text-primary-600" />
+                                </div>
                             </div>
+                        )}
+
+                        {/* File Chứng Từ Tab */}
+                        {activeTab === 'documents' && (
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">File Chứng Từ</h2>
-                                <p className="text-xs text-neutral-600">Các tài liệu liên quan đến thanh toán này</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-6">
-                        {loadingDocuments ? (
+                                {loadingDocuments ? (
                             <div className="flex justify-center items-center py-8">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                                 <span className="ml-3 text-neutral-600">Đang tải file chứng từ...</span>
@@ -818,6 +858,9 @@ export default function DeveloperPaymentDetailPage() {
                                 ))}
                             </div>
                         )}
+                            </div>
+                        )}
+                        </>
                     </div>
                 </div>
             </div>

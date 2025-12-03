@@ -453,7 +453,7 @@ const AppRouter: React.FC = () => {
               <Route path={ROUTES.DEVELOPER.PROFILE} element={<DeveloperProfile />} />
               <Route path={ROUTES.DEVELOPER.CV_CREATE} element={<TalentCVCreatePage />} />
               <Route path={ROUTES.DEVELOPER.CONTRACTS.LIST} element={<DeveloperContractsList />} />
-              <Route path="/developer/contracts/:type/:id" element={<DeveloperContractDetail />} />
+              <Route path="/developer/contracts/:id" element={<DeveloperContractDetail />} />
               <Route path={ROUTES.DEVELOPER.PAYMENTS.LIST} element={<DeveloperPaymentsList />} />
               <Route path={ROUTES.DEVELOPER.PAYMENTS.DETAIL} element={<DeveloperPaymentDetail />} />
             </Route>

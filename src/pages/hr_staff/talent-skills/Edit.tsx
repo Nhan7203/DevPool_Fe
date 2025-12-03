@@ -6,6 +6,9 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
+import { talentSkillGroupAssessmentService, type SkillGroupVerificationStatus } from "../../../services/TalentSkillGroupAssessment";
+import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
+import { userService } from "../../../services/User";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -161,6 +164,37 @@ export default function TalentSkillEditPage() {
     try {
       console.log("Payload gửi đi:", formData);
       await talentSkillService.update(Number(id), formData);
+
+      // Refresh verification status sau khi update skill (auto-invalidate nếu cần)
+      try {
+        // Lấy skill info để biết skillGroupId
+        const updatedSkill = allSkills.find(s => s.id === formData.skillId);
+        if (updatedSkill?.skillGroupId) {
+          // Lấy status cũ trước khi refresh
+          let oldStatus: SkillGroupVerificationStatus | undefined;
+          try {
+            const oldStatuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
+              talentId,
+              [updatedSkill.skillGroupId]
+            );
+            oldStatus = Array.isArray(oldStatuses) ? oldStatuses[0] : undefined;
+          } catch (e) {
+            // Ignore error khi lấy status cũ
+          }
+
+          // Đợi một chút để backend xử lý auto-invalidate
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
+            talentId,
+            [updatedSkill.skillGroupId]
+          );
+          
+        }
+      } catch (statusError) {
+        console.warn("⚠️ Không thể refresh verification status:", statusError);
+        // Không block việc update nếu refresh status lỗi
+      }
 
       alert("✅ Cập nhật kỹ năng nhân sự thành công!");
       navigate(`/ta/developers/${talentId}`);
