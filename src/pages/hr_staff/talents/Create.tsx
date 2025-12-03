@@ -2577,7 +2577,13 @@ export default function CreateTalent() {
                                     </div>
                                   </button>
                                   {isJobRoleLevelDropdownOpen[index] && !isUploadedFromFirebase && (
-                                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                    <div 
+                                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                      onMouseLeave={() => {
+                                        setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                        setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                      }}
+                                    >
                                       <div className="p-3 border-b border-neutral-100">
                                         <div className="relative">
                                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3022,7 +3028,13 @@ export default function CreateTalent() {
                       </div>
                     </button>
                     {isPartnerDropdownOpen && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div 
+                        className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                        onMouseLeave={() => {
+                          setIsPartnerDropdownOpen(false);
+                          setPartnerSearchQuery("");
+                        }}
+                      >
                         <div className="p-3 border-b border-neutral-100">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3179,7 +3191,13 @@ export default function CreateTalent() {
                               </div>
                             </button>
                             {isJobRoleLevelDropdownOpen[index] && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsJobRoleLevelDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                  setJobRoleLevelSearch(prev => ({ ...prev, [index]: "" }));
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3422,7 +3440,13 @@ export default function CreateTalent() {
                             </div>
                           </button>
                           {isSkillGroupDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsSkillGroupDropdownOpen(false);
+                                setSkillGroupSearchQuery("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3518,7 +3542,13 @@ export default function CreateTalent() {
                               </div>
                             </button>
                             {isSkillDropdownOpen[index] && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsSkillDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                  setSkillSearchQuery(prev => ({ ...prev, [index]: "" }));
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -3673,7 +3703,13 @@ export default function CreateTalent() {
                                 </div>
                               </button>
                               {isCertificateTypeDropdownOpen[index] && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsCertificateTypeDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                    setCertificateTypeSearch(prev => ({ ...prev, [index]: "" }));
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -4001,7 +4037,13 @@ export default function CreateTalent() {
                                 </div>
                               </button>
                               {isWorkExperiencePositionDropdownOpen[index] && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsWorkExperiencePositionDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                    setWorkExperiencePositionSearch(prev => ({ ...prev, [index]: "" }));
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

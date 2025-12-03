@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
 import { Link } from "react-router-dom";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
@@ -13,7 +14,8 @@ import {
   Users,
   CheckCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Briefcase
 } from "lucide-react";
 
 export default function ManagerClientCompanyListPage() {
@@ -145,6 +147,11 @@ export default function ManagerClientCompanyListPage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Công ty khách hàng" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Công ty khách hàng</h1>
@@ -279,6 +286,7 @@ export default function ManagerClientCompanyListPage() {
               <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã công ty</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên công ty</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người liên hệ</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Email</th>
@@ -289,7 +297,7 @@ export default function ManagerClientCompanyListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredCompanies.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12">
+                    <td colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Building2 className="w-8 h-8 text-neutral-400" />
@@ -306,6 +314,14 @@ export default function ManagerClientCompanyListPage() {
                       className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                     >
                       <td className="py-4 px-4 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-neutral-400" />
+                          <span className="text-sm font-medium text-neutral-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                            {c.code}
+                          </span>
+                        </div>
+                      </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-neutral-400" />

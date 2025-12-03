@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Mail, Phone, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import Sidebar from '../../components/common/Sidebar';
+import Breadcrumb from '../../components/common/Breadcrumb';
 import { sidebarItems } from '../../components/hr_staff/SidebarItems';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService, type User as UserType } from '../../services/User';
@@ -131,6 +132,11 @@ export default function HRStaffProfilePage() {
             <div className="flex-1 p-8">
                 <div className="max-w-4xl mx-auto">
                     <div className="mb-8 animate-slide-up">
+                        <Breadcrumb
+                            items={[
+                                { label: "Hồ sơ cá nhân" }
+                            ]}
+                        />
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">Thông Tin Cá Nhân</h1>
                         <p className="text-neutral-600">Quản lý thông tin tài khoản của bạn</p>
                     </div>

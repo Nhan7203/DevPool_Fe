@@ -369,24 +369,38 @@ export default function TalentDetailPage() {
       try {
         setLoading(true);
 
-        const talentData = await talentService.getById(Number(id));
+        // Fetch talent data và các lookup services song song (không phụ thuộc lẫn nhau)
+        const [
+          talentData,
+          allJobRoleLevels,
+          allSkills,
+          skillGroupsData,
+          allCertificateTypes,
+          partners,
+          blacklistData
+        ] = await Promise.all([
+          talentService.getById(Number(id)),
+          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true }),
+          skillService.getAll(),
+          skillGroupService.getAll({ excludeDeleted: true }).catch(() => null),
+          certificateTypeService.getAll(),
+          partnerService.getAll().catch(() => []),
+          clientTalentBlacklistService.getByTalentId(Number(id), true).catch(() => null)
+        ]);
 
-        // Resolve location name
-        if (talentData.locationId) {
-          try {
-            const location = await locationService.getById(talentData.locationId);
-            setLocationName(location?.name ?? "—");
-          } catch { }
-        }
+        // Set talent data ngay để UI có thể hiển thị
+        setTalent(talentData);
+
+        // Resolve location name (song song với các calls khác nếu có thể)
+        const locationPromise = talentData.locationId
+          ? locationService.getById(talentData.locationId).catch(() => null)
+          : Promise.resolve(null);
 
         // Resolve partner name
-        try {
-          const partner = await partnerService.getAll();
-          const talentPartner = partner.find((p: Partner) => p.id === talentData.currentPartnerId);
-          setPartnerName(talentPartner?.companyName ?? "—");
-        } catch { }
+        const talentPartner = partners.find((p: Partner) => p.id === talentData.currentPartnerId);
+        setPartnerName(talentPartner?.companyName ?? "—");
 
-        // Fetch all related data
+        // Fetch all related talent data song song
         const [
           cvs,
           projects,
@@ -394,7 +408,8 @@ export default function TalentDetailPage() {
           experiences,
           jobRoleLevelsData,
           certificatesData,
-          availableTimesData
+          availableTimesData,
+          location
         ] = await Promise.all([
           talentCVService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentProjectService.getAll({ talentId: Number(id), excludeDeleted: true }),
@@ -402,17 +417,46 @@ export default function TalentDetailPage() {
           talentWorkExperienceService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true }),
           talentCertificateService.getAll({ talentId: Number(id), excludeDeleted: true }),
-          talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true })
+          talentAvailableTimeService.getAll({ talentId: Number(id), excludeDeleted: true }),
+          locationPromise
         ]);
 
+        // Set location name
+        if (location) {
+          setLocationName(location.name ?? "—");
+        }
+
+        // Set lookup data
+        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+        setLookupJobRoleLevels(jobRoleLevelsArray);
+        setLookupSkills(allSkills);
+        
+        // Set skill groups
+        try {
+          const skillGroupsArray = Array.isArray(skillGroupsData)
+            ? skillGroupsData
+            : (Array.isArray((skillGroupsData as any)?.items)
+              ? (skillGroupsData as any).items
+              : (Array.isArray((skillGroupsData as any)?.data)
+                ? (skillGroupsData as any).data
+                : []));
+          setLookupSkillGroups(skillGroupsArray);
+        } catch (skillGroupsError) {
+          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
+          setLookupSkillGroups([]);
+        }
+
+        setLookupCertificateTypes(allCertificateTypes);
+
+        // Set blacklist
+        if (blacklistData) {
+          setBlacklists(Array.isArray(blacklistData) ? blacklistData : blacklistData?.data || []);
+        }
+
+        // Set projects, experiences, available times
         setTalentProjects(projects);
         setWorkExperiences(experiences);
         setAvailableTimes(availableTimesData);
-
-        // Fetch job role levels once and reuse for both CVs and job role levels mapping
-        const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
-        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
-        setLookupJobRoleLevels(jobRoleLevelsArray);
         
         // Map CVs with job role level names
         const cvsWithJobRoleLevelNames = cvs.map((cv: TalentCV) => {
@@ -439,30 +483,12 @@ export default function TalentDetailPage() {
         // Thu gọn tất cả các nhóm CV không hoạt động mặc định
         const inactiveGroups = new Set<string>();
         sortedCVs.forEach((cv: TalentCV & { jobRoleLevelName?: string }) => {
-        if (!cv.isActive && cv.jobRoleLevelName) {
-          inactiveGroups.add(cv.jobRoleLevelName);
-        }
-      });
+          if (!cv.isActive && cv.jobRoleLevelName) {
+            inactiveGroups.add(cv.jobRoleLevelName);
+          }
+        });
 
-      // Fetch skill names
-        const allSkills = await skillService.getAll();
-        setLookupSkills(allSkills);
-        
-        // Fetch skill groups
-        try {
-          const skillGroupsData = await skillGroupService.getAll({ excludeDeleted: true });
-          const skillGroupsArray = Array.isArray(skillGroupsData)
-            ? skillGroupsData
-            : (Array.isArray((skillGroupsData as any)?.items)
-              ? (skillGroupsData as any).items
-              : (Array.isArray((skillGroupsData as any)?.data)
-                ? (skillGroupsData as any).data
-                : []));
-          setLookupSkillGroups(skillGroupsArray);
-        } catch (skillGroupsError) {
-          console.error("❌ Lỗi khi tải nhóm kỹ năng:", skillGroupsError);
-          setLookupSkillGroups([]);
-        }
+        // Map skills with names
         const skillsWithNames = skills.map((skill: TalentSkill) => {
           const skillInfo = allSkills.find((s: Skill) => s.id === skill.skillId);
           return {
@@ -507,25 +533,12 @@ export default function TalentDetailPage() {
         });
         setJobRoleLevels(jobRoleLevelsWithNames);
 
-        // Fetch certificate type names
-        const allCertificateTypes = await certificateTypeService.getAll();
-        setLookupCertificateTypes(allCertificateTypes);
+        // Map certificates with names
         const certificatesWithNames = certificatesData.map((cert: TalentCertificate) => {
           const certTypeInfo = allCertificateTypes.find((c: CertificateType) => c.id === cert.certificateTypeId);
           return { ...cert, certificateTypeName: certTypeInfo?.name ?? "Unknown Certificate" };
         });
         setCertificates(certificatesWithNames);
-
-        setTalent(talentData);
-
-        // Fetch blacklist information
-        try {
-          const blacklistData = await clientTalentBlacklistService.getByTalentId(Number(id), true);
-          setBlacklists(Array.isArray(blacklistData) ? blacklistData : blacklistData?.data || []);
-        } catch (err) {
-          console.error("❌ Lỗi khi tải thông tin blacklist:", err);
-          setBlacklists([]);
-        }
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết nhân sự:", err);
       } finally {
@@ -5202,7 +5215,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isJobRoleLevelDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsJobRoleLevelDropdownOpen(false);
+                                setJobRoleLevelSearch("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -5547,7 +5566,13 @@ export default function TalentDetailPage() {
                                 </div>
                               </button>
                               {isSkillGroupDropdownOpen && (
-                                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                                <div 
+                                  className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsSkillGroupDropdownOpen(false);
+                                    setSkillGroupSearchQuery("");
+                                  }}
+                                >
                                   <div className="p-3 border-b border-neutral-100">
                                     <div className="relative">
                                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -5633,7 +5658,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isSkillDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsSkillDropdownOpen(false);
+                                setSkillSearchQuery("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -5913,7 +5944,13 @@ export default function TalentDetailPage() {
                               </div>
                             </button>
                             {isSkillGroupListDropdownOpen && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsSkillGroupListDropdownOpen(false);
+                                  setSkillGroupListSearchQuery("");
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -6949,7 +6986,13 @@ export default function TalentDetailPage() {
                             </div>
                           </button>
                           {isCertificateTypeDropdownOpen && (
-                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                            <div 
+                              className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                              onMouseLeave={() => {
+                                setIsCertificateTypeDropdownOpen(false);
+                                setCertificateTypeSearch("");
+                              }}
+                            >
                               <div className="p-3 border-b border-neutral-100">
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -7472,7 +7515,13 @@ export default function TalentDetailPage() {
                               </div>
                             </button>
                             {isWorkExperiencePositionDropdownOpen && (
-                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                              <div 
+                                className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsWorkExperiencePositionDropdownOpen(false);
+                                  setWorkExperiencePositionSearch("");
+                                }}
+                              >
                                 <div className="p-3 border-b border-neutral-100">
                                   <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

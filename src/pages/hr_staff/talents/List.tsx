@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { Button } from "../../../components/ui/button";
 import { talentService, type Talent, type CreateDeveloperAccountModel } from "../../../services/Talent";
@@ -302,6 +303,11 @@ export default function ListDev() {
       <div className="flex-1 p-8">
         {/* Tiêu đề */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Danh sách nhân sự" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">

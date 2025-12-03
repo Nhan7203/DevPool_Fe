@@ -31,6 +31,7 @@ import {
 import { WorkingMode } from "../../../types/WorkingMode";
 import RichTextEditor from "../../../components/common/RichTextEditor";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { clientJobRoleLevelService, type ClientJobRoleLevel } from "../../../services/ClientJobRoleLevel";
 
 export default function JobRequestEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,8 @@ export default function JobRequestEditPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
+  const [clientJobRoleLevels, setClientJobRoleLevels] = useState<ClientJobRoleLevel[]>([]);
+  const [budgetCurrency, setBudgetCurrency] = useState<string>("VND");
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
@@ -143,7 +146,12 @@ export default function JobRequestEditPage() {
 
         // Lấy clientCompanyId từ project tương ứng
         const project = projects.find(p => p.id === data.projectId);
-        if (project) setSelectedClientId(project.clientCompanyId);
+        if (project) {
+          setSelectedClientId(project.clientCompanyId);
+          
+          // Tự động điền thông tin từ ClientJobRoleLevel nếu có (sau khi fetch ClientJobRoleLevels)
+          // Logic này sẽ được xử lý trong useEffect khi clientJobRoleLevels thay đổi
+        }
       } catch (err) {
         console.error("❌ Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin Job Request!");
@@ -242,6 +250,56 @@ export default function JobRequestEditPage() {
     fetchTemplates();
   }, [selectedClientId]);
 
+  // Fetch ClientJobRoleLevels khi chọn công ty
+  useEffect(() => {
+    const fetchClientJobRoleLevels = async () => {
+      if (!selectedClientId) {
+        setClientJobRoleLevels([]);
+        return;
+      }
+      try {
+        const result = await clientJobRoleLevelService.getAll({ clientCompanyId: selectedClientId, excludeDeleted: true });
+        const list = Array.isArray(result)
+          ? result
+          : Array.isArray((result as any)?.items)
+            ? (result as any).items
+            : Array.isArray((result as any)?.data)
+              ? (result as any).data
+              : [];
+        setClientJobRoleLevels(list as ClientJobRoleLevel[]);
+        
+        // Tự động điền thông tin từ ClientJobRoleLevel nếu đã có jobRoleLevelId
+        if (formData.jobRoleLevelId && selectedClientId) {
+          const clientJobRoleLevel = (list as ClientJobRoleLevel[]).find(
+            cjrl => cjrl.jobRoleLevelId === formData.jobRoleLevelId && cjrl.clientCompanyId === selectedClientId
+          );
+          
+          if (clientJobRoleLevel) {
+            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate) nếu chưa có
+            if (!formData.budgetPerMonth) {
+              if (clientJobRoleLevel.expectedMaxRate) {
+                setFormData(prev => ({ ...prev, budgetPerMonth: clientJobRoleLevel.expectedMaxRate }));
+              } else if (clientJobRoleLevel.expectedMinRate) {
+                setFormData(prev => ({ ...prev, budgetPerMonth: clientJobRoleLevel.expectedMinRate }));
+              }
+            }
+            
+            // Điền currency
+            if (clientJobRoleLevel.currency) {
+              setBudgetCurrency(clientJobRoleLevel.currency);
+            } else {
+              setBudgetCurrency("VND");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải vị trí tuyển dụng của công ty:", err);
+        setClientJobRoleLevels([]);
+      }
+    };
+    fetchClientJobRoleLevels();
+  }, [selectedClientId]);
+
   // chọn Company/Project được xử lý trực tiếp trong popover, không dùng handler <select>
 
   // ✍️ Cập nhật dữ liệu form
@@ -279,6 +337,37 @@ export default function JobRequestEditPage() {
         if (optionalNumeric.includes(name) && value === "") {
           return { ...prev, [name]: name === "clientCompanyCVTemplateId" ? null : undefined };
         }
+        
+        // Tự động điền thông tin từ ClientJobRoleLevel khi chọn jobRoleLevelId
+        if (name === "jobRoleLevelId" && selectedClientId) {
+          const jobRoleLevelId = Number(value);
+          const clientJobRoleLevel = clientJobRoleLevels.find(
+            cjrl => cjrl.jobRoleLevelId === jobRoleLevelId && cjrl.clientCompanyId === selectedClientId
+          );
+          
+          if (clientJobRoleLevel) {
+            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
+            let newBudget = prev.budgetPerMonth;
+            if (clientJobRoleLevel.expectedMaxRate) {
+              newBudget = clientJobRoleLevel.expectedMaxRate;
+            } else if (clientJobRoleLevel.expectedMinRate) {
+              newBudget = clientJobRoleLevel.expectedMinRate;
+            }
+            
+            // Điền currency
+            if (clientJobRoleLevel.currency) {
+              setBudgetCurrency(clientJobRoleLevel.currency);
+            } else {
+              setBudgetCurrency("VND");
+            }
+            
+            return { ...prev, [name]: jobRoleLevelId, budgetPerMonth: newBudget };
+          } else {
+            // Reset về mặc định nếu không tìm thấy
+            setBudgetCurrency("VND");
+          }
+        }
+        
         return { ...prev, [name]: Number(value) };
       }
 
@@ -478,7 +567,9 @@ export default function JobRequestEditPage() {
                               setSelectedClientId(0);
                               setCompanySearch("");
                               setClientTemplates([]);
-                              setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null }));
+                              setClientJobRoleLevels([]);
+                              setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
+                              setBudgetCurrency("VND");
                               setIsCompanyDropdownOpen(false);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -498,7 +589,8 @@ export default function JobRequestEditPage() {
                                 key={c.id}
                                 onClick={() => {
                                   setSelectedClientId(c.id);
-                                  setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null }));
+                                  setFormData(prev => ({ ...prev, projectId: 0, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
+                                  setBudgetCurrency("VND");
                                   setIsCompanyDropdownOpen(false);
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -621,8 +713,9 @@ export default function JobRequestEditPage() {
                                   key={p.id}
                                   onClick={() => {
                                     if (!isDisabled) {
-                                      setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null }));
+                                      setFormData(prev => ({ ...prev, projectId: p.id, clientCompanyCVTemplateId: null, jobRoleLevelId: 0, budgetPerMonth: undefined }));
                                       setSelectedClientId(p.clientCompanyId);
+                                      setBudgetCurrency("VND");
                                       setIsProjectDropdownOpen(false);
                                     }
                                   }}
@@ -844,12 +937,12 @@ export default function JobRequestEditPage() {
                       className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl pr-12"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium pointer-events-none">
-                      VNĐ
+                      {budgetCurrency}
                     </span>
                   </div>
                   {formData.budgetPerMonth && (
                     <p className="mt-1 text-xs text-neutral-500">
-                      Số tiền: {formatCurrency(formData.budgetPerMonth)} VNĐ
+                      Số tiền: {formatCurrency(formData.budgetPerMonth)} {budgetCurrency}
                     </p>
                   )}
                 </div>
@@ -951,7 +1044,13 @@ export default function JobRequestEditPage() {
                     </div>
                   </button>
                   {isSkillGroupDropdownOpen && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                    <div 
+                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                      onMouseLeave={() => {
+                        setIsSkillGroupDropdownOpen(false);
+                        setSkillGroupQuery("");
+                      }}
+                    >
                       <div className="p-3 border-b border-neutral-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

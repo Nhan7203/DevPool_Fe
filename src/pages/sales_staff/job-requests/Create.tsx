@@ -36,6 +36,7 @@ import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
 import RichTextEditor from "../../../components/common/RichTextEditor";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { clientJobRoleLevelService, type ClientJobRoleLevel } from "../../../services/ClientJobRoleLevel";
 
 export default function JobRequestCreatePage() {
   const navigate = useNavigate();
@@ -68,6 +69,8 @@ export default function JobRequestCreatePage() {
   const [selectedJobRoleId, setSelectedJobRoleId] = useState<number>(0);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
+  const [clientJobRoleLevels, setClientJobRoleLevels] = useState<ClientJobRoleLevel[]>([]);
+  const [budgetCurrency, setBudgetCurrency] = useState<string>("VND");
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
@@ -270,6 +273,31 @@ export default function JobRequestCreatePage() {
     fetchTemplates();
   }, [selectedClientId]);
 
+  // Fetch ClientJobRoleLevels khi chọn công ty
+  useEffect(() => {
+    const fetchClientJobRoleLevels = async () => {
+      if (!selectedClientId) {
+        setClientJobRoleLevels([]);
+        return;
+      }
+      try {
+        const result = await clientJobRoleLevelService.getAll({ clientCompanyId: selectedClientId, excludeDeleted: true });
+        const list = Array.isArray(result)
+          ? result
+          : Array.isArray((result as any)?.items)
+            ? (result as any).items
+            : Array.isArray((result as any)?.data)
+              ? (result as any).data
+              : [];
+        setClientJobRoleLevels(list as ClientJobRoleLevel[]);
+      } catch (err) {
+        console.error("❌ Lỗi tải vị trí tuyển dụng của công ty:", err);
+        setClientJobRoleLevels([]);
+      }
+    };
+    fetchClientJobRoleLevels();
+  }, [selectedClientId]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
@@ -294,7 +322,35 @@ export default function JobRequestCreatePage() {
     setForm(prev => ({ ...prev, [name]: value }));
     if (name === "jobRoleLevelId") {
       const lvl = jobRoleLevels.find(j => j.id.toString() === value);
-      if (lvl) setSelectedJobRoleId(lvl.jobRoleId);
+      if (lvl) {
+        setSelectedJobRoleId(lvl.jobRoleId);
+        
+        // Tự động điền thông tin từ ClientJobRoleLevel nếu có
+        if (selectedClientId) {
+          const clientJobRoleLevel = clientJobRoleLevels.find(
+            cjrl => cjrl.jobRoleLevelId === Number(value) && cjrl.clientCompanyId === selectedClientId
+          );
+          
+          if (clientJobRoleLevel) {
+            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
+            if (clientJobRoleLevel.expectedMaxRate) {
+              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate) }));
+            } else if (clientJobRoleLevel.expectedMinRate) {
+              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate) }));
+            }
+            
+            // Điền currency
+            if (clientJobRoleLevel.currency) {
+              setBudgetCurrency(clientJobRoleLevel.currency);
+            } else {
+              setBudgetCurrency("VND");
+            }
+          } else {
+            // Reset về mặc định nếu không tìm thấy
+            setBudgetCurrency("VND");
+          }
+        }
+      }
     }
   };
 
@@ -529,7 +585,9 @@ export default function JobRequestCreatePage() {
                               setSelectedClientId(0);
                               setCompanySearch("");
                               setClientTemplates([]);
-                              setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0 }));
+                              setClientJobRoleLevels([]);
+                              setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "", budgetPerMonth: "" }));
+                              setBudgetCurrency("VND");
                               setIsCompanyDropdownOpen(false);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -549,7 +607,8 @@ export default function JobRequestCreatePage() {
                                 key={c.id}
                                 onClick={() => {
                                   setSelectedClientId(c.id);
-                                  setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0 }));
+                                  setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "", budgetPerMonth: "" }));
+                                  setBudgetCurrency("VND");
                                   setIsCompanyDropdownOpen(false);
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -674,6 +733,9 @@ export default function JobRequestCreatePage() {
                                     if (!isDisabled) {
                                       setForm(prev => ({ ...prev, projectId: p.id.toString(), clientCompanyCVTemplateId: 0 }));
                                       setSelectedClientId(p.clientCompanyId);
+                                      // Reset job role level và budget khi chọn project mới
+                                      setForm(prev => ({ ...prev, jobRoleLevelId: "", budgetPerMonth: "" }));
+                                      setBudgetCurrency("VND");
                                       setIsProjectDropdownOpen(false);
                                     }
                                   }}
@@ -898,7 +960,13 @@ export default function JobRequestCreatePage() {
                       </div>
                     </button>
                     {isJobRoleLevelDropdownOpen && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                      <div 
+                        className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                        onMouseLeave={() => {
+                          setIsJobRoleLevelDropdownOpen(false);
+                          setJobRoleLevelSearch("");
+                        }}
+                      >
                         <div className="p-3 border-b border-neutral-100">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
@@ -937,6 +1005,33 @@ export default function JobRequestCreatePage() {
                                 onClick={() => {
                                   setForm(prev => ({ ...prev, jobRoleLevelId: j.id.toString() }));
                                   setSelectedJobRoleId(j.jobRoleId);
+                                  
+                                  // Tự động điền thông tin từ ClientJobRoleLevel nếu có
+                                  if (selectedClientId) {
+                                    const clientJobRoleLevel = clientJobRoleLevels.find(
+                                      cjrl => cjrl.jobRoleLevelId === j.id && cjrl.clientCompanyId === selectedClientId
+                                    );
+                                    
+                                    if (clientJobRoleLevel) {
+                                      // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
+                                      if (clientJobRoleLevel.expectedMaxRate) {
+                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate) }));
+                                      } else if (clientJobRoleLevel.expectedMinRate) {
+                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate) }));
+                                      }
+                                      
+                                      // Điền currency
+                                      if (clientJobRoleLevel.currency) {
+                                        setBudgetCurrency(clientJobRoleLevel.currency);
+                                      } else {
+                                        setBudgetCurrency("VND");
+                                      }
+                                    } else {
+                                      // Reset về mặc định nếu không tìm thấy
+                                      setBudgetCurrency("VND");
+                                    }
+                                  }
+                                  
                                   setIsJobRoleLevelDropdownOpen(false);
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -1056,12 +1151,12 @@ export default function JobRequestCreatePage() {
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 pr-12 focus:border-primary-500 focus:ring-primary-500 bg-white"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
-                      VNĐ
+                      {budgetCurrency}
                     </span>
                   </div>
                   {form.budgetPerMonth && (
                     <p className="mt-1 text-xs text-neutral-500">
-                      Số tiền: {formatCurrency(parseCurrency(form.budgetPerMonth))} VNĐ
+                      Số tiền: {formatCurrency(parseCurrency(form.budgetPerMonth))} {budgetCurrency}
                     </p>
                   )}
                 </div>
@@ -1163,7 +1258,13 @@ export default function JobRequestCreatePage() {
                     </div>
                   </button>
                   {isSkillGroupDropdownOpen && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                    <div 
+                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                      onMouseLeave={() => {
+                        setIsSkillGroupDropdownOpen(false);
+                        setSkillGroupQuery("");
+                      }}
+                    >
                       <div className="p-3 border-b border-neutral-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

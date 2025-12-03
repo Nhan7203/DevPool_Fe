@@ -14,6 +14,7 @@ import { useNotification } from '../../../contexts/NotificationContext';
 import { talentCVService } from '../../../services/TalentCV';
 import { talentService } from '../../../services/Talent';
 import { jobRoleLevelService } from '../../../services/JobRoleLevel';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 
@@ -517,6 +518,11 @@ const NotificationCenterPage = () => {
     <div className="min-h-screen bg-gray-50 py-10">
       <div className="max-w-5xl mx-auto px-4">
         <div className="mb-8">
+          <Breadcrumb
+            items={[
+              { label: 'Trung tâm thông báo' }
+            ]}
+          />
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-primary-100 text-primary-700">

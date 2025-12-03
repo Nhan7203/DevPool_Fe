@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
@@ -329,6 +330,11 @@ export default function SalesApplicationListPage() {
       <Sidebar items={sidebarItems} title="Sales Staff" />
       <div className="flex-1 p-8">
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Hồ sơ ứng tuyển" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Hồ sơ ứng tuyển</h1>

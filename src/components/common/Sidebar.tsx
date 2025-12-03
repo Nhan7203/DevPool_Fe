@@ -97,7 +97,7 @@ export default function Sidebar({ items, title }: SidebarProps) {
 
   const handleLogout = () => {
     logout();
-    navigate(ROUTES.LOGIN);
+    navigate(ROUTES.GUEST.LOGIN);
   };
 
   // Phân chia items theo section

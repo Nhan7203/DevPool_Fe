@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Building2, Plus, Users, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { Button } from '../../../components/ui/button';
 import { partnerService, type Partner, PartnerType } from '../../../services/Partner';
@@ -113,6 +114,11 @@ export default function ListPartner() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Đối tác" }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Danh sách đối tác</h1>

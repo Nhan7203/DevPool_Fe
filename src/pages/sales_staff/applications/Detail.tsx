@@ -522,46 +522,48 @@ export default function SalesApplicationDetailPage() {
   const statusConfig = getStatusConfig(application.status);
 
   // Tính toán last updated time và kiểm tra idle 7 ngày
-  const getLastUpdatedTime = useMemo(() => {
+  const getLastUpdatedTime = () => {
     // Ưu tiên: updatedAt > last activity scheduledDate > createdAt
     let lastUpdated: Date | null = null;
-    
+
     if (application?.updatedAt) {
       lastUpdated = new Date(application.updatedAt);
     } else if (activities.length > 0) {
       // Lấy activity có scheduledDate gần nhất
       const sortedActivities = [...activities]
-        .filter(a => a.scheduledDate)
+        .filter((a) => a.scheduledDate)
         .sort((a, b) => {
           const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
           const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
           return dateB - dateA;
         });
-      
+
       if (sortedActivities.length > 0 && sortedActivities[0].scheduledDate) {
         lastUpdated = new Date(sortedActivities[0].scheduledDate);
       }
     }
-    
+
     if (!lastUpdated && application?.createdAt) {
       lastUpdated = new Date(application.createdAt);
     }
-    
-    return lastUpdated;
-  }, [application, activities]);
 
-  const isIdle7Days = useMemo(() => {
-    if (!getLastUpdatedTime) return false;
+    return lastUpdated;
+  };
+
+  const lastUpdatedTime = getLastUpdatedTime();
+
+  const isIdle7Days = (() => {
+    if (!lastUpdatedTime) return false;
     const daysSinceUpdate = Math.floor(
-      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+      (new Date().getTime() - lastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
     );
     return daysSinceUpdate >= 7;
-  }, [getLastUpdatedTime]);
+  })();
 
   const formatLastUpdatedTime = () => {
-    if (!getLastUpdatedTime) return "—";
+    if (!lastUpdatedTime) return "—";
     try {
-      return getLastUpdatedTime.toLocaleString("vi-VN", {
+      return lastUpdatedTime.toLocaleString("vi-VN", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -574,9 +576,9 @@ export default function SalesApplicationDetailPage() {
   };
 
   const getDaysSinceUpdate = () => {
-    if (!getLastUpdatedTime) return 0;
+    if (!lastUpdatedTime) return 0;
     return Math.floor(
-      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+      (new Date().getTime() - lastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
     );
   };
 

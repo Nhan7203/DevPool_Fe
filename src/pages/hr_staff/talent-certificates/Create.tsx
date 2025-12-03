@@ -494,7 +494,13 @@ function TalentCertificateCreatePage() {
                     <span className="text-neutral-400 text-xs uppercase">Chọn</span>
                   </button>
                   {isCertificateTypeDropdownOpen && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+                    <div 
+                      className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                      onMouseLeave={() => {
+                        setIsCertificateTypeDropdownOpen(false);
+                        setCertificateTypeSearch("");
+                      }}
+                    >
                       <div className="p-3 border-b border-neutral-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

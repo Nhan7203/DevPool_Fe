@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Filter, Plus, Users } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 
 interface Assignment {
@@ -53,6 +54,11 @@ export default function Assignments() {
 
             <div className="flex-1 p-8">
                 <div className="mb-8">
+                    <Breadcrumb
+                        items={[
+                            { label: "Phân công" }
+                        ]}
+                    />
                     <h1 className="text-3xl font-bold text-gray-900">Danh Sách Phân Công</h1>
                     <p className="text-neutral-600 mt-1">Quản lý và theo dõi các phân công nhân sự vào dự án</p>
                 </div>

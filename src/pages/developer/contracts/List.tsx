@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, FileText, Calendar, Building2, CheckCircle, Clock, Eye, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerService, type Partner } from '../../../services/Partner';
@@ -351,6 +352,11 @@ export default function DeveloperContractsList() {
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
+                    <Breadcrumb
+                        items={[
+                            { label: "Hợp đồng" }
+                        ]}
+                    />
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Hợp Đồng Của Tôi</h1>

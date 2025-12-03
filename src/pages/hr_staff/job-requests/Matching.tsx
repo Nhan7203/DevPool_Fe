@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link, useLocation } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentCVService, type TalentCVMatchResult, type TalentCV } from "../../../services/TalentCV";
 import { jobRequestService, type JobRequest } from "../../../services/JobRequest";
@@ -672,7 +673,13 @@ export default function CVMatchingPage() {
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
-                    <div className="flex items-center gap-4 mb-6">
+                    <Breadcrumb
+                        items={[
+                            { label: "Yêu cầu tuyển dụng", to: "/ta/job-requests" },
+                            { label: "Matching CV" }
+                        ]}
+                    />
+                    <div className="flex items_center gap-4 mb-6">
                         <Link
                             to={`/ta/job-requests/${jobRequestId}`}
                             className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"

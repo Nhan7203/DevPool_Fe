@@ -60,6 +60,12 @@ export default function SearchableSelect<T = any>({
     }
   }, [isOpen]);
 
+  // Close dropdown when mouse leaves the dropdown area
+  const handleMouseLeave = () => {
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
   // Focus search input when dropdown opens
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -117,7 +123,10 @@ export default function SearchableSelect<T = any>({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl">
+        <div 
+          className="absolute z-50 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+          onMouseLeave={handleMouseLeave}
+        >
           <div className="p-3 border-b border-neutral-100">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />

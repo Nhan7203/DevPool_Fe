@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import { sidebarItems } from "../../../components/manager/SidebarItems";
-import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
+import { clientCompanyService, type ClientCompanyDetailedModel } from "../../../services/ClientCompany";
 import { clientTalentBlacklistService, type ClientTalentBlacklist, type ClientTalentBlacklistCreate, type ClientTalentBlacklistRemove } from "../../../services/ClientTalentBlacklist";
 import { talentService, type Talent } from "../../../services/Talent";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -22,6 +22,9 @@ import {
   Plus,
   X,
   Search,
+  FolderKanban,
+  FileText,
+  Layers,
 } from "lucide-react";
 
 const formatDateTime = (dateString?: string | null) => {
@@ -42,9 +45,9 @@ const formatDateTime = (dateString?: string | null) => {
 
 export default function ManagerClientCompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [company, setCompany] = useState<ClientCompany | null>(null);
+  const [company, setCompany] = useState<ClientCompanyDetailedModel | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"info" | "blacklist">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "projects" | "assignedCVTemplates" | "jobRoleLevels" | "blacklist">("info");
   const [blacklists, setBlacklists] = useState<ClientTalentBlacklist[]>([]);
   const [loadingBlacklists, setLoadingBlacklists] = useState(false);
   
@@ -70,7 +73,7 @@ export default function ManagerClientCompanyDetailPage() {
     const fetchCompany = async () => {
       try {
         setLoading(true);
-        const data = await clientCompanyService.getById(Number(id));
+        const data = await clientCompanyService.getDetailedById(Number(id));
         setCompany(data);
       } catch (err) {
         console.error("❌ Lỗi khi tải chi tiết công ty:", err);
@@ -293,20 +296,13 @@ export default function ManagerClientCompanyDetailPage() {
                 Thông tin chi tiết công ty khách hàng
               </p>
 
-              {/* Status Badge */}
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 ${
-                company.isDeleted ? "bg-red-50" : "bg-green-50"
-              }`}>
-                {company.isDeleted ? (
-                  <XCircle className="w-4 h-4 text-red-600" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                )}
-                <span className={`text-sm font-medium ${
-                  company.isDeleted ? "text-red-800" : "text-green-800"
-                }`}>
-                  {company.isDeleted ? "Đã xóa" : "Đang hoạt động"}
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-neutral-200 bg-blue-50">
+                  <Briefcase className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800">
+                    Code: {company.code}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -327,6 +323,54 @@ export default function ManagerClientCompanyDetailPage() {
               >
                 <Building2 className="w-4 h-4" />
                 Thông tin công ty
+              </button>
+              <button
+                onClick={() => setActiveTab("projects")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "projects"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FolderKanban className="w-4 h-4" />
+                Dự án
+                {company?.projects && company.projects.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 text-xs font-semibold bg-primary-100 text-primary-700 rounded-full">
+                    {company.projects.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("assignedCVTemplates")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "assignedCVTemplates"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                CV Templates
+                {company?.assignedCVTemplates && company.assignedCVTemplates.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 text-xs font-semibold bg-primary-100 text-primary-700 rounded-full">
+                    {company.assignedCVTemplates.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("jobRoleLevels")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  activeTab === "jobRoleLevels"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Vị trí tuyển dụng
+                {company?.jobRoleLevels && company.jobRoleLevels.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 text-xs font-semibold bg-primary-100 text-primary-700 rounded-full">
+                    {company.jobRoleLevels.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveTab("blacklist")}
@@ -352,6 +396,11 @@ export default function ManagerClientCompanyDetailPage() {
             {activeTab === "info" && (
               <div className="animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InfoItem
+                    label="Mã công ty"
+                    value={company.code}
+                    icon={<Briefcase className="w-4 h-4" />}
+                  />
                   <InfoItem
                     label="Tên công ty"
                     value={company.name}
@@ -399,6 +448,152 @@ export default function ManagerClientCompanyDetailPage() {
                     className="col-span-2"
                   />
                 </div>
+              </div>
+            )}
+
+            {activeTab === "projects" && (
+              <div className="animate-fade-in">
+                {!company.projects || company.projects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FolderKanban className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có dự án nào</p>
+                    <p className="text-neutral-400 text-sm mt-2">Danh sách dự án của công ty này sẽ hiển thị ở đây</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {company.projects.map((project) => (
+                      <Link
+                        key={project.id}
+                        to={`/manager/projects/${project.id}`}
+                        className="block border border-neutral-200 rounded-xl p-4 hover:shadow-md transition-all hover:border-primary-300"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">{project.name}</h3>
+                            {project.description && (
+                              <p className="text-sm text-neutral-600 mb-3 line-clamp-2">{project.description}</p>
+                            )}
+                            <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
+                              {project.startDate && (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Bắt đầu: {new Date(project.startDate).toLocaleDateString("vi-VN")}</span>
+                                </div>
+                              )}
+                              {project.status && (
+                                <div className="flex items-center gap-1">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span>Trạng thái: {project.status}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "assignedCVTemplates" && (
+              <div className="animate-fade-in">
+                {!company.assignedCVTemplates || company.assignedCVTemplates.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FileText className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có CV Template nào được gán</p>
+                    <p className="text-neutral-400 text-sm mt-2">Danh sách CV Template được gán cho công ty này sẽ hiển thị ở đây</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {company.assignedCVTemplates.map((template) => (
+                      <div
+                        key={`${template.clientCompanyId}-${template.templateId}`}
+                        className="border border-neutral-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="p-2 bg-primary-100 rounded-lg">
+                                <FileText className="w-5 h-5 text-primary-600" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold text-gray-900">{template.templateName}</h3>
+                                {template.templateDescription && (
+                                  <p className="text-sm text-neutral-500 mt-1">{template.templateDescription}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="ml-12 space-y-2">
+                              {template.isDefault && (
+                                <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                                  Mặc định
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2 text-sm text-neutral-500">
+                                <Clock className="w-4 h-4" />
+                                <span>Gán vào: {formatDateTime(template.createdAt)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "jobRoleLevels" && (
+              <div className="animate-fade-in">
+                {!company.jobRoleLevels || company.jobRoleLevels.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Layers className="w-8 h-8 text-neutral-400" />
+                    </div>
+                    <p className="text-neutral-500 text-lg font-medium">Chưa có vị trí tuyển dụng nào</p>
+                    <p className="text-neutral-400 text-sm mt-2">Danh sách vị trí tuyển dụng của công ty này sẽ hiển thị ở đây</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-neutral-50 to-primary-50">
+                        <tr>
+                          <th className="py-3 px-4 text-left text-xs font-semibold text-neutral-600 uppercase">Vị trí</th>
+                          <th className="py-3 px-4 text-left text-xs font-semibold text-neutral-600 uppercase">Mức lương tối thiểu</th>
+                          <th className="py-3 px-4 text-left text-xs font-semibold text-neutral-600 uppercase">Mức lương tối đa</th>
+                          <th className="py-3 px-4 text-left text-xs font-semibold text-neutral-600 uppercase">Tiền tệ</th>
+                          <th className="py-3 px-4 text-left text-xs font-semibold text-neutral-600 uppercase">Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-200">
+                        {company.jobRoleLevels.map((jobRoleLevel) => (
+                          <tr key={jobRoleLevel.id} className="hover:bg-neutral-50 transition-colors">
+                            <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                              Vị trí #{jobRoleLevel.jobRoleLevelId}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-neutral-700">
+                              {jobRoleLevel.expectedMinRate ? jobRoleLevel.expectedMinRate.toLocaleString("vi-VN") : "—"}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-neutral-700">
+                              {jobRoleLevel.expectedMaxRate ? jobRoleLevel.expectedMaxRate.toLocaleString("vi-VN") : "—"}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-neutral-700">
+                              {jobRoleLevel.currency || "—"}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-neutral-600">
+                              {jobRoleLevel.notes || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

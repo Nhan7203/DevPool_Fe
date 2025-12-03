@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, Calendar, Building2, CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, CreditCard, Eye } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
+import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/developer/SidebarItems';
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from '../../../services/PartnerContractPayment';
 import { partnerService, type Partner } from '../../../services/Partner';
@@ -346,6 +347,11 @@ export default function DeveloperPaymentsList() {
             <div className="flex-1 p-8">
                 {/* Header */}
                 <div className="mb-8 animate-slide-up">
+                    <Breadcrumb
+                        items={[
+                            { label: "Thanh toán" }
+                        ]}
+                    />
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Trạng Thái Thanh Toán</h1>

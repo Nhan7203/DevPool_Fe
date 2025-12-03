@@ -11,11 +11,15 @@ import {
   Plus,
   Save,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Sparkles
 } from "lucide-react";
 import Sidebar from "../../../components/common/Sidebar";
+import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { clientCompanyService, type ClientCompanyPayload } from "../../../services/ClientCompany";
+import { clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
+import { cvTemplateService } from "../../../services/CVTemplate";
 
 export default function ClientCompanyCreatePage() {
   const navigate = useNavigate();
@@ -24,11 +28,13 @@ export default function ClientCompanyCreatePage() {
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState<{
     name?: string;
+    code?: string;
     contactPerson?: string;
     email?: string;
     phone?: string;
   }>({});
   const [form, setForm] = useState<ClientCompanyPayload>({
+    code: "",
     name: "",
     taxCode: "",
     contactPerson: "",
@@ -37,6 +43,8 @@ export default function ClientCompanyCreatePage() {
     phone: "",
     address: "",
   });
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
+  const [codeStatus, setCodeStatus] = useState<"idle" | "checking" | "unique" | "duplicate">("idle");
 
   // Validation functions
   const validateEmail = (email: string): boolean => {
@@ -66,11 +74,22 @@ export default function ClientCompanyCreatePage() {
       return;
     }
     
+    // Khi thay đổi tên công ty, tự động suggest code
+    if (name === "name" && value.trim()) {
+      handleSuggestCode(value);
+    }
+    
     setForm((prev) => ({ ...prev, [name]: value }));
     
     // Clear error khi user đang nhập
     if (name === "name" && formErrors.name) {
       setFormErrors((prev) => ({ ...prev, name: undefined }));
+    }
+    if (name === "code") {
+      setCodeStatus("idle");
+      if (formErrors.code) {
+        setFormErrors((prev) => ({ ...prev, code: undefined }));
+      }
     }
     if (name === "contactPerson" && formErrors.contactPerson) {
       setFormErrors((prev) => ({ ...prev, contactPerson: undefined }));
@@ -80,15 +99,66 @@ export default function ClientCompanyCreatePage() {
     }
   };
 
+  const handleSuggestCode = async (companyName: string) => {
+    if (!companyName.trim()) return;
+    
+    try {
+      const result = await clientCompanyService.suggestCode(companyName);
+      if (result.success && result.suggestedCode) {
+        setForm((prev) => ({ ...prev, code: result.suggestedCode }));
+        setCodeStatus("idle");
+      }
+    } catch (err) {
+      console.error("❌ Lỗi khi gợi ý code:", err);
+    }
+  };
+
+  const handleCheckCodeUnique = async (code: string) => {
+    if (!code.trim()) {
+      setCodeStatus("idle");
+      return;
+    }
+
+    try {
+      setIsCheckingCode(true);
+      setCodeStatus("checking");
+      const result = await clientCompanyService.checkCodeUnique(code);
+      if (result.success) {
+        setCodeStatus(result.isUnique ? "unique" : "duplicate");
+        if (!result.isUnique) {
+          setFormErrors((prev) => ({ ...prev, code: "Mã công ty đã tồn tại" }));
+        } else {
+          setFormErrors((prev) => ({ ...prev, code: undefined }));
+        }
+      }
+    } catch (err) {
+      console.error("❌ Lỗi khi kiểm tra code:", err);
+      setCodeStatus("idle");
+    } finally {
+      setIsCheckingCode(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
-    const errors: { name?: string; contactPerson?: string; email?: string; phone?: string } = {};
+    const errors: { name?: string; code?: string; contactPerson?: string; email?: string; phone?: string } = {};
     
     // Validate tên công ty (bắt buộc)
     if (!form.name || form.name.trim() === "") {
       errors.name = "Tên công ty là bắt buộc";
+    }
+    
+    // Validate code (bắt buộc)
+    if (!form.code || form.code.trim() === "") {
+      errors.code = "Mã công ty là bắt buộc";
+    } else {
+      // Kiểm tra code unique trước khi submit
+      await handleCheckCodeUnique(form.code);
+      if (codeStatus === "duplicate") {
+        errors.code = "Mã công ty đã tồn tại";
+      }
     }
     
     // Validate người liên hệ (bắt buộc)
@@ -126,8 +196,47 @@ export default function ClientCompanyCreatePage() {
     setSuccess(false);
 
     try {
-      await clientCompanyService.create(form);
+      const createdCompany = await clientCompanyService.create(form);
       setSuccess(true);
+      
+      // Tự động gán template mặc định "Default Professional"
+      try {
+        // Lấy ID từ response (có thể là object hoặc có data wrapper)
+        const companyId = createdCompany?.id || createdCompany?.data?.id || (createdCompany as any)?.data?.id;
+        
+        if (companyId) {
+          // Tìm template "Default Professional"
+          const templates = await cvTemplateService.getAll({ excludeDeleted: true });
+          const templatesArray = Array.isArray(templates)
+            ? templates
+            : (Array.isArray((templates as any)?.items)
+              ? (templates as any).items
+              : (Array.isArray((templates as any)?.data)
+                ? (templates as any).data
+                : []));
+          
+          // Tìm template có tên "Default Professional" hoặc template mặc định
+          const defaultTemplate = templatesArray.find(
+            (t: any) => 
+              t.name === "Default Professional" || 
+              (t.name && t.name.toLowerCase().includes("default professional")) ||
+              (t.isDefault && t.name && t.name.toLowerCase().includes("professional"))
+          );
+          
+          if (defaultTemplate) {
+            await clientCompanyCVTemplateService.assignTemplate(companyId, defaultTemplate.id);
+            console.log("✅ Đã tự động gán template mặc định:", defaultTemplate.name);
+          } else {
+            console.warn("⚠️ Không tìm thấy template 'Default Professional'");
+          }
+        } else {
+          console.warn("⚠️ Không lấy được ID công ty vừa tạo");
+        }
+      } catch (templateErr) {
+        console.error("❌ Lỗi khi gán template mặc định:", templateErr);
+        // Không throw error để không ảnh hưởng đến việc tạo công ty
+      }
+      
       setTimeout(() => navigate("/sales/clients"), 1500);
     } catch (err) {
       console.error("❌ Lỗi tạo công ty:", err);
@@ -144,6 +253,12 @@ export default function ClientCompanyCreatePage() {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
+          <Breadcrumb
+            items={[
+              { label: "Công ty khách hàng", to: "/sales/clients" },
+              { label: "Tạo mới" }
+            ]}
+          />
           <div className="flex items-center gap-4 mb-6">
             <Link 
               to="/sales/clients"
@@ -207,6 +322,70 @@ export default function ClientCompanyCreatePage() {
                   <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {formErrors.name}
+                  </p>
+                )}
+              </div>
+
+              {/* Mã công ty */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Mã công ty <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input
+                      name="code"
+                      value={form.code}
+                      onChange={handleChange}
+                      onBlur={() => form.code && handleCheckCodeUnique(form.code)}
+                      placeholder="Nhập mã công ty..."
+                      required
+                      className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                        formErrors.code || codeStatus === "duplicate"
+                          ? "border-red-500 focus:border-red-500"
+                          : codeStatus === "unique"
+                          ? "border-green-500 focus:border-green-500"
+                          : "border-neutral-200 focus:border-primary-500"
+                      }`}
+                    />
+                    {codeStatus === "checking" && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                    {codeStatus === "unique" && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      </div>
+                    )}
+                    {codeStatus === "duplicate" && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => form.name && handleSuggestCode(form.name)}
+                    disabled={!form.name.trim() || isCheckingCode}
+                    className="px-4 py-3 bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-xl border border-primary-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Gợi ý mã từ tên công ty"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span className="hidden sm:inline">Gợi ý</span>
+                  </button>
+                </div>
+                {formErrors.code && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {formErrors.code}
+                  </p>
+                )}
+                {codeStatus === "unique" && !formErrors.code && (
+                  <p className="mt-1 text-sm text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" />
+                    Mã công ty hợp lệ
                   </p>
                 )}
               </div>
