@@ -413,7 +413,7 @@ export default function ManagerClientCompanyDetailPage() {
                   />
                   <InfoItem
                     label="Người liên hệ"
-                    value={company.contactPerson}
+                    value={company.contactPerson ?? "—"}
                     icon={<User className="w-4 h-4" />}
                   />
                   <InfoItem
@@ -423,7 +423,7 @@ export default function ManagerClientCompanyDetailPage() {
                   />
                   <InfoItem
                     label="Email"
-                    value={company.email}
+                    value={company.email ?? "—"}
                     icon={<Mail className="w-4 h-4" />}
                   />
                   <InfoItem

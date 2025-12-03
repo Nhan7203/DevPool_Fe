@@ -334,9 +334,9 @@ export default function JobRequestCreatePage() {
           if (clientJobRoleLevel) {
             // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
             if (clientJobRoleLevel.expectedMaxRate) {
-              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate) }));
+              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate ?? undefined) }));
             } else if (clientJobRoleLevel.expectedMinRate) {
-              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate) }));
+              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate ?? undefined) }));
             }
             
             // Điền currency
@@ -1015,9 +1015,9 @@ export default function JobRequestCreatePage() {
                                     if (clientJobRoleLevel) {
                                       // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
                                       if (clientJobRoleLevel.expectedMaxRate) {
-                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate) }));
+                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate ?? undefined) }));
                                       } else if (clientJobRoleLevel.expectedMinRate) {
-                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate) }));
+                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate ?? undefined) }));
                                       }
                                       
                                       // Điền currency
