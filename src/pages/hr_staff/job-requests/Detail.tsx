@@ -543,7 +543,7 @@ export default function JobRequestDetailHRPage() {
                                     className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
                                 >
                                     <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                                    Matching CV AI
+                                    Matching CV
                                 </Button>
                             )}
                             <Button

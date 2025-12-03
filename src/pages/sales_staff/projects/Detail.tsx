@@ -150,7 +150,9 @@ export default function ProjectDetailPage() {
         // Lấy danh sách TalentAssignment cho project
         try {
           const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
-          setTalentAssignments(assignments);
+          // Filter client-side để đảm bảo chỉ lấy assignments của dự án này
+          const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
+          setTalentAssignments(filteredAssignments);
         } catch (err) {
           console.error("❌ Lỗi tải danh sách phân công nhân sự:", err);
         }
@@ -481,7 +483,9 @@ export default function ProjectDetailPage() {
 
       // Refresh assignments list
       const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
-      setTalentAssignments(assignments);
+      // Filter client-side để đảm bảo chỉ lấy assignments của dự án này
+      const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
+      setTalentAssignments(filteredAssignments);
 
       // Reset form and close modal
       setAssignmentForm({
@@ -640,7 +644,9 @@ export default function ProjectDetailPage() {
 
       // Refresh assignments list
       const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
-      setTalentAssignments(assignments);
+      // Filter client-side để đảm bảo chỉ lấy assignments của dự án này
+      const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
+      setTalentAssignments(filteredAssignments);
 
       // Reset form and close modal
       setUpdateForm({
@@ -1671,6 +1677,7 @@ export default function ProjectDetailPage() {
                     </thead>
                     <tbody>
                       {[...talentAssignments]
+                        .filter(a => a.projectId === Number(id))
                         .sort((a, b) => {
                           // Sắp xếp theo ngày cập nhật gần nhất (mới nhất trước)
                           const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
