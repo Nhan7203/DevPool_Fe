@@ -4,7 +4,7 @@ import { Search, Filter, Building2, Plus, Users, Mail, Phone, MapPin, ChevronLef
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { Button } from '../../../components/ui/button';
-import { partnerService, type Partner } from '../../../services/Partner';
+import { partnerService, type Partner, PartnerType } from '../../../services/Partner';
 import { ROUTES } from '../../../router/routes'; 
 
 export default function ListPartner() {
@@ -56,8 +56,12 @@ export default function ListPartner() {
     try {
       setLoading(true);
       const data = await partnerService.getAll();
-      setPartners(data);
-      setFilteredPartners(data);
+      // Sắp xếp theo id giảm dần (mới nhất trước) - đối tác mới tạo sẽ có id lớn hơn
+      const sortedData = Array.isArray(data) 
+        ? [...data].sort((a, b) => b.id - a.id)
+        : data;
+      setPartners(sortedData);
+      setFilteredPartners(sortedData);
     } catch (err) {
       console.error("❌ Failed to fetch partners:", err);
     } finally {
@@ -70,6 +74,8 @@ export default function ListPartner() {
     let filtered = [...partners];
     if (searchTerm) filtered = filtered.filter((p) => p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()));
     if (filterTaxCode) filtered = filtered.filter((p) => p.taxCode?.includes(filterTaxCode));
+    // Đảm bảo vẫn sắp xếp theo id giảm dần (mới nhất trước) sau khi filter
+    filtered.sort((a, b) => b.id - a.id);
     setFilteredPartners(filtered);
     setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
   }, [searchTerm, filterTaxCode, partners]);
@@ -239,10 +245,11 @@ export default function ListPartner() {
               <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên công ty</th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã đối tác</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã số thuế</th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Loại</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người đại diện</th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Email</th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Điện thoại</th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                 </tr>
@@ -250,7 +257,7 @@ export default function ListPartner() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredPartners.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Building2 className="w-8 h-8 text-neutral-400" />
@@ -268,6 +275,12 @@ export default function ListPartner() {
                     >
                       <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
                       <td className="py-4 px-6">
+                        <span className="text-sm font-semibold text-primary-700">{p.code || '—'}</span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="text-sm text-neutral-700">{p.taxCode || '—'}</span>
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
                             <Building2 className="w-5 h-5 text-primary-600" />
@@ -278,18 +291,21 @@ export default function ListPartner() {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="text-sm text-neutral-700">{p.taxCode || '—'}</span>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          p.partnerType === PartnerType.OwnCompany ? 'bg-blue-100 text-blue-800' :
+                          p.partnerType === PartnerType.Partner ? 'bg-green-100 text-green-800' :
+                          p.partnerType === PartnerType.Individual ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {p.partnerType === PartnerType.OwnCompany ? 'Công ty mình' :
+                           p.partnerType === PartnerType.Partner ? 'Đối tác' :
+                           p.partnerType === PartnerType.Individual ? 'Cá nhân' : '—'}
+                        </span>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-neutral-400" />
                           <span className="text-sm text-neutral-700">{p.contactPerson || '—'}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-neutral-400" />
-                          <span className="text-sm text-neutral-700">{p.email || '—'}</span>
                         </div>
                       </td>
                       <td className="py-4 px-6">

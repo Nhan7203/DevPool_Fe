@@ -9,6 +9,8 @@ import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRol
 import { locationService, type Location } from "../../../services/location";
 import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
+import { skillGroupService } from "../../../services/SkillGroup";
+import { talentSkillGroupAssessmentService } from "../../../services/TalentSkillGroupAssessment";
 import { applyService } from "../../../services/Apply";
 import { talentApplicationService, TalentApplicationStatusConstants, type TalentApplication } from "../../../services/TalentApplication";
 import { decodeJWT } from "../../../services/Auth";
@@ -297,6 +299,51 @@ export default function CVMatchingPage() {
                             // Lọc bỏ talent có trạng thái "Applying" hoặc "Working"
                             if (talent.status === "Applying" || talent.status === "Working") {
                                 return null; // Trả về null để filter sau
+                            }
+                            
+                            // ✅ Kiểm tra verification status: Talent có skills thuộc group chưa verify thì không được matching
+                            try {
+                                // Lấy skills của talent
+                                const talentSkills = await talentSkillService.getAll({
+                                    talentId: talent.id,
+                                    excludeDeleted: true,
+                                }) as TalentSkill[];
+                                
+                                // Lấy tất cả skills để map skillId -> skillGroupId
+                                const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
+                                const skillGroupMap = new Map<number, number | undefined>();
+                                allSkills.forEach(skill => {
+                                    skillGroupMap.set(skill.id, skill.skillGroupId);
+                                });
+                                
+                                // Lấy danh sách skill group IDs của talent
+                                const distinctSkillGroupIds = Array.from(
+                                    new Set(
+                                        talentSkills
+                                            .map(ts => skillGroupMap.get(ts.skillId))
+                                            .filter((gid): gid is number => typeof gid === "number")
+                                    )
+                                );
+                                
+                                if (distinctSkillGroupIds.length > 0) {
+                                    const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
+                                        talent.id,
+                                        distinctSkillGroupIds
+                                    );
+                                    
+                                    // Kiểm tra xem có skill group nào chưa verify không
+                                    const hasUnverifiedGroup = statuses.some(status => 
+                                        !status.isVerified || status.needsReverification
+                                    );
+                                    
+                                    if (hasUnverifiedGroup) {
+                                        console.log(`⚠️ CV ${cv.id} - Talent ${talent.id} có skill group chưa verify, loại bỏ khỏi matching.`);
+                                        return null; // Loại bỏ CV này khỏi matching
+                                    }
+                                }
+                            } catch (verificationError) {
+                                console.warn("⚠️ Không thể kiểm tra verification status cho talent:", talent.id, verificationError);
+                                // Nếu lỗi khi check verification, vẫn cho phép matching (không block)
                             }
                             
                             let talentLocationName: string | null = null;

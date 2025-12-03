@@ -15,8 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  Pause,
-  XCircle
+  Pause
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -79,12 +78,6 @@ export default function ProjectListPage() {
       value: projects.filter(p => p.status === 'Completed').length.toString(),
       color: 'purple',
       icon: <Building2 className="w-6 h-6" />
-    },
-    {
-      title: 'Đã Hủy',
-      value: projects.filter(p => p.status === 'Cancelled').length.toString(),
-      color: 'red',
-      icon: <XCircle className="w-6 h-6" />
     }
   ];
 
@@ -185,8 +178,7 @@ export default function ProjectListPage() {
     Planned: "Đã lên kế hoạch",
     Ongoing: "Đang thực hiện",
     OnHold: "Tạm dừng",
-    Completed: "Đã hoàn thành",
-    Cancelled: "Đã hủy"
+    Completed: "Đã hoàn thành"
   };
 
   if (loading) {
@@ -361,7 +353,6 @@ export default function ProjectListPage() {
                       <option value="Ongoing">Đang thực hiện</option>
                       <option value="OnHold">Tạm dừng</option>
                       <option value="Completed">Đã hoàn thành</option>
-                      <option value="Cancelled">Đã hủy</option>
                     </select>
                   </div>
                   <button
@@ -491,8 +482,6 @@ export default function ProjectListPage() {
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : p.status === 'Completed'
                                 ? 'bg-blue-100 text-blue-800'
-                                : p.status === 'Cancelled'
-                                ? 'bg-red-100 text-red-800'
                                 : 'bg-neutral-100 text-neutral-800'
                             }`}
                           >

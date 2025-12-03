@@ -38,6 +38,7 @@ export const NotificationType = {
   // Skills & CV Analysis (7xxx)
   NewSkillDetectedFromCV: 7001,
   CVUploadedByDeveloper: 7002,
+  SkillGroupAutoInvalidated: 7003, // Skill group bị auto-invalidate do thay đổi skill
 
   // Payments (8xxx)
   PaymentDueSoon: 8001,

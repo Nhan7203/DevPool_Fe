@@ -14,6 +14,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -41,6 +42,20 @@ export default function ExpertListPage() {
     isPartnerRepresentative: false,
     partnerId: null as number | null,
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Validation functions
+  const validateEmail = (email: string): boolean => {
+    if (!email || email.trim() === "") return true; // Optional field
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone || phone.trim() === "") return true; // Optional field
+    const phoneRegex = /^[0-9]{10}$/;
+    return phoneRegex.test(phone.replace(/\D/g, ""));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -149,13 +164,30 @@ export default function ExpertListPage() {
   };
 
   const handleCreate = async () => {
+    const newErrors: Record<string, string> = {};
+
+    // Validate name
     if (!newExpert.name.trim()) {
-      alert("Vui lòng nhập tên chuyên gia.");
-      return;
+      newErrors.name = "Vui lòng nhập tên chuyên gia.";
     }
 
+    // Validate email
+    if (newExpert.email && !validateEmail(newExpert.email)) {
+      newErrors.email = "Email không hợp lệ";
+    }
+
+    // Validate phone
+    if (newExpert.phone && !validatePhone(newExpert.phone)) {
+      newErrors.phone = "Số điện thoại phải có đúng 10 chữ số";
+    }
+
+    // Validate partner representative
     if (newExpert.isPartnerRepresentative && !newExpert.partnerId) {
-      alert("Vui lòng chọn công ty đối tác trước khi đánh dấu là đại diện đối tác.");
+      newErrors.partnerId = "Vui lòng chọn công ty đối tác trước khi đánh dấu là đại diện đối tác.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -181,6 +213,7 @@ export default function ExpertListPage() {
         isPartnerRepresentative: false,
         partnerId: null,
       });
+      setErrors({});
     } catch (err) {
       console.error("❌ Lỗi khi tạo expert:", err);
       alert("Không thể tạo chuyên gia, vui lòng thử lại.");
@@ -368,10 +401,7 @@ export default function ExpertListPage() {
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Chuyên môn
                   </th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Loại
-                  </th>
-                  <th className="py-4 px-6 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Thao tác
                   </th>
                 </tr>
@@ -379,7 +409,7 @@ export default function ExpertListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredExperts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <UserCog className="w-8 h-8 text-neutral-400" />
@@ -437,29 +467,18 @@ export default function ExpertListPage() {
                       <td className="py-4 px-6 text-sm text-neutral-700">
                         {expert.specialization || "—"}
                       </td>
-                      <td className="py-4 px-6 text-sm">
-                        {expert.isPartnerRepresentative ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Đại diện đối tác
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-50 text-neutral-700 border border-neutral-200">
-                            Nội bộ / Cộng tác
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="py-4 px-6 text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <Link
                             to={`/admin/categories/experts/${expert.id}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary-200 text-primary-700 text-xs hover:bg-primary-50"
+                            className="group inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary-200 text-primary-700 text-xs hover:bg-primary-50 hover:text-primary-800 transition-all duration-300"
                           >
                             Chi tiết
                           </Link>
                           <button
                             type="button"
                             onClick={() => handleDelete(expert.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 hover:text-red-700 transition-all duration-300"
                           >
                             <Trash2 className="w-3 h-3" /> Xóa
                           </button>
@@ -477,7 +496,19 @@ export default function ExpertListPage() {
         {showCreateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Thêm chuyên gia mới</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Thêm chuyên gia mới</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setErrors({});
+                  }}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <div className="space-y-4">
                 <div>
@@ -487,10 +518,24 @@ export default function ExpertListPage() {
                   <input
                     type="text"
                     value={newExpert.name}
-                    onChange={(e) => setNewExpert((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    onChange={(e) => {
+                      setNewExpert((p) => ({ ...p, name: e.target.value }));
+                      if (errors.name) {
+                        setErrors((prev) => {
+                          const newErrors = { ...prev };
+                          delete newErrors.name;
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
+                      errors.name ? "border-red-500" : "border-neutral-300"
+                    }`}
                     placeholder="VD: Nguyễn Văn A"
                   />
+                  {errors.name && (
+                    <p className="mt-1 text-xs text-red-500">{errors.name}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -501,10 +546,27 @@ export default function ExpertListPage() {
                     <input
                       type="email"
                       value={newExpert.email}
-                      onChange={(e) => setNewExpert((p) => ({ ...p, email: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewExpert((p) => ({ ...p, email: value }));
+                        const newErrors = { ...errors };
+                        if (value && validateEmail(value)) {
+                          delete newErrors.email;
+                        } else if (value && !validateEmail(value)) {
+                          newErrors.email = "Email không hợp lệ";
+                        } else {
+                          delete newErrors.email;
+                        }
+                        setErrors(newErrors);
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
+                        errors.email ? "border-red-500" : "border-neutral-300"
+                      }`}
                       placeholder="expert@example.com"
                     />
+                    {errors.email && (
+                      <p className="mt-1 text-xs text-red-500">{errors.email}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-1">
@@ -513,10 +575,27 @@ export default function ExpertListPage() {
                     <input
                       type="tel"
                       value={newExpert.phone}
-                      onChange={(e) => setNewExpert((p) => ({ ...p, phone: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewExpert((p) => ({ ...p, phone: value }));
+                        const newErrors = { ...errors };
+                        if (value && validatePhone(value)) {
+                          delete newErrors.phone;
+                        } else if (value && !validatePhone(value)) {
+                          newErrors.phone = "Số điện thoại phải có đúng 10 chữ số";
+                        } else {
+                          delete newErrors.phone;
+                        }
+                        setErrors(newErrors);
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 ${
+                        errors.phone ? "border-red-500" : "border-neutral-300"
+                      }`}
                       placeholder="VD: 0901234567"
                     />
+                    {errors.phone && (
+                      <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
+                    )}
                   </div>
                 </div>
 
@@ -555,6 +634,24 @@ export default function ExpertListPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* Hiển thị trường nhập company khi không chọn partner */}
+                {!newExpert.partnerId && (
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Tên công ty / Đơn vị
+                    </label>
+                    <input
+                      type="text"
+                      value={newExpert.company}
+                      onChange={(e) =>
+                        setNewExpert((p) => ({ ...p, company: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                      placeholder="VD: Công ty ABC, Tổ chức XYZ, ..."
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1">

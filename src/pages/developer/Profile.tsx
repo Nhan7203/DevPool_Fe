@@ -58,6 +58,9 @@ export default function DeveloperProfilePage() {
   const [pageCVs, setPageCVs] = useState(1);
   const itemsPerPageCVs = 5;
   const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'info' | 'cvs' | 'skills' | 'jobRole' | 'experience' | 'projects' | 'certificates'>('info');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -536,8 +539,102 @@ export default function DeveloperProfilePage() {
             <p className="text-neutral-600">Xem và quản lý thông tin hồ sơ của bạn</p>
           </div>
 
-          {/* 1. Thông tin cá nhân */}
-          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
+          {/* Main Content Card with Tabs */}
+          <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in">
+            {/* Tab Navigation */}
+            <div className="border-b border-neutral-200 bg-white">
+              <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <button
+                  onClick={() => setActiveTab('info')}
+                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                    activeTab === 'info'
+                      ? 'border-primary-600 text-primary-600 bg-primary-50'
+                      : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                  }`}
+                >
+                  <User className="w-4 h-4" />
+                  Thông Tin Cá Nhân
+                </button>
+                {talent && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('cvs')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'cvs'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      Hồ Sơ (CVs)
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('skills')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'skills'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Code className="w-4 h-4" />
+                      Kỹ Năng
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('jobRole')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'jobRole'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Vai Trò & Cấp Độ
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('experience')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'experience'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Briefcase className="w-4 h-4" />
+                      Kinh Nghiệm
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('projects')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'projects'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Star className="w-4 h-4" />
+                      Dự Án
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('certificates')}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-all duration-300 whitespace-nowrap ${
+                        activeTab === 'certificates'
+                          ? 'border-primary-600 text-primary-600 bg-primary-50'
+                          : 'border-transparent text-neutral-600 hover:text-primary-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Award className="w-4 h-4" />
+                      Chứng Chỉ
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6">
+              <>
+                {/* Thông Tin Cá Nhân Tab */}
+                {activeTab === 'info' && (
+                  <div>
+                    <form onSubmit={handleSubmit}>
             <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -553,8 +650,7 @@ export default function DeveloperProfilePage() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
-              {talent && (talent.status === "Applying" || talent.status === "Working") && (
+                      {talent && (talent.status === "Applying" || talent.status === "Working") && (
                 <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-yellow-600" />
                   <p className="text-yellow-800 font-medium">
@@ -746,7 +842,7 @@ export default function DeveloperProfilePage() {
               </div>
 
               {/* Submit Button */}
-              <div className="flex justify-end pt-6 mt-6 border-neutral-200">
+              <div className="flex justify-end pt-6 mt-6 border-t border-neutral-200">
                 <button
                   type="submit"
                   disabled={saving || !!(talent && (talent.status === "Applying" || talent.status === "Working"))}
@@ -765,26 +861,70 @@ export default function DeveloperProfilePage() {
                   )}
                 </button>
               </div>
-            </form>
-          </div>
+                    </form>
 
-          {/* 2. Thông tin chuyên môn */}
-          {talent && (
-            <>
-              {/* (f) CVs */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-primary-100 rounded-lg">
-                        <FileText className="w-6 h-6 text-primary-600" />
+                    {/* Lịch Rảnh (Available Time) */}
+                    {talent && talent.availableTimes && talent.availableTimes.length > 0 && (
+                      <div className="mt-8 pt-8 border-t border-neutral-200">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-3 bg-primary-100 rounded-lg">
+                            <Clock className="w-6 h-6 text-primary-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-bold text-gray-900">Lịch Rảnh (Available Time)</h2>
+                            <p className="text-sm text-neutral-600">Thời gian bạn có thể làm việc</p>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          {talent.availableTimes.map((at) => (
+                            <div key={at.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="font-semibold text-gray-900">
+                                  {formatDate(at.startTime)} - {at.endTime ? formatDate(at.endTime) : 'Không giới hạn'}
+                                </p>
+                              </div>
+                              {at.notes && (
+                                <p className="text-sm text-neutral-700 mt-2">{at.notes}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900">Hồ Sơ (CVs)</h2>
-                        <p className="text-sm text-neutral-600">Danh sách CV của bạn</p>
+                    )}
+
+                    {/* Đối Tác Hiện Tại */}
+                    {talent && talent.currentPartnerId && (
+                      <div className="mt-8 pt-8 border-t border-neutral-200">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-3 bg-primary-100 rounded-lg">
+                            <Building2 className="w-6 h-6 text-primary-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-bold text-gray-900">Đối Tác Hiện Tại</h2>
+                            <p className="text-sm text-neutral-600">Công ty đối tác bạn đang làm việc</p>
+                          </div>
+                        </div>
+                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                          <p className="text-lg font-semibold text-gray-900">{partnerName}</p>
+                        </div>
                       </div>
-                    </div>
-                    {talent && (
+                    )}
+                  </div>
+                )}
+
+                {/* Hồ Sơ (CVs) Tab */}
+                {activeTab === 'cvs' && talent && (
+                  <div>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-primary-100 rounded-lg">
+                          <FileText className="w-6 h-6 text-primary-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold text-gray-900">Hồ Sơ (CVs)</h2>
+                          <p className="text-sm text-neutral-600">Danh sách CV của bạn</p>
+                        </div>
+                      </div>
                       <Link to={`/developer/cv/create?talentId=${talent.id}`}>
                         <button
                           className="group flex items-center gap-2 bg-gradient-to-r from-accent-600 to-accent-700 hover:from-accent-700 hover:to-accent-800 text-white px-4 py-2 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105"
@@ -793,11 +933,8 @@ export default function DeveloperProfilePage() {
                           Tải lên CV
                         </button>
                       </Link>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-6">
+                    </div>
+                    <div>
                   {talent.cvs && Array.isArray(talent.cvs) && talent.cvs.length > 0 ? (
                     <>
                       <div className="space-y-4">
@@ -975,25 +1112,24 @@ export default function DeveloperProfilePage() {
                     </>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có CV nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* (a) Skills */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Code className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Kỹ Năng (Skills)</h2>
-                      <p className="text-sm text-neutral-600">Danh sách kỹ năng của bạn</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
+                {/* Kỹ Năng (Skills) Tab */}
+                {activeTab === 'skills' && talent && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Code className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Kỹ Năng (Skills)</h2>
+                        <p className="text-sm text-neutral-600">Danh sách kỹ năng của bạn</p>
+                      </div>
+                    </div>
+                    <div>
                   {talent.skills && talent.skills.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {talent.skills.map((skill) => (
@@ -1014,25 +1150,24 @@ export default function DeveloperProfilePage() {
                     </div>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có kỹ năng nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* (b) Job Role Level */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Target className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Vai Trò & Cấp Độ (Job Role Level)</h2>
-                      <p className="text-sm text-neutral-600">Vai trò và cấp độ của bạn</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
+                {/* Vai Trò & Cấp Độ Tab */}
+                {activeTab === 'jobRole' && talent && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Target className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Vai Trò & Cấp Độ (Job Role Level)</h2>
+                        <p className="text-sm text-neutral-600">Vai trò và cấp độ của bạn</p>
+                      </div>
+                    </div>
+                    <div>
                   {talent.jobRoleLevels && talent.jobRoleLevels.length > 0 ? (
                     <div className="space-y-4">
                       {talent.jobRoleLevels.map((jrl) => {
@@ -1060,25 +1195,24 @@ export default function DeveloperProfilePage() {
                     </div>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có vai trò nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* (c) Work Experiences */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Briefcase className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Kinh Nghiệm Làm Việc</h2>
-                      <p className="text-sm text-neutral-600">Lịch sử công việc của bạn</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
+                {/* Kinh Nghiệm Làm Việc Tab */}
+                {activeTab === 'experience' && talent && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Briefcase className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Kinh Nghiệm Làm Việc</h2>
+                        <p className="text-sm text-neutral-600">Lịch sử công việc của bạn</p>
+                      </div>
+                    </div>
+                    <div>
                   {talent.workExperiences && talent.workExperiences.length > 0 ? (
                     <div className="space-y-4">
                       {talent.workExperiences.map((exp) => (
@@ -1102,25 +1236,24 @@ export default function DeveloperProfilePage() {
                     </div>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có kinh nghiệm làm việc nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* (d) Projects */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Star className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Dự Án (Projects)</h2>
-                      <p className="text-sm text-neutral-600">Các dự án bạn đã tham gia</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
+                {/* Dự Án (Projects) Tab */}
+                {activeTab === 'projects' && talent && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Star className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Dự Án (Projects)</h2>
+                        <p className="text-sm text-neutral-600">Các dự án bạn đã tham gia</p>
+                      </div>
+                    </div>
+                    <div>
                   {talent.projects && talent.projects.length > 0 ? (
                     <div className="space-y-4">
                       {talent.projects.map((project) => (
@@ -1140,25 +1273,24 @@ export default function DeveloperProfilePage() {
                     </div>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có dự án nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* (e) Certificates */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Award className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Chứng Chỉ (Certificates)</h2>
-                      <p className="text-sm text-neutral-600">Các chứng chỉ của bạn</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
+                {/* Chứng Chỉ (Certificates) Tab */}
+                {activeTab === 'certificates' && talent && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="p-3 bg-primary-100 rounded-lg">
+                        <Award className="w-6 h-6 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Chứng Chỉ (Certificates)</h2>
+                        <p className="text-sm text-neutral-600">Các chứng chỉ của bạn</p>
+                      </div>
+                    </div>
+                    <div>
                   {talent.certificates && talent.certificates.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {talent.certificates.map((cert) => (
@@ -1200,76 +1332,20 @@ export default function DeveloperProfilePage() {
                     </div>
                   ) : (
                     <p className="text-neutral-500 text-center py-8">Chưa có chứng chỉ nào</p>
-                  )}
-                </div>
-              </div>
-
-              {/* 3. Lịch rảnh (Available Time) */}
-              <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary-100 rounded-lg">
-                      <Clock className="w-6 h-6 text-primary-600" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Lịch Rảnh (Available Time)</h2>
-                      <p className="text-sm text-neutral-600">Thời gian bạn có thể làm việc</p>
+                    )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="p-6">
-                  {talent.availableTimes && talent.availableTimes.length > 0 ? (
-                    <div className="space-y-4">
-                      {talent.availableTimes.map((at) => (
-                        <div key={at.id} className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-semibold text-gray-900">
-                              {formatDate(at.startTime)} - {at.endTime ? formatDate(at.endTime) : 'Không giới hạn'}
-                            </p>
-                          </div>
-                          {at.notes && (
-                            <p className="text-sm text-neutral-700 mt-2">{at.notes}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-neutral-500 text-center py-8">Chưa có lịch rảnh nào</p>
-                  )}
-                </div>
-              </div>
 
-              {/* 4. Thông tin đối tác hiện tại */}
-              {talent.currentPartnerId && (
-                <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6">
-                  <div className="p-6 border-b border-neutral-200 bg-gradient-to-r from-neutral-50 to-primary-50">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-primary-100 rounded-lg">
-                        <Building2 className="w-6 h-6 text-primary-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900">Đối Tác Hiện Tại</h2>
-                        <p className="text-sm text-neutral-600">Công ty đối tác bạn đang làm việc</p>
-                      </div>
-                    </div>
+                {!talent && activeTab === 'info' && (
+                  <div className="text-center py-8">
+                    <p className="text-neutral-500">Chưa có thông tin talent. Vui lòng liên hệ TA để được tạo hồ sơ.</p>
                   </div>
-
-                  <div className="p-6">
-                    <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                      <p className="text-lg font-semibold text-gray-900">{partnerName}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {!talent && (
-            <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 overflow-hidden animate-fade-in mb-6 p-8 text-center">
-              <p className="text-neutral-500">Chưa có thông tin talent. Vui lòng liên hệ TA để được tạo hồ sơ.</p>
+                )}
+              </>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

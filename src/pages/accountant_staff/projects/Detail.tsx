@@ -383,6 +383,44 @@ export default function AccountantProjectDetailPage() {
       const createdPeriods: ProjectPeriodModel[] = [];
       
       for (const period of newPeriods) {
+        // Validation: Kiểm tra Project StartDate
+        // ProjectPeriod startDate sẽ là ngày đầu tháng (ví dụ: 2025-12-01)
+        // Nó phải >= Project StartDate
+        if (project?.startDate) {
+          const projectStartDate = new Date(project.startDate);
+          // Lấy ngày đầu tháng của Project StartDate (theo UTC)
+          const projectStartMonthUTC = new Date(Date.UTC(
+            projectStartDate.getUTCFullYear(),
+            projectStartDate.getUTCMonth(),
+            1
+          ));
+          
+          // ProjectPeriod startDate là ngày đầu tháng (UTC)
+          const periodStartDate = new Date(Date.UTC(period.year, period.month - 1, 1));
+          
+          // So sánh: periodStartDate phải >= projectStartMonthUTC
+          // Nếu Project StartDate không phải là ngày đầu tháng, thì Period của tháng đó không thể tạo
+          if (periodStartDate < projectStartMonthUTC) {
+            const projectStartLocal = new Date(project.startDate);
+            const projectStartMonthLocal = new Date(projectStartLocal.getFullYear(), projectStartLocal.getMonth(), 1);
+            const periodStartLocal = new Date(period.year, period.month - 1, 1);
+            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} không thể tạo: ProjectPeriod startDate (${periodStartLocal.toLocaleDateString('vi-VN')}) < Project StartDate tháng (${projectStartMonthLocal.toLocaleDateString('vi-VN')})`);
+            continue;
+          }
+          
+          // Nếu Period là tháng của Project StartDate nhưng Project StartDate không phải ngày đầu tháng
+          // thì không thể tạo Period cho tháng đó
+          if (periodStartDate.getTime() === projectStartMonthUTC.getTime()) {
+            const projectStartDayUTC = projectStartDate.getUTCDate();
+            if (projectStartDayUTC > 1) {
+              const projectStartLocal = new Date(project.startDate);
+              const periodStartLocal = new Date(period.year, period.month - 1, 1);
+              console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} không thể tạo: ProjectPeriod startDate (${periodStartLocal.toLocaleDateString('vi-VN')}) < Project StartDate (${projectStartLocal.toLocaleDateString('vi-VN')}). Backend yêu cầu ProjectPeriod startDate phải >= Project StartDate.`);
+              continue;
+            }
+          }
+        }
+
         const payload: ProjectPeriodCreateModel = {
           projectId: Number(id),
           periodMonth: period.month,

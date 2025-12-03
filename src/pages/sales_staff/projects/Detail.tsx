@@ -6,7 +6,7 @@ import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../services/ProjectPeriod";
-import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignmentCreateModel } from "../../../services/TalentAssignment";
+import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignmentCreateModel, type TalentAssignmentUpdateModel } from "../../../services/TalentAssignment";
 import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
@@ -16,6 +16,7 @@ import { talentCVService, type TalentCV } from "../../../services/TalentCV";
 import { partnerService, type Partner } from "../../../services/Partner";
 import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
 import { locationService, type Location } from "../../../services/location";
+import { type JobRequest } from "../../../services/JobRequest";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { uploadFile } from "../../../utils/firebaseStorage";
 import { 
@@ -223,7 +224,7 @@ export default function ProjectDetailPage() {
         
         // Lấy danh sách applications có status = "Hired" và thuộc project này
         const allApplications = await talentApplicationService.getAll({ excludeDeleted: true });
-        const projectJobRequestIds = project?.jobRequests?.map((jr: any) => jr.id) || [];
+        const projectJobRequestIds = (project?.jobRequests as JobRequest[] | undefined)?.map((jr) => jr.id) || [];
         const hiredApps = allApplications.filter((app: TalentApplication) => 
           app.status === "Hired" && projectJobRequestIds.includes(app.jobRequestId)
         );
@@ -244,8 +245,8 @@ export default function ProjectDetailPage() {
         ]);
         
         // Ưu tiên hiển thị talents từ applications đã hired, sau đó là tất cả
-        const talentsFromApps = allTalents.filter((t: any) => talentIdsFromApps.includes(t.id));
-        const otherTalents = allTalents.filter((t: any) => !talentIdsFromApps.includes(t.id));
+        const talentsFromApps = allTalents.filter((t: Talent) => talentIdsFromApps.includes(t.id));
+        const otherTalents = allTalents.filter((t: Talent) => !talentIdsFromApps.includes(t.id));
         setTalents([...talentsFromApps, ...otherTalents]);
         setPartners(allPartners);
       } catch (err) {
@@ -306,7 +307,7 @@ export default function ProjectDetailPage() {
       
       if (startDate < completedDate) {
         setAssignmentWarnings({ 
-          startDate: "Talent vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
+          startDate: "Nhân sự vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
         });
       } else {
         setAssignmentWarnings({});
@@ -440,14 +441,14 @@ export default function ProjectDetailPage() {
     }
 
     // Confirmation dialog
-    const talentName = talents.find(t => t.id === assignmentForm.talentId)?.fullName || `Talent #${assignmentForm.talentId}`;
-    const partnerName = partners.find(p => p.id === assignmentForm.partnerId)?.companyName || `Partner #${assignmentForm.partnerId}`;
+    const talentName = talents.find(t => t.id === assignmentForm.talentId)?.fullName || `Nhân sự #${assignmentForm.talentId}`;
+    const partnerName = partners.find(p => p.id === assignmentForm.partnerId)?.companyName || `Đối tác #${assignmentForm.partnerId}`;
     const startDateStr = assignmentForm.startDate ? formatViDate(assignmentForm.startDate) : "—";
     const endDateStr = assignmentForm.endDate ? formatViDate(assignmentForm.endDate) : "—";
     
     const confirmMessage = `Xác nhận tạo phân công nhân sự?\n\n` +
-      `Talent: ${talentName}\n` +
-      `Partner: ${partnerName}\n` +
+      `Nhân sự: ${talentName}\n` +
+      `Đối tác: ${partnerName}\n` +
       `Ngày bắt đầu: ${startDateStr}\n` +
       `Ngày kết thúc: ${endDateStr}`;
     
@@ -467,9 +468,12 @@ export default function ProjectDetailPage() {
       }
 
       // Create assignment
+      // Convert dates to UTC ISO string for PostgreSQL
       const payload: TalentAssignmentCreateModel = {
         ...assignmentForm,
         projectId: Number(id),
+        startDate: assignmentForm.startDate ? toUTCISOString(assignmentForm.startDate) || "" : "",
+        endDate: assignmentForm.endDate ? toUTCISOString(assignmentForm.endDate) : null,
         commitmentFileUrl
       };
 
@@ -571,7 +575,7 @@ export default function ProjectDetailPage() {
     }
 
     // Confirmation dialog
-    const talentName = talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Talent #${selectedAssignment.talentId}`;
+    const talentName = talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Nhân sự #${selectedAssignment.talentId}`;
     const startDateStr = selectedAssignment.status === "Draft" 
       ? (updateForm.startDate ? formatViDate(updateForm.startDate) : formatViDate(selectedAssignment.startDate))
       : formatViDate(selectedAssignment.startDate);
@@ -580,7 +584,7 @@ export default function ProjectDetailPage() {
     
     const actionText = selectedAssignment.status === "Draft" ? "cập nhật" : "gia hạn";
     let confirmMessage = `Xác nhận ${actionText} phân công nhân sự?\n\n` +
-      `Talent: ${talentName}\n` +
+      `Nhân sự: ${talentName}\n` +
       `Ngày bắt đầu: ${startDateStr}\n`;
     
     if (selectedAssignment.status === "Active" && currentEndDateStr !== "—") {
@@ -608,10 +612,11 @@ export default function ProjectDetailPage() {
 
       if (isDraft) {
         // Use update API for Draft status
-        // Note: We need to include startDate even though it's not in the interface
-        const payload: any = {
-          startDate: updateForm.startDate || selectedAssignment.startDate,
-          endDate: updateForm.endDate || null,
+        // Note: We need to include startDate even though it's not in the standard interface
+        // Convert dates to UTC ISO string for PostgreSQL
+        const payload: TalentAssignmentUpdateModel & { startDate?: string | null; status?: string } = {
+          startDate: updateForm.startDate ? toUTCISOString(updateForm.startDate) : (selectedAssignment.startDate ? toUTCISOString(selectedAssignment.startDate) : null),
+          endDate: updateForm.endDate ? toUTCISOString(updateForm.endDate) : null,
           commitmentFileUrl,
           status: "Active", // Change status to Active
           notes: updateForm.notes || null
@@ -620,8 +625,10 @@ export default function ProjectDetailPage() {
         await talentAssignmentService.update(selectedAssignment.id, payload);
       } else if (isActiveWithStartDate) {
         // Use extend API for Active status with startDate
+        // Convert endDate to UTC ISO string for PostgreSQL
+        const endDateUTC = updateForm.endDate ? toUTCISOString(updateForm.endDate) : null;
         const payload = {
-          endDate: updateForm.endDate || "",
+          endDate: endDateUTC || "",
           commitmentFileUrl,
           notes: updateForm.notes || null
         };
@@ -715,11 +722,42 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Chuyển date string sang UTC ISO string để gửi lên API
+  const toUTCISOString = (dateStr?: string | null): string | null => {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime()) || date.getFullYear() < 1900) return null;
+      // Convert sang UTC và trả về ISO string
+      return date.toISOString();
+    } catch {
+      return null;
+    }
+  };
+
   const statusLabels: Record<string, string> = {
   Planned: "Đã lên kế hoạch",
   Ongoing: "Đang thực hiện",
   Completed: "Đã hoàn thành",
 };
+
+  const assignmentStatusLabels: Record<string, string> = {
+    Active: "Đang hoạt động",
+    Completed: "Đã hoàn thành",
+    Terminated: "Đã chấm dứt",
+    Inactive: "Không hoạt động",
+    Draft: "Nháp",
+  };
+
+  const applicationStatusLabels: Record<string, string> = {
+    Hired: "Đã tuyển",
+    Submitted: "Đã nộp hồ sơ",
+    Interviewing: "Đang phỏng vấn",
+    Withdrawn: "Đã rút",
+    Rejected: "Từ chối",
+    Expired: "Đã hết hạn",
+    ClosedBySystem: "Đã đóng bởi hệ thống",
+  };
 
   // Filter periods by year and status
   useEffect(() => {
@@ -930,11 +968,18 @@ export default function ProjectDetailPage() {
   };
 
   // Filter và paginate Job Requests
-  const filteredJobRequests = (project?.jobRequests || []).filter((jr: any) => {
+  const filteredJobRequests = ((project?.jobRequests || []) as JobRequest[]).filter((jr) => {
     const matchesSearch = !jobRequestSearch || 
       (jr.title?.toLowerCase().includes(jobRequestSearch.toLowerCase()) ||
-       jr.jobPositionName?.toLowerCase().includes(jobRequestSearch.toLowerCase()));
-    const matchesStatus = !jobRequestStatusFilter || jr.status === jobRequestStatusFilter;
+       (jr as any).jobPositionName?.toLowerCase().includes(jobRequestSearch.toLowerCase()));
+    // Convert status to string for comparison (status can be number or string)
+    const statusStr = typeof jr.status === 'number' ? String(jr.status) : jr.status;
+    const statusNum = typeof jr.status === 'number' ? jr.status : undefined;
+    const matchesStatus = !jobRequestStatusFilter || statusStr === jobRequestStatusFilter || 
+      (jobRequestStatusFilter === "Pending" && statusNum === 0) ||
+      (jobRequestStatusFilter === "Approved" && statusNum === 1) ||
+      (jobRequestStatusFilter === "Closed" && statusNum === 2) ||
+      (jobRequestStatusFilter === "Rejected" && (statusNum === 3 || statusStr === "Rejected"));
     return matchesSearch && matchesStatus;
   });
   const paginatedJobRequests = filteredJobRequests.slice(
@@ -1260,7 +1305,7 @@ export default function ProjectDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedJobRequests.map((jr: any) => {
+                        {paginatedJobRequests.map((jr) => {
                           const jobRoleLevel = jobRoleLevels.find(jrl => jrl.id === jr.jobRoleLevelId);
                           const location = locations.find(loc => loc.id === jr.locationId);
                           return (
@@ -1270,7 +1315,7 @@ export default function ProjectDetailPage() {
                               className="border-b border-neutral-100 hover:bg-primary-50 cursor-pointer transition-colors"
                             >
                               <td className="py-3 px-4 text-sm text-neutral-900 font-medium">{jr.title || "—"}</td>
-                              <td className="py-3 px-4 text-sm text-neutral-700">{jobRoleLevel?.name || jr.jobPositionName || "—"}</td>
+                              <td className="py-3 px-4 text-sm text-neutral-700">{jobRoleLevel?.name || (jr as any).jobPositionName || "—"}</td>
                               <td className="py-3 px-4 text-sm text-neutral-700">{jr.quantity || 0}</td>
                               <td className="py-3 px-4 text-sm text-neutral-700">
                                 {jr.budgetPerMonth ? `${jr.budgetPerMonth.toLocaleString('vi-VN')} VNĐ` : "—"}
@@ -1446,7 +1491,7 @@ export default function ProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            Phân công nhân sự ID: {talentAssignmentId}
                                           </p>
                                         </div>
                                         {clientPayments.map((payment) => (
@@ -1521,7 +1566,7 @@ export default function ProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            Phân công nhân sự ID: {talentAssignmentId}
                                           </p>
                                         </div>
                                         {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
@@ -1533,7 +1578,7 @@ export default function ProjectDetailPage() {
                                             <div className="flex items-start justify-between mb-3">
                                               <div className="flex-1">
                                                 <p className="font-semibold text-gray-900 mb-1">{payment.contractNumber}</p>
-                                                <p className="text-sm text-neutral-600">{talentNamesMap[payment.talentAssignmentId] || `Talent Assignment ID: ${payment.talentAssignmentId}`}</p>
+                                                <p className="text-sm text-neutral-600">{talentNamesMap[payment.talentAssignmentId] || `Phân công nhân sự ID: ${payment.talentAssignmentId}`}</p>
                                               </div>
                                               <div className="flex flex-col items-end gap-2">
                                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -1614,8 +1659,8 @@ export default function ProjectDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-neutral-200">
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Talent</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Partner</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Nhân sự</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Đối tác</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ngày bắt đầu</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ngày kết thúc</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Trạng thái</th>
@@ -1641,10 +1686,10 @@ export default function ProjectDetailPage() {
                             className="border-b border-neutral-100 hover:bg-neutral-50"
                           >
                             <td className="py-3 px-4 text-sm text-neutral-900 font-medium">
-                              {talent?.fullName || `Talent #${assignment.talentId}`}
+                              {talent?.fullName || `Nhân sự #${assignment.talentId}`}
                             </td>
                             <td className="py-3 px-4 text-sm text-neutral-700">
-                              {partner?.companyName || `Partner #${assignment.partnerId}`}
+                              {partner?.companyName || `Đối tác #${assignment.partnerId}`}
                             </td>
                             <td className="py-3 px-4 text-sm text-neutral-700">
                               {assignment.startDate ? formatViDate(assignment.startDate) : "—"}
@@ -1660,7 +1705,7 @@ export default function ProjectDetailPage() {
                                 assignment.status === "Inactive" ? "bg-gray-100 text-gray-800" :
                                 "bg-neutral-100 text-neutral-800"
                               }`}>
-                                {assignment.status || "—"}
+                                {assignment.status ? (assignmentStatusLabels[assignment.status] || assignment.status) : "—"}
                               </span>
                             </td>
                             <td className="py-3 px-4">
@@ -1846,7 +1891,7 @@ export default function ProjectDetailPage() {
                 {/* Talent Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Talent <span className="text-red-500">*</span>
+                    Nhân sự <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={assignmentForm.talentId || ""}
@@ -1866,7 +1911,7 @@ export default function ProjectDetailPage() {
                 {/* Partner Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Partner <span className="text-red-500">*</span>
+                    Đối tác <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={assignmentForm.partnerId || ""}
@@ -1899,7 +1944,7 @@ export default function ProjectDetailPage() {
                     <option value="">Không chọn</option>
                     {hiredApplications.map((app) => (
                       <option key={app.id} value={app.id}>
-                        Application #{app.id} - {app.status}
+                        Application #{app.id} - {app.status ? (applicationStatusLabels[app.status] || app.status) : app.status}
                       </option>
                     ))}
                   </select>
@@ -1933,7 +1978,7 @@ export default function ProjectDetailPage() {
                         
                         if (startDate < completedDate) {
                           setAssignmentWarnings({ 
-                            startDate: "Talent vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
+                            startDate: "Nhân sự vào làm trước khi thủ tục hoàn tất. Vui lòng kiểm tra lại." 
                           });
                         } else {
                           setAssignmentWarnings({});
@@ -2275,15 +2320,15 @@ export default function ProjectDetailPage() {
               {/* Talent Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Talent</label>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Nhân sự</label>
                   <p className="text-sm font-semibold text-gray-900">
-                    {talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Talent #${selectedAssignment.talentId}`}
+                    {talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Nhân sự #${selectedAssignment.talentId}`}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Partner</label>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Đối tác</label>
                   <p className="text-sm font-semibold text-gray-900">
-                    {partners.find(p => p.id === selectedAssignment.partnerId)?.companyName || `Partner #${selectedAssignment.partnerId}`}
+                    {partners.find(p => p.id === selectedAssignment.partnerId)?.companyName || `Đối tác #${selectedAssignment.partnerId}`}
                   </p>
                 </div>
               </div>
@@ -2315,7 +2360,7 @@ export default function ProjectDetailPage() {
                   selectedAssignment.status === "Draft" ? "bg-yellow-100 text-yellow-800" :
                   "bg-neutral-100 text-neutral-800"
                 }`}>
-                  {selectedAssignment.status || "—"}
+                  {selectedAssignment.status ? (assignmentStatusLabels[selectedAssignment.status] || selectedAssignment.status) : "—"}
                 </span>
               </div>
 

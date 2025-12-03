@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
-import { partnerService, type PartnerDetailedModel, type PartnerTalentModel } from "../../../services/Partner";
+import { partnerService, type PartnerDetailedModel, type PartnerTalentModel, PartnerType } from "../../../services/Partner";
 import { talentService, type Talent } from "../../../services/Talent";
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { Button } from "../../../components/ui/button";
@@ -108,8 +108,40 @@ export default function PartnerDetailPage() {
         const response = await partnerService.getDetailedById(Number(id));
         // Handle response structure: { success: true, data: {...} } or direct data
         const partnerData = response?.data || response;
+        console.log("🔍 Partner data from API:", partnerData);
+        
+        // Lấy thông tin cơ bản từ getAll để có code, taxCode, phone, partnerType (vì detailed API có thể thiếu)
+        let basicPartnerInfo: any = null;
+        try {
+          const allPartners = await partnerService.getAll();
+          const partnersArray = Array.isArray(allPartners) ? allPartners : [];
+          basicPartnerInfo = partnersArray.find((p: any) => p.id === Number(id));
+        } catch (err) {
+          console.warn("⚠️ Không thể lấy thông tin cơ bản từ getAll:", err);
+        }
+        
         if (partnerData) {
-          setPartner(partnerData);
+          // Map dữ liệu từ backend (có thể là PascalCase) sang camelCase
+          // Ưu tiên lấy từ basicPartnerInfo (getAll) nếu có, fallback về partnerData (detailed)
+          const mappedPartner: PartnerDetailedModel = {
+            id: partnerData.id || partnerData.Id,
+            code: basicPartnerInfo?.code || partnerData.code || partnerData.Code || '',
+            partnerType: basicPartnerInfo?.partnerType || partnerData.partnerType || partnerData.PartnerType || PartnerType.Partner,
+            companyName: partnerData.companyName || partnerData.CompanyName || '',
+            taxCode: basicPartnerInfo?.taxCode || partnerData.taxCode || partnerData.TaxCode || null,
+            contactPerson: partnerData.contactPerson || partnerData.ContactPerson || null,
+            email: partnerData.email || partnerData.Email || null,
+            phoneNumber: basicPartnerInfo?.phone || partnerData.phoneNumber || partnerData.PhoneNumber || partnerData.phone || partnerData.Phone || null,
+            address: partnerData.address || partnerData.Address || null,
+            notes: partnerData.notes || partnerData.Notes || null,
+            createdAt: partnerData.createdAt || partnerData.CreatedAt || '',
+            updatedAt: partnerData.updatedAt || partnerData.UpdatedAt || '',
+            contracts: partnerData.contracts || partnerData.Contracts || [],
+            talents: partnerData.talents || partnerData.Talents || [],
+            paymentPeriods: partnerData.paymentPeriods || partnerData.PaymentPeriods || [],
+          };
+          console.log("✅ Mapped partner data:", mappedPartner);
+          setPartner(mappedPartner);
           
           // Fetch talent details for each talent
           if (partnerData.talents && partnerData.talents.length > 0) {
@@ -355,10 +387,38 @@ export default function PartnerDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Mã đối tác
+                    </label>
+                    <p className="text-lg font-semibold text-gray-900">{partner.code || '—'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Loại đối tác
+                    </label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {partner.partnerType === PartnerType.OwnCompany ? 'Công ty mình' :
+                       partner.partnerType === PartnerType.Partner ? 'Đối tác' :
+                       partner.partnerType === PartnerType.Individual ? 'Cá nhân/Freelancer' : '—'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       Tên công ty
                     </label>
                     <p className="text-lg font-semibold text-gray-900">{partner.companyName}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Mã số thuế
+                    </label>
+                    <p className="text-lg text-gray-900">{partner.taxCode || '—'}</p>
                   </div>
 
                   {partner.notes && (
@@ -401,6 +461,26 @@ export default function PartnerDetailPage() {
                       Địa chỉ
                     </label>
                     <p className="text-lg text-gray-900">{partner.address || '—'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      Ngày tạo
+                    </label>
+                    <p className="text-lg text-gray-900">
+                      {partner.createdAt ? new Date(partner.createdAt).toLocaleString('vi-VN') : '—'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      Ngày cập nhật
+                    </label>
+                    <p className="text-lg text-gray-900">
+                      {partner.updatedAt ? new Date(partner.updatedAt).toLocaleString('vi-VN') : '—'}
+                    </p>
                   </div>
                 </div>
               )}
