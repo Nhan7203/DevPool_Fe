@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import Sidebar from "../../../components/common/Sidebar";
-import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
+import { sidebarItems } from "../../../components/manager/SidebarItems";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { clientTalentBlacklistService, type ClientTalentBlacklist, type ClientTalentBlacklistCreate, type ClientTalentBlacklistRemove } from "../../../services/ClientTalentBlacklist";
 import { talentService, type Talent } from "../../../services/Talent";
@@ -9,8 +9,6 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { Button } from "../../../components/ui/button";
 import {
   ArrowLeft,
-  Edit,
-  Trash2,
   Building2,
   Mail,
   Phone,
@@ -42,9 +40,8 @@ const formatDateTime = (dateString?: string | null) => {
   }
 };
 
-export default function ClientCompanyDetailPage() {
+export default function ManagerClientCompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [company, setCompany] = useState<ClientCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"info" | "blacklist">("info");
@@ -68,7 +65,6 @@ export default function ClientCompanyDetailPage() {
   const [isRemovingBlacklist, setIsRemovingBlacklist] = useState(false);
   
   const { user } = useAuth();
-  const isManager = user?.role === "Manager" || user?.role === "Admin";
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -141,25 +137,6 @@ export default function ClientCompanyDetailPage() {
     setFilteredTalents(filtered);
   }, [talentSearchQuery, allTalents]);
 
-  const handleDelete = async () => {
-    if (!id) return;
-    const confirmDelete = window.confirm("⚠️ Bạn có chắc muốn xóa công ty này?");
-    if (!confirmDelete) return;
-
-    try {
-      await clientCompanyService.delete(Number(id));
-      alert("✅ Xóa công ty thành công!");
-      navigate("/sales/clients");
-    } catch (err) {
-      console.error("❌ Lỗi khi xóa công ty:", err);
-      alert("Không thể xóa công ty!");
-    }
-  };
-
-  const handleEdit = () => {
-    navigate(`/sales/clients/edit/${id}`);
-  };
-
   // Handle Add Blacklist
   const handleOpenAddBlacklistModal = () => {
     setSelectedTalentId(null);
@@ -217,10 +194,6 @@ export default function ClientCompanyDetailPage() {
 
   // Handle Remove Blacklist
   const handleOpenRemoveBlacklistModal = (blacklistId: number) => {
-    if (!isManager) {
-      alert("⚠️ Chỉ Manager mới có quyền gỡ bỏ blacklist!");
-      return;
-    }
     setSelectedBlacklistId(blacklistId);
     setRemovalReason("");
     setShowRemoveBlacklistModal(true);
@@ -263,7 +236,7 @@ export default function ClientCompanyDetailPage() {
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Sales Staff" />
+        <Sidebar items={sidebarItems} title="Manager" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -277,7 +250,7 @@ export default function ClientCompanyDetailPage() {
   if (!company) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="Sales Staff" />
+        <Sidebar items={sidebarItems} title="Manager" />
         <div className="flex-1 flex justify-center items-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -285,7 +258,7 @@ export default function ClientCompanyDetailPage() {
             </div>
             <p className="text-red-500 text-lg font-medium">Không tìm thấy công ty</p>
             <Link
-              to="/sales/clients"
+              to="/manager/client-companies"
               className="text-primary-600 hover:text-primary-800 text-sm mt-2 inline-block"
             >
               ← Quay lại danh sách
@@ -298,14 +271,14 @@ export default function ClientCompanyDetailPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="Sales Staff" />
+      <Sidebar items={sidebarItems} title="Manager" />
 
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8 animate-slide-up">
           <div className="flex items-center gap-4 mb-6">
             <Link
-              to="/sales/clients"
+              to="/manager/client-companies"
               className="group flex items-center gap-2 text-neutral-600 hover:text-primary-600 transition-colors duration-300"
             >
               <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -335,23 +308,6 @@ export default function ClientCompanyDetailPage() {
                   {company.isDeleted ? "Đã xóa" : "Đang hoạt động"}
                 </span>
               </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={handleEdit}
-                className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white"
-              >
-                <Edit className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                Sửa
-              </Button>
-              <Button
-                onClick={handleDelete}
-                className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-              >
-                <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                Xóa
-              </Button>
             </div>
           </div>
         </div>
@@ -512,15 +468,14 @@ export default function ClientCompanyDetailPage() {
                               )}
                             </div>
                           </div>
-                          {isManager && (
-                            <button
-                              onClick={() => handleOpenRemoveBlacklistModal(blacklist.id)}
-                              className="ml-4 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-                              title="Gỡ bỏ blacklist (Chỉ Manager)"
-                            >
-                              Gỡ bỏ
-                            </button>
-                          )}
+                          {/* Manager luôn thấy nút Gỡ bỏ */}
+                          <button
+                            onClick={() => handleOpenRemoveBlacklistModal(blacklist.id)}
+                            className="ml-4 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+                            title="Gỡ bỏ blacklist"
+                          >
+                            Gỡ bỏ
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -531,7 +486,7 @@ export default function ClientCompanyDetailPage() {
           </div>
         </div>
 
-        {/* Add Blacklist Modal */}
+        {/* Add Blacklist Modal - Giống Sales */}
         {showAddBlacklistModal && (
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -676,7 +631,7 @@ export default function ClientCompanyDetailPage() {
           </div>
         )}
 
-        {/* Remove Blacklist Modal */}
+        {/* Remove Blacklist Modal - Giống Sales */}
         {showRemoveBlacklistModal && selectedBlacklistId && (
           <div 
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -795,3 +750,4 @@ function InfoItem({ label, value, icon, className }: {
     </div>
   );
 }
+

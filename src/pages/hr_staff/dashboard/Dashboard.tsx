@@ -1,7 +1,11 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Briefcase, Clock, Calendar, FileText, UserPlus, Building2, Target, Users, ClipboardList } from 'lucide-react';
+import { TrendingUp, Briefcase, Clock, Calendar, FileText, UserPlus, Building2, Target, Users, ClipboardList, Loader2, AlertCircle, BarChart3, Star, Activity } from 'lucide-react';
+import {
+  LineChart, Line,
+  CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer
+} from "recharts";
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { talentService, type Talent } from '../../../services/Talent';
@@ -12,6 +16,9 @@ import { talentCVService } from '../../../services/TalentCV';
 import { partnerService, type Partner } from '../../../services/Partner';
 import { projectService, type Project } from '../../../services/Project';
 import { clientCompanyService, type ClientCompany } from '../../../services/ClientCompany';
+import { dashboardService, type TalentManagementDashboardModel } from '../../../services/Dashboard';
+
+type DashboardTab = 'overview' | 'talent-management';
 
 interface RecentApplication {
   id: number;
@@ -41,6 +48,9 @@ interface RecentJobRequest {
 
 export default function HRDashboard() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  
+  // Overview tab states
   const [loading, setLoading] = useState(true);
   const [talents, setTalents] = useState<Talent[]>([]);
   const [applications, setApplications] = useState<Apply[]>([]);
@@ -50,6 +60,11 @@ export default function HRDashboard() {
   const [recentApplications, setRecentApplications] = useState<RecentApplication[]>([]);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [recentJobRequests, setRecentJobRequests] = useState<RecentJobRequest[]>([]);
+
+  // Talent Management Dashboard states
+  const [loadingTalentManagement, setLoadingTalentManagement] = useState(false);
+  const [errorTalentManagement, setErrorTalentManagement] = useState<string | null>(null);
+  const [talentManagementData, setTalentManagementData] = useState<TalentManagementDashboardModel | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,6 +197,34 @@ export default function HRDashboard() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'talent-management' && !talentManagementData && !loadingTalentManagement && !errorTalentManagement) {
+      fetchTalentManagementData();
+    }
+  }, [activeTab]);
+
+  const fetchTalentManagementData = async () => {
+    try {
+      setLoadingTalentManagement(true);
+      setErrorTalentManagement(null);
+      const data = await dashboardService.getTalentManagementDashboard();
+      setTalentManagementData(data);
+    } catch (err: any) {
+      // Chỉ log error nếu không phải là NOT_IMPLEMENTED (expected behavior)
+      if (err.code !== 'NOT_IMPLEMENTED' && !err.message?.includes('chưa được triển khai')) {
+        console.error('Error fetching talent management data:', err);
+      }
+      
+      if (err.code === 'NOT_IMPLEMENTED' || err.message?.includes('chưa được triển khai')) {
+        setErrorTalentManagement('NOT_IMPLEMENTED');
+      } else {
+        setErrorTalentManagement(err.message || 'Không thể tải dữ liệu talent management. Vui lòng thử lại sau.');
+      }
+    } finally {
+      setLoadingTalentManagement(false);
+    }
+  };
+
   const getTimeAgo = (date: Date): string => {
     const now = new Date();
     const diffInMs = now.getTime() - date.getTime();
@@ -268,31 +311,21 @@ export default function HRDashboard() {
   };
 
 
-  if (loading) {
-    return (
-      <div className="flex bg-gray-50 min-h-screen">
-        <Sidebar items={sidebarItems} title="TA Staff" />
-        <div className="flex-1 flex justify-center items-center">
+  // Overview Dashboard Content
+  const renderOverviewDashboard = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Đang tải dữ liệu...</p>
+            <Loader2 className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Đang tải dữ liệu...</p>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar items={sidebarItems} title="TA Staff" />
-
-      <div className="flex-1 p-8">
-        {/* Header */}
-        <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, TA Staff</h1>
-          <p className="text-neutral-600 mt-1">Quản lý tuyển dụng và nhân sự hiệu quả</p>
-        </div>
-
+    return (
+      <div className="space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
           {stats.map((stat, index) => (
@@ -402,7 +435,6 @@ export default function HRDashboard() {
             </div>
           </div>
         </div>
-
 
         {/* Recent Applications & Activities Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in mb-8">
@@ -549,6 +581,326 @@ export default function HRDashboard() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // Talent Management Dashboard Content
+  const renderTalentManagementDashboard = () => {
+    if (loadingTalentManagement) {
+      return (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Đang tải dữ liệu talent management...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (errorTalentManagement) {
+      if (errorTalentManagement === 'NOT_IMPLEMENTED' || errorTalentManagement.includes('chưa được triển khai')) {
+        return (
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="text-center bg-amber-50 border border-amber-200 rounded-2xl p-8 max-w-lg">
+              <BarChart3 className="w-16 h-16 text-amber-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-amber-900 mb-2">Chức năng đang phát triển</h3>
+              <p className="text-amber-700 mb-4">
+                Talent Management Dashboard đang được phát triển và sẽ sớm có mặt trong phiên bản tiếp theo.
+              </p>
+              <button
+                onClick={() => setActiveTab('overview')}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Chuyển sang Overview
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-center bg-red-50 border border-red-200 rounded-2xl p-8 max-w-md">
+            <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+            <p className="text-red-800 font-medium mb-2">Không thể tải dữ liệu</p>
+            <p className="text-red-600 text-sm mb-4">{errorTalentManagement}</p>
+            <button
+              onClick={fetchTalentManagementData}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Thử lại
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (!talentManagementData) return null;
+
+    const formatPercentage = (value: number) => {
+      return `${value.toFixed(1)}%`;
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Talent Overview Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Tổng Talents</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{talentManagementData.totalTalents}</p>
+              </div>
+              <Users className="w-8 h-8 text-primary-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Active Talents</p>
+                <p className="text-3xl font-bold text-green-600 mt-2">{talentManagementData.activeTalents}</p>
+              </div>
+              <Activity className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Available Talents</p>
+                <p className="text-3xl font-bold text-blue-600 mt-2">{talentManagementData.availableTalents}</p>
+              </div>
+              <UserPlus className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6 border border-neutral-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-600">Onboarding</p>
+                <p className="text-3xl font-bold text-amber-600 mt-2">{talentManagementData.onboardingTalents}</p>
+              </div>
+              <Clock className="w-8 h-8 text-amber-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Assignment Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Total Assignments</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{talentManagementData.totalAssignments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Active</p>
+            <p className="text-2xl font-bold text-green-600 mt-2">{talentManagementData.activeAssignments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Draft</p>
+            <p className="text-2xl font-bold text-gray-600 mt-2">{talentManagementData.draftAssignments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Completed</p>
+            <p className="text-2xl font-bold text-blue-600 mt-2">{talentManagementData.completedAssignments}</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <p className="text-sm font-medium text-neutral-600">Utilization Rate</p>
+            <p className="text-2xl font-bold text-purple-600 mt-2">{formatPercentage(talentManagementData.averageUtilizationRate)}</p>
+          </div>
+        </div>
+
+        {/* New Talents Trend Chart */}
+        {talentManagementData.newTalentsTrend && talentManagementData.newTalentsTrend.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Xu hướng Talents mới</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={talentManagementData.newTalentsTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="monthLabel" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="newTalents" name="Talents mới" stroke="#6366f1" strokeWidth={2} />
+                <Line type="monotone" dataKey="leavingTalents" name="Talents rời đi" stroke="#ef4444" strokeWidth={2} />
+                <Line type="monotone" dataKey="netChange" name="Thay đổi ròng" stroke="#22c55e" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Top Performing Talents */}
+        {talentManagementData.topTalents && talentManagementData.topTalents.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Talents</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-neutral-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Tên Talent</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Total Assignments</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Active</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Completed</th>
+                    {talentManagementData.topTalents.some(t => t.averageRating > 0) && (
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Rating</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {talentManagementData.topTalents.slice(0, 10).map((talent) => (
+                    <tr key={talent.talentId} className="border-b border-neutral-100 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-gray-900">{talent.talentName}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="text-sm text-neutral-600">{talent.totalAssignments}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          {talent.activeAssignments}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                          {talent.completedAssignments}
+                        </span>
+                      </td>
+                      {talentManagementData.topTalents.some(t => t.averageRating > 0) && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1">
+                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                            <span className="text-sm font-medium">{talent.averageRating.toFixed(1)}</span>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Talent Retention & Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Talent Retention</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-neutral-600">Retention Rate</p>
+                <p className="text-3xl font-bold text-primary-600 mt-1">{formatPercentage(talentManagementData.retentionRate)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-neutral-600">Talents tham gia tháng này</p>
+                  <p className="text-xl font-semibold text-green-600 mt-1">+{talentManagementData.talentsJoiningThisMonth}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-600">Talents rời đi tháng này</p>
+                  <p className="text-xl font-semibold text-red-600 mt-1">-{talentManagementData.talentsLeavingThisMonth}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assignment Duration</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-neutral-600">Average Duration</p>
+                <p className="text-3xl font-bold text-blue-600 mt-1">{Math.round(talentManagementData.averageAssignmentDuration)} ngày</p>
+              </div>
+              {talentManagementData.assignmentDurationDistribution && talentManagementData.assignmentDurationDistribution.length > 0 && (
+                <div className="space-y-2">
+                  {talentManagementData.assignmentDurationDistribution.slice(0, 4).map((dist, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-600">{dist.durationRange}</span>
+                      <span className="text-sm font-medium text-gray-900">{dist.assignmentCount} ({formatPercentage(dist.percentage)})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Top Skills */}
+        {talentManagementData.topSkills && talentManagementData.topSkills.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Skills</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {talentManagementData.topSkills.slice(0, 9).map((skill) => (
+                <div key={skill.skillId} className="p-4 bg-gray-50 rounded-lg border border-neutral-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-gray-900">{skill.skillName}</p>
+                    <span className="text-sm font-semibold text-primary-600">{skill.talentCount}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-primary-600 h-2 rounded-full"
+                      style={{ width: `${skill.percentage}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-1">{formatPercentage(skill.percentage)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (loading && activeTab === 'overview') {
+    return (
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar items={sidebarItems} title="TA Staff" />
+        <div className="flex-1 flex justify-center items-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex bg-gray-50 min-h-screen">
+      <Sidebar items={sidebarItems} title="TA Staff" />
+
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Chào mừng, TA Staff</h1>
+          <p className="text-neutral-600 mt-1">Quản lý tuyển dụng và nhân sự hiệu quả</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-6 border-b border-neutral-200">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === 'overview'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Tổng quan
+            </button>
+            <button
+              onClick={() => setActiveTab('talent-management')}
+              className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === 'talent-management'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Talent Management
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' && renderOverviewDashboard()}
+        {activeTab === 'talent-management' && renderTalentManagementDashboard()}
       </div>
     </div>
   );

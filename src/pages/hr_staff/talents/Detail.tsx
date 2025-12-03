@@ -23,6 +23,7 @@ import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum 
 import { talentCertificateService, type TalentCertificate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { talentAvailableTimeService, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
+import { clientTalentBlacklistService, type ClientTalentBlacklist } from "../../../services/ClientTalentBlacklist";
 import { notificationService, NotificationPriority, NotificationType } from "../../../services/Notification";
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
@@ -64,6 +65,7 @@ import {
   Save,
   Search,
   Layers,
+  Ban,
 } from "lucide-react";
 
 // Mapping WorkingMode values to Vietnamese names
@@ -116,6 +118,7 @@ export default function TalentDetailPage() {
   const [skillSnapshotEnabled, setSkillSnapshotEnabled] = useState<boolean>(true);
   const [showAllSkillsInVerifyModal, setShowAllSkillsInVerifyModal] =
     useState<boolean>(false);
+  const [isVerifyingSkillGroup, setIsVerifyingSkillGroup] = useState<boolean>(false);
   const [historyModal, setHistoryModal] = useState<{
     isOpen: boolean;
     skillGroupId?: number;
@@ -151,6 +154,7 @@ export default function TalentDetailPage() {
   };
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"projects" | "cvs" | "jobRoleLevels" | "skills" | "availableTimes" | "certificates" | "experiences">(initialTab || "cvs");
+  const [basicInfoTab, setBasicInfoTab] = useState<"info" | "blacklist">("info"); // Tab cho phần Thông tin cơ bản
 
   // Inline form states
   const [showInlineForm, setShowInlineForm] = useState<"project" | "skill" | "certificate" | "experience" | "jobRoleLevel" | "availableTime" | "cv" | null>(null);
@@ -355,6 +359,9 @@ export default function TalentDetailPage() {
   // State để quản lý việc collapse/expand CV không hoạt động theo từng jobRoleLevelName
   const [collapsedInactiveCVGroups, setCollapsedInactiveCVGroups] = useState<Set<string>>(new Set());
 
+  // Blacklist state
+  const [blacklists, setBlacklists] = useState<ClientTalentBlacklist[]>([]);
+
   const talentName = talent?.fullName ?? "";
 
   useEffect(() => {
@@ -510,6 +517,15 @@ export default function TalentDetailPage() {
         setCertificates(certificatesWithNames);
 
         setTalent(talentData);
+
+        // Fetch blacklist information
+        try {
+          const blacklistData = await clientTalentBlacklistService.getByTalentId(Number(id), true);
+          setBlacklists(Array.isArray(blacklistData) ? blacklistData : blacklistData?.data || []);
+        } catch (err) {
+          console.error("❌ Lỗi khi tải thông tin blacklist:", err);
+          setBlacklists([]);
+        }
       } catch (err) {
         console.error("❌ Lỗi tải chi tiết nhân sự:", err);
       } finally {
@@ -1641,6 +1657,16 @@ export default function TalentDetailPage() {
     }
   };
 
+  // ✅ Helper function để đóng modal verify và reset state
+  const handleCloseVerifySkillGroupModal = () => {
+    setSkillGroupVerifyModal({ isOpen: false });
+    setVerifyExpertName("");
+    setVerifyNote("");
+    setVerifyResult(true);
+    setSelectedExpertId("");
+    setIsVerifyingSkillGroup(false);
+  };
+
   // ✅ Xử lý verify kỹ năng theo SkillGroup cho nhân sự (verify cả nhóm)
   const handleOpenVerifySkillGroup = (skillGroupId: number | undefined) => {
     if (!skillGroupId) {
@@ -1660,6 +1686,7 @@ export default function TalentDetailPage() {
     setExpertsForSkillGroup([]);
     setSkillSnapshotEnabled(true);
     setShowAllSkillsInVerifyModal(false);
+    setIsVerifyingSkillGroup(false);
     // Tải danh sách expert đã được gán nhóm kỹ năng này (nếu có)
     const fetchExperts = async () => {
       try {
@@ -1766,6 +1793,9 @@ export default function TalentDetailPage() {
       return;
     }
 
+    // Hiển thị loading ngay lập tức
+    setIsVerifyingSkillGroup(true);
+
     try {
       const groupId = skillGroupVerifyModal.skillGroupId;
 
@@ -1775,6 +1805,7 @@ export default function TalentDetailPage() {
       );
       if (skillsInGroup.length === 0) {
         alert("⚠️ Không tìm thấy kỹ năng nào trong nhóm để verify.");
+        setIsVerifyingSkillGroup(false);
         return;
       }
 
@@ -1803,27 +1834,29 @@ export default function TalentDetailPage() {
 
       await talentSkillGroupAssessmentService.verifySkillGroup(payload);
 
-      // Đợi lâu hơn để BE xử lý xong và cập nhật database
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Đóng modal và hiển thị thông báo ngay lập tức
+      handleCloseVerifySkillGroupModal();
 
-      // Refresh lại trạng thái skill group - refresh tất cả groups để đảm bảo đồng bộ
-      try {
-        // Lấy tất cả skillGroupIds từ talentSkills hiện tại
-        const distinctSkillGroupIds = Array.from(
-          new Set(
-            talentSkills
-              .map((s: any) => s.skillGroupId)
-              .filter((gid: number | undefined) => typeof gid === "number")
-          )
-        ) as number[];
+      alert(verifyResult 
+        ? "✅ Đã verify nhóm kỹ năng thành công (Pass)!" 
+        : "⚠️ Đã đánh dấu nhóm kỹ năng không hợp lệ (Fail)!");
 
-        if (distinctSkillGroupIds.length > 0) {
-          // Retry logic: thử refresh status nhiều lần để đảm bảo backend đã cập nhật
-          let retryCount = 0;
-          const maxRetries = 3;
-          let statusMap: Record<number, SkillGroupVerificationStatus> = {};
-          
-          while (retryCount < maxRetries) {
+      // Refresh status ở background (không block UI) - chỉ đợi một chút để backend xử lý xong
+      setTimeout(async () => {
+        try {
+          // Lấy tất cả skillGroupIds từ talentSkills hiện tại
+          const distinctSkillGroupIds = Array.from(
+            new Set(
+              talentSkills
+                .map((s: any) => s.skillGroupId)
+                .filter((gid: number | undefined) => typeof gid === "number")
+            )
+          ) as number[];
+
+          if (distinctSkillGroupIds.length > 0) {
+            // Chỉ retry 1 lần với delay ngắn để tối ưu tốc độ
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            
             try {
               const statuses =
                 await talentSkillGroupAssessmentService.getVerificationStatuses(
@@ -1831,82 +1864,50 @@ export default function TalentDetailPage() {
                   distinctSkillGroupIds
                 );
               
-              // Cập nhật toàn bộ state với dữ liệu mới
               if (Array.isArray(statuses)) {
-                statusMap = {};
+                const statusMap: Record<number, SkillGroupVerificationStatus> = {};
                 statuses.forEach((st) => {
                   statusMap[st.skillGroupId] = st;
                 });
                 
-                // Kiểm tra xem group vừa verify đã có status đúng chưa
+                // Kiểm tra và cập nhật status cho group vừa verify
                 const verifiedStatus = statusMap[groupId];
-                if (verifiedStatus && verifiedStatus.isVerified === true && verifiedStatus.needsReverification === false) {
-                  // Status đã đúng, không cần retry nữa
-                  break;
-                }
-                
-                // Nếu chưa đúng, thử lấy từ getLatest (chỉ lần đầu)
-                if (retryCount === 0 && (!verifiedStatus || verifiedStatus.isVerified !== true)) {
+                if (!verifiedStatus || verifiedStatus.isVerified !== verifyResult) {
+                  // Thử lấy từ getLatest nếu status chưa đúng
                   try {
                     const latest = await talentSkillGroupAssessmentService.getLatest(
                       Number(id),
                       groupId
                     );
-                    // Chỉ dùng getLatest nếu latest assessment là active và verified
-                    if (latest && latest.isVerified && latest.isActive !== false) {
-                      // Cập nhật status từ latest assessment
+                    if (latest && latest.isVerified === verifyResult && latest.isActive !== false) {
                       statusMap[groupId] = {
                         talentId: Number(id),
                         skillGroupId: groupId,
-                        skillGroupName: skillGroupVerifyModal.skillGroupName,
-                        isVerified: true,
+                        skillGroupName: skillGroupVerifyModal.skillGroupName || "",
+                        isVerified: latest.isVerified,
                         lastVerifiedDate: latest.assessmentDate,
                         lastVerifiedByExpertId: latest.expertId ?? undefined,
                         lastVerifiedByExpertName: latest.verifiedByName ?? latest.expertName ?? undefined,
                         needsReverification: false,
                       };
-                      break; // Status đã đúng từ getLatest
                     }
                   } catch (latestError) {
                     console.warn("Không thể lấy latest assessment:", latestError);
                   }
                 }
+                
+                setSkillGroupVerificationStatuses(statusMap);
               }
-              
-              // Nếu đã retry và status vẫn chưa đúng, đợi thêm rồi retry
-              if (retryCount < maxRetries - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              }
-              retryCount++;
             } catch (statusError) {
-              console.error(`❌ Lỗi khi refresh trạng thái verify (lần ${retryCount + 1}):`, statusError);
-              retryCount++;
-              if (retryCount < maxRetries) {
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              }
+              console.error("❌ Lỗi khi refresh trạng thái verify:", statusError);
             }
           }
-          
-          // Cập nhật state với status cuối cùng
-          setSkillGroupVerificationStatuses(statusMap);
+        } catch (error) {
+          console.error("❌ Lỗi khi refresh trạng thái verify:", error);
         }
-      } catch (statusError) {
-        console.error("❌ Lỗi khi refresh trạng thái verify:", statusError);
-        // Vẫn đóng modal và thông báo thành công nếu verify đã thành công
-      }
-
-      // Đợi thêm một chút để state được cập nhật trước khi đóng modal
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      alert(verifyResult 
-        ? "✅ Đã verify nhóm kỹ năng thành công (Pass)!" 
-        : "⚠️ Đã đánh dấu nhóm kỹ năng không hợp lệ (Fail)!");
-      setSkillGroupVerifyModal({ isOpen: false });
-      setVerifyExpertName("");
-      setVerifyNote("");
-      setVerifyResult(true); // Reset về mặc định
-      setSelectedExpertId("");
+      }, 100);
     } catch (err: any) {
+      setIsVerifyingSkillGroup(false);
       console.error("❌ Lỗi khi verify nhóm kỹ năng:", err);
       
       // Xử lý lỗi thiếu mandatory skills (400 error)
@@ -3337,84 +3338,160 @@ export default function TalentDetailPage() {
           </div>
         </div>
 
-        {/* Thông tin cơ bản */}
+        {/* Thông tin cơ bản với Tabs */}
         <div className="bg-white rounded-2xl shadow-soft border border-neutral-100 mb-8 animate-fade-in">
-          <div className="p-6 border-b border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <FileText className="w-5 h-5 text-primary-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Thông tin cơ bản</h2>
+          {/* Tab Headers */}
+          <div className="border-b border-neutral-200">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => setBasicInfoTab("info")}
+                className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                  basicInfoTab === "info"
+                    ? "border-primary-600 text-primary-600 bg-primary-50"
+                    : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Thông tin cơ bản
+              </button>
+              {blacklists.length > 0 && (
+                <button
+                  onClick={() => setBasicInfoTab("blacklist")}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all duration-300 whitespace-nowrap border-b-2 ${
+                    basicInfoTab === "blacklist"
+                      ? "border-red-600 text-red-600 bg-red-50"
+                      : "border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                  }`}
+                >
+                  <Ban className="w-4 h-4" />
+                  Cảnh báo Blacklist
+                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                    {blacklists.length}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Tab Content */}
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              <InfoItem
-                label="Họ và tên"
-                value={talent.fullName}
-                icon={<User className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Email"
-                value={talent.email || "—"}
-                icon={<Mail className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Số điện thoại"
-                value={talent.phone || "—"}
-                icon={<Phone className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Ngày sinh"
-                value={talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
-                icon={<Calendar className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Công ty"
-                value={partnerName}
-                icon={<Building2 className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Khu vực làm việc"
-                value={locationName}
-                icon={<MapPin className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Chế độ làm việc"
-                value={workingModeLabels[talent.workingMode] || "Không xác định"}
-                icon={<Globe className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="GitHub"
-                value={talent.githubUrl ? (
-                  <a
-                    href={talent.githubUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={talent.githubUrl}
-                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
-                  >
-                    {formatLinkDisplay(talent.githubUrl)}
-                  </a>
-                ) : "—"}
-                icon={<ExternalLink className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Portfolio"
-                value={talent.portfolioUrl ? (
-                  <a
-                    href={talent.portfolioUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={talent.portfolioUrl}
-                    className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
-                  >
-                    {formatLinkDisplay(talent.portfolioUrl)}
-                  </a>
-                ) : "—"}
-                icon={<ExternalLink className="w-4 h-4" />}
-              />
-            </div>
+            {basicInfoTab === "info" && (
+              <div className="animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <InfoItem
+                    label="Họ và tên"
+                    value={talent.fullName}
+                    icon={<User className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Email"
+                    value={talent.email || "—"}
+                    icon={<Mail className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Số điện thoại"
+                    value={talent.phone || "—"}
+                    icon={<Phone className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Ngày sinh"
+                    value={talent.dateOfBirth ? new Date(talent.dateOfBirth).toLocaleDateString('vi-VN') : "Chưa xác định"}
+                    icon={<Calendar className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Công ty"
+                    value={partnerName}
+                    icon={<Building2 className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Khu vực làm việc"
+                    value={locationName}
+                    icon={<MapPin className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Chế độ làm việc"
+                    value={workingModeLabels[talent.workingMode] || "Không xác định"}
+                    icon={<Globe className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="GitHub"
+                    value={talent.githubUrl ? (
+                      <a
+                        href={talent.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={talent.githubUrl}
+                        className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                      >
+                        {formatLinkDisplay(talent.githubUrl)}
+                      </a>
+                    ) : "—"}
+                    icon={<ExternalLink className="w-4 h-4" />}
+                  />
+                  <InfoItem
+                    label="Portfolio"
+                    value={talent.portfolioUrl ? (
+                      <a
+                        href={talent.portfolioUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={talent.portfolioUrl}
+                        className="text-primary-600 hover:text-primary-800 inline-block max-w-full truncate"
+                      >
+                        {formatLinkDisplay(talent.portfolioUrl)}
+                      </a>
+                    ) : "—"}
+                    icon={<ExternalLink className="w-4 h-4" />}
+                  />
+                </div>
+              </div>
+            )}
+
+            {basicInfoTab === "blacklist" && blacklists.length > 0 && (
+              <div className="animate-fade-in">
+                <div className="bg-red-50 border-l-4 border-red-500 rounded-xl p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
+                      <Ban className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-red-900 mb-2">
+                        ⚠️ Cảnh báo: Ứng viên này đã bị blacklist
+                      </h3>
+                      <p className="text-sm text-red-800 mb-3">
+                        Ứng viên này đã bị thêm vào blacklist bởi {blacklists.length} {blacklists.length === 1 ? "Client" : "Clients"}:
+                      </p>
+                      <div className="space-y-2">
+                        {blacklists.map((blacklist) => (
+                          <div
+                            key={blacklist.id}
+                            className="bg-white border border-red-200 rounded-lg p-3"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-semibold text-red-900">
+                                  {blacklist.clientCompanyName || `Client #${blacklist.clientCompanyId}`}
+                                </p>
+                                <p className="text-sm text-red-700 mt-1">
+                                  Lý do: {blacklist.reason || "—"}
+                                </p>
+                                <p className="text-xs text-red-600 mt-1">
+                                  Ngày: {blacklist.blacklistedDate ? new Date(blacklist.blacklistedDate).toLocaleDateString("vi-VN") : "—"}
+                                  {blacklist.requestedBy && ` • Yêu cầu bởi: ${blacklist.requestedBy}`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-red-700 mt-3 font-medium">
+                        💡 Lưu ý: Vui lòng không giới thiệu ứng viên này cho các Client đã blacklist. Matching tự động sẽ loại bỏ ứng viên này khỏi kết quả tìm kiếm cho các Client tương ứng.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -6220,7 +6297,7 @@ export default function TalentDetailPage() {
                             </p>
               </div>
                           <button
-                            onClick={() => setSkillGroupVerifyModal({ isOpen: false })}
+                            onClick={handleCloseVerifySkillGroupModal}
                             className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
                           >
                             <X className="w-5 h-5" />
@@ -6411,24 +6488,32 @@ export default function TalentDetailPage() {
                         <div className="mt-6 flex justify-end gap-3">
                           <button
                             type="button"
-                            onClick={() => setSkillGroupVerifyModal({ isOpen: false })}
-                            className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg"
+                            onClick={handleCloseVerifySkillGroupModal}
+                            disabled={isVerifyingSkillGroup}
+                            className="px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Hủy
                           </button>
                           <button
                             type="button"
                             onClick={handleConfirmVerifySkillGroup}
-                            disabled={(verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()}
-                            className={`px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm ${
-                              (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()
+                            disabled={isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()}
+                            className={`px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm flex items-center justify-center gap-2 ${
+                              isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()
                                 ? "bg-neutral-300 cursor-not-allowed"
                                 : verifyResult === false
                                 ? "bg-red-600 hover:bg-red-700"
                                 : "bg-secondary-600 hover:bg-secondary-700"
                             }`}
                           >
-                            {verifyResult === false ? "Xác nhận Fail" : "Xác nhận Verify"}
+                            {isVerifyingSkillGroup && (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            )}
+                            {isVerifyingSkillGroup 
+                              ? "Đang xử lý..." 
+                              : verifyResult === false 
+                              ? "Xác nhận Fail" 
+                              : "Xác nhận Verify"}
                           </button>
                         </div>
                       </div>

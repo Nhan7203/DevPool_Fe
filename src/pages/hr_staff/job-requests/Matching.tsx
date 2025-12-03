@@ -9,10 +9,11 @@ import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRol
 import { locationService, type Location } from "../../../services/location";
 import { talentSkillService, type TalentSkill } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
-import { skillGroupService } from "../../../services/SkillGroup";
 import { talentSkillGroupAssessmentService } from "../../../services/TalentSkillGroupAssessment";
 import { applyService } from "../../../services/Apply";
 import { talentApplicationService, TalentApplicationStatusConstants, type TalentApplication } from "../../../services/TalentApplication";
+import { clientTalentBlacklistService } from "../../../services/ClientTalentBlacklist";
+import { projectService } from "../../../services/Project";
 import { decodeJWT } from "../../../services/Auth";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -239,6 +240,25 @@ export default function CVMatchingPage() {
                     }
                 }
 
+                // Fetch blacklisted talent IDs for this client
+                let blacklistedTalentIds = new Set<number>();
+                try {
+                    if (jobReq.projectId) {
+                        const project = await projectService.getById(jobReq.projectId);
+                        if (project?.clientCompanyId) {
+                            const blacklistedTalentIdsArray = await clientTalentBlacklistService.getByClientId(project.clientCompanyId, true);
+                            const blacklistData = Array.isArray(blacklistedTalentIdsArray) 
+                                ? blacklistedTalentIdsArray 
+                                : blacklistedTalentIdsArray?.data || [];
+                            blacklistedTalentIds = new Set(blacklistData.map((b: any) => b.talentId));
+                            console.log("🚫 Blacklisted talent IDs:", Array.from(blacklistedTalentIds));
+                            console.log("📊 Total blacklisted talents:", blacklistedTalentIds.size);
+                        }
+                    }
+                } catch (err) {
+                    console.warn("⚠️ Không thể tải danh sách blacklist:", err);
+                }
+
                 // Lấy danh sách đơn ứng tuyển đã tồn tại cho job request này để loại bỏ các CV đã nộp
                 const existingApplications = await talentApplicationService.getAll({
                     jobRequestId: Number(jobRequestId),
@@ -261,9 +281,16 @@ export default function CVMatchingPage() {
                 }) as TalentCV[];
                 console.log("✅ All CVs received:", allCVsData.length);
 
-                // Lọc bỏ CV đã ứng tuyển ở trạng thái Hired
-                const availableCVs = allCVsData.filter(cv => !excludedCvIds.has(cv.id));
-                console.log("📊 CVs available (after excluding Hired):", availableCVs.length);
+                // Lọc bỏ CV đã ứng tuyển ở trạng thái Hired và CV của talents bị blacklist
+                const availableCVs = allCVsData.filter(cv => {
+                    const isExcluded = excludedCvIds.has(cv.id);
+                    const isBlacklisted = blacklistedTalentIds.has(cv.talentId);
+                    return !isExcluded && !isBlacklisted;
+                });
+                console.log("📊 CVs available (after excluding Hired and Blacklisted):", availableCVs.length);
+                if (blacklistedTalentIds.size > 0) {
+                    console.log("🚫 Excluded blacklisted talents from matching");
+                }
 
                 // Fetch matching CVs (có điểm số từ backend)
                 console.log("🔍 Fetching matching CVs for Job Request ID:", jobRequestId);
@@ -277,11 +304,13 @@ export default function CVMatchingPage() {
                 // Tạo map của CV có điểm số để dễ dàng tra cứu
                 const matchMap = new Map<number, TalentCVMatchResult>();
                 matches.forEach((match: TalentCVMatchResult) => {
-                    if (!excludedCvIds.has(match.talentCV.id)) {
+                    const isExcluded = excludedCvIds.has(match.talentCV.id);
+                    const isBlacklisted = blacklistedTalentIds.has(match.talentCV.talentId);
+                    if (!isExcluded && !isBlacklisted) {
                         matchMap.set(match.talentCV.id, match);
                     }
                 });
-                console.log("📉 Số CV có điểm số sau khi loại trừ đã ứng tuyển:", matchMap.size);
+                console.log("📉 Số CV có điểm số sau khi loại trừ đã ứng tuyển và blacklist:", matchMap.size);
 
                 // Fetch skillMap một lần để dùng cho tất cả CV
                 const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
@@ -295,6 +324,11 @@ export default function CVMatchingPage() {
                     availableCVs.map(async (cv: TalentCV): Promise<EnrichedMatchResult | EnrichedCVWithoutScore | null> => {
                         try {
                             const talent = await talentService.getById(cv.talentId);
+                            
+                            // Lọc bỏ talent bị blacklist
+                            if (blacklistedTalentIds.has(talent.id)) {
+                                return null; // Trả về null để filter sau
+                            }
                             
                             // Lọc bỏ talent có trạng thái "Applying" hoặc "Working"
                             if (talent.status === "Applying" || talent.status === "Working") {

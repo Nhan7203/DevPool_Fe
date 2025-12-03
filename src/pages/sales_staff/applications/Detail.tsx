@@ -31,6 +31,8 @@ import {
   AlertCircle,
   Eye,
   Target,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { projectService } from "../../../services/Project";
 import { clientCompanyService } from "../../../services/ClientCompany";
@@ -519,6 +521,65 @@ export default function SalesApplicationDetailPage() {
       : "—";
   const statusConfig = getStatusConfig(application.status);
 
+  // Tính toán last updated time và kiểm tra idle 7 ngày
+  const getLastUpdatedTime = useMemo(() => {
+    // Ưu tiên: updatedAt > last activity scheduledDate > createdAt
+    let lastUpdated: Date | null = null;
+    
+    if (application?.updatedAt) {
+      lastUpdated = new Date(application.updatedAt);
+    } else if (activities.length > 0) {
+      // Lấy activity có scheduledDate gần nhất
+      const sortedActivities = [...activities]
+        .filter(a => a.scheduledDate)
+        .sort((a, b) => {
+          const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+          const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+          return dateB - dateA;
+        });
+      
+      if (sortedActivities.length > 0 && sortedActivities[0].scheduledDate) {
+        lastUpdated = new Date(sortedActivities[0].scheduledDate);
+      }
+    }
+    
+    if (!lastUpdated && application?.createdAt) {
+      lastUpdated = new Date(application.createdAt);
+    }
+    
+    return lastUpdated;
+  }, [application, activities]);
+
+  const isIdle7Days = useMemo(() => {
+    if (!getLastUpdatedTime) return false;
+    const daysSinceUpdate = Math.floor(
+      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return daysSinceUpdate >= 7;
+  }, [getLastUpdatedTime]);
+
+  const formatLastUpdatedTime = () => {
+    if (!getLastUpdatedTime) return "—";
+    try {
+      return getLastUpdatedTime.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "—";
+    }
+  };
+
+  const getDaysSinceUpdate = () => {
+    if (!getLastUpdatedTime) return 0;
+    return Math.floor(
+      (new Date().getTime() - getLastUpdatedTime.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  };
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
       <Sidebar items={sidebarItems} title="Sales Staff" />
@@ -535,14 +596,44 @@ export default function SalesApplicationDetailPage() {
             ]}
           />
 
+          {/* Banner cảnh báo khi idle 7 ngày */}
+          {isIdle7Days && (
+            <div className="mt-4 mb-6 bg-amber-50 border-l-4 border-amber-500 rounded-lg p-4 flex items-start gap-3 animate-fade-in">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                  ⚠️ Cảnh báo: Ứng viên này đã không được cập nhật {getDaysSinceUpdate()} ngày
+                </h3>
+                <p className="text-sm text-amber-800">
+                  Vui lòng cập nhật trạng thái để theo dõi tiến độ ứng viên.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hồ sơ #{application.id}</h1>
               <p className="text-neutral-600 mb-4">Thông tin chi tiết hồ sơ ứng viên</p>
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.badgeClass}`}>
-                <span className={`text-sm font-medium ${statusConfig.textClass}`}>
-                  {statusConfig.label}
-                </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.badgeClass}`}>
+                  <span className={`text-sm font-medium ${statusConfig.textClass}`}>
+                    {statusConfig.label}
+                  </span>
+                </div>
+                {/* Last updated time */}
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${
+                  isIdle7Days 
+                    ? "bg-amber-50 border-amber-200" 
+                    : "bg-neutral-50 border-neutral-200"
+                }`}>
+                  <Clock className={`w-4 h-4 ${isIdle7Days ? "text-amber-600" : "text-neutral-500"}`} />
+                  <span className={`text-sm font-medium ${
+                    isIdle7Days ? "text-amber-900" : "text-neutral-700"
+                  }`}>
+                    Cập nhật lần cuối: {formatLastUpdatedTime()}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">

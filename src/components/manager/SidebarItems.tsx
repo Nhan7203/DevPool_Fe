@@ -1,8 +1,7 @@
 import {
   BarChart3,
-  LineChart,
-  DollarSign,
   Briefcase,
+  Building2,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -15,6 +14,11 @@ export const sidebarItems = [
     label: "Dự án",
     href: "/manager/projects",
     icon: Briefcase,
+  },
+  {
+    label: "Công ty KH",
+    href: "/manager/client-companies",
+    icon: Building2,
   },
   // {
   //   label: "Kỳ Thanh Toán",
@@ -33,15 +37,15 @@ export const sidebarItems = [
   //     },
   //   ],
   // },
-  {
-    label: "Báo cáo Kinh doanh",
-    href: "/manager/business",
-    icon: LineChart,
-    subItems: [
-      { label: "Tổng quan kinh doanh", href: "/manager/business/overview" },
-      { label: "Doanh thu", href: "/manager/business/revenue" },
-    ],
-  },
+  // {
+  //   label: "Báo cáo Kinh doanh",
+  //   href: "/manager/business",
+  //   icon: LineChart,
+  //   subItems: [
+  //     { label: "Tổng quan kinh doanh", href: "/manager/business/overview" },
+  //     { label: "Doanh thu", href: "/manager/business/revenue" },
+  //   ],
+  // },
   // {
   //   label: 'Báo cáo Nhân sự',
   //   href: '/manager/hr',
@@ -53,15 +57,15 @@ export const sidebarItems = [
   //     { label: 'Hiệu suất làm việc', href: '/manager/hr/performance' }
   //   ]
   // },
-  {
-    label: "Báo cáo Tài chính",
-    href: "/manager/finance",
-    icon: DollarSign,
-    subItems: [
-      { label: "Tổng quan tài chính", href: "/manager/finance/overview" },
-      { label: "Dòng tiền", href: "/manager/finance/cashflow" },
-      { label: "Công nợ", href: "/manager/finance/debt" },
-      { label: "Lợi nhuận", href: "/manager/finance/profit" },
-    ],
-  },
+  // {
+  //   label: "Báo cáo Tài chính",
+  //   href: "/manager/finance",
+  //   icon: DollarSign,
+  //   subItems: [
+  //     { label: "Tổng quan tài chính", href: "/manager/finance/overview" },
+  //     { label: "Dòng tiền", href: "/manager/finance/cashflow" },
+  //     { label: "Công nợ", href: "/manager/finance/debt" },
+  //     { label: "Lợi nhuận", href: "/manager/finance/profit" },
+  //   ],
+  // },
 ];

@@ -6,7 +6,11 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyService } from "../../../services/Apply";
+import { talentApplicationService } from "../../../services/TalentApplication";
 import { jobRequestService } from "../../../services/JobRequest";
+import { clientTalentBlacklistService, type ClientTalentBlacklistCreate } from "../../../services/ClientTalentBlacklist";
+import { projectService } from "../../../services/Project";
+import { useAuth } from "../../../contexts/AuthContext";
 import { Button } from "../../../components/ui/button";
 import {
   Edit,
@@ -15,7 +19,9 @@ import {
   AlertCircle,
   CheckCircle,
   Briefcase,
-  Tag
+  Tag,
+  Ban,
+  X
 } from "lucide-react";
 
 interface ApplyActivityDetail extends ApplyActivity {
@@ -80,6 +86,15 @@ export default function ApplyActivityDetailPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [jobRequest, setJobRequest] = useState<any>(null);
   
+  // Blacklist modal state
+  const [showBlacklistModal, setShowBlacklistModal] = useState(false);
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [blacklistRequestedBy, setBlacklistRequestedBy] = useState("");
+  const [isAddingBlacklist, setIsAddingBlacklist] = useState(false);
+  const [talent, setTalent] = useState<any>(null);
+  const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
+  const { user } = useAuth();
+  
   const quickRejectNotes = [
     "Ứng viên không đáp ứng yêu cầu kỹ năng kỹ thuật.",
     "Ứng viên thiếu kinh nghiệm làm việc cần thiết.",
@@ -120,10 +135,33 @@ export default function ApplyActivityDetailPage() {
           status: app.status
         };
 
+        // Fetch talent information for blacklist
+        try {
+          const detailedApp = await talentApplicationService.getDetailedById(app.id);
+          if (detailedApp?.talent) {
+            setTalent(detailedApp.talent);
+          }
+        } catch (err) {
+          console.error("⚠️ Không thể tải thông tin talent:", err);
+        }
+
         let resolvedSteps: ApplyProcessStep[] = [];
         try {
           const jobReq = await jobRequestService.getById(app.jobRequestId);
           setJobRequest(jobReq);
+          
+          // Get clientCompanyId from project
+          if (jobReq?.projectId) {
+            try {
+              const project = await projectService.getById(jobReq.projectId);
+              if (project?.clientCompanyId) {
+                setClientCompanyId(project.clientCompanyId);
+              }
+            } catch (err) {
+              console.error("⚠️ Không thể tải thông tin project:", err);
+            }
+          }
+          
           if (jobReq?.applyProcessTemplateId) {
             const stepsResponse = await applyProcessStepService.getAll({
               templateId: jobReq.applyProcessTemplateId,
@@ -421,6 +459,56 @@ export default function ApplyActivityDetailPage() {
     }
   };
 
+  // Handle Add to Blacklist
+  const handleOpenBlacklistModal = () => {
+    if (!clientCompanyId || !talent?.id) {
+      alert("⚠️ Không thể thêm vào blacklist: Thiếu thông tin Client hoặc Talent!");
+      return;
+    }
+    setBlacklistRequestedBy(user?.name || "");
+    setBlacklistReason("");
+    setShowBlacklistModal(true);
+  };
+
+  const handleCloseBlacklistModal = () => {
+    setShowBlacklistModal(false);
+    setBlacklistReason("");
+    setBlacklistRequestedBy("");
+  };
+
+  const handleAddToBlacklist = async () => {
+    if (!clientCompanyId || !talent?.id) {
+      alert("⚠️ Không thể thêm vào blacklist: Thiếu thông tin Client hoặc Talent!");
+      return;
+    }
+
+    if (!blacklistReason.trim()) {
+      alert("⚠️ Vui lòng nhập lý do blacklist!");
+      return;
+    }
+
+    try {
+      setIsAddingBlacklist(true);
+      
+      const payload: ClientTalentBlacklistCreate = {
+        clientCompanyId,
+        talentId: talent.id,
+        reason: blacklistReason.trim(),
+        requestedBy: blacklistRequestedBy.trim() || user?.name || "",
+      };
+
+      await clientTalentBlacklistService.add(payload);
+      alert("✅ Đã thêm ứng viên vào blacklist thành công!");
+      handleCloseBlacklistModal();
+    } catch (error: any) {
+      console.error("❌ Lỗi thêm vào blacklist:", error);
+      const errorMessage = error?.message || error?.data?.message || "Không thể thêm vào blacklist!";
+      alert(`⚠️ ${errorMessage}`);
+    } finally {
+      setIsAddingBlacklist(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -684,6 +772,34 @@ export default function ApplyActivityDetailPage() {
           </div>
         )}
 
+        {/* Add to Blacklist - hiển thị khi activity Failed */}
+        {activity.status === ApplyActivityStatus.Failed && clientCompanyId && talent?.id && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-soft mb-8 animate-fade-in">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Ban className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-amber-900">Thêm vào Blacklist</h3>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Ứng viên này đã không đạt phỏng vấn. Bạn có muốn thêm vào blacklist của Client không?
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleOpenBlacklistModal}
+                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-glow transform hover:scale-105 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+                >
+                  <Ban className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                  Thêm vào Blacklist
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Note Dialog - cho Passed hoặc Failed */}
         {showNoteDialog && noteDialogTargetStatus !== null && (
           <div 
@@ -767,6 +883,104 @@ export default function ApplyActivityDetailPage() {
                       ? "Xác nhận Đạt"
                       : "Xác nhận từ chối"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Blacklist Modal */}
+        {showBlacklistModal && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isAddingBlacklist) {
+                handleCloseBlacklistModal();
+              }
+            }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+              <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <Ban className="w-5 h-5 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Thêm vào Blacklist</h3>
+                </div>
+                <button
+                  onClick={handleCloseBlacklistModal}
+                  className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                  aria-label="Đóng"
+                  disabled={isAddingBlacklist}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <p className="text-sm text-neutral-600 mb-2">
+                    Bạn đang thêm <span className="font-semibold text-gray-900">{talent?.fullName || "ứng viên"}</span> vào blacklist của Client.
+                  </p>
+                  <p className="text-xs text-amber-600 mb-4">
+                    ⚠️ Sau khi thêm vào blacklist, ứng viên này sẽ không được gợi ý cho Client này trong các lần matching tiếp theo.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Người yêu cầu <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={blacklistRequestedBy}
+                    onChange={(e) => setBlacklistRequestedBy(e.target.value)}
+                    placeholder="Nhập tên người yêu cầu..."
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    disabled={isAddingBlacklist}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lý do blacklist <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={blacklistReason}
+                    onChange={(e) => setBlacklistReason(e.target.value)}
+                    placeholder="Ví dụ: Thái độ phỏng vấn kém, không phù hợp với văn hóa công ty..."
+                    rows={4}
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all resize-none"
+                    disabled={isAddingBlacklist}
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Vui lòng nhập lý do rõ ràng để tham khảo sau này.
+                  </p>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
+                <Button
+                  onClick={handleCloseBlacklistModal}
+                  disabled={isAddingBlacklist}
+                  className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  onClick={handleAddToBlacklist}
+                  disabled={isAddingBlacklist || !blacklistReason.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isAddingBlacklist ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-4 h-4" />
+                      Xác nhận thêm vào Blacklist
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>

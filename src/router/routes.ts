@@ -329,6 +329,10 @@ export const ROUTES = {
       PARTNERS: '/manager/contracts/partners',
       PARTNER_DETAIL: '/manager/contracts/partners/:id',
     },
+    CLIENT_COMPANY: {
+      LIST: '/manager/client-companies',
+      DETAIL: '/manager/client-companies/:id',
+    },
     HUMAN_RESOURCES: {
       OVERVIEW: '/manager/hr/overview',
       DEVELOPERS: '/manager/hr/developers',

@@ -6,9 +6,7 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentSkillService, type TalentSkillCreate } from "../../../services/TalentSkill";
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
-import { talentSkillGroupAssessmentService, type SkillGroupVerificationStatus } from "../../../services/TalentSkillGroupAssessment";
-import { notificationService, NotificationType, NotificationPriority } from "../../../services/Notification";
-import { userService } from "../../../services/User";
+import { talentSkillGroupAssessmentService } from "../../../services/TalentSkillGroupAssessment";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -170,26 +168,18 @@ export default function TalentSkillEditPage() {
         // Lấy skill info để biết skillGroupId
         const updatedSkill = allSkills.find(s => s.id === formData.skillId);
         if (updatedSkill?.skillGroupId) {
-          // Lấy status cũ trước khi refresh
-          let oldStatus: SkillGroupVerificationStatus | undefined;
-          try {
-            const oldStatuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
-              talentId,
-              [updatedSkill.skillGroupId]
-            );
-            oldStatus = Array.isArray(oldStatuses) ? oldStatuses[0] : undefined;
-          } catch (e) {
-            // Ignore error khi lấy status cũ
-          }
-
           // Đợi một chút để backend xử lý auto-invalidate
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
-            talentId,
-            [updatedSkill.skillGroupId]
-          );
-          
+          // Refresh verification status
+          try {
+            await talentSkillGroupAssessmentService.getVerificationStatuses(
+              talentId,
+              [updatedSkill.skillGroupId]
+            );
+          } catch (e) {
+            // Ignore error khi refresh status
+          }
         }
       } catch (statusError) {
         console.warn("⚠️ Không thể refresh verification status:", statusError);
