@@ -1,21 +1,28 @@
-import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+import { HubConnection, HubConnectionBuilder, LogLevel, HttpTransportType } from '@microsoft/signalr';
 import { getAccessToken as getTokenFromStorage } from '../utils/storage';
 import { API_URL } from '../configs/api';
 
 // Suy ra HUB_URL từ API_URL
-// Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
-// SignalR sẽ tự động chuyển HTTP -> WS và HTTPS -> WSS
+// Có 2 khả năng: /notificationHub hoặc /api/notificationHub
+// Thử /api/notificationHub trước (thường backend đặt hub trong /api)
 const getHubUrl = (): string => {
 	const apiUrl = String(API_URL).trim();
-	// Loại bỏ /api ở cuối nếu có
+	
+	// Thử endpoint trong /api trước (phổ biến hơn)
+	// Nếu API là https://host:port/api thì Hub sẽ là https://host:port/api/notificationHub
+	if (apiUrl.includes('/api')) {
+		const hubUrl = `${apiUrl}/notificationHub`.replace(/\/api\/api/, '/api');
+		
+		// Log để debug
+		console.log('🔗 Notification Hub URL (trying /api/notificationHub):', hubUrl);
+		return hubUrl;
+	}
+	
+	// Fallback: nếu không có /api, thử root
 	const hubBase = apiUrl.replace(/\/api\/?$/, '');
 	const hubUrl = `${hubBase}/notificationHub`;
 	
-	// Log để debug (chỉ trong development)
-	if (import.meta.env.DEV) {
-		console.log('🔗 Notification Hub URL:', hubUrl);
-	}
-	
+	console.log('🔗 Notification Hub URL (trying /notificationHub):', hubUrl);
 	return hubUrl;
 };
 
@@ -129,8 +136,9 @@ export const createNotificationConnection = (): HubConnection => {
 				return token;
 			},
 			withCredentials: true,
-			// Thử các transport methods: WebSockets, Server-Sent Events, Long Polling
-			// SignalR sẽ tự động chọn transport phù hợp
+			// Thử tất cả transport methods: WebSockets, Server-Sent Events, Long Polling
+			// Nếu WebSocket bị block, sẽ tự động fallback sang SSE hoặc Long Polling
+			transport: HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents | HttpTransportType.LongPolling,
 			skipNegotiation: false,
 		})
 		.withAutomaticReconnect({
