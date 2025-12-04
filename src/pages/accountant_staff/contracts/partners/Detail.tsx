@@ -1597,10 +1597,9 @@ export default function PartnerContractDetailPage() {
                   Số tiền đã thanh toán <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={contractPayment?.actualAmountVND || markAsPaidForm.paidAmount || ""}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(contractPayment?.actualAmountVND || markAsPaidForm.paidAmount || 0)}
                   readOnly
                   disabled
                   className="w-full border rounded-lg p-2 bg-gray-100 cursor-not-allowed"
