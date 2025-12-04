@@ -47,6 +47,7 @@ import { uploadFile } from "../../../../utils/firebaseStorage";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { decodeJWT } from "../../../../services/Auth";
 import { getAccessToken } from "../../../../utils/storage";
+import { formatNumberInput, parseNumberInput } from "../../../../utils/helpers";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -1813,24 +1814,27 @@ export default function ClientContractDetailPage() {
               <div>
                 <label className="block text-sm font-medium mb-2">Số tiền nhận được (VND) <span className="text-red-500">*</span></label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={contractPayment?.paymentStatus === "Invoiced" 
-                    ? (contractPayment.actualAmountVND || 0)
-                    : contractPayment?.paymentStatus === "PartiallyPaid"
-                    ? ((contractPayment.actualAmountVND || 0) - (contractPayment.totalPaidAmount || 0))
-                    : undefined
-                  }
-                  value={paymentForm.receivedAmount}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatNumberInput(paymentForm.receivedAmount)}
                   onChange={(e) => {
-                    setPaymentForm({ ...paymentForm, receivedAmount: parseFloat(e.target.value) || 0 });
+                    const parsedValue = parseNumberInput(e.target.value);
+                    setPaymentForm({ ...paymentForm, receivedAmount: parsedValue });
                     // Clear error when user changes value
                     if (paymentAmountError) {
                       setPaymentAmountError(null);
                     }
                   }}
+                  onBlur={(e) => {
+                    // Format lại khi blur để đảm bảo hiển thị đẹp
+                    const parsedValue = parseNumberInput(e.target.value);
+                    if (parsedValue !== paymentForm.receivedAmount) {
+                      setPaymentForm({ ...paymentForm, receivedAmount: parsedValue });
+                    }
+                  }}
+                  maxLength={20}
                   className={`w-full border rounded-lg p-2 ${paymentAmountError ? 'border-red-500' : ''}`}
+                  placeholder="Ví dụ: 30.000.000"
                   required
                 />
                 {paymentAmountError && (

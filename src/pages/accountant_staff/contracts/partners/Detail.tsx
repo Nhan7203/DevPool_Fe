@@ -37,6 +37,7 @@ import { talentService } from "../../../../services/Talent";
 import { partnerDocumentService, type PartnerDocument } from "../../../../services/PartnerDocument";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { uploadFile } from "../../../../utils/firebaseStorage";
+import { formatNumberInput, parseNumberInput } from "../../../../utils/helpers";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -1198,19 +1199,31 @@ export default function PartnerContractDetailPage() {
                     )}
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={verifyForm.unitPriceForeignCurrency}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatNumberInput(verifyForm.unitPriceForeignCurrency)}
                     onChange={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
+                      const value = parseNumberInput(e.target.value);
                       if (verifyForm.calculationMethod === "Fixed") {
                         setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value, fixedAmount: value });
                       } else {
                         setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value });
                       }
                     }}
+                    onBlur={(e) => {
+                      // Format lại khi blur
+                      const value = parseNumberInput(e.target.value);
+                      if (value !== verifyForm.unitPriceForeignCurrency) {
+                        if (verifyForm.calculationMethod === "Fixed") {
+                          setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value, fixedAmount: value });
+                        } else {
+                          setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value });
+                        }
+                      }
+                    }}
+                    maxLength={20}
                     className="w-full border rounded-lg p-2"
+                    placeholder="Ví dụ: 30.000.000"
                     required
                     disabled={verifyForm.calculationMethod === "Fixed"}
                   />
@@ -1299,21 +1312,33 @@ export default function PartnerContractDetailPage() {
                       Số tiền cố định ({verifyForm.currencyCode}) <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={verifyForm.fixedAmount || ""}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatNumberInput(verifyForm.fixedAmount)}
                       onChange={(e) => {
-                        const fixedValue = parseFloat(e.target.value) || null;
+                        const fixedValue = parseNumberInput(e.target.value);
                         setVerifyForm({ 
                           ...verifyForm, 
-                          fixedAmount: fixedValue,
+                          fixedAmount: fixedValue || null,
                           unitPriceForeignCurrency: fixedValue || 0,
                           percentageValue: null
                         });
                       }}
+                      onBlur={(e) => {
+                        // Format lại khi blur
+                        const fixedValue = parseNumberInput(e.target.value);
+                        if (fixedValue !== (verifyForm.fixedAmount || 0)) {
+                          setVerifyForm({ 
+                            ...verifyForm, 
+                            fixedAmount: fixedValue || null,
+                            unitPriceForeignCurrency: fixedValue || 0,
+                            percentageValue: null
+                          });
+                        }
+                      }}
+                      maxLength={20}
                       className="w-full border rounded-lg p-2"
-                      placeholder="Nhập số tiền cố định bằng ngoại tệ"
+                      placeholder="Ví dụ: 30.000.000"
                       required
                     />
                     <p className="mt-1 text-xs text-gray-500">
@@ -1713,3 +1738,5 @@ function InfoItem({
     </div>
   );
 }
+
+

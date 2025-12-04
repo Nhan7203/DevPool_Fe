@@ -3,26 +3,17 @@ import { getAccessToken as getTokenFromStorage } from '../utils/storage';
 import { API_URL } from '../configs/api';
 
 // Suy ra HUB_URL từ API_URL
-// Có 2 khả năng: /notificationHub hoặc /api/notificationHub
-// Thử /api/notificationHub trước (thường backend đặt hub trong /api)
+// Thử /notificationHub (không có /api) vì endpoint có thể ở root level
 const getHubUrl = (): string => {
 	const apiUrl = String(API_URL).trim();
-	
-	// Thử endpoint trong /api trước (phổ biến hơn)
-	// Nếu API là https://host:port/api thì Hub sẽ là https://host:port/api/notificationHub
-	if (apiUrl.includes('/api')) {
-		const hubUrl = `${apiUrl}/notificationHub`.replace(/\/api\/api/, '/api');
-		
-		// Log để debug
-		console.log('🔗 Notification Hub URL (trying /api/notificationHub):', hubUrl);
-		return hubUrl;
-	}
-	
-	// Fallback: nếu không có /api, thử root
+	// Loại bỏ /api ở cuối nếu có
+	// Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
 	const hubBase = apiUrl.replace(/\/api\/?$/, '');
 	const hubUrl = `${hubBase}/notificationHub`;
 	
-	console.log('🔗 Notification Hub URL (trying /notificationHub):', hubUrl);
+	// Log để debug
+	console.log('🔗 Notification Hub URL:', hubUrl);
+	
 	return hubUrl;
 };
 

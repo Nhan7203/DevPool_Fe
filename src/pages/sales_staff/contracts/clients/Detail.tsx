@@ -36,6 +36,7 @@ import { talentService } from "../../../../services/Talent";
 import { clientDocumentService, type ClientDocument, type ClientDocumentCreate } from "../../../../services/ClientDocument";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { uploadFile } from "../../../../utils/firebaseStorage";
+import { formatNumberInput, parseNumberInput } from "../../../../utils/helpers";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { decodeJWT } from "../../../../services/Auth";
 import { getAccessToken } from "../../../../utils/storage";
@@ -1064,19 +1065,31 @@ export default function ClientContractDetailPage() {
                     )}
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={submitForm.unitPriceForeignCurrency}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatNumberInput(submitForm.unitPriceForeignCurrency)}
                     onChange={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
+                      const value = parseNumberInput(e.target.value);
                       if (submitForm.calculationMethod === "FixedAmount") {
                         setSubmitForm({ ...submitForm, unitPriceForeignCurrency: value, fixedAmount: value });
                       } else {
                         setSubmitForm({ ...submitForm, unitPriceForeignCurrency: value });
                       }
                     }}
+                    onBlur={(e) => {
+                      // Format lại khi blur
+                      const value = parseNumberInput(e.target.value);
+                      if (value !== submitForm.unitPriceForeignCurrency) {
+                        if (submitForm.calculationMethod === "FixedAmount") {
+                          setSubmitForm({ ...submitForm, unitPriceForeignCurrency: value, fixedAmount: value });
+                        } else {
+                          setSubmitForm({ ...submitForm, unitPriceForeignCurrency: value });
+                        }
+                      }
+                    }}
+                    maxLength={20}
                     className="w-full border rounded-lg p-2"
+                    placeholder="Ví dụ: 30.000.000"
                     required
                     disabled={submitForm.calculationMethod === "FixedAmount"}
                   />
@@ -1165,21 +1178,33 @@ export default function ClientContractDetailPage() {
                       Số tiền cố định ({submitForm.currencyCode}) <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={submitForm.fixedAmount || ""}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatNumberInput(submitForm.fixedAmount)}
                       onChange={(e) => {
-                        const fixedValue = parseFloat(e.target.value) || null;
+                        const fixedValue = parseNumberInput(e.target.value);
                         setSubmitForm({ 
                           ...submitForm, 
-                          fixedAmount: fixedValue,
+                          fixedAmount: fixedValue || null,
                           unitPriceForeignCurrency: fixedValue || 0,
                           percentageValue: 0
                         });
                       }}
+                      onBlur={(e) => {
+                        // Format lại khi blur
+                        const fixedValue = parseNumberInput(e.target.value);
+                        if (fixedValue !== (submitForm.fixedAmount || 0)) {
+                          setSubmitForm({ 
+                            ...submitForm, 
+                            fixedAmount: fixedValue || null,
+                            unitPriceForeignCurrency: fixedValue || 0,
+                            percentageValue: 0
+                          });
+                        }
+                      }}
+                      maxLength={20}
                       className="w-full border rounded-lg p-2"
-                      placeholder="Nhập số tiền cố định bằng ngoại tệ"
+                      placeholder="Ví dụ: 30.000.000"
                       required
                     />
                     <p className="mt-1 text-xs text-gray-500">
@@ -1339,3 +1364,5 @@ function InfoItem({
     </div>
   );
 }
+
+
