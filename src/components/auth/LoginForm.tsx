@@ -312,7 +312,7 @@ export default function LoginForm() {
       </div> */}
 
       {/* Demo Accounts */}
-      <div className="relative z-10 mt-8 p-6 bg-gradient-to-br from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 shadow-soft">
+      {/* <div className="relative z-10 mt-8 p-6 bg-gradient-to-br from-neutral-50 to-primary-50 rounded-2xl border border-neutral-200 shadow-soft">
         <h4 className="font-semibold text-neutral-900 mb-3 flex items-center">
           <div className="w-2 h-2 bg-primary-500 rounded-full mr-2 animate-pulse"></div>
           Tài khoản demo:
@@ -324,7 +324,7 @@ export default function LoginForm() {
           <div><span className="font-semibold">Manager</span>: manager@example.com / string</div>
           <div><span className="font-semibold">Admin</span>: admin@example.com / string</div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

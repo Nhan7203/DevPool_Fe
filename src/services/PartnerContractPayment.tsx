@@ -75,7 +75,6 @@ export interface PartnerContractPaymentFilter {
 // Interface cho PartnerContractPaymentCalculateModel (Payload để tính toán)
 export interface PartnerContractPaymentCalculateModel {
   actualWorkHours: number;
-  otHours?: number | null;
   notes?: string | null;
 }
 

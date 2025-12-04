@@ -190,7 +190,6 @@ export default function PartnerContractDetailPage() {
   });
   const [billingForm, setBillingForm] = useState<PartnerContractPaymentCalculateModel>({
     actualWorkHours: 0,
-    otHours: null,
     notes: null,
   });
   const [markAsPaidForm, setMarkAsPaidForm] = useState<PartnerContractPaymentMarkAsPaidModel>({
@@ -350,6 +349,118 @@ export default function PartnerContractDetailPage() {
     return null;
   };
 
+  // Calculate billing preview
+  const calculateBillingPreview = () => {
+    if (!contractPayment || !billingForm.actualWorkHours || billingForm.actualWorkHours <= 0) {
+      return null;
+    }
+
+    const actualWorkHours = billingForm.actualWorkHours;
+    const unitPrice = contractPayment.unitPriceForeignCurrency;
+    const exchangeRate = contractPayment.exchangeRate;
+    const standardHours = contractPayment.standardHours || 160;
+    const calculationMethod = contractPayment.calculationMethod;
+
+    if (calculationMethod === "Fixed") {
+      // Fixed: ActualAmountVND = PlannedAmountVND (không đổi)
+      const plannedAmountVND = contractPayment.plannedAmountVND || 0;
+      const manMonthCoefficient = actualWorkHours / standardHours;
+      
+      return {
+        type: "Fixed",
+        actualWorkHours,
+        manMonthCoefficient,
+        plannedAmountVND,
+        actualAmountVND: plannedAmountVND,
+      };
+    } else if (calculationMethod === "Percentage") {
+      // Percentage: Tính theo tier breakdown
+      // Mỗi tier có 20h (trừ tier 1 có 160h)
+      const baseRate = unitPrice / standardHours;
+      const tiers = [
+        { from: 0, to: 160, multiplier: 1.0 },      // Tier 1: 0-160h (160h)
+        { from: 161, to: 180, multiplier: 1.0 },    // Tier 2: 161-180h (20h)
+        { from: 181, to: 200, multiplier: 1.25 },   // Tier 3: 181-200h (20h)
+        { from: 201, to: 220, multiplier: 1.5 },    // Tier 4: 201-220h (20h)
+        { from: 221, to: 240, multiplier: 1.5 },    // Tier 5: 221-240h (20h)
+        { from: 241, to: 260, multiplier: 1.75 },   // Tier 6: 241-260h (20h)
+        { from: 261, to: Infinity, multiplier: 2.0 }, // Tier 7+: 261+h
+      ];
+
+      const tierBreakdown: Array<{
+        tier: string;
+        hours: number;
+        rate: number;
+        multiplier: number;
+        amountUSD: number;
+        amountVND: number;
+      }> = [];
+
+      let totalAmountUSD = 0;
+      let remainingHours = actualWorkHours;
+
+      for (const tier of tiers) {
+        if (remainingHours <= 0) break;
+
+        const tierStart = tier.from;
+        const tierEnd = tier.to === Infinity ? Infinity : tier.to;
+        
+        // Tính số giờ trong tier này
+        let tierHours = 0;
+        if (tierStart === 0) {
+          // Tier 1: 0-160h
+          tierHours = Math.min(160, remainingHours);
+        } else {
+          // Các tier khác: mỗi tier 20h
+          const tierSize = tierEnd === Infinity ? Infinity : (tierEnd - tierStart + 1);
+          tierHours = Math.min(tierSize, remainingHours);
+        }
+        
+        if (tierHours > 0) {
+          const amountUSD = tierHours * baseRate * tier.multiplier;
+          const amountVND = amountUSD * exchangeRate;
+          
+          let tierLabel = "";
+          if (tierStart === 0) {
+            tierLabel = `0-${Math.min(160, actualWorkHours)}h`;
+          } else if (tierEnd === Infinity) {
+            tierLabel = `${tierStart}+h`;
+          } else {
+            const actualEnd = Math.min(tierEnd, actualWorkHours);
+            tierLabel = `${tierStart}-${actualEnd}h`;
+          }
+          
+          tierBreakdown.push({
+            tier: `Tier ${tierBreakdown.length + 1} (${tierLabel})`,
+            hours: tierHours,
+            rate: baseRate,
+            multiplier: tier.multiplier,
+            amountUSD,
+            amountVND,
+          });
+          
+          totalAmountUSD += amountUSD;
+          remainingHours -= tierHours;
+        }
+      }
+
+      const actualAmountVND = totalAmountUSD * exchangeRate;
+      const effectiveCoefficient = totalAmountUSD / unitPrice;
+
+      return {
+        type: "Percentage",
+        actualWorkHours,
+        baseRate,
+        tierBreakdown,
+        totalAmountUSD,
+        actualAmountVND,
+        effectiveCoefficient,
+      };
+    }
+
+    return null;
+  };
+
   // Handlers
   const handleVerifyContract = async () => {
     if (!id || !contractPayment) return;
@@ -434,7 +545,7 @@ export default function PartnerContractDetailPage() {
       await partnerContractPaymentService.startBilling(Number(id), billingForm);
       await fetchData();
       setShowStartBillingModal(false);
-      setBillingForm({ actualWorkHours: 0, otHours: null, notes: null });
+      setBillingForm({ actualWorkHours: 0, notes: null });
       alert("Bắt đầu tính toán thành công!");
     } catch (err: unknown) {
       console.error("❌ Lỗi bắt đầu tính toán:", err);
@@ -1309,9 +1420,9 @@ export default function PartnerContractDetailPage() {
       )}
 
       {/* Start Billing Modal */}
-      {showStartBillingModal && (
+      {showStartBillingModal && contractPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Bắt đầu tính toán</h3>
               <button onClick={() => setShowStartBillingModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -1319,37 +1430,32 @@ export default function PartnerContractDetailPage() {
               </button>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Số giờ làm việc thực tế <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={billingForm.actualWorkHours || ""}
-                  onChange={(e) =>
-                    setBillingForm({ ...billingForm, actualWorkHours: parseFloat(e.target.value) || 0 })
-                  }
-                  className="w-full border rounded-lg p-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Số giờ làm thêm (OT)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={billingForm.otHours || ""}
-                  onChange={(e) =>
-                    setBillingForm({
-                      ...billingForm,
-                      otHours: e.target.value ? parseFloat(e.target.value) : null,
-                    })
-                  }
-                  className="w-full border rounded-lg p-2"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Số giờ làm việc thực tế <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={billingForm.actualWorkHours || ""}
+                    onChange={(e) =>
+                      setBillingForm({ ...billingForm, actualWorkHours: parseFloat(e.target.value) || 0 })
+                    }
+                    className="w-full border rounded-lg p-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Phương pháp tính</label>
+                  <input
+                    type="text"
+                    value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : contractPayment.calculationMethod === "Fixed" ? "Số tiền cố định" : contractPayment.calculationMethod}
+                    className="w-full border rounded-lg p-2 bg-gray-50"
+                    disabled
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Ghi chú</label>
@@ -1358,14 +1464,81 @@ export default function PartnerContractDetailPage() {
                   onChange={(e) => setBillingForm({ ...billingForm, notes: e.target.value || null })}
                   className="w-full border rounded-lg p-2"
                   rows={3}
+                  placeholder="Ví dụ: Timesheet: 160h đúng như dự kiến"
                 />
               </div>
+
+              {/* Preview tính toán */}
+              {billingForm.actualWorkHours > 0 && calculateBillingPreview() && (() => {
+                const preview = calculateBillingPreview();
+                if (!preview) return null;
+
+                if (preview.type === "Fixed") {
+                  return (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm font-semibold text-green-900 mb-3">Tính toán (Fixed):</p>
+                      <div className="space-y-2 text-sm">
+                        <p className="text-green-800">
+                          <span className="font-medium">Actual Work Hours:</span> {preview.actualWorkHours}h
+                        </p>
+                        <p className="text-green-800">
+                          <span className="font-medium">ManMonthCoefficient:</span> {preview.manMonthCoefficient?.toFixed(4) ?? '0.0000'} (chỉ để tracking)
+                        </p>
+                        <p className="text-green-800">
+                          <span className="font-medium">PlannedAmountVND:</span> {preview.plannedAmountVND?.toLocaleString("vi-VN") ?? '0'} VND
+                        </p>
+                        <div className="mt-3 pt-3 border-t border-green-300">
+                          <p className="text-green-900 font-bold">
+                            <span className="font-medium">ActualAmountVND:</span> {preview.actualAmountVND.toLocaleString("vi-VN")} VND
+                          </p>
+                          <p className="text-xs text-green-700 mt-2 italic">
+                            Lưu ý: Contract Fixed nên ActualAmountVND = PlannedAmountVND (không thay đổi dù làm nhiều hay ít giờ)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else if (preview.type === "Percentage") {
+                  return (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm font-semibold text-blue-900 mb-3">Tính toán (Percentage):</p>
+                      <div className="space-y-2 text-sm">
+                        <p className="text-blue-800">
+                          <span className="font-medium">BaseRate:</span> {preview.baseRate?.toFixed(4) ?? '0.0000'} {contractPayment.currencyCode}/giờ
+                        </p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Actual Work Hours:</span> {preview.actualWorkHours}h
+                        </p>
+                        <div className="mt-3 pt-3 border-t border-blue-300">
+                          <p className="text-blue-900 font-medium mb-2">Tier Breakdown:</p>
+                          <div className="space-y-1">
+                            {preview.tierBreakdown?.map((tier, idx) => (
+                              <p key={idx} className="text-blue-800 text-xs">
+                                {tier.tier}: {tier.hours}h × {tier.rate.toFixed(4)} × {tier.multiplier} = {tier.amountUSD.toFixed(2)} {contractPayment.currencyCode} = {tier.amountVND.toLocaleString("vi-VN")} VND
+                              </p>
+                            )) ?? []}
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-blue-300">
+                            <p className="text-blue-900 font-bold">
+                              <span className="font-medium">TỔNG:</span> {preview.totalAmountUSD?.toFixed(2) ?? '0.00'} {contractPayment.currencyCode} = {preview.actualAmountVND?.toLocaleString("vi-VN") ?? '0'} VND
+                            </p>
+                            <p className="text-blue-800 mt-2">
+                              <span className="font-medium">EffectiveCoefficient:</span> {preview.effectiveCoefficient?.toFixed(4) ?? '0.0000'} = {preview.totalAmountUSD?.toFixed(2) ?? '0.00'} / {contractPayment.unitPriceForeignCurrency}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button
                 onClick={() => {
                   setShowStartBillingModal(false);
-                  setBillingForm({ actualWorkHours: 0, otHours: null, notes: null });
+                  setBillingForm({ actualWorkHours: 0, notes: null });
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >

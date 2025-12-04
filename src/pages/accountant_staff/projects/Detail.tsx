@@ -1044,7 +1044,7 @@ export default function AccountantProjectDetailPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800 mb-2">
                   <strong>Lưu ý:</strong> Hệ thống sẽ tự động:
                 </p>
@@ -1054,7 +1054,7 @@ export default function AccountantProjectDetailPage() {
                   <li>Tạo ProjectPeriod cho mỗi tháng cần thiết</li>
                   <li>Tự động tạo ClientContractPayment và PartnerContractPayment với ContractStatus = "Draft", PaymentStatus = "Pending"</li>
                 </ul>
-              </div>
+              </div> */}
 
               <div>
                 <button

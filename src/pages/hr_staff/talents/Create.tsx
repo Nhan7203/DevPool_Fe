@@ -1232,7 +1232,7 @@ export default function CreateTalent() {
         ratePerMonth: undefined
       }]);
 
-      const result: TalentCVExtractResponse = await talentCVService.extractFromPDFWithOllama(file);
+      const result: TalentCVExtractResponse = await talentCVService.extractFromPDF(file);
 
       if (result.isSuccess && result.generateText) {
         try {

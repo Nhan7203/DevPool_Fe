@@ -1,9 +1,6 @@
 import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { UNAUTHORIZED_EVENT } from '../constants/events';
-
-// const API_URL = import.meta.env.VITE_API_URL;
-// const API_URL = 'https://localhost:7298/api';
-const API_URL = 'https://api-devpool.innosphere.io.vn/api';
+import { API_URL } from './api';
 const axiosInstance = axios.create({
     baseURL: API_URL,
     withCredentials: true,

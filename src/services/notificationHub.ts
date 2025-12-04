@@ -1,10 +1,10 @@
 import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import { getAccessToken as getTokenFromStorage } from '../utils/storage';
+import { API_URL } from '../configs/api';
 
-// Suy ra HUB_URL từ biến môi trường hoặc fallback localhost
+// Suy ra HUB_URL từ API_URL
 // Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
-const RAW_API_URL = (import.meta as any)?.env?.VITE_API_URL || 'https://localhost:7298/api';
-const HUB_BASE = String(RAW_API_URL).replace(/\/api\/?$/, '');
+const HUB_BASE = String(API_URL).replace(/\/api\/?$/, '');
 const HUB_URL = `${HUB_BASE}/notificationHub`;
 
 let connection: HubConnection | null = null;
@@ -32,7 +32,7 @@ const refreshToken = async (): Promise<string | null> => {
 			return null;
 		}
 
-		const response = await fetch(`${RAW_API_URL}/auth/refresh-token`, {
+		const response = await fetch(`${API_URL}/auth/refresh-token`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
