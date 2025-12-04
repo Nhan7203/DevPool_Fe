@@ -82,6 +82,18 @@ export interface PartnerDetailedModel {
   paymentPeriods: PartnerPaymentPeriodModel[];
 }
 
+export interface SuggestCodeResponse {
+  success: boolean;
+  suggestedCode?: string;
+  message?: string;
+}
+
+export interface CheckCodeUniqueResponse {
+  success: boolean;
+  isUnique?: boolean;
+  message?: string;
+}
+
 export const partnerService = {
   async getAll(filter?: { companyName?: string; taxCode?: string; contactPerson?: string }) {
     try {
@@ -140,6 +152,62 @@ export const partnerService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Failed to fetch partner detailed information" };
       throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  /**
+   * Suggest code from company name for Partner
+   * @param name Company name
+   * @returns Suggested code
+   */
+  async suggestCode(name: string): Promise<SuggestCodeResponse> {
+    try {
+      if (!name || !name.trim()) {
+        throw { message: "Company name is required" };
+      }
+      const params = new URLSearchParams();
+      params.append("name", name.trim());
+      const response = await axios.get(`/partner/suggest-code?${params.toString()}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to suggest code" };
+      }
+      throw error || { message: "Unexpected error occurred" };
+    }
+  },
+
+  /**
+   * Check if partner code is unique
+   * @param code Code to check
+   * @param excludeId Partner ID to exclude (for update)
+   * @returns True if unique
+   */
+  async checkCodeUnique(code: string, excludeId?: number): Promise<CheckCodeUniqueResponse> {
+    try {
+      if (!code || !code.trim()) {
+        throw { message: "Code is required" };
+      }
+      const params = new URLSearchParams();
+      params.append("code", code.trim());
+      if (excludeId !== undefined) {
+        params.append("excludeId", excludeId.toString());
+      }
+      const response = await axios.get(`/partner/check-code-unique?${params.toString()}`);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to check code uniqueness" };
+      }
+      throw error || { message: "Unexpected error occurred" };
     }
   },
 };

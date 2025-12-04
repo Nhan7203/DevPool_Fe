@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Mail, Phone, MapPin, User, FileText } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, User, FileText, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
 import { partnerService, type Partner, type PartnerPayload, PartnerType } from '../../../services/Partner';
@@ -20,6 +20,8 @@ export default function CreatePartner() {
     address: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
+  const [codeStatus, setCodeStatus] = useState<"idle" | "checking" | "unique" | "duplicate">("idle");
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,47 +52,80 @@ export default function CreatePartner() {
     }
   };
 
-  // Auto-generate code from company name
-  const generateCodeFromCompanyName = (companyName: string): string => {
-    if (!companyName) return '';
+  // Suggest code from company name using API
+  const handleSuggestCode = async (companyName: string) => {
+    if (!companyName.trim()) return;
     
-    // Remove common words and special characters, take first letters of words
-    const words = companyName
-      .toUpperCase()
-      .replace(/[^A-Z0-9\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 0 && !['CÔNG', 'TY', 'TNHH', 'CP', 'CTY', 'COMPANY', 'LTD', 'INC'].includes(word));
-    
-    // Take first 3-4 words, max 50 chars
-    let code = words.slice(0, 4).map(word => word.charAt(0)).join('');
-    
-    // If still too long, truncate
-    if (code.length > 50) {
-      code = code.substring(0, 50);
+    try {
+      const result = await partnerService.suggestCode(companyName);
+      if (result.success && result.suggestedCode) {
+        setFormData((prev) => ({ ...prev, code: result.suggestedCode || '' }));
+        setCodeStatus("idle");
+        // Clear code error if exists
+        if (errors.code) {
+          setErrors((prev) => {
+            const newErrors = { ...prev };
+            delete newErrors.code;
+            return newErrors;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("❌ Lỗi khi gợi ý code:", err);
     }
-    
-    return code;
+  };
+
+  // Check if code is unique using API
+  const handleCheckCodeUnique = async (code: string): Promise<boolean> => {
+    if (!code.trim()) {
+      setCodeStatus("idle");
+      return true;
+    }
+
+    try {
+      setIsCheckingCode(true);
+      setCodeStatus("checking");
+      const result = await partnerService.checkCodeUnique(code);
+      if (result.success) {
+        const isUnique = result.isUnique ?? false;
+        setCodeStatus(isUnique ? "unique" : "duplicate");
+        if (!isUnique) {
+          setErrors((prev) => ({ ...prev, code: "Mã đối tác đã tồn tại" }));
+        } else {
+          setErrors((prev) => {
+            const newErrors = { ...prev };
+            delete newErrors.code;
+            return newErrors;
+          });
+        }
+        return isUnique;
+      }
+      return false;
+    } catch (err) {
+      console.error("❌ Lỗi khi kiểm tra code:", err);
+      setCodeStatus("idle");
+      return false;
+    } finally {
+      setIsCheckingCode(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     const newErrors = { ...errors };
 
-    // Auto-generate code when company name changes
+    // Validate companyName and auto-suggest code
     if (name === 'companyName') {
       if (value && value.trim() !== '') {
         delete newErrors.companyName;
-        // Auto-suggest code if code is empty or was auto-generated
-        if (!formData.code || formData.code === generateCodeFromCompanyName(formData.companyName)) {
-          const suggestedCode = generateCodeFromCompanyName(value);
-          setFormData(prev => ({ ...prev, companyName: value, code: suggestedCode }));
-          return;
-        }
+        // Tự động suggest code khi nhập tên công ty
+        handleSuggestCode(value);
       }
     }
 
     // Validate code
     if (name === 'code') {
+      setCodeStatus("idle");
       if (value && value.trim() !== '') {
         if (value.length > 50) {
           newErrors.code = 'Mã đối tác không được vượt quá 50 ký tự';
@@ -99,13 +134,6 @@ export default function CreatePartner() {
         }
       } else {
         newErrors.code = 'Mã đối tác là bắt buộc';
-      }
-    }
-
-    // Validate companyName
-    if (name === 'companyName') {
-      if (value && value.trim() !== '') {
-        delete newErrors.companyName;
       }
     }
 
@@ -182,6 +210,12 @@ export default function CreatePartner() {
       newErrors.code = 'Mã đối tác là bắt buộc';
     } else if (formData.code.length > 50) {
       newErrors.code = 'Mã đối tác không được vượt quá 50 ký tự';
+    } else {
+      // Check code unique before submit
+      const isCodeUnique = await handleCheckCodeUnique(formData.code);
+      if (!isCodeUnique) {
+        newErrors.code = "Mã đối tác đã tồn tại";
+      }
     }
 
     if (!formData.companyName || formData.companyName.trim() === '') {
@@ -259,30 +293,95 @@ export default function CreatePartner() {
           {/* Form Container */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft p-8 border border-neutral-200/50 animate-fade-in-up">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Tên công ty */}
+              <div>
+                <label className="block text-sm font-semibold text-neutral-700 mb-2">
+                  Tên công ty <span className="text-red-500">*</span>
+                </label>
+                <div className="relative group">
+                  <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
+                  <input
+                    type="text"
+                    name="companyName"
+                    value={formData.companyName}
+                    onChange={handleChange}
+                    required
+                    className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.companyName ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
+                    placeholder="Tên công ty đối tác"
+                  />
+                </div>
+                {errors.companyName && (
+                  <p className="mt-1 text-sm text-red-500">{errors.companyName}</p>
+                )}
+              </div>
+
               {/* Grid: Mã đối tác + Loại đối tác */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Mã đối tác <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative group">
-                    <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
-                    <input
-                      type="text"
-                      name="code"
-                      value={formData.code}
-                      onChange={handleChange}
-                      required
-                      maxLength={50}
-                      className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.code ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
-                      placeholder="VD: KMS, FPT, VNG"
-                    />
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative group">
+                      <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
+                      <input
+                        type="text"
+                        name="code"
+                        value={formData.code}
+                        onChange={handleChange}
+                        onBlur={() => formData.code && handleCheckCodeUnique(formData.code)}
+                        required
+                        maxLength={50}
+                        className={`w-full pl-12 pr-12 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${
+                          errors.code || codeStatus === "duplicate"
+                            ? 'border-red-500 focus:border-red-500'
+                            : codeStatus === "unique"
+                            ? 'border-green-500 focus:border-green-500'
+                            : 'border-neutral-300 focus:border-primary-500'
+                        }`}
+                        placeholder="VD: KMS, FPT, VNG"
+                      />
+                      {codeStatus === "checking" && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                      {codeStatus === "unique" && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        </div>
+                      )}
+                      {codeStatus === "duplicate" && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => formData.companyName && handleSuggestCode(formData.companyName)}
+                      disabled={!formData.companyName.trim() || isCheckingCode}
+                      className="px-4 py-3 bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-xl border border-primary-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      title="Gợi ý mã từ tên công ty"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span className="hidden sm:inline">Gợi ý</span>
+                    </button>
                   </div>
                   {errors.code && (
-                    <p className="mt-1 text-sm text-red-500">{errors.code}</p>
+                    <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {errors.code}
+                    </p>
+                  )}
+                  {codeStatus === "unique" && !errors.code && (
+                    <p className="mt-1 text-sm text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Mã đối tác hợp lệ
+                    </p>
                   )}
                   <p className="mt-1 text-xs text-neutral-500">
-                    Mã duy nhất cho đối tác (tối đa 50 ký tự). Hệ thống sẽ tự động gợi ý từ tên công ty.
+                    Mã duy nhất cho đối tác (tối đa 50 ký tự). Hệ thống tự động gợi ý từ tên công ty hoặc nhấn nút "Gợi ý" để tạo lại.
                   </p>
                 </div>
 
@@ -305,28 +404,6 @@ export default function CreatePartner() {
                     </select>
                   </div>
                 </div>
-              </div>
-
-              {/* Tên công ty */}
-              <div>
-                <label className="block text-sm font-semibold text-neutral-700 mb-2">
-                  Tên công ty <span className="text-red-500">*</span>
-                </label>
-                <div className="relative group">
-                  <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400 w-5 h-5 group-focus-within:text-primary-500" />
-                  <input
-                    type="text"
-                    name="companyName"
-                    value={formData.companyName}
-                    onChange={handleChange}
-                    required
-                    className={`w-full pl-12 pr-4 py-3.5 border rounded-xl bg-white/50 focus:ring-2 focus:ring-primary-500/20 hover:shadow-soft transition-all ${errors.companyName ? 'border-red-500 focus:border-red-500' : 'border-neutral-300 focus:border-primary-500'}`}
-                    placeholder="Tên công ty đối tác"
-                  />
-                </div>
-                {errors.companyName && (
-                  <p className="mt-1 text-sm text-red-500">{errors.companyName}</p>
-                )}
               </div>
 
               {/* Grid: Mã số thuế + Người đại diện */}

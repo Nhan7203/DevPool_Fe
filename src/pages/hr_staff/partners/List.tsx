@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Building2, Plus, Users, Mail, Phone, MapPin, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Search, Filter, Building2, Plus, Users, Phone, ChevronLeft, ChevronRight, Eye, User, Briefcase } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import Breadcrumb from '../../../components/common/Breadcrumb';
 import { sidebarItems } from '../../../components/hr_staff/SidebarItems';
@@ -16,6 +16,7 @@ export default function ListPartner() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterTaxCode, setFilterTaxCode] = useState('');
+  const [filterPartnerType, setFilterPartnerType] = useState<PartnerType | null>(null);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -27,25 +28,32 @@ export default function ListPartner() {
       title: 'Tổng Đối Tác',
       value: partners.length.toString(),
       color: 'blue',
-      icon: <Building2 className="w-6 h-6" />
+      icon: <Building2 className="w-6 h-6" />,
+      onClick: () => setFilterPartnerType(null)
     },
     {
-      title: 'Có Liên Hệ',
-      value: partners.filter(p => p.contactPerson).length.toString(),
+      title: 'Đối Tác',
+      value: partners.filter(p => p.partnerType === PartnerType.Partner).length.toString(),
       color: 'green',
-      icon: <Users className="w-6 h-6" />
+      icon: <Briefcase className="w-6 h-6" />,
+      partnerType: PartnerType.Partner,
+      onClick: () => setFilterPartnerType(PartnerType.Partner)
     },
     {
-      title: 'Có Email',
-      value: partners.filter(p => p.email).length.toString(),
+      title: 'Cá Nhân',
+      value: partners.filter(p => p.partnerType === PartnerType.Individual).length.toString(),
       color: 'orange',
-      icon: <Mail className="w-6 h-6" />
+      icon: <User className="w-6 h-6" />,
+      partnerType: PartnerType.Individual,
+      onClick: () => setFilterPartnerType(PartnerType.Individual)
     },
     {
-      title: 'Có Địa Chỉ',
-      value: partners.filter(p => p.address).length.toString(),
+      title: 'Công Ty Mình',
+      value: partners.filter(p => p.partnerType === PartnerType.OwnCompany).length.toString(),
       color: 'purple',
-      icon: <MapPin className="w-6 h-6" />
+      icon: <Building2 className="w-6 h-6" />,
+      partnerType: PartnerType.OwnCompany,
+      onClick: () => setFilterPartnerType(PartnerType.OwnCompany)
     }
   ];
 
@@ -75,11 +83,12 @@ export default function ListPartner() {
     let filtered = [...partners];
     if (searchTerm) filtered = filtered.filter((p) => p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()));
     if (filterTaxCode) filtered = filtered.filter((p) => p.taxCode?.includes(filterTaxCode));
+    if (filterPartnerType !== null) filtered = filtered.filter((p) => p.partnerType === filterPartnerType);
     // Đảm bảo vẫn sắp xếp theo id giảm dần (mới nhất trước) sau khi filter
     filtered.sort((a, b) => b.id - a.id);
     setFilteredPartners(filtered);
     setCurrentPage(1); // Reset về trang đầu khi filter thay đổi
-  }, [searchTerm, filterTaxCode, partners]);
+  }, [searchTerm, filterTaxCode, filterPartnerType, partners]);
   
   // Tính toán pagination
   const totalPages = Math.ceil(filteredPartners.length / itemsPerPage);
@@ -92,6 +101,7 @@ export default function ListPartner() {
   const handleResetFilters = () => {
     setSearchTerm("");
     setFilterTaxCode("");
+    setFilterPartnerType(null);
   };
 
 
@@ -136,17 +146,45 @@ export default function ListPartner() {
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in">
             {stats.map((stat, index) => (
-              <div key={index} className="group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border border-neutral-100 hover:border-primary-200">
+              <div 
+                key={index} 
+                onClick={stat.onClick}
+                className={`group bg-white rounded-2xl shadow-soft hover:shadow-medium p-6 transition-all duration-300 transform hover:-translate-y-1 border cursor-pointer ${
+                  filterPartnerType === stat.partnerType || (filterPartnerType === null && stat.partnerType === undefined)
+                    ? 'border-primary-500 bg-primary-50 shadow-glow'
+                    : 'border-neutral-100 hover:border-primary-200'
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-neutral-600 group-hover:text-neutral-700 transition-colors duration-300">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2 group-hover:text-primary-700 transition-colors duration-300">{stat.value}</p>
+                    <p className={`text-sm font-medium transition-colors duration-300 ${
+                      filterPartnerType === stat.partnerType || (filterPartnerType === null && stat.partnerType === undefined)
+                        ? 'text-primary-700'
+                        : 'text-neutral-600 group-hover:text-neutral-700'
+                    }`}>{stat.title}</p>
+                    <p className={`text-3xl font-bold mt-2 transition-colors duration-300 ${
+                      filterPartnerType === stat.partnerType || (filterPartnerType === null && stat.partnerType === undefined)
+                        ? 'text-primary-700'
+                        : 'text-gray-900 group-hover:text-primary-700'
+                    }`}>{stat.value}</p>
                   </div>
-                  <div className={`p-3 rounded-full ${stat.color === 'blue' ? 'bg-primary-100 text-primary-600 group-hover:bg-primary-200' :
-                      stat.color === 'green' ? 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200' :
-                        stat.color === 'purple' ? 'bg-accent-100 text-accent-600 group-hover:bg-accent-200' :
-                          'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
-                    } transition-all duration-300`}>
+                  <div className={`p-3 rounded-full transition-all duration-300 ${
+                    stat.color === 'blue' 
+                      ? filterPartnerType === stat.partnerType || (filterPartnerType === null && stat.partnerType === undefined)
+                        ? 'bg-primary-200 text-primary-700'
+                        : 'bg-primary-100 text-primary-600 group-hover:bg-primary-200'
+                      : stat.color === 'green'
+                        ? filterPartnerType === stat.partnerType
+                          ? 'bg-secondary-200 text-secondary-700'
+                          : 'bg-secondary-100 text-secondary-600 group-hover:bg-secondary-200'
+                        : stat.color === 'purple'
+                          ? filterPartnerType === stat.partnerType
+                            ? 'bg-accent-200 text-accent-700'
+                            : 'bg-accent-100 text-accent-600 group-hover:bg-accent-200'
+                          : filterPartnerType === stat.partnerType
+                            ? 'bg-warning-200 text-warning-700'
+                            : 'bg-warning-100 text-warning-600 group-hover:bg-warning-200'
+                  }`}>
                     {stat.icon}
                   </div>
                 </div>

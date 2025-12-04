@@ -548,6 +548,9 @@ export default function ListDev() {
                     #
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
+                    Mã
+                  </th>
+                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
                     đối tác
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase">
@@ -570,7 +573,7 @@ export default function ListDev() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredTalents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Users className="w-8 h-8 text-neutral-400" />
@@ -591,6 +594,11 @@ export default function ListDev() {
                         className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                       >
                         <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                        <td className="py-4 px-6">
+                          <span className="text-sm font-semibold text-primary-700">
+                            {t.code || "—"}
+                          </span>
+                        </td>
                         <td className="py-4 px-6">
                           <div className="text-sm text-neutral-700">
                             {partnerName}

@@ -12,6 +12,7 @@ import type { TalentStaffAssignment } from './TalentStaffAssignment';
 
 export interface Talent {
   id: number;
+  code: string;
   currentPartnerId: number;
   userId: string;
   fullName: string;

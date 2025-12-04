@@ -29,6 +29,7 @@ import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { uploadFile, uploadTalentCV } from "../../../utils/firebaseStorage";
+import { saveFileToIndexedDB, getFileFromIndexedDB, deleteFileFromIndexedDB } from "../../../utils/indexedDBStorage";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "../../../configs/firebase";
 import { Button } from "../../../components/ui/button";
@@ -234,6 +235,10 @@ export default function TalentDetailPage() {
   const [inlineCVAnalysisResult, setInlineCVAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
   const [showInlineCVAnalysisModal, setShowInlineCVAnalysisModal] = useState(false);
   const [showCVFullForm, setShowCVFullForm] = useState(false); // Hiện form đầy đủ sau khi xác nhận phân tích
+  
+  // Storage key cho form CV
+  const CV_FORM_STORAGE_KEY = id ? `talent-detail-cv-form-${id}` : null;
+  const CV_FILE_STORAGE_KEY = id ? `talent-detail-cv-file-${id}` : null;
   // Certificate image upload states
   const [certificateImageFile, setCertificateImageFile] = useState<File | null>(null);
   const [uploadingCertificateImage, setUploadingCertificateImage] = useState(false);
@@ -333,6 +338,105 @@ export default function TalentDetailPage() {
       console.warn("Không thể khôi phục kết quả phân tích CV:", error);
     }
   }, [ANALYSIS_RESULT_STORAGE_KEY, talentCVs]);
+
+  // Lưu trạng thái form CV vào storage khi thay đổi
+  useEffect(() => {
+    if (!CV_FORM_STORAGE_KEY || showInlineForm !== "cv") return;
+    
+    try {
+      const rememberMe = localStorage.getItem('remember_me') === 'true';
+      const storage = rememberMe ? localStorage : sessionStorage;
+      
+      const formData = {
+        inlineCVForm,
+        showCVFullForm,
+        inlineCVAnalysisResult,
+        showInlineCVAnalysisModal,
+        // Không lưu cvPreviewUrl vì là URL object, không thể serialize
+        uploadedCVUrl,
+        isCVUploadedFromFirebase,
+        // Lưu metadata của file (không thể lưu File object)
+        selectedCVFileInfo: selectedCVFile ? {
+          name: selectedCVFile.name,
+          size: selectedCVFile.size,
+          type: selectedCVFile.type
+        } : null
+      };
+      
+      storage.setItem(CV_FORM_STORAGE_KEY, JSON.stringify(formData));
+    } catch (error) {
+      console.warn("Không thể lưu trạng thái form CV:", error);
+    }
+  }, [CV_FORM_STORAGE_KEY, showInlineForm, inlineCVForm, showCVFullForm, inlineCVAnalysisResult, showInlineCVAnalysisModal, uploadedCVUrl, isCVUploadedFromFirebase, selectedCVFile]);
+
+  // Khôi phục trạng thái form CV từ storage khi component mount
+  useEffect(() => {
+    if (!CV_FORM_STORAGE_KEY || !id || !CV_FILE_STORAGE_KEY) return;
+    
+    const restoreFormData = async () => {
+      try {
+        const rememberMe = localStorage.getItem('remember_me') === 'true';
+        const storage = rememberMe ? localStorage : sessionStorage;
+        
+        const stored = storage.getItem(CV_FORM_STORAGE_KEY);
+        if (!stored) return;
+        
+        const parsed = JSON.parse(stored) as {
+          inlineCVForm: Partial<TalentCVCreate>;
+          showCVFullForm: boolean;
+          inlineCVAnalysisResult: CVAnalysisComparisonResponse | null;
+          showInlineCVAnalysisModal: boolean;
+          uploadedCVUrl: string | null;
+          isCVUploadedFromFirebase: boolean;
+          selectedCVFileInfo: { name: string; size: number; type: string } | null;
+        };
+        
+        // Khôi phục form data
+        if (parsed.inlineCVForm) {
+          setInlineCVForm(parsed.inlineCVForm);
+        }
+        if (parsed.showCVFullForm !== undefined) {
+          setShowCVFullForm(parsed.showCVFullForm);
+        }
+        if (parsed.inlineCVAnalysisResult) {
+          setInlineCVAnalysisResult(parsed.inlineCVAnalysisResult);
+        }
+        if (parsed.showInlineCVAnalysisModal !== undefined) {
+          setShowInlineCVAnalysisModal(parsed.showInlineCVAnalysisModal);
+        }
+        if (parsed.uploadedCVUrl) {
+          setUploadedCVUrl(parsed.uploadedCVUrl);
+          // Nếu đã có uploadedCVUrl, tự động set vào form và đánh dấu đã upload
+          if (parsed.inlineCVForm && !parsed.inlineCVForm.cvFileUrl) {
+            setInlineCVForm(prev => ({ ...prev, cvFileUrl: parsed.uploadedCVUrl || undefined }));
+          }
+        }
+        if (parsed.isCVUploadedFromFirebase !== undefined) {
+          setIsCVUploadedFromFirebase(parsed.isCVUploadedFromFirebase);
+        }
+        
+        // Khôi phục File object từ IndexedDB nếu chưa upload lên Firebase
+        if (!parsed.isCVUploadedFromFirebase) {
+          const file = await getFileFromIndexedDB(CV_FILE_STORAGE_KEY);
+          if (file) {
+            setSelectedCVFile(file);
+            // Tạo lại preview URL
+            const url = URL.createObjectURL(file);
+            setCvPreviewUrl(url);
+          }
+        }
+        
+        // Mở form nếu đã có dữ liệu
+        if (parsed.inlineCVForm || parsed.showCVFullForm || parsed.inlineCVAnalysisResult) {
+          setShowInlineForm("cv");
+        }
+      } catch (error) {
+        console.warn("Không thể khôi phục trạng thái form CV:", error);
+      }
+    };
+    
+    restoreFormData();
+  }, [CV_FORM_STORAGE_KEY, CV_FILE_STORAGE_KEY, id]);
 
   // Multi-select states
   const [selectedCVs, setSelectedCVs] = useState<number[]>([]);
@@ -981,6 +1085,35 @@ export default function TalentDetailPage() {
       setShowCVFullForm(false);
       setInlineCVAnalysisResult(null);
       setShowInlineCVAnalysisModal(false);
+      
+      // Xóa dữ liệu đã lưu trong storage
+      if (CV_FORM_STORAGE_KEY) {
+        try {
+          const rememberMe = localStorage.getItem('remember_me') === 'true';
+          const storage = rememberMe ? localStorage : sessionStorage;
+          storage.removeItem(CV_FORM_STORAGE_KEY);
+        } catch (error) {
+          console.warn("Không thể xóa dữ liệu form CV từ storage:", error);
+        }
+      }
+      
+      // Xóa file từ IndexedDB
+      if (CV_FILE_STORAGE_KEY) {
+        try {
+          await deleteFileFromIndexedDB(CV_FILE_STORAGE_KEY);
+        } catch (error) {
+          console.warn("Không thể xóa file từ IndexedDB:", error);
+        }
+      }
+      
+      // Xóa file từ IndexedDB
+      if (CV_FILE_STORAGE_KEY) {
+        try {
+          await deleteFileFromIndexedDB(CV_FILE_STORAGE_KEY);
+        } catch (error) {
+          console.warn("Không thể xóa file từ IndexedDB:", error);
+        }
+      }
     }
     // Reset form CV full
     setShowCVFullForm(false);
@@ -1208,50 +1341,6 @@ export default function TalentDetailPage() {
   };
 
 
-  // Hàm tạo nhanh jobRoleLevel từ matched item
-  const handleQuickCreateJobRoleLevel = (matchedJobRole: { jobRoleLevelId: number; position: string; level?: string; yearsOfExp?: number; ratePerMonth?: number }) => {
-    // Chuyển sang tab jobRoleLevels
-    setActiveTab("jobRoleLevels");
-    
-    // Mở form inline trước (sẽ reset form)
-    handleOpenInlineForm("jobRoleLevel");
-    
-    // Điền dữ liệu vào form sau khi form đã mở và reset
-    setTimeout(() => {
-      setInlineJobRoleLevelForm({
-        jobRoleLevelId: matchedJobRole.jobRoleLevelId,
-        yearsOfExp: matchedJobRole.yearsOfExp ?? 1,
-        ratePerMonth: matchedJobRole.ratePerMonth,
-      });
-    }, 100);
-  };
-
-
-  // Hàm tạo nhanh certificate từ recognized (có trong hệ thống nhưng chưa có trong hồ sơ)
-  const handleQuickCreateCertificateFromRecognized = (item: { suggestion: CertificateSuggestion; system: CertificateType }) => {
-    // Chuyển sang tab certificates
-    setActiveTab("certificates");
-    
-    // Mở form inline trước (sẽ reset form)
-    handleOpenInlineForm("certificate");
-    
-    // Điền dữ liệu vào form sau khi form đã mở và reset
-    setTimeout(() => {
-      setInlineCertificateForm({
-        certificateTypeId: item.system.id,
-        certificateName: item.suggestion.certificateName ?? "",
-        certificateDescription: "",
-        issuedDate: item.suggestion.issuedDate ?? undefined,
-        isVerified: false,
-        imageUrl: item.suggestion.imageUrl ?? "",
-      });
-      
-      // Tự động lọc để hiển thị chứng chỉ đã chọn
-      setCertificateTypeSearch(item.system.name);
-      setIsCertificateTypeDropdownOpen(false);
-    }, 100);
-  };
-
   const getTalentLevelName = (levelValue: number | undefined) => {
     if (levelValue === undefined) return "";
     const match = Object.entries(TalentLevelEnum).find(([, value]) => value === levelValue);
@@ -1457,66 +1546,6 @@ export default function TalentDetailPage() {
         yearsExp: suggestion.yearsExp != null ? String(suggestion.yearsExp) : "",
       })),
     [unmatchedSkillSuggestions]
-  );
-
-  const jobRoleSuggestionRequestKey = useMemo(() => {
-    if (!jobRoleLevelsUnmatched.length) return "";
-    return `jobRole:${jobRoleLevelsUnmatched
-      .map((suggestion, index) => {
-        const key = normalizeJobRoleKey(suggestion.position, suggestion.level);
-        return !key || key === "|" ? `__unknown-jobrole-${index}` : key;
-      })
-      .sort()
-      .join("|")}`;
-  }, [jobRoleLevelsUnmatched]);
-
-  const jobRoleSuggestionDisplayItems = useMemo(
-    () =>
-      jobRoleLevelsUnmatched.map((suggestion) => {
-        const parts: string[] = [];
-        if (suggestion.position) parts.push(suggestion.position);
-        if (suggestion.level) parts.push(`Level ${suggestion.level}`);
-        return parts.join(" · ") || "Vị trí chưa rõ";
-      }),
-    [jobRoleLevelsUnmatched]
-  );
-
-  const jobRoleSuggestionDetailItems = useMemo(
-    () =>
-      jobRoleLevelsUnmatched.map((suggestion) => ({
-        position: suggestion.position ?? "",
-        level: suggestion.level ?? "",
-        yearsOfExp: suggestion.yearsOfExp != null ? String(suggestion.yearsOfExp) : "",
-        ratePerMonth: suggestion.ratePerMonth != null ? String(suggestion.ratePerMonth) : "",
-      })),
-    [jobRoleLevelsUnmatched]
-  );
-
-  const certificateSuggestionRequestKey = useMemo(() => {
-    if (!certificatesUnmatched.length) return "";
-    return `certificate:${certificatesUnmatched
-      .map((suggestion, index) => {
-        const key = normalizeCertificateName(suggestion.certificateName);
-        return key.length > 0 ? key : `__unknown-certificate-${index}`;
-      })
-      .sort()
-      .join("|")}`;
-  }, [certificatesUnmatched]);
-
-  const certificateSuggestionDisplayItems = useMemo(
-    () =>
-      certificatesUnmatched.map((suggestion) => suggestion.certificateName?.trim() || "Chứng chỉ chưa rõ"),
-    [certificatesUnmatched]
-  );
-
-  const certificateSuggestionDetailItems = useMemo(
-    () =>
-      certificatesUnmatched.map((suggestion) => ({
-        certificateName: suggestion.certificateName ?? "",
-        issuedDate: suggestion.issuedDate ?? "",
-        imageUrl: suggestion.imageUrl ?? "",
-      })),
-    [certificatesUnmatched]
   );
 
   const handleDeleteProjects = async () => {
@@ -2076,11 +2105,6 @@ export default function TalentDetailPage() {
     }
   };
 
-  // Close inline CV analysis modal
-  const handleCloseInlineCVAnalysisModal = () => {
-    setShowInlineCVAnalysisModal(false);
-  };
-
   // Handle confirm and apply analysis result
   const handleConfirmInlineCVAnalysis = () => {
     if (!inlineCVAnalysisResult) return;
@@ -2135,7 +2159,7 @@ export default function TalentDetailPage() {
       }
     }
     
-    // Đóng modal và hiện form đầy đủ
+    // Đóng modal và hiện form đầy đủ - KHÔNG đóng form, giữ nguyên để user có thể xem lại
     setShowInlineCVAnalysisModal(false);
     setShowCVFullForm(true);
     
@@ -2274,28 +2298,28 @@ export default function TalentDetailPage() {
       });
       setTalentSkills(skillsWithNames);
 
-      // Refresh status để check needsReverification (khi thêm skill mới vào group đã verify)
-      const distinctSkillGroupIds = Array.from(
-        new Set(
-          skillsWithNames
-            .map((s: any) => s.skillGroupId)
-            .filter((gid: number | undefined) => typeof gid === "number")
-        )
-      ) as number[];
+      // Chỉ refresh status cho group của skill vừa thêm, không phải tất cả groups
+      // Tìm skillGroupId của skill vừa thêm
+      const addedSkillInfo = allSkills.find((s: Skill) => s.id === inlineSkillForm.skillId);
+      const addedSkillGroupId = addedSkillInfo?.skillGroupId;
 
-      if (distinctSkillGroupIds.length > 0) {
+      if (addedSkillGroupId && typeof addedSkillGroupId === "number") {
         try {
+          // Chỉ refresh status cho group này
           const statuses =
             await talentSkillGroupAssessmentService.getVerificationStatuses(
               Number(id),
-              distinctSkillGroupIds
+              [addedSkillGroupId]
             );
-          if (Array.isArray(statuses)) {
-            const statusMap: Record<number, SkillGroupVerificationStatus> = {};
-            statuses.forEach((st) => {
-              statusMap[st.skillGroupId] = st;
+          if (Array.isArray(statuses) && statuses.length > 0) {
+            // Chỉ cập nhật status của group này, giữ nguyên các groups khác
+            setSkillGroupVerificationStatuses((prev) => {
+              const newStatusMap = { ...prev };
+              statuses.forEach((st) => {
+                newStatusMap[st.skillGroupId] = st;
+              });
+              return newStatusMap;
             });
-            setSkillGroupVerificationStatuses(statusMap);
           }
         } catch (statusError) {
           console.error("❌ Lỗi khi refresh trạng thái verify sau khi thêm skill:", statusError);
@@ -2770,13 +2794,19 @@ export default function TalentDetailPage() {
   // Auto-set version and validate when existingCVsForValidation changes
   useEffect(() => {
     const jobRoleLevelId = inlineCVForm.jobRoleLevelId || 0;
-    if (jobRoleLevelId > 0 && existingCVsForValidation.length === 0 && inlineCVForm.version !== 1) {
-      setInlineCVForm(prev => ({ ...prev, version: 1 }));
+    if (jobRoleLevelId > 0 && existingCVsForValidation.length === 0) {
+      // Chưa có CV nào cho jobRoleLevelId này - chỉ cho phép version 1
+      if (inlineCVForm.version !== 1) {
+        setInlineCVForm(prev => ({ ...prev, version: 1 }));
+      }
+      // Clear error vì chưa có CV nào, version 1 là hợp lệ
       setCvVersionError("");
     } else if (inlineCVForm.version && inlineCVForm.version > 0 && jobRoleLevelId > 0 && existingCVsForValidation.length > 0) {
+      // Đã có CV - validate version
       const error = validateCVVersion(inlineCVForm.version, jobRoleLevelId, existingCVsForValidation);
       setCvVersionError(error);
-    } else if (existingCVsForValidation.length === 0 && jobRoleLevelId === 0) {
+    } else if (jobRoleLevelId === 0) {
+      // Chưa chọn jobRoleLevelId - clear error
       setCvVersionError("");
     }
   }, [existingCVsForValidation, inlineCVForm.jobRoleLevelId, inlineCVForm.version]);
@@ -2796,9 +2826,9 @@ export default function TalentDetailPage() {
   };
 
   // Handle CV file select
-  const handleCVFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCVFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && CV_FILE_STORAGE_KEY) {
       setSelectedCVFile(file);
       setCvFormErrors(prev => {
         const newErrors = { ...prev };
@@ -2807,6 +2837,14 @@ export default function TalentDetailPage() {
       });
       const url = URL.createObjectURL(file);
       setCvPreviewUrl(url);
+      
+      // Lưu file vào IndexedDB để khôi phục sau khi reload
+      try {
+        await saveFileToIndexedDB(CV_FILE_STORAGE_KEY, file);
+      } catch (error) {
+        console.warn("⚠️ Không thể lưu file vào IndexedDB:", error);
+        // Không block UI nếu lưu IndexedDB thất bại
+      }
     }
   };
 
@@ -3031,43 +3069,6 @@ export default function TalentDetailPage() {
       return;
     }
 
-    // ✅ Kiểm tra verification status: Talent có skills thuộc group chưa verify thì không được tạo CV
-    try {
-      const distinctSkillGroupIds = Array.from(
-        new Set(
-          talentSkills
-            .map((s: any) => s.skillGroupId)
-            .filter((gid: number | undefined) => typeof gid === "number")
-        )
-      ) as number[];
-
-      if (distinctSkillGroupIds.length > 0) {
-        const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
-          Number(id),
-          distinctSkillGroupIds
-        );
-
-        const unverifiedGroups: string[] = [];
-        statuses.forEach((status) => {
-          // Chưa verify nếu: không có status hoặc isVerified = false hoặc needsReverification = true
-          if (!status.isVerified || status.needsReverification) {
-            const groupName = status.skillGroupName || `Nhóm kỹ năng #${status.skillGroupId}`;
-            unverifiedGroups.push(groupName);
-          }
-        });
-
-        if (unverifiedGroups.length > 0) {
-          const errorMessage = `⚠️ Không thể tạo CV!\n\nTalent có ${unverifiedGroups.length} nhóm kỹ năng chưa được verify:\n\n${unverifiedGroups.map(g => `• ${g}`).join("\n")}\n\nVui lòng verify các nhóm kỹ năng này trước khi tạo CV.`;
-          alert(errorMessage);
-          setCvFormErrors({ submit: "Không thể tạo CV vì có nhóm kỹ năng chưa verify." });
-          return;
-        }
-      }
-    } catch (verificationError) {
-      console.error("❌ Lỗi khi kiểm tra verification status:", verificationError);
-      // Nếu lỗi khi check verification, vẫn cho phép tạo CV (không block)
-      console.warn("⚠️ Không thể kiểm tra verification status, cho phép tạo CV.");
-    }
 
     // Kiểm tra nếu có kết quả phân tích CV và có gợi ý chưa được xử lý
     if (analysisResult) {
@@ -3162,6 +3163,27 @@ export default function TalentDetailPage() {
       
       // Hủy phân tích và đóng form (không cảnh báo xóa file vì file đã được lưu vào CV)
       await clearAnalysisResult();
+      
+      // Xóa dữ liệu form CV từ storage
+      if (CV_FORM_STORAGE_KEY) {
+        try {
+          const rememberMe = localStorage.getItem('remember_me') === 'true';
+          const storage = rememberMe ? localStorage : sessionStorage;
+          storage.removeItem(CV_FORM_STORAGE_KEY);
+        } catch (error) {
+          console.warn("Không thể xóa dữ liệu form CV từ storage:", error);
+        }
+      }
+      
+      // Xóa file từ IndexedDB
+      if (CV_FILE_STORAGE_KEY) {
+        try {
+          await deleteFileFromIndexedDB(CV_FILE_STORAGE_KEY);
+        } catch (error) {
+          console.warn("Không thể xóa file từ IndexedDB:", error);
+        }
+      }
+      
       closeInlineFormAfterSuccess();
       
       // Refresh data
@@ -3313,12 +3335,22 @@ export default function TalentDetailPage() {
                 Thông tin chi tiết nhân sự trong hệ thống DevPool
               </p>
 
-              {/* Status Badge */}
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
-                {statusConfig.icon}
-                <span className={`text-sm font-medium ${statusConfig.color}`}>
-                  {statusConfig.label}
-                </span>
+              {/* Mã nhân sự và Status Badge */}
+              <div className="flex items-center gap-3">
+                {/* Mã nhân sự */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-50 border border-neutral-200">
+                  <FileText className="w-4 h-4 text-neutral-600" />
+                  <span className="text-sm font-medium text-neutral-700">
+                    Mã: <span className="font-mono">{talent.code || "—"}</span>
+                  </span>
+                </div>
+                {/* Status Badge */}
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${statusConfig.bgColor} border border-neutral-200`}>
+                  {statusConfig.icon}
+                  <span className={`text-sm font-medium ${statusConfig.color}`}>
+                    {statusConfig.label}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -4079,19 +4111,11 @@ export default function TalentDetailPage() {
                                 <p className="text-xs font-semibold text-green-800 mb-1.5">Cần tạo mới (có trong hệ thống, chưa có trong hồ sơ) ({matchedJobRoleLevelsNotInProfile.length})</p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {matchedJobRoleLevelsNotInProfile.map((jobRole, index) => (
-                                    <div key={`jobrole-matched-notin-${index}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
-                                      <span>
-                                        {jobRole.position}
-                                        {jobRole.level && <span className="ml-1.5 text-green-600">· Level {jobRole.level}</span>}
-                                        {jobRole.yearsOfExp && <span className="ml-1.5 text-green-600">· {jobRole.yearsOfExp} năm</span>}
-                                      </span>
-                                      <button
-                                        onClick={() => handleQuickCreateJobRoleLevel(jobRole)}
-                                        className="px-2 py-0.5 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors text-xs font-medium"
-                                      >
-                                        Tạo nhanh
-                                      </button>
-                                    </div>
+                                    <span key={`jobrole-matched-notin-${index}`} className="inline-flex items-center px-2.5 py-1 bg-white border border-green-200 rounded-lg text-xs text-green-900">
+                                      {jobRole.position}
+                                      {jobRole.level && <span className="ml-1.5 text-green-600">· Level {jobRole.level}</span>}
+                                      {jobRole.yearsOfExp && <span className="ml-1.5 text-green-600">· {jobRole.yearsOfExp} năm</span>}
+                                    </span>
                                   ))}
                                 </div>
                               </div>
@@ -4451,12 +4475,7 @@ export default function TalentDetailPage() {
                 <div className="bg-white rounded-xl border-2 border-accent-200 p-6 mb-6 shadow-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Thêm CV mới</h3>
-                    <button
-                      onClick={handleCloseInlineForm}
-                      className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+                    {/* Bỏ nút X - chỉ đóng khi hủy phân tích CV */}
                   </div>
 
                   {/* Giai đoạn 1: Chọn file CV (giống Create.tsx) */}
@@ -4555,6 +4574,8 @@ export default function TalentDetailPage() {
                             const newErrors = { ...cvFormErrors };
                             delete newErrors.jobRoleLevelId;
                             setCvFormErrors(newErrors);
+                            // Clear version error khi chọn jobRoleLevelId mới - sẽ được validate lại sau khi fetch existingCVsForValidation
+                            setCvVersionError("");
                           }}
                           disabled={isCVUploadedFromFirebase}
                           className={`w-full border rounded-xl px-4 py-3 focus:ring-accent-500 bg-white ${
@@ -4591,15 +4612,24 @@ export default function TalentDetailPage() {
                           onChange={(e) => {
                             const versionNum = Number(e.target.value);
                             setInlineCVForm({ ...inlineCVForm, version: versionNum });
-                            const error = validateCVVersion(versionNum, inlineCVForm.jobRoleLevelId || 0, existingCVsForValidation);
-                            setCvVersionError(error);
-                            const newErrors = { ...cvFormErrors };
-                            if (error) {
-                              newErrors.version = error;
-                            } else {
+                            const jobRoleLevelId = inlineCVForm.jobRoleLevelId || 0;
+                            // Nếu chưa có CV nào và version = 1, không có lỗi
+                            if (jobRoleLevelId > 0 && existingCVsForValidation.length === 0 && versionNum === 1) {
+                              setCvVersionError("");
+                              const newErrors = { ...cvFormErrors };
                               delete newErrors.version;
+                              setCvFormErrors(newErrors);
+                            } else {
+                              const error = validateCVVersion(versionNum, jobRoleLevelId, existingCVsForValidation);
+                              setCvVersionError(error);
+                              const newErrors = { ...cvFormErrors };
+                              if (error) {
+                                newErrors.version = error;
+                              } else {
+                                delete newErrors.version;
+                              }
+                              setCvFormErrors(newErrors);
                             }
-                            setCvFormErrors(newErrors);
                           }}
                           placeholder="VD: 1, 2, 3..."
                           min="1"
@@ -4634,6 +4664,14 @@ export default function TalentDetailPage() {
                             <div className="flex items-center gap-2 text-sm text-neutral-600">
                               <FileText className="w-4 h-4" />
                               <span>File đã chọn: <span className="font-medium">{selectedCVFile.name}</span> ({(selectedCVFile.size / 1024).toFixed(2)} KB)</span>
+                            </div>
+                          )}
+
+                          {/* Thông báo khi reload và mất file */}
+                          {!isCVUploadedFromFirebase && !selectedCVFile && showCVFullForm && (
+                            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Vui lòng chọn lại file CV để upload (file đã chọn trước đó không thể khôi phục sau khi reload trang).</span>
                             </div>
                           )}
 
@@ -4763,12 +4801,7 @@ export default function TalentDetailPage() {
 
                     {/* Submit buttons */}
                     <div className="flex justify-end gap-2">
-                      <Button
-                        onClick={handleCloseInlineForm}
-                        className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
-                      >
-                        Hủy
-                      </Button>
+                      {/* Bỏ nút Hủy - chỉ đóng khi hủy phân tích CV */}
                       <Button
                         onClick={handleSubmitInlineCV}
                         disabled={isSubmitting}
@@ -4794,7 +4827,8 @@ export default function TalentDetailPage() {
 
               {/* Modal phân tích CV inline */}
               {showInlineCVAnalysisModal && inlineCVAnalysisResult && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleCloseInlineCVAnalysisModal}>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  {/* Bỏ logic đóng modal khi click outside - chỉ đóng khi hủy phân tích */}
                   <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <div className="p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white z-10">
                       <div className="flex items-center gap-3">
@@ -4803,12 +4837,7 @@ export default function TalentDetailPage() {
                         </div>
                         <h2 className="text-xl font-semibold text-gray-900">Kết quả phân tích CV</h2>
                       </div>
-                      <button
-                        onClick={handleCloseInlineCVAnalysisModal}
-                        className="text-neutral-400 hover:text-neutral-600 transition-colors p-1 rounded hover:bg-neutral-100"
-                      >
-                        <X className="w-6 h-6" />
-                      </button>
+                      {/* Bỏ nút X - chỉ đóng khi hủy phân tích CV */}
                     </div>
                     <div className="p-6 space-y-5">
                       <p className="text-sm text-neutral-600">
@@ -4882,12 +4911,7 @@ export default function TalentDetailPage() {
                       </div>
                       
                       <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-                        <Button
-                          onClick={handleCloseInlineCVAnalysisModal}
-                          className="px-4 py-2 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all"
-                        >
-                          Đóng
-                        </Button>
+                        {/* Bỏ nút Đóng - chỉ đóng khi hủy phân tích CV */}
                         {inlineCVAnalysisResult.basicInfo.hasChanges && (
                           <Button
                             onClick={handleConfirmInlineCVAnalysis}
@@ -5375,22 +5399,11 @@ export default function TalentDetailPage() {
                               <ul className="space-y-2">
                                 {matchedJobRoleLevelsNotInProfile.map((jobRole, index) => (
                                   <li key={`jobrole-matched-notin-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <span className="font-semibold text-sm">
-                                        {jobRole.position}
-                                        {jobRole.level && <span className="ml-1.5 text-amber-600">· Level {jobRole.level}</span>}
-                                        {jobRole.yearsOfExp && <span className="ml-1.5 text-amber-600">· {jobRole.yearsOfExp} năm</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          onClick={() => handleQuickCreateJobRoleLevel(jobRole)}
-                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
-                                        >
-                                          <Plus className="w-4 h-4" />
-                                          Tạo nhanh
-                                        </Button>
-                                      </div>
-                                    </div>
+                                    <span className="font-semibold text-sm">
+                                      {jobRole.position}
+                                      {jobRole.level && <span className="ml-1.5 text-amber-600">· Level {jobRole.level}</span>}
+                                      {jobRole.yearsOfExp && <span className="ml-1.5 text-amber-600">· {jobRole.yearsOfExp} năm</span>}
+                                    </span>
                                   </li>
                                 ))}
                               </ul>
@@ -5406,36 +5419,7 @@ export default function TalentDetailPage() {
                                   </li>
                                 ))}
                               </ul>
-                              <div className="mt-3 flex flex-col items-end gap-1">
-                                <Button
-                                  onClick={() =>
-                                    handleSuggestionRequest(
-                                      "jobRoleLevel",
-                                      jobRoleSuggestionRequestKey,
-                                      jobRoleSuggestionDisplayItems,
-                                      jobRoleSuggestionDetailItems
-                                    )
-                                  }
-                                  disabled={
-                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                                  }
-                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                    !jobRoleSuggestionDisplayItems.length || isSuggestionPending(jobRoleSuggestionRequestKey)
-                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                                  }`}
-                                >
-                                  <Plus className="w-4 h-4" />
-                                  {isSuggestionPending(jobRoleSuggestionRequestKey)
-                                    ? "Đã gửi đề xuất"
-                                    : "Đề xuất thêm vị trí/level vào hệ thống"}
-                                </Button>
-                                {isSuggestionPending(jobRoleSuggestionRequestKey) && (
-                                  <span className="text-xs text-amber-600">
-                                    Đang chờ Admin xem xét đề xuất này.
-                                  </span>
-                                )}
-                              </div>
+                              {/* Bỏ nút đề xuất - chỉ có ở phần Skills */}
                             </div>
                           )}
                         </div>
@@ -7295,23 +7279,7 @@ export default function TalentDetailPage() {
                               <ul className="space-y-2">
                                 {certificatesRecognized.map(({ suggestion }, index) => (
                                   <li key={`certificate-recognized-${index}`} className="flex flex-col rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-900 shadow-sm">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <span className="font-semibold text-sm">{suggestion.certificateName}</span>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          onClick={() => {
-                                            const certItem = certificatesRecognized.find(c => c.suggestion.certificateName === suggestion.certificateName);
-                                            if (certItem) {
-                                              handleQuickCreateCertificateFromRecognized(certItem);
-                                            }
-                                          }}
-                                          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:from-primary-700 hover:to-primary-800"
-                                        >
-                                          <Plus className="w-4 h-4" />
-                                          Tạo nhanh
-                                        </Button>
-                                      </div>
-                                    </div>
+                                    <span className="font-semibold text-sm">{suggestion.certificateName}</span>
                                     <p className="text-xs text-amber-600 mt-1">Gợi ý CV: Ngày cấp {suggestion.issuedDate ?? "Chưa rõ"}</p>
                                   </li>
                                 ))}
@@ -7326,38 +7294,7 @@ export default function TalentDetailPage() {
                                   <li key={`certificate-unmatched-${index}`}>- {suggestion.certificateName}</li>
                                 ))}
                               </ul>
-                              <div className="mt-3 flex flex-col items-end gap-1">
-                                <Button
-                                  onClick={() =>
-                                    handleSuggestionRequest(
-                                      "certificate",
-                                      certificateSuggestionRequestKey,
-                                      certificateSuggestionDisplayItems,
-                                      certificateSuggestionDetailItems
-                                    )
-                                  }
-                                  disabled={
-                                    !certificateSuggestionDisplayItems.length ||
-                                    isSuggestionPending(certificateSuggestionRequestKey)
-                                  }
-                                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-300 ${
-                                    !certificateSuggestionDisplayItems.length ||
-                                    isSuggestionPending(certificateSuggestionRequestKey)
-                                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-                                      : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700"
-                                  }`}
-                                >
-                                  <Plus className="w-4 h-4" />
-                                  {isSuggestionPending(certificateSuggestionRequestKey)
-                                    ? "Đã gửi đề xuất"
-                                    : "Đề xuất thêm loại chứng chỉ dựa vào tên chứng chỉ trên vào hệ thống"}
-                                </Button>
-                                {isSuggestionPending(certificateSuggestionRequestKey) && (
-                                  <span className="text-xs text-amber-600">
-                                    Đang chờ Admin xem xét đề xuất này.
-                                  </span>
-                                )}
-                              </div>
+                              {/* Bỏ nút đề xuất - chỉ có ở phần Skills */}
                             </div>
                           )}
                         </div>

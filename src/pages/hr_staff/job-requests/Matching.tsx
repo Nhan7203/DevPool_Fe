@@ -216,9 +216,6 @@ export default function CVMatchingPage() {
                 
                 // Fetch job request details
                 const jobReq = await jobRequestService.getById(Number(jobRequestId));
-                console.log("✅ Job Request loaded:", jobReq);
-                console.log("📋 Job Skills:", jobReq.jobSkills);
-                console.log("📋 Job Skills count:", jobReq.jobSkills?.length || 0);
                 setJobRequest(jobReq);
 
                 // Fetch job role level to get level information
@@ -252,8 +249,6 @@ export default function CVMatchingPage() {
                                 ? blacklistedTalentIdsArray 
                                 : blacklistedTalentIdsArray?.data || [];
                             blacklistedTalentIds = new Set(blacklistData.map((b: any) => b.talentId));
-                            console.log("🚫 Blacklisted talent IDs:", Array.from(blacklistedTalentIds));
-                            console.log("📊 Total blacklisted talents:", blacklistedTalentIds.size);
                         }
                     }
                 } catch (err) {
@@ -275,12 +270,10 @@ export default function CVMatchingPage() {
                 );
 
                 // Fetch toàn bộ CV trong hệ thống (không filter theo jobRoleId)
-                console.log("🔍 Fetching all CVs in system...");
                 const allCVsData = await talentCVService.getAll({
                     isActive: true,
                     excludeDeleted: true,
                 }) as TalentCV[];
-                console.log("✅ All CVs received:", allCVsData.length);
 
                 // Lọc bỏ CV đã ứng tuyển ở trạng thái Hired và CV của talents bị blacklist
                 const availableCVs = allCVsData.filter(cv => {
@@ -288,19 +281,12 @@ export default function CVMatchingPage() {
                     const isBlacklisted = blacklistedTalentIds.has(cv.talentId);
                     return !isExcluded && !isBlacklisted;
                 });
-                console.log("📊 CVs available (after excluding Hired and Blacklisted):", availableCVs.length);
-                if (blacklistedTalentIds.size > 0) {
-                    console.log("🚫 Excluded blacklisted talents from matching");
-                }
 
                 // Fetch matching CVs (có điểm số từ backend)
-                console.log("🔍 Fetching matching CVs for Job Request ID:", jobRequestId);
                 const matches = await talentCVService.getMatchesForJobRequest({
                     jobRequestId: Number(jobRequestId),
                     excludeDeleted: true,
                 });
-                console.log("✅ Matching CVs received:", matches);
-                console.log("📊 Total matches found:", matches?.length || 0);
 
                 // Tạo map của CV có điểm số để dễ dàng tra cứu
                 const matchMap = new Map<number, TalentCVMatchResult>();
@@ -311,7 +297,6 @@ export default function CVMatchingPage() {
                         matchMap.set(match.talentCV.id, match);
                     }
                 });
-                console.log("📉 Số CV có điểm số sau khi loại trừ đã ứng tuyển và blacklist:", matchMap.size);
 
                 // Fetch skillMap một lần để dùng cho tất cả CV
                 const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
@@ -336,44 +321,58 @@ export default function CVMatchingPage() {
                                 return null; // Trả về null để filter sau
                             }
                             
-                            // ✅ Kiểm tra verification status: Talent có skills thuộc group chưa verify thì không được matching
+                            // ✅ Kiểm tra verification status: Chỉ loại bỏ nếu JobRequest yêu cầu skill thuộc group chưa verify
+                            // Logic: Nếu group đã verify (isVerified = true) nhưng cần verify lại (needsReverification = true)
+                            // thì vẫn cho phép matching vì các skill cũ đã được verify, chỉ skill mới cần verify lại
                             try {
-                                // Lấy skills của talent
-                                const talentSkills = await talentSkillService.getAll({
-                                    talentId: talent.id,
-                                    excludeDeleted: true,
-                                }) as TalentSkill[];
+                                // Lấy danh sách skill IDs mà JobRequest yêu cầu
+                                const requiredSkillIds = jobReq.jobSkills?.map((js: any) => {
+                                    if (js.skillsId) {
+                                        return js.skillsId;
+                                    }
+                                    return null;
+                                }).filter((id: any): id is number => typeof id === "number") || [];
                                 
-                                // Lấy tất cả skills để map skillId -> skillGroupId
-                                const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
-                                const skillGroupMap = new Map<number, number | undefined>();
-                                allSkills.forEach(skill => {
-                                    skillGroupMap.set(skill.id, skill.skillGroupId);
-                                });
-                                
-                                // Lấy danh sách skill group IDs của talent
-                                const distinctSkillGroupIds = Array.from(
-                                    new Set(
-                                        talentSkills
-                                            .map(ts => skillGroupMap.get(ts.skillId))
-                                            .filter((gid): gid is number => typeof gid === "number")
-                                    )
-                                );
-                                
-                                if (distinctSkillGroupIds.length > 0) {
-                                    const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
-                                        talent.id,
-                                        distinctSkillGroupIds
+                                // Nếu JobRequest không yêu cầu skill nào, bỏ qua kiểm tra verification
+                                if (requiredSkillIds.length === 0) {
+                                    // Không có skill yêu cầu, không cần kiểm tra verification
+                                } else {
+                                    // Lấy tất cả skills để map skillId -> skillGroupId
+                                    const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
+                                    const skillGroupMap = new Map<number, number | undefined>();
+                                    allSkills.forEach(skill => {
+                                        skillGroupMap.set(skill.id, skill.skillGroupId);
+                                    });
+                                    
+                                    // Lấy danh sách skill group IDs mà JobRequest yêu cầu
+                                    const requiredSkillGroupIds: number[] = Array.from(
+                                        new Set(
+                                            requiredSkillIds
+                                                .map((skillId: number) => skillGroupMap.get(skillId))
+                                                .filter((gid: number | undefined): gid is number => typeof gid === "number")
+                                        )
                                     );
                                     
-                                    // Kiểm tra xem có skill group nào chưa verify không
-                                    const hasUnverifiedGroup = statuses.some(status => 
-                                        !status.isVerified || status.needsReverification
-                                    );
-                                    
-                                    if (hasUnverifiedGroup) {
-                                        console.log(`⚠️ CV ${cv.id} - Talent ${talent.id} có skill group chưa verify, loại bỏ khỏi matching.`);
-                                        return null; // Loại bỏ CV này khỏi matching
+                                    // Chỉ kiểm tra verification cho các skill groups mà JobRequest yêu cầu
+                                    if (requiredSkillGroupIds.length > 0) {
+                                        const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
+                                            talent.id,
+                                            requiredSkillGroupIds
+                                        );
+                                        
+                                        // Logic mới: Chỉ block nếu group chưa được verify VÀ chưa từng được verify
+                                        // Nếu group đã từng được verify (có lastVerifiedDate) nhưng hiện tại isVerified = false
+                                        // thì có thể do verify fail hoặc cần verify lại, nhưng vẫn cho phép matching
+                                        // vì JobRequest chỉ yêu cầu skill cụ thể, không phải toàn bộ group
+                                        const hasUnverifiedRequiredGroup = statuses.some(status => {
+                                            // Block nếu: chưa verify VÀ chưa từng verify (không có lastVerifiedDate)
+                                            // Không block nếu: đã từng verify (có lastVerifiedDate) dù hiện tại isVerified = false
+                                            return !status.isVerified && !status.lastVerifiedDate;
+                                        });
+                                        
+                                        if (hasUnverifiedRequiredGroup) {
+                                            return null; // Loại bỏ CV này khỏi matching
+                                        }
                                     }
                                 }
                             } catch (verificationError) {
@@ -421,17 +420,9 @@ export default function CVMatchingPage() {
                                         const skillNameLower = skillName.toLowerCase().trim();
                                         return !matchedSkillsLower.includes(skillNameLower);
                                     });
-                                    
-                                    console.log(`🔍 CV ${cv.id} - Tính toán missingSkills:`, {
-                                        requiredSkills: requiredSkillNames,
-                                        matchedSkills: matchedSkills,
-                                        missingSkills: missingSkills,
-                                        count: missingSkills.length
-                                    });
                                 } else {
                                     // Nếu không có jobSkills, dùng missingSkills từ backend (nếu có)
                                     missingSkills = match.missingSkills || [];
-                                    console.log(`⚠️ CV ${cv.id} - Không có jobSkills, dùng missingSkills từ backend:`, missingSkills);
                                 }
                                 
                                 return {
@@ -449,12 +440,6 @@ export default function CVMatchingPage() {
                                         jobReq,
                                         level
                                     );
-                                    
-                                    console.log(`🔍 CV ${cv.id} - calculateMatchScore result:`, {
-                                        matchedSkills: calculatedMatch.matchedSkills,
-                                        missingSkills: calculatedMatch.missingSkills,
-                                        missingCount: calculatedMatch.missingSkills?.length || 0
-                                    });
                                     
                                     return {
                                         ...calculatedMatch,
@@ -492,9 +477,6 @@ export default function CVMatchingPage() {
                     return scoreB - scoreA;
                 });
 
-                console.log("✅ Final enriched CVs:", sortedCVs.length);
-                console.log("📊 CVs with score > 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) > 0).length);
-                console.log("📊 CVs with score = 0:", sortedCVs.filter(cv => (cv.matchScore ?? 0) === 0).length);
                 
                 setAllCVs(sortedCVs);
                 setFilteredCVs(sortedCVs);
@@ -996,14 +978,6 @@ export default function CVMatchingPage() {
 
                             // CV có điểm số - hiển thị đầy đủ thông tin
                             if (!match) return null; // Safety check
-                            
-                            // Debug: Log missingSkills trước khi render
-                            console.log(`🎨 Rendering CV ${match.talentCV.id}:`, {
-                                matchedSkills: match.matchedSkills,
-                                missingSkills: match.missingSkills,
-                                missingCount: match.missingSkills?.length || 0,
-                                hasMissing: match.missingSkills && match.missingSkills.length > 0
-                            });
                             
                             const totalRequiredSkills = (match.matchedSkills?.length || 0) + (match.missingSkills?.length || 0);
                             const skillMatchPercent = totalRequiredSkills > 0
