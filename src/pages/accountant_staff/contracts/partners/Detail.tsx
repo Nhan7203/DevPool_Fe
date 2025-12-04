@@ -179,14 +179,13 @@ export default function PartnerContractDetailPage() {
 
   // Form states
   const [verifyForm, setVerifyForm] = useState<PartnerContractPaymentVerifyModel>({
-    monthlyRate: 0,
     unitPriceForeignCurrency: 0,
-    currencyCode: "",
-    exchangeRate: 0,
-    calculationMethod: "",
-    percentageValue: 0,
-    fixedAmount: 0,
-    finalAmountVND: 0,
+    currencyCode: "USD",
+    exchangeRate: 1,
+    calculationMethod: "Percentage",
+    percentageValue: null,
+    fixedAmount: null,
+    standardHours: 160,
     notes: null,
   });
   const [billingForm, setBillingForm] = useState<PartnerContractPaymentCalculateModel>({
@@ -335,76 +334,81 @@ export default function PartnerContractDetailPage() {
     loadPartnerDocuments();
   }, [id, contractPayment?.id]);
 
+  // Calculate PlannedAmountVND
+  const calculatePlannedAmountVND = () => {
+    if (verifyForm.calculationMethod === "Percentage") {
+      if (verifyForm.percentageValue && verifyForm.unitPriceForeignCurrency && verifyForm.exchangeRate) {
+        return (verifyForm.unitPriceForeignCurrency * verifyForm.exchangeRate) * (verifyForm.percentageValue / 100);
+      }
+      return null;
+    } else if (verifyForm.calculationMethod === "Fixed") {
+      if (verifyForm.fixedAmount && verifyForm.exchangeRate) {
+        return verifyForm.fixedAmount * verifyForm.exchangeRate;
+      }
+      return null;
+    }
+    return null;
+  };
+
   // Handlers
   const handleVerifyContract = async () => {
     if (!id || !contractPayment) return;
 
     // Validation
-    if (!verifyForm.monthlyRate || verifyForm.monthlyRate <= 0) {
-      alert("Vui lòng nhập mức lương tháng");
-      return;
-    }
-
     if (!verifyForm.unitPriceForeignCurrency || verifyForm.unitPriceForeignCurrency <= 0) {
-      alert("Vui lòng nhập đơn giá ngoại tệ");
-      return;
-    }
-
-    if (!verifyForm.currencyCode) {
-      alert("Vui lòng nhập mã tiền tệ");
+      alert("Vui lòng điền đầy đủ thông tin đơn giá và tỷ giá");
       return;
     }
 
     if (!verifyForm.exchangeRate || verifyForm.exchangeRate <= 0) {
-      alert("Vui lòng nhập tỷ giá");
+      alert("Vui lòng điền đầy đủ thông tin đơn giá và tỷ giá");
       return;
     }
 
-    if (!verifyForm.calculationMethod) {
-      alert("Vui lòng chọn phương thức tính toán");
+    if (!verifyForm.standardHours || verifyForm.standardHours <= 0) {
+      alert("Vui lòng nhập số giờ tiêu chuẩn hợp lệ");
       return;
     }
 
-    if (verifyForm.calculationMethod === "Percentage" && (!verifyForm.percentageValue || verifyForm.percentageValue <= 0)) {
-      alert("Vui lòng nhập giá trị phần trăm");
-      return;
-    }
-
-    if (verifyForm.calculationMethod === "FixedAmount" && (!verifyForm.fixedAmount || verifyForm.fixedAmount <= 0)) {
-      alert("Vui lòng nhập số tiền cố định");
-      return;
-    }
-
-    if (!verifyForm.finalAmountVND || verifyForm.finalAmountVND <= 0) {
-      alert("Vui lòng nhập số tiền cuối cùng (VND)");
-      return;
+    if (verifyForm.calculationMethod === "Percentage") {
+      if (!verifyForm.percentageValue || verifyForm.percentageValue <= 0) {
+        alert("Vui lòng nhập giá trị phần trăm hợp lệ");
+        return;
+      }
+    } else if (verifyForm.calculationMethod === "Fixed") {
+      if (!verifyForm.fixedAmount || verifyForm.fixedAmount <= 0) {
+        alert("Vui lòng nhập số tiền cố định hợp lệ");
+        return;
+      }
+      if (verifyForm.unitPriceForeignCurrency !== verifyForm.fixedAmount) {
+        alert("Đơn giá ngoại tệ phải bằng số tiền cố định");
+        return;
+      }
     }
 
     try {
       setIsProcessing(true);
       const payload: PartnerContractPaymentVerifyModel = {
-        monthlyRate: verifyForm.monthlyRate,
         unitPriceForeignCurrency: verifyForm.unitPriceForeignCurrency,
         currencyCode: verifyForm.currencyCode,
         exchangeRate: verifyForm.exchangeRate,
         calculationMethod: verifyForm.calculationMethod,
-        percentageValue: verifyForm.percentageValue,
-        fixedAmount: verifyForm.fixedAmount,
-        finalAmountVND: verifyForm.finalAmountVND,
+        percentageValue: verifyForm.calculationMethod === "Percentage" ? verifyForm.percentageValue : null,
+        fixedAmount: verifyForm.calculationMethod === "Fixed" ? verifyForm.fixedAmount : null,
+        standardHours: verifyForm.standardHours,
         notes: verifyForm.notes || null,
       };
       await partnerContractPaymentService.verifyContract(Number(id), payload);
       await fetchData();
       setShowVerifyContractModal(false);
       setVerifyForm({
-        monthlyRate: 0,
         unitPriceForeignCurrency: 0,
-        currencyCode: "",
-        exchangeRate: 0,
-        calculationMethod: "",
-        percentageValue: 0,
-        fixedAmount: 0,
-        finalAmountVND: 0,
+        currencyCode: "USD",
+        exchangeRate: 1,
+        calculationMethod: "Percentage",
+        percentageValue: null,
+        fixedAmount: null,
+        standardHours: contractPayment.standardHours || 160,
         notes: null,
       });
       alert("Xác minh hợp đồng thành công!");
@@ -444,9 +448,9 @@ export default function PartnerContractDetailPage() {
   const handleMarkAsPaid = async () => {
     if (!id || !contractPayment) return;
 
-    // Validation: Số tiền đã thanh toán phải = số tiền cuối cùng
-    if (!contractPayment.finalAmount || contractPayment.finalAmount <= 0) {
-      alert("Hợp đồng chưa có số tiền cuối cùng. Vui lòng xác minh hợp đồng trước.");
+    // Validation: Số tiền đã thanh toán phải = số tiền thực tế
+    if (!contractPayment.actualAmountVND || contractPayment.actualAmountVND <= 0) {
+      alert("Hợp đồng chưa có số tiền thực tế. Vui lòng bắt đầu tính toán trước.");
       return;
     }
 
@@ -455,9 +459,9 @@ export default function PartnerContractDetailPage() {
       return;
     }
 
-    // Đảm bảo số tiền đã thanh toán = số tiền cuối cùng
-    if (Math.abs(markAsPaidForm.paidAmount - contractPayment.finalAmount) > 0.01) {
-      alert(`Số tiền đã thanh toán phải bằng số tiền cuối cùng (${formatCurrency(contractPayment.finalAmount)})`);
+    // Đảm bảo số tiền đã thanh toán = số tiền thực tế
+    if (Math.abs(markAsPaidForm.paidAmount - contractPayment.actualAmountVND) > 0.01) {
+      alert(`Số tiền đã thanh toán phải bằng số tiền thực tế (${formatCurrency(contractPayment.actualAmountVND)})`);
       return;
     }
 
@@ -500,9 +504,9 @@ export default function PartnerContractDetailPage() {
       const partnerReceiptFileUrl = await uploadFile(partnerReceiptFile, partnerReceiptFilePath);
 
       // Format paymentDate to ISO string if it's in YYYY-MM-DD format
-      // Đảm bảo paidAmount = finalAmount
+      // Đảm bảo paidAmount = actualAmountVND
       const paymentPayload: PartnerContractPaymentMarkAsPaidModel = {
-        paidAmount: contractPayment.finalAmount,
+        paidAmount: contractPayment.actualAmountVND!,
         paymentDate: markAsPaidForm.paymentDate.includes('T')
           ? markAsPaidForm.paymentDate
           : new Date(markAsPaidForm.paymentDate + 'T00:00:00').toISOString(),
@@ -622,7 +626,21 @@ export default function PartnerContractDetailPage() {
               {/* Verify Contract - Draft + Pending */}
               {contractPayment.contractStatus === "Draft" && contractPayment.paymentStatus === "Pending" && (
                 <button
-                  onClick={() => setShowVerifyContractModal(true)}
+                  onClick={() => {
+                    // Pre-fill form with contract payment data
+                    const method = contractPayment.calculationMethod || "Percentage";
+                    setVerifyForm({
+                      unitPriceForeignCurrency: contractPayment.unitPriceForeignCurrency || 0,
+                      currencyCode: contractPayment.currencyCode || "USD",
+                      exchangeRate: contractPayment.exchangeRate || 1,
+                      calculationMethod: method as "Percentage" | "Fixed",
+                      percentageValue: method === "Percentage" ? (contractPayment.percentageValue ?? null) : null,
+                      fixedAmount: method === "Fixed" ? (contractPayment.fixedAmount ?? contractPayment.unitPriceForeignCurrency ?? null) : null,
+                      standardHours: contractPayment.standardHours || 160,
+                      notes: contractPayment.notes ?? null,
+                    });
+                    setShowVerifyContractModal(true);
+                  }}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -647,7 +665,7 @@ export default function PartnerContractDetailPage() {
                   onClick={() => {
                     setMarkAsPaidForm({
                       ...markAsPaidForm,
-                      paidAmount: contractPayment.finalAmount || 0,
+                      paidAmount: contractPayment.actualAmountVND || 0,
                     });
                     setShowMarkAsPaidModal(true);
                   }}
@@ -822,8 +840,39 @@ export default function PartnerContractDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
-                  label="Mức lương/tháng"
-                  value={formatCurrency(contractPayment.monthlyRate)}
+                  label="Đơn giá ngoại tệ"
+                  value={`${formatCurrency(contractPayment.unitPriceForeignCurrency)} ${contractPayment.currencyCode}`}
+                />
+                <InfoItem
+                  icon={<DollarSign className="w-4 h-4" />}
+                  label="Tỷ giá"
+                  value={contractPayment.exchangeRate ? contractPayment.exchangeRate.toLocaleString("vi-VN") : "—"}
+                />
+                <InfoItem
+                  icon={<FileText className="w-4 h-4" />}
+                  label="Phương thức tính toán"
+                  value={
+                    contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm (%)" : "Số tiền cố định"
+                  }
+                />
+                {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Giá trị phần trăm"
+                    value={`${contractPayment.percentageValue}%`}
+                  />
+                )}
+                {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền cố định"
+                    value={formatCurrency(contractPayment.fixedAmount)}
+                  />
+                )}
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ chuẩn"
+                  value={`${contractPayment.standardHours} giờ`}
                 />
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
@@ -845,8 +894,13 @@ export default function PartnerContractDetailPage() {
                 />
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền cuối cùng"
-                  value={formatCurrency(contractPayment.finalAmount)}
+                  label="Số tiền dự kiến (VND)"
+                  value={formatCurrency(contractPayment.plannedAmountVND)}
+                />
+                <InfoItem
+                  icon={<DollarSign className="w-4 h-4" />}
+                  label="Số tiền thực tế (VND)"
+                  value={formatCurrency(contractPayment.actualAmountVND)}
                 />
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
@@ -1026,133 +1080,207 @@ export default function PartnerContractDetailPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Mức lương tháng <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium mb-2">
+                    Đơn giá ngoại tệ ({verifyForm.currencyCode}) <span className="text-red-500">*</span>
+                    {verifyForm.calculationMethod === "Fixed" && (
+                      <span className="ml-2 text-xs text-gray-500">(Phải bằng số tiền cố định)</span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     step="0.01"
-                    value={verifyForm.monthlyRate || ""}
-                    onChange={(e) => setVerifyForm({ ...verifyForm, monthlyRate: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    value={verifyForm.unitPriceForeignCurrency}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      if (verifyForm.calculationMethod === "Fixed") {
+                        setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value, fixedAmount: value });
+                      } else {
+                        setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: value });
+                      }
+                    }}
                     className="w-full border rounded-lg p-2"
                     required
+                    disabled={verifyForm.calculationMethod === "Fixed"}
                   />
+                  {verifyForm.calculationMethod === "Fixed" && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Đơn giá ngoại tệ sẽ tự động cập nhật khi nhập số tiền cố định
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Đơn giá ngoại tệ <span className="text-red-500">*</span></label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={verifyForm.unitPriceForeignCurrency || ""}
-                    onChange={(e) => setVerifyForm({ ...verifyForm, unitPriceForeignCurrency: parseFloat(e.target.value) || 0 })}
-                    className="w-full border rounded-lg p-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Mã tiền tệ <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={verifyForm.currencyCode || ""}
+                  <label className="block text-sm font-medium mb-2">Mã tiền tệ</label>
+                  <select
+                    value={verifyForm.currencyCode}
                     onChange={(e) => setVerifyForm({ ...verifyForm, currencyCode: e.target.value })}
                     className="w-full border rounded-lg p-2"
-                    placeholder="VD: USD, EUR..."
-                    required
-                  />
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="VND">VND</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Tỷ giá <span className="text-red-500">*</span></label>
                   <input
                     type="number"
-                    step="0.01"
-                    value={verifyForm.exchangeRate || ""}
+                    step="0.0001"
+                    min="0"
+                    value={verifyForm.exchangeRate}
                     onChange={(e) => setVerifyForm({ ...verifyForm, exchangeRate: parseFloat(e.target.value) || 0 })}
                     className="w-full border rounded-lg p-2"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Phương thức tính toán <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium mb-2">Phương pháp tính</label>
                   <select
-                    value={verifyForm.calculationMethod || ""}
+                    value={verifyForm.calculationMethod}
                     onChange={(e) => {
-                      const method = e.target.value;
-                      setVerifyForm({
-                        ...verifyForm,
-                        calculationMethod: method,
-                        // Reset các trường không liên quan
-                        percentageValue: method === "Percentage" ? verifyForm.percentageValue : 0,
-                        fixedAmount: method === "FixedAmount" ? verifyForm.fixedAmount : 0,
-                      });
+                      const newMethod = e.target.value as "Percentage" | "Fixed";
+                      if (newMethod === "Percentage") {
+                        setVerifyForm({ 
+                          ...verifyForm, 
+                          calculationMethod: newMethod, 
+                          fixedAmount: null,
+                          unitPriceForeignCurrency: verifyForm.unitPriceForeignCurrency || 0
+                        });
+                      } else if (newMethod === "Fixed") {
+                        setVerifyForm({ 
+                          ...verifyForm, 
+                          calculationMethod: newMethod, 
+                          percentageValue: null,
+                          fixedAmount: verifyForm.fixedAmount || verifyForm.unitPriceForeignCurrency || 0,
+                          unitPriceForeignCurrency: verifyForm.fixedAmount || verifyForm.unitPriceForeignCurrency || 0
+                        });
+                      }
                     }}
                     className="w-full border rounded-lg p-2"
-                    required
                   >
-                    <option value="">Chọn phương thức</option>
-                    <option value="Percentage">Phần trăm (%)</option>
-                    <option value="FixedAmount">Số tiền cố định</option>
+                    <option value="Percentage">Theo phần trăm</option>
+                    <option value="Fixed">Số tiền cố định</option>
                   </select>
                 </div>
                 {verifyForm.calculationMethod === "Percentage" && (
                   <div>
-                    <label className="block text-sm font-medium mb-2">Giá trị phần trăm <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium mb-2">
+                      Giá trị phần trăm (%) <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={verifyForm.percentageValue || ""}
-                      onChange={(e) => setVerifyForm({ ...verifyForm, percentageValue: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setVerifyForm({ ...verifyForm, percentageValue: parseFloat(e.target.value) || null, fixedAmount: null })}
                       className="w-full border rounded-lg p-2"
+                      placeholder="Ví dụ: 100 (full month), 120 (overtime)"
                       required
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Ví dụ: 100% (full month), 120% (overtime)
+                    </p>
                   </div>
                 )}
-                {verifyForm.calculationMethod === "FixedAmount" && (
+                {verifyForm.calculationMethod === "Fixed" && (
                   <div>
-                    <label className="block text-sm font-medium mb-2">Số tiền cố định <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium mb-2">
+                      Số tiền cố định ({verifyForm.currencyCode}) <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={verifyForm.fixedAmount || ""}
-                      onChange={(e) => setVerifyForm({ ...verifyForm, fixedAmount: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const fixedValue = parseFloat(e.target.value) || null;
+                        setVerifyForm({ 
+                          ...verifyForm, 
+                          fixedAmount: fixedValue,
+                          unitPriceForeignCurrency: fixedValue || 0,
+                          percentageValue: null
+                        });
+                      }}
                       className="w-full border rounded-lg p-2"
+                      placeholder="Nhập số tiền cố định bằng ngoại tệ"
                       required
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Đơn giá ngoại tệ sẽ tự động cập nhật bằng số tiền cố định
+                    </p>
                   </div>
                 )}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-2">Số tiền cuối cùng (VND) <span className="text-red-500">*</span></label>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Số giờ tiêu chuẩn (Standard Hours) <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="number"
-                    step="0.01"
-                    value={verifyForm.finalAmountVND || ""}
-                    onChange={(e) => setVerifyForm({ ...verifyForm, finalAmountVND: parseFloat(e.target.value) || 0 })}
+                    step="1"
+                    min="1"
+                    value={verifyForm.standardHours}
+                    onChange={(e) => setVerifyForm({ ...verifyForm, standardHours: parseFloat(e.target.value) || 0 })}
                     className="w-full border rounded-lg p-2"
+                    placeholder="Ví dụ: 160 (full month), 132 (mid-month)"
                     required
                   />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-2">Ghi chú (tùy chọn)</label>
-                  <textarea
-                    value={verifyForm.notes || ""}
-                    onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
-                    className="w-full border rounded-lg p-2"
-                    rows={3}
-                    placeholder="Nhập ghi chú nếu có..."
-                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Ví dụ: 160 giờ (full month), 132 giờ (mid-month)
+                  </p>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Ghi chú</label>
+                <textarea
+                  value={verifyForm.notes || ""}
+                  onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value || null })}
+                  className="w-full border rounded-lg p-2"
+                  rows={3}
+                  placeholder="Ví dụ: Standard full month contract"
+                />
+              </div>
+              {/* Hiển thị tính toán PlannedAmountVND */}
+              {verifyForm.calculationMethod === "Percentage" && verifyForm.unitPriceForeignCurrency && verifyForm.exchangeRate && verifyForm.percentageValue && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">Tính toán PlannedAmountVND:</p>
+                  <p className="text-sm text-blue-800">
+                    PlannedAmountVND = {verifyForm.unitPriceForeignCurrency.toLocaleString("vi-VN")} × {verifyForm.exchangeRate.toLocaleString("vi-VN")} × ({verifyForm.percentageValue} / 100)
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    = {(verifyForm.unitPriceForeignCurrency * verifyForm.exchangeRate).toLocaleString("vi-VN")} × {(verifyForm.percentageValue / 100).toFixed(2)}
+                  </p>
+                  <p className="text-sm font-bold text-blue-900 mt-1">
+                    = {calculatePlannedAmountVND()?.toLocaleString("vi-VN")} VND
+                  </p>
+                </div>
+              )}
+              {verifyForm.calculationMethod === "Fixed" && verifyForm.fixedAmount && verifyForm.exchangeRate && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm font-semibold text-green-900 mb-2">Tính toán PlannedAmountVND:</p>
+                  <p className="text-sm text-green-800">
+                    PlannedAmountVND = {verifyForm.fixedAmount.toLocaleString("vi-VN")} × {verifyForm.exchangeRate.toLocaleString("vi-VN")}
+                  </p>
+                  <p className="text-sm font-bold text-green-900 mt-1">
+                    = {calculatePlannedAmountVND()?.toLocaleString("vi-VN")} VND
+                  </p>
+                  <p className="text-xs text-green-700 mt-2 italic">
+                    Lưu ý: Số tiền cố định không phụ thuộc vào số giờ làm việc
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button
                 onClick={() => {
                   setShowVerifyContractModal(false);
                   setVerifyForm({
-                    monthlyRate: 0,
                     unitPriceForeignCurrency: 0,
-                    currencyCode: "",
-                    exchangeRate: 0,
-                    calculationMethod: "",
-                    percentageValue: 0,
-                    fixedAmount: 0,
-                    finalAmountVND: 0,
+                    currencyCode: "USD",
+                    exchangeRate: 1,
+                    calculationMethod: "Percentage",
+                    percentageValue: null,
+                    fixedAmount: null,
+                    standardHours: contractPayment?.standardHours || 160,
                     notes: null,
                   });
                 }}
@@ -1162,7 +1290,15 @@ export default function PartnerContractDetailPage() {
               </button>
               <button
                 onClick={handleVerifyContract}
-                disabled={isProcessing}
+                disabled={
+                  isProcessing || 
+                  !verifyForm.unitPriceForeignCurrency || 
+                  !verifyForm.exchangeRate || 
+                  !verifyForm.standardHours ||
+                  verifyForm.standardHours <= 0 ||
+                  (verifyForm.calculationMethod === "Percentage" && (!verifyForm.percentageValue || verifyForm.percentageValue <= 0)) ||
+                  (verifyForm.calculationMethod === "Fixed" && (!verifyForm.fixedAmount || verifyForm.fixedAmount <= 0))
+                }
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác minh"}
@@ -1266,15 +1402,15 @@ export default function PartnerContractDetailPage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={contractPayment?.finalAmount || markAsPaidForm.paidAmount || ""}
+                  value={contractPayment?.actualAmountVND || markAsPaidForm.paidAmount || ""}
                   readOnly
                   disabled
                   className="w-full border rounded-lg p-2 bg-gray-100 cursor-not-allowed"
                   required
                 />
-                {contractPayment?.finalAmount && (
+                {contractPayment?.actualAmountVND && (
                   <p className="mt-1 text-xs text-gray-500">
-                    Số tiền đã thanh toán phải bằng số tiền cuối cùng ({formatCurrency(contractPayment.finalAmount)})
+                    Số tiền đã thanh toán phải bằng số tiền thực tế ({formatCurrency(contractPayment.actualAmountVND)})
                   </p>
                 )}
               </div>
@@ -1359,8 +1495,8 @@ export default function PartnerContractDetailPage() {
                 onClick={handleMarkAsPaid}
                 disabled={
                   isProcessing ||
-                  !contractPayment?.finalAmount ||
-                  contractPayment.finalAmount <= 0 ||
+                  !contractPayment?.actualAmountVND ||
+                  contractPayment.actualAmountVND <= 0 ||
                   !markAsPaidForm.paymentDate ||
                   !paymentProofFile ||
                   !partnerReceiptFile

@@ -1616,7 +1616,7 @@ export default function ProjectDetailPage() {
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.finalAmount)}</p>
+                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || payment.plannedAmountVND)}</p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>

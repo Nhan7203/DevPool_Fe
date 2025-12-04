@@ -18,9 +18,9 @@ export interface ClientContractPaymentModel {
   // Calculation Method
   calculationMethod: string;
   percentageValue?: number | null;
+  fixedAmount?: number | null;
 
-  // Legacy fields (for backward compatibility)
-  monthlyRate: number;
+  // Contract Info
   standardHours: number;
   sowDescription?: string | null;
 
@@ -34,9 +34,8 @@ export interface ClientContractPaymentModel {
   reportedHours?: number | null;
   billableHours?: number | null;
   manMonthCoefficient?: number | null;
-  finalAmount?: number | null;
-  finalAmountVND?: number | null;
-  plannedAmount?: number | null;
+  plannedAmountVND?: number | null;
+  actualAmountVND?: number | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null; // ISO string
   totalPaidAmount: number;
@@ -46,6 +45,7 @@ export interface ClientContractPaymentModel {
   // Rejection
   rejectionReason?: string | null;
   notes?: string | null;
+  tierBreakdown?: any | null;
   createdAt: string; // ISO string
   updatedAt?: string | null; // ISO string
 
@@ -73,24 +73,23 @@ export interface ClientContractPaymentCreateModel {
   // Calculation Method
   calculationMethod: string;
   percentageValue?: number | null;
+  fixedAmount?: number | null;
 
   // Contract Dates
   contractStartDate: string; // ISO string
   contractEndDate: string; // ISO string
 
-  // Legacy fields
-  monthlyRate: number;
+  // Contract Info
   standardHours: number;
   sowDescription?: string | null;
 
   contractStatus: string;
 
-  plannedAmount?: number | null;
-  finalAmountVND?: number | null;
+  plannedAmountVND?: number | null;
+  actualAmountVND?: number | null;
   reportedHours?: number | null;
   billableHours?: number | null;
   manMonthCoefficient?: number | null;
-  finalAmount?: number | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null; // ISO string
   totalPaidAmount: number;
@@ -131,10 +130,9 @@ export interface SubmitContractModel {
   calculationMethod: string;
   percentageValue?: number | null;
   fixedAmount?: number | null;
-  plannedAmount?: number | null;
+  plannedAmountVND?: number | null;
   sowDescription?: string | null;
   sowExcelFileUrl: string;
-  monthlyRate: number;
   standardHours: number;
   notes?: string | null;
 }

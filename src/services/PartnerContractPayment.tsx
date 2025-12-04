@@ -9,16 +9,24 @@ export interface PartnerContractPaymentModel {
 
   // Contract Info
   contractNumber: string;
-  monthlyRate: number;
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+  calculationMethod: "Percentage" | "Fixed";
+  percentageValue?: number | null;
+  fixedAmount?: number | null;
+  standardHours: number;
   contractStatus: string;
 
   // Payment Info
   reportedHours?: number | null;
   manMonthCoefficient?: number | null;
-  finalAmount?: number | null;
+  plannedAmountVND?: number | null;
+  actualAmountVND?: number | null;
   totalPaidAmount: number;
   paymentDate?: string | null; // ISO string
   paymentStatus: string;
+  tierBreakdown?: any | null;
 
   // Rejection
   rejectionReason?: string | null;
@@ -32,14 +40,22 @@ export interface PartnerContractPaymentCreateModel {
   projectPeriodId: number;
   talentAssignmentId: number;
   contractNumber: string;
-  monthlyRate: number;
+  unitPriceForeignCurrency: number;
+  currencyCode: string;
+  exchangeRate: number;
+  calculationMethod: "Percentage" | "Fixed";
+  percentageValue?: number | null;
+  fixedAmount?: number | null;
+  standardHours: number;
   contractStatus: string;
   reportedHours?: number | null;
   manMonthCoefficient?: number | null;
-  finalAmount?: number | null;
+  plannedAmountVND?: number | null;
+  actualAmountVND?: number | null;
   totalPaidAmount: number;
   paymentDate?: string | null; // ISO string
   paymentStatus: string;
+  tierBreakdown?: any | null;
   rejectionReason?: string | null;
   notes?: string | null;
 }
@@ -74,14 +90,13 @@ export interface PartnerContractPaymentMarkAsPaidModel {
 
 // Interface cho VerifyContractModel (Payload để xác minh hợp đồng)
 export interface PartnerContractPaymentVerifyModel {
-  monthlyRate: number;
   unitPriceForeignCurrency: number;
   currencyCode: string;
   exchangeRate: number;
-  calculationMethod: string;
-  percentageValue: number;
-  fixedAmount: number;
-  finalAmountVND: number;
+  calculationMethod: "Percentage" | "Fixed";
+  percentageValue?: number | null;
+  fixedAmount?: number | null;
+  standardHours: number;
   notes?: string | null;
 }
 

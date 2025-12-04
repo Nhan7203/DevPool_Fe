@@ -678,13 +678,20 @@ export default function ClientContractDetailPage() {
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
                   label="Phương pháp tính"
-                  value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : "Số tiền cố định"}
+                  value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : contractPayment.calculationMethod === "Fixed" ? "Số tiền cố định" : "Số tiền cố định"}
                 />
                 {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
                   <InfoItem
                     icon={<FileText className="w-4 h-4" />}
                     label="Giá trị phần trăm"
                     value={`${contractPayment.percentageValue}%`}
+                  />
+                )}
+                {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Số tiền cố định"
+                    value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
                   </div>
@@ -701,11 +708,6 @@ export default function ClientContractDetailPage() {
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Mức lương/tháng (Legacy)"
-                  value={formatCurrency(contractPayment.monthlyRate)}
-                />
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
                   label="Số giờ tiêu chuẩn"
@@ -732,25 +734,18 @@ export default function ClientContractDetailPage() {
                     value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
                   />
                 )}
-                {contractPayment.plannedAmount !== null && contractPayment.plannedAmount !== undefined && (
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
                   <InfoItem
                     icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền dự kiến"
-                    value={formatCurrency(contractPayment.plannedAmount)}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
                   />
                 )}
-                {contractPayment.finalAmountVND !== null && contractPayment.finalAmountVND !== undefined && (
+                {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (
                   <InfoItem
                     icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền cuối cùng (VND)"
-                    value={formatCurrency(contractPayment.finalAmountVND)}
-                  />
-                )}
-                {contractPayment.finalAmount !== null && contractPayment.finalAmount !== undefined && (
-                  <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền cuối cùng"
-                    value={formatCurrency(contractPayment.finalAmount)}
+                    label="Số tiền thực tế (VND)"
+                    value={formatCurrency(contractPayment.actualAmountVND)}
                   />
                 )}
                 <InfoItem

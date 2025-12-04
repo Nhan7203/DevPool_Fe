@@ -595,8 +595,39 @@ export default function PartnerContractDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
-                  label="Mức lương/tháng"
-                  value={formatCurrency(contractPayment.monthlyRate)}
+                  label="Đơn giá ngoại tệ"
+                  value={`${formatCurrency(contractPayment.unitPriceForeignCurrency)} ${contractPayment.currencyCode}`}
+                />
+                <InfoItem
+                  icon={<DollarSign className="w-4 h-4" />}
+                  label="Tỷ giá"
+                  value={contractPayment.exchangeRate ? contractPayment.exchangeRate.toLocaleString("vi-VN") : "—"}
+                />
+                <InfoItem
+                  icon={<FileText className="w-4 h-4" />}
+                  label="Phương thức tính toán"
+                  value={
+                    contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm (%)" : "Số tiền cố định"
+                  }
+                />
+                {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Giá trị phần trăm"
+                    value={`${contractPayment.percentageValue}%`}
+                  />
+                )}
+                {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền cố định"
+                    value={formatCurrency(contractPayment.fixedAmount)}
+                  />
+                )}
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ chuẩn"
+                  value={`${contractPayment.standardHours} giờ`}
                 />
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
@@ -618,8 +649,13 @@ export default function PartnerContractDetailPage() {
                 />
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền cuối cùng"
-                  value={formatCurrency(contractPayment.finalAmount)}
+                  label="Số tiền dự kiến (VND)"
+                  value={formatCurrency(contractPayment.plannedAmountVND)}
+                />
+                <InfoItem
+                  icon={<DollarSign className="w-4 h-4" />}
+                  label="Số tiền thực tế (VND)"
+                  value={formatCurrency(contractPayment.actualAmountVND)}
                 />
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
