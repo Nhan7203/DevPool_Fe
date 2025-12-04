@@ -288,13 +288,15 @@ export default function DeveloperPaymentDetailPage() {
     };
 
     const formatRate = (payment: PartnerContractPaymentModel | null) => {
-        if (!payment || !payment.monthlyRate) return '—';
-        return `${new Intl.NumberFormat('vi-VN').format(payment.monthlyRate)} VNĐ/tháng`;
+        if (!payment) return '—';
+        const monthlyRate = (payment.unitPriceForeignCurrency * payment.exchangeRate) || payment.actualAmountVND || 0;
+        if (monthlyRate === 0) return '—';
+        return `${new Intl.NumberFormat('vi-VN').format(monthlyRate)} VNĐ/tháng`;
     };
 
     const getTotalAmount = () => {
         if (!payment) return 0;
-        return payment.totalPaidAmount || payment.finalAmount || 0;
+        return payment.totalPaidAmount || payment.actualAmountVND || 0;
     };
 
     const getTotalHours = () => {
@@ -629,9 +631,10 @@ export default function DeveloperPaymentDetailPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-base font-semibold text-gray-900">
-                                        {payment?.monthlyRate 
-                                            ? `${new Intl.NumberFormat('vi-VN').format(payment.monthlyRate)} VNĐ/tháng`
-                                            : '—'}
+                                        {payment ? (() => {
+                                            const monthlyRate = (payment.unitPriceForeignCurrency * payment.exchangeRate) || payment.actualAmountVND || 0;
+                                            return monthlyRate > 0 ? `${new Intl.NumberFormat('vi-VN').format(monthlyRate)} VNĐ/tháng` : '—';
+                                        })() : '—'}
                                     </p>
                                 </div>
                             </div>
@@ -655,15 +658,18 @@ export default function DeveloperPaymentDetailPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-lg font-bold text-primary-700">
-                                        {payment?.finalAmount 
-                                            ? `${new Intl.NumberFormat('vi-VN').format(payment.finalAmount)} VNĐ`
+                                        {payment?.actualAmountVND 
+                                            ? `${new Intl.NumberFormat('vi-VN').format(payment.actualAmountVND)} VNĐ`
                                             : '—'}
                                     </p>
-                                    {payment?.reportedHours && payment?.monthlyRate && (
-                                        <p className="text-xs text-neutral-500 mt-1">
-                                            {payment.reportedHours}h × {new Intl.NumberFormat('vi-VN').format(payment.monthlyRate / 160)} VNĐ/giờ
-                                        </p>
-                                    )}
+                                    {payment?.reportedHours && payment && (() => {
+                                        const monthlyRate = (payment.unitPriceForeignCurrency * payment.exchangeRate) || payment.actualAmountVND || 0;
+                                        return monthlyRate > 0 ? (
+                                            <p className="text-xs text-neutral-500 mt-1">
+                                                {payment.reportedHours}h × {new Intl.NumberFormat('vi-VN').format(monthlyRate / 160)} VNĐ/giờ
+                                            </p>
+                                        ) : null;
+                                    })()}
                                 </div>
                             </div>
 

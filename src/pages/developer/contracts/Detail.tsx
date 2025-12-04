@@ -288,7 +288,7 @@ export default function DeveloperContractDetailPage() {
                             />
                             <InfoItem 
                                 label="Mức lương tháng" 
-                                value={formatCurrency(contract.monthlyRate)} 
+                                value={contract ? formatCurrency((contract.unitPriceForeignCurrency * contract.exchangeRate) || contract.actualAmountVND || 0) : '—'} 
                                 icon={<DollarSign className="w-4 h-4" />}
                             />
                             <InfoItem 

@@ -149,7 +149,7 @@ export default function DeveloperDashboard() {
           p.paymentStatus?.toLowerCase() === 'paid'
         );
         const totalEarnings = paidPayments.reduce((sum: number, p: PartnerContractPaymentModel) => {
-          return sum + (p.totalPaidAmount || p.finalAmount || 0);
+          return sum + (p.totalPaidAmount || p.actualAmountVND || 0);
         }, 0);
 
         // 4. Utilization Rate = (hours this month / 160) * 100 (giả sử 1 tháng = 160 giờ)
@@ -162,7 +162,7 @@ export default function DeveloperDashboard() {
             const date = new Date(p.paymentDate);
             const monthLabel = `T${date.getMonth() + 1}/${String(date.getFullYear()).slice(-2)}`;
             const current = monthlyEarningsMap.get(monthLabel) || 0;
-            monthlyEarningsMap.set(monthLabel, current + (p.totalPaidAmount || p.finalAmount || 0));
+            monthlyEarningsMap.set(monthLabel, current + (p.totalPaidAmount || p.actualAmountVND || 0));
           }
         });
         

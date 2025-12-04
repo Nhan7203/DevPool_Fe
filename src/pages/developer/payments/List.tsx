@@ -261,7 +261,7 @@ export default function DeveloperPaymentsList() {
     };
 
     const getAmount = (payment: PartnerContractPaymentModel) => {
-        return payment.finalAmount || payment.totalPaidAmount || 0;
+        return payment.actualAmountVND || payment.totalPaidAmount || 0;
     };
 
     const stats = useMemo(() => [

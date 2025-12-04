@@ -1619,10 +1619,10 @@ export default function ClientContractDetailPage() {
                           <span className="font-medium">Billable Hours:</span> {preview.billableHours}h
                         </p>
                         <p className="text-green-800">
-                          <span className="font-medium">ManMonthCoefficient:</span> {preview.manMonthCoefficient.toFixed(4)} (chỉ để tracking)
+                          <span className="font-medium">ManMonthCoefficient:</span> {preview.manMonthCoefficient?.toFixed(4) ?? '0.0000'} (chỉ để tracking)
                         </p>
                         <p className="text-green-800">
-                          <span className="font-medium">PlannedAmountVND:</span> {preview.plannedAmountVND.toLocaleString("vi-VN")} VND
+                          <span className="font-medium">PlannedAmountVND:</span> {preview.plannedAmountVND?.toLocaleString("vi-VN") ?? '0'} VND
                         </p>
                         <div className="mt-3 pt-3 border-t border-green-300">
                           <p className="text-green-900 font-bold">
@@ -1641,7 +1641,7 @@ export default function ClientContractDetailPage() {
                       <p className="text-sm font-semibold text-blue-900 mb-3">Tính toán (Percentage):</p>
                       <div className="space-y-2 text-sm">
                         <p className="text-blue-800">
-                          <span className="font-medium">BaseRate:</span> {preview.baseRate.toFixed(4)} {contractPayment.currencyCode}/giờ
+                          <span className="font-medium">BaseRate:</span> {preview.baseRate?.toFixed(4) ?? '0.0000'} {contractPayment.currencyCode}/giờ
                         </p>
                         <p className="text-blue-800">
                           <span className="font-medium">Billable Hours:</span> {preview.billableHours}h
@@ -1649,18 +1649,18 @@ export default function ClientContractDetailPage() {
                         <div className="mt-3 pt-3 border-t border-blue-300">
                           <p className="text-blue-900 font-medium mb-2">Tier Breakdown:</p>
                           <div className="space-y-1">
-                            {preview.tierBreakdown.map((tier, idx) => (
+                            {preview.tierBreakdown?.map((tier, idx) => (
                               <p key={idx} className="text-blue-800 text-xs">
                                 {tier.tier}: {tier.hours}h × {tier.rate.toFixed(4)} × {tier.multiplier} = {tier.amountUSD.toFixed(2)} {contractPayment.currencyCode} = {tier.amountVND.toLocaleString("vi-VN")} VND
                               </p>
-                            ))}
+                            )) ?? []}
                           </div>
                           <div className="mt-3 pt-3 border-t border-blue-300">
                             <p className="text-blue-900 font-bold">
-                              <span className="font-medium">TỔNG:</span> {preview.totalAmountUSD.toFixed(2)} {contractPayment.currencyCode} = {preview.actualAmountVND.toLocaleString("vi-VN")} VND
+                              <span className="font-medium">TỔNG:</span> {preview.totalAmountUSD?.toFixed(2) ?? '0.00'} {contractPayment.currencyCode} = {preview.actualAmountVND?.toLocaleString("vi-VN") ?? '0'} VND
                             </p>
                             <p className="text-blue-800 mt-2">
-                              <span className="font-medium">EffectiveCoefficient:</span> {preview.effectiveCoefficient.toFixed(4)} = {preview.totalAmountUSD.toFixed(2)} / {contractPayment.unitPriceForeignCurrency}
+                              <span className="font-medium">EffectiveCoefficient:</span> {preview.effectiveCoefficient?.toFixed(4) ?? '0.0000'} = {preview.totalAmountUSD?.toFixed(2) ?? '0.00'} / {contractPayment.unitPriceForeignCurrency}
                             </p>
                           </div>
                         </div>

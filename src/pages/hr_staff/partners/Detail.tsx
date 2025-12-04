@@ -517,7 +517,10 @@ export default function PartnerDetailPage() {
                                   </td>
                                   <td className="py-4 px-4">
                                     <p className="text-sm text-gray-900">
-                                      {contract.monthlyRate ? `${contract.monthlyRate.toLocaleString('vi-VN')} VND/tháng` : '—'}
+                                      {(() => {
+                                        const monthlyRate = (contract.unitPriceForeignCurrency * contract.exchangeRate) || contract.actualAmountVND || 0;
+                                        return monthlyRate > 0 ? `${monthlyRate.toLocaleString('vi-VN')} VND/tháng` : '—';
+                                      })()}
                                     </p>
                                   </td>
                                   <td className="py-4 px-4">
