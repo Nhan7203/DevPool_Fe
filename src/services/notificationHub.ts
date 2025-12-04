@@ -4,8 +4,22 @@ import { API_URL } from '../configs/api';
 
 // Suy ra HUB_URL từ API_URL
 // Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
-const HUB_BASE = String(API_URL).replace(/\/api\/?$/, '');
-const HUB_URL = `${HUB_BASE}/notificationHub`;
+// SignalR sẽ tự động chuyển HTTP -> WS và HTTPS -> WSS
+const getHubUrl = (): string => {
+	const apiUrl = String(API_URL).trim();
+	// Loại bỏ /api ở cuối nếu có
+	const hubBase = apiUrl.replace(/\/api\/?$/, '');
+	const hubUrl = `${hubBase}/notificationHub`;
+	
+	// Log để debug (chỉ trong development)
+	if (import.meta.env.DEV) {
+		console.log('🔗 Notification Hub URL:', hubUrl);
+	}
+	
+	return hubUrl;
+};
+
+const HUB_URL = getHubUrl();
 
 let connection: HubConnection | null = null;
 let isStarting = false;
@@ -115,6 +129,9 @@ export const createNotificationConnection = (): HubConnection => {
 				return token;
 			},
 			withCredentials: true,
+			// Thử các transport methods: WebSockets, Server-Sent Events, Long Polling
+			// SignalR sẽ tự động chọn transport phù hợp
+			skipNegotiation: false,
 		})
 		.withAutomaticReconnect({
 			nextRetryDelayInMilliseconds: (retryContext) => {
@@ -125,7 +142,7 @@ export const createNotificationConnection = (): HubConnection => {
 				return 30000;
 			},
 		})
-		.configureLogging(LogLevel.Warning)
+		.configureLogging(import.meta.env.DEV ? LogLevel.Information : LogLevel.Warning)
 		.build();
 
 	// Optional: lắng nghe sự kiện hệ thống để debug
@@ -181,9 +198,20 @@ export const startNotificationConnection = async (forceRestart: boolean = false)
 	try {
 		await newConn.start();
 		reconnectAttempts = 0; // Reset counter khi kết nối thành công
+		if (import.meta.env.DEV) {
+			console.log('✅ Notification Hub connected successfully to:', HUB_URL);
+		}
 	} catch (err: any) {
 		const errorMessage = err?.message || '';
 		const statusCode = err?.statusCode || err?.status;
+		
+		// Log lỗi để debug
+		console.error('❌ Failed to start notification connection:', {
+			url: HUB_URL,
+			error: errorMessage,
+			statusCode,
+			attempts: reconnectAttempts + 1,
+		});
 		
 		// Nếu lỗi 401, thử refresh token và reconnect
 		if (statusCode === 401 || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
@@ -213,6 +241,11 @@ export const startNotificationConnection = async (forceRestart: boolean = false)
 			}, 2000);
 		} else {
 			isStarting = false;
+			console.error('❌ Max reconnection attempts reached. Please check:', {
+				hubUrl: HUB_URL,
+				apiUrl: API_URL,
+				note: 'Ensure the backend SignalR hub is properly configured and accessible.',
+			});
 		}
 		return;
 	} finally {
