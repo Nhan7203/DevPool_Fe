@@ -197,7 +197,7 @@ export default function ClientCompanyListPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm theo tên công ty, email, người liên hệ..."
+                  placeholder="Tìm kiếm theo tên công ty, email, người đại diện..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -230,7 +230,7 @@ export default function ClientCompanyListPage() {
                     <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
                     <input
                       type="text"
-                      placeholder="Người liên hệ"
+                      placeholder="Người đại diện"
                       className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
                       value={filterContactPerson}
                       onChange={(e) => setFilterContactPerson(e.target.value)}
@@ -296,7 +296,7 @@ export default function ClientCompanyListPage() {
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã công ty</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên công ty</th>
-                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người liên hệ</th>
+                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Người đại diện</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Email</th>
                   <th className="py-4 px-4 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
                   <th className="py-4 px-4 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>

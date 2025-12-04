@@ -20,6 +20,7 @@ export interface JobSkill {
 
 export interface JobRequest {
   id: number;
+  code: string;
   projectId: number;
   jobRoleLevelId: number;
   applyProcessTemplateId?: number | null;

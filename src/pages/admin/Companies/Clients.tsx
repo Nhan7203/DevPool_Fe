@@ -86,7 +86,7 @@ export default function ClientsPage() {
               <tr>
                 <th className="px-4 py-3">Tên công ty</th>
                 <th className="px-4 py-3">Mã số thuế</th>
-                <th className="px-4 py-3">Người liên hệ</th>
+                <th className="px-4 py-3">Người đại diện</th>
                 <th className="px-4 py-3">Thông tin liên hệ</th>
                 <th className="px-4 py-3">Trạng thái</th>
               </tr>

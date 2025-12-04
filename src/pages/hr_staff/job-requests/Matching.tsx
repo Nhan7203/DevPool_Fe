@@ -45,6 +45,7 @@ import { WorkingMode } from "../../../types/WorkingMode";
 
 interface EnrichedMatchResult extends TalentCVMatchResult {
     talentInfo?: Talent;
+    jobRoleLevelName?: string; // Tên vị trí tuyển dụng của CV
 }
 
 interface EnrichedCVWithoutScore {
@@ -54,6 +55,7 @@ interface EnrichedCVWithoutScore {
     matchedSkills?: string[];
     missingSkills?: string[];
     levelMatch?: boolean;
+    jobRoleLevelName?: string; // Tên vị trí tuyển dụng của CV
 }
 
 const WORKING_MODE_OPTIONS = [
@@ -305,6 +307,13 @@ export default function CVMatchingPage() {
                     skillMap.set(skill.id, skill.name);
                 });
 
+                // Fetch jobRoleLevelMap một lần để dùng cho tất cả CV
+                const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true }) as JobRoleLevel[];
+                const jobRoleLevelMap = new Map<number, string>();
+                allJobRoleLevels.forEach(jrl => {
+                    jobRoleLevelMap.set(jrl.id, jrl.name);
+                });
+
                 // Enrich tất cả CV với talent information và tính điểm
                 const enrichedCVs = await Promise.all(
                     availableCVs.map(async (cv: TalentCV): Promise<EnrichedMatchResult | EnrichedCVWithoutScore | null> => {
@@ -392,6 +401,9 @@ export default function CVMatchingPage() {
                             
                             const talentInfo = { ...talent, locationName: talentLocationName } as Talent & { locationName?: string | null };
                             
+                            // Lấy tên vị trí tuyển dụng của CV
+                            const jobRoleLevelName = jobRoleLevelMap.get(cv.jobRoleLevelId) || "—";
+                            
                             // Kiểm tra xem CV này có trong kết quả matching không
                             const match = matchMap.get(cv.id);
                             
@@ -430,6 +442,7 @@ export default function CVMatchingPage() {
                                     talentInfo: talentInfo,
                                     matchedSkills: matchedSkills,
                                     missingSkills: missingSkills,
+                                    jobRoleLevelName: jobRoleLevelName,
                                 };
                             } else {
                                 // CV không có điểm số - tính điểm chi tiết
@@ -444,6 +457,7 @@ export default function CVMatchingPage() {
                                     return {
                                         ...calculatedMatch,
                                         talentInfo: talentInfo,
+                                        jobRoleLevelName: jobRoleLevelName,
                                     };
                                 } catch (calcErr) {
                                     console.warn("⚠️ Failed to calculate match score for CV:", cv.id, calcErr);
@@ -456,6 +470,7 @@ export default function CVMatchingPage() {
                                         missingSkills: jobReq.jobSkills?.map((skill: { skillName: string }) => skill.skillName) || [],
                                         levelMatch: false,
                                         matchSummary: "Không thể tính điểm matching",
+                                        jobRoleLevelName: jobRoleLevelName,
                                     };
                                 }
                             }
@@ -915,7 +930,15 @@ export default function CVMatchingPage() {
                                                         <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors duration-300">
                                                             {cv.talentInfo?.fullName || `Talent #${cv.talentCV.talentId}`}
                                                         </h3>
-                                                        <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: v{cv.talentCV.version}</p>
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <p className="text-neutral-600 text-sm">Phiên bản CV: v{cv.talentCV.version}</p>
+                                                            {cv.jobRoleLevelName && (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 bg-primary-50 rounded-lg border border-primary-200">
+                                                                    <Briefcase className="w-3 h-3" />
+                                                                    {cv.jobRoleLevelName}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <div className="flex items-center gap-4 text-sm text-neutral-500">
                                                             {cv.talentInfo?.email && (
                                                                 <span className="flex items-center gap-1">
@@ -1076,7 +1099,15 @@ export default function CVMatchingPage() {
                                                 <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors duration-300">
                                                     {match.talentInfo?.fullName || `Talent #${match.talentCV.talentId}`}
                                                 </h3>
-                                                <p className="text-neutral-600 text-sm mb-2">Phiên bản CV: v{match.talentCV.version}</p>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <p className="text-neutral-600 text-sm">Phiên bản CV: v{match.talentCV.version}</p>
+                                                    {match.jobRoleLevelName && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 bg-primary-50 rounded-lg border border-primary-200">
+                                                            <Briefcase className="w-3 h-3" />
+                                                            {match.jobRoleLevelName}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="flex items-center gap-4 text-sm text-neutral-500">
                                                     {match.talentInfo?.email && (
                                                         <span className="flex items-center gap-1">

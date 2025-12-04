@@ -6,7 +6,7 @@ import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { applyActivityService, type ApplyActivity, ApplyActivityStatus, ApplyActivityType } from "../../../services/ApplyActivity";
 import { applyProcessStepService, type ApplyProcessStep } from "../../../services/ApplyProcessStep";
 import { applyService } from "../../../services/Apply";
-import { talentApplicationService } from "../../../services/TalentApplication";
+import { talentApplicationService, type TalentApplicationDetailed } from "../../../services/TalentApplication";
 import { jobRequestService } from "../../../services/JobRequest";
 import { clientTalentBlacklistService, type ClientTalentBlacklistCreate } from "../../../services/ClientTalentBlacklist";
 import { projectService } from "../../../services/Project";
@@ -93,6 +93,7 @@ export default function ApplyActivityDetailPage() {
   const [isAddingBlacklist, setIsAddingBlacklist] = useState(false);
   const [talent, setTalent] = useState<any>(null);
   const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
+  const [isBlacklisted, setIsBlacklisted] = useState(false); // Track trạng thái blacklist
   const { user } = useAuth();
   
   const quickRejectNotes = [
@@ -128,6 +129,7 @@ export default function ApplyActivityDetailPage() {
 
       // Fetch application info & related process steps
       let applicationInfo;
+      let detailedApp: TalentApplicationDetailed | null = null;
       try {
         const app = await applyService.getById(activityData.applyId);
         applicationInfo = {
@@ -137,7 +139,7 @@ export default function ApplyActivityDetailPage() {
 
         // Fetch talent information for blacklist
         try {
-          const detailedApp = await talentApplicationService.getDetailedById(app.id);
+          detailedApp = await talentApplicationService.getDetailedById(app.id);
           if (detailedApp?.talent) {
             setTalent(detailedApp.talent);
           }
@@ -156,6 +158,20 @@ export default function ApplyActivityDetailPage() {
               const project = await projectService.getById(jobReq.projectId);
               if (project?.clientCompanyId) {
                 setClientCompanyId(project.clientCompanyId);
+                
+                // Check blacklist status nếu đã có talent
+                if (detailedApp?.talent?.id) {
+                  try {
+                    const blacklistCheck = await clientTalentBlacklistService.checkBlacklisted(
+                      project.clientCompanyId,
+                      detailedApp.talent.id
+                    );
+                    setIsBlacklisted(blacklistCheck.isBlacklisted);
+                  } catch (err) {
+                    console.error("⚠️ Không thể kiểm tra blacklist:", err);
+                    setIsBlacklisted(false);
+                  }
+                }
               }
             } catch (err) {
               console.error("⚠️ Không thể tải thông tin project:", err);
@@ -308,6 +324,13 @@ export default function ApplyActivityDetailPage() {
   const handleStatusUpdate = async (newStatus: ApplyActivityStatus) => {
     if (!id || !activity) return;
 
+    // ✅ Kiểm tra scheduledDate: Khi đổi trạng thái phải bắt buộc có scheduledDate
+    if (!activity.scheduledDate) {
+      alert("⚠️ Vui lòng chỉnh sửa và thêm ngày lên lịch trước khi thay đổi trạng thái!");
+      navigate(`/ta/apply-activities/edit/${id}`);
+      return;
+    }
+
     // Nếu đang ở Completed và chuyển sang Passed hoặc Failed, yêu cầu nhập note
     if (activity.status === ApplyActivityStatus.Completed && 
         (newStatus === ApplyActivityStatus.Passed || newStatus === ApplyActivityStatus.Failed)) {
@@ -339,9 +362,9 @@ export default function ApplyActivityDetailPage() {
 
   const handleConfirmNoteDialog = async () => {
     const note = noteInput.trim();
-    if (!note) {
-      const statusLabel = noteDialogTargetStatus === ApplyActivityStatus.Passed ? "Đạt" : "Không đạt";
-      alert(`⚠️ Vui lòng nhập ghi chú khi thay đổi trạng thái sang "${statusLabel}"`);
+    // Chỉ bắt buộc note khi status là Failed, Passed thì tùy chọn
+    if (!note && noteDialogTargetStatus === ApplyActivityStatus.Failed) {
+      alert(`⚠️ Vui lòng nhập ghi chú khi thay đổi trạng thái sang "Không đạt"`);
       return;
     }
     
@@ -499,6 +522,7 @@ export default function ApplyActivityDetailPage() {
 
       await clientTalentBlacklistService.add(payload);
       alert("✅ Đã thêm ứng viên vào blacklist thành công!");
+      setIsBlacklisted(true); // Đánh dấu đã blacklisted để ẩn nút
       handleCloseBlacklistModal();
     } catch (error: any) {
       console.error("❌ Lỗi thêm vào blacklist:", error);
@@ -546,13 +570,14 @@ export default function ApplyActivityDetailPage() {
   }
 
   const formattedDate = activity.scheduledDate
-    ? new Date(activity.scheduledDate).toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    ? new Date(activity.scheduledDate).toLocaleString("vi-VN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
     : "—";
 
   const canModifyActivity = activity.status === ApplyActivityStatus.Scheduled;
@@ -772,8 +797,8 @@ export default function ApplyActivityDetailPage() {
           </div>
         )}
 
-        {/* Add to Blacklist - hiển thị khi activity Failed */}
-        {activity.status === ApplyActivityStatus.Failed && clientCompanyId && talent?.id && (
+        {/* Add to Blacklist - hiển thị khi activity Failed và chưa blacklisted */}
+        {activity.status === ApplyActivityStatus.Failed && clientCompanyId && talent?.id && !isBlacklisted && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-soft mb-8 animate-fade-in">
             <div className="p-6">
               <div className="flex items-center justify-between">

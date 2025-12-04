@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { User, Mail, Phone, Shield } from 'lucide-react';
 import Sidebar from '../../../components/common/Sidebar';
 import { sidebarItems } from '../../../components/admin/SidebarItems';
-import { userService, type UserCreate } from '../../../services/User';
+import { authService, type UserProvisionPayload } from '../../../services/Auth';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -10,16 +10,6 @@ export default function CreateAccount() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Role mapping: FE display name -> BE enum value
-  const roleMapping = {
-    'Admin': 1,
-    'Manager': 2,
-    'TA': 3,      // FE hiển thị "TA", BE là "HR" (3)
-    'Accountant': 4,
-    'Sale': 5,
-    'Dev': 6
-  };
   
   // Available roles for display (FE)
   const availableRoles = [
@@ -53,23 +43,30 @@ export default function CreateAccount() {
     setError(null);
 
     try {
-      // Map role từ FE display name sang BE enum value
-      const roleValue = roleMapping[formData.role as keyof typeof roleMapping];
-      if (!roleValue) {
-        setError("Vai trò không hợp lệ");
+      // Xác nhận trước khi tạo tài khoản
+      const confirmed = window.confirm(
+        `Bạn có chắc muốn tạo tài khoản cho:\n\n- Họ tên: ${formData.fullName}\n- Email: ${formData.email}\n- Vai trò: ${formData.role}\n\nMật khẩu sẽ được tạo tự động và gửi qua email này.`
+      );
+      if (!confirmed) {
         setLoading(false);
         return;
       }
 
-      const payload: UserCreate = {
+      // Map role từ FE display name sang BE role string
+      // Backend register API nhận role là string (ví dụ: "TA", "Manager", "Sale", "Accountant")
+      const roleString = formData.role; // Giữ nguyên string từ form
+
+      const payload: UserProvisionPayload = {
         email: formData.email,
         fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber || undefined,
-        password: '', // Backend sẽ tự động generate và gửi qua email
-        role: roleValue.toString() // Gửi role là string của số enum
+        phoneNumber: formData.phoneNumber || null, // Backend nhận string? (optional)
+        role: roleString // Gửi role là string (ví dụ: "TA", "Manager", "Sale", "Accountant")
       };
 
-      await userService.create(payload);
+      const response = await authService.adminProvision(payload);
+      
+      // Hiển thị thông báo thành công với password được generate
+      alert(`✅ Tạo tài khoản thành công!\n\nEmail: ${response.email}\nMật khẩu: ${response.password}\n\nMật khẩu đã được gửi qua email.`);
       
       // Success - redirect to user list
       navigate('/admin/users');

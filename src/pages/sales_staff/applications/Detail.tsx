@@ -184,7 +184,6 @@ export default function SalesApplicationDetailPage() {
   const [showFullCVSummary, setShowFullCVSummary] = useState(false);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [existingContract, setExistingContract] = useState<ClientContractPaymentModel | null>(null);
-  const [clientCompanyId, setClientCompanyId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -220,7 +219,6 @@ export default function SalesApplicationDetailPage() {
               display.projectName = project?.name ?? "—";
 
               if (project?.clientCompanyId) {
-                setClientCompanyId(project.clientCompanyId);
                 try {
                   const company = await clientCompanyService.getById(project.clientCompanyId);
                   display.clientCompany = {
@@ -431,58 +429,6 @@ export default function SalesApplicationDetailPage() {
     }
   };
 
-  // Kiểm tra xem có nên hiển thị nút "Tạo hợp đồng" hay không
-  const shouldShowCreateContractButton = useMemo(() => {
-    // Chỉ hiển thị khi application ở trạng thái Hired
-    if (application?.status !== 'Hired') {
-      return false;
-    }
-
-    // Nếu chưa có hợp đồng nào, hiển thị nút "Tạo hợp đồng"
-    if (!existingContract) {
-      return true;
-    }
-
-    // Nếu hợp đồng ở trạng thái "Rejected", hiển thị nút "Tạo hợp đồng khác"
-    if (existingContract.contractStatus === 'Rejected') {
-      return true;
-    }
-
-    // Các trạng thái khác thì không hiển thị nút tạo hợp đồng
-    return false;
-  }, [application?.status, existingContract]);
-
-  // Hàm xử lý khi click nút "Tạo hợp đồng"
-  const handleCreateContract = () => {
-    if (!application?.talent) {
-      alert("Không tìm thấy thông tin nhân sự");
-      return;
-    }
-
-    const talentId = application.talent.id;
-    
-    // Lấy clientCompanyId từ state hoặc từ application
-    const companyId = clientCompanyId || application.project?.clientCompanyId || application.clientCompany?.id;
-
-    if (!companyId) {
-      alert("Không tìm thấy thông tin công ty khách hàng. Vui lòng đảm bảo application có liên kết với project hoặc client company.");
-      return;
-    }
-
-    const projectId = application.project?.id;
-
-    // Chuyển đến trang tạo hợp đồng với query params
-    const params = new URLSearchParams({
-      clientCompanyId: companyId.toString(),
-      talentId: talentId.toString(),
-      talentApplicationId: application.id.toString()
-    });
-    if (projectId) {
-      params.append('projectId', projectId.toString());
-    }
-    navigate(`/sales/contracts/create?${params.toString()}`);
-  };
-
   if (loading) {
     return (
       <div className="flex bg-gray-50 min-h-screen">
@@ -647,15 +593,6 @@ export default function SalesApplicationDetailPage() {
                     {getContractStatusLabel(existingContract.contractStatus)}
                   </span>
                 </div>
-              )}
-              {shouldShowCreateContractButton && (
-                <Button
-                  onClick={handleCreateContract}
-                  className="group flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-soft transform hover:scale-105 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
-                >
-                  <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  {existingContract?.contractStatus === 'Rejected' ? 'Tạo hợp đồng khác' : 'Tạo hợp đồng'}
-                </Button>
               )}
             </div>
           </div>

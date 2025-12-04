@@ -4,7 +4,6 @@ import {
     Search,
     Filter,
     Users,
-    GraduationCap,
     Briefcase,
     Building2,
     Target,
@@ -28,6 +27,7 @@ import { talentApplicationService, type TalentApplication } from "../../../servi
 
 interface HRJobRequest {
     id: number;
+    code: string;
     title: string;
     companyName: string;
     projectName: string;
@@ -185,6 +185,7 @@ const stats = [
                     const position = positionDict[r.jobRoleLevelId];
                     return {
                         id: r.id,
+                        code: r.code,
                         title: r.title,
                         companyName: company?.name ?? "—",
                         projectName: project?.name ?? "—",
@@ -525,13 +526,13 @@ const stats = [
                             <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                                 <tr>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                                    <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tiêu đề</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dự án</th>
                                     <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Vị trí</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Hồ sơ</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Trạng thái</th>
-                                    <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Chế độ</th>
                                     <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">Thao tác</th>
                                 </tr>
                             </thead>
@@ -555,6 +556,11 @@ const stats = [
                                             className="group hover:bg-gradient-to-r hover:from-primary-50 hover:to-accent-50 transition-all duration-300"
                                         >
                                             <td className="py-4 px-6 text-sm font-medium text-neutral-900">{startIndex + i + 1}</td>
+                                            <td className="py-4 px-6">
+                                                <div className="text-sm font-medium text-neutral-600">
+                                                    {req.code || "—"}
+                                                </div>
+                                            </td>
                                             <td className="py-4 px-6">
                                                 <div className="font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">
                                                     {req.title || "(Chưa có tiêu đề)"}
@@ -599,12 +605,6 @@ const stats = [
                                                     }`}>
                                                     {statusLabelDisplay[req.status] ?? req.status}
                                                 </span>
-                                            </td>
-                                            <td className="py-4 px-6 text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <GraduationCap className="w-4 h-4 text-neutral-400" />
-                                                    <span className="text-sm text-neutral-700">{req.workingMode}</span>
-                                                </div>
                                             </td>
                                             <td className="py-4 px-6 text-center">
                                                 <div className="flex items-center justify-center gap-2">

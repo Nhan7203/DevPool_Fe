@@ -763,7 +763,7 @@ export default function JobRequestEditPage() {
                           <div className="text-sm text-neutral-800 space-y-0.5">
                             <div><span className="font-medium">Tên:</span> {company.name}</div>
                             {company.contactPerson && (
-                              <div><span className="font-medium">Liên hệ:</span> {company.contactPerson}</div>
+                              <div><span className="font-medium">Người đại diện:</span> {company.contactPerson}</div>
                             )}
                             {company.email && (
                               <div><span className="font-medium">Email:</span> {company.email}</div>

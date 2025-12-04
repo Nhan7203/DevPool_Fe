@@ -3,6 +3,7 @@ import { AxiosError } from "axios";
 
 export interface Project {
   id: number;
+  code: string;
   clientCompanyId: number;
   marketId: number;
   industryIds: number[];
@@ -53,6 +54,7 @@ export interface ProjectStatusTransitionResult {
 
 export interface ProjectDetailedModel {
   id: number;
+  code: string;
   clientCompanyId?: number | null;
   marketId?: number | null;
   industryIds: number[];

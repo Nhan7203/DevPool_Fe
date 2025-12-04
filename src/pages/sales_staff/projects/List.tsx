@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  Pause
+  Pause,
+  Hash
 } from "lucide-react";
 
 export default function ProjectListPage() {
@@ -421,6 +422,7 @@ export default function ProjectListPage() {
               <thead className="bg-gradient-to-r from-neutral-50 to-primary-50 sticky top-0 z-10">
                 <tr>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">#</th>
+                  <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Mã dự án</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tên dự án</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Công ty khách hàng</th>
                   <th className="py-4 px-4 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">Ngày bắt đầu</th>
@@ -432,7 +434,7 @@ export default function ProjectListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredProjects.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <Layers className="w-8 h-8 text-neutral-400" />
@@ -452,6 +454,12 @@ export default function ProjectListPage() {
                       >
                         <td className="py-4 px-4 text-sm font-medium text-neutral-900">
                             <span>{startIndex + i + 1}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="inline-flex items-center gap-2 text-sm text-neutral-700 font-mono">
+                            <Hash className="w-4 h-4 text-neutral-400" />
+                            <span>{p.code || "—"}</span>
+                          </span>
                         </td>
                         <td className="py-4 px-4">
                           <div className="inline-flex items-center gap-2 font-semibold text-primary-700 group-hover:text-primary-800 transition-colors duration-300">

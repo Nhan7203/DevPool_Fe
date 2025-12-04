@@ -47,6 +47,20 @@ export interface RegisterPayload {
   role: string; // ví dụ: "TA", "Admin", ...
 }
 
+// Payload cho Admin Provision User (backend tự generate password)
+export interface UserProvisionPayload {
+  email: string;
+  fullName: string;
+  phoneNumber?: string | null;
+  role: string; // ví dụ: "TA", "Manager", "Sale", "Accountant" - sẽ được parse thành enum Role ở backend
+}
+
+export interface UserProvisionResponse {
+  message: string;
+  email: string;
+  password: string; // Password được generate tự động bởi backend
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
@@ -295,6 +309,22 @@ export const authService = {
       if (error instanceof AxiosError)
         throw error.response?.data || { message: "Không thể đăng ký tài khoản" };
       throw { message: "Lỗi không xác định khi đăng ký" };
+    }
+  },
+
+  /**
+   * Admin provision user - Backend tự động generate password
+   * @param payload - UserProvisionPayload (không cần password, avatarUrl, address)
+   * @returns UserProvisionResponse với password được generate
+   */
+  async adminProvision(payload: UserProvisionPayload): Promise<UserProvisionResponse> {
+    try {
+      const response = await axios.post<UserProvisionResponse>("/auth/register", payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể tạo tài khoản" };
+      throw { message: "Lỗi không xác định khi tạo tài khoản" };
     }
   },
 

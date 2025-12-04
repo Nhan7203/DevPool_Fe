@@ -36,7 +36,7 @@ export default function ProjectCreatePage() {
     description: "",
     startDate: "",
     endDate: "",
-    status: "",
+    status: "Planned", // mặc định Planned khi tạo mới
     clientCompanyId: undefined,
     marketId: undefined,
     industryIds: [],
@@ -177,14 +177,8 @@ export default function ProjectCreatePage() {
       return;
     }
 
-    // Nếu không có EndDate, tự động set status thành "Ongoing"
-    // Nếu có EndDate nhưng chưa có status, mặc định là "Planned"
-    let finalStatus = form.status;
-    if (!form.endDate || form.endDate.trim() === "") {
-      finalStatus = "Ongoing";
-    } else if (!finalStatus || finalStatus.trim() === "") {
-      finalStatus = "Planned";
-    }
+    // Trạng thái: không tự động đổi theo EndDate, chỉ dùng giá trị user chọn (mặc định Planned)
+    const finalStatus = form.status && form.status.trim() !== "" ? form.status.trim() : "Planned";
 
     try {
       const payload: ProjectPayload = {
@@ -192,7 +186,7 @@ export default function ProjectCreatePage() {
         description: form.description ?? "",
         startDate: toUTCDateString(form.startDate) ?? "",
         endDate: toUTCDateString(form.endDate),
-        status: finalStatus!,
+        status: finalStatus,
         clientCompanyId: Number(form.clientCompanyId),
         marketId: Number(form.marketId),
         industryIds: form.industryIds.map((id) => Number(id)),
@@ -374,45 +368,31 @@ export default function ProjectCreatePage() {
                     Ngày kết thúc
                   </label>
                   <div className="relative">
-                  <input
-                    type="date"
-                    name="endDate"
-                    value={form.endDate ?? ""}
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      // Nếu xóa EndDate, tự động set status thành "Ongoing" và disable status
-                      if (newValue === "") {
-                        setForm((prev) => ({ ...prev, endDate: "", status: "Ongoing" }));
-                      } else {
-                        // Nếu có EndDate, tự động set status thành "Planned" nếu chưa có hoặc đang là "Ongoing"
-                        handleChange(e);
-                        setForm((prev) => {
-                          const shouldSetPlanned = !prev.status || prev.status === "" || prev.status === "Ongoing";
-                          return {
-                            ...prev,
-                            endDate: newValue,
-                            status: shouldSetPlanned ? "Planned" : prev.status
-                          };
-                        });
-                      }
-                      if (fieldErrors.endDate) {
-                        setFieldErrors((prev) => {
-                          const newErrors = { ...prev };
-                          delete newErrors.endDate;
-                          return newErrors;
-                        });
-                      }
-                    }}
-                    min={form.startDate || undefined}
-                    className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
-                      fieldErrors.endDate
-                        ? "border-red-500 focus:border-red-500"
-                        : "border-neutral-200 focus:border-primary-500"
-                    }`}
-                  />
+                    <input
+                      type="date"
+                      name="endDate"
+                      value={form.endDate ?? ""}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setForm((prev) => ({ ...prev, endDate: newValue }));
+                        if (fieldErrors.endDate) {
+                          setFieldErrors((prev) => {
+                            const newErrors = { ...prev };
+                            delete newErrors.endDate;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      min={form.startDate || undefined}
+                      className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
+                        fieldErrors.endDate
+                          ? "border-red-500 focus:border-red-500"
+                          : "border-neutral-200 focus:border-primary-500"
+                      }`}
+                    />
                     {!form.endDate && (
                       <div className="absolute -bottom-6 left-0 text-xs text-neutral-500 mt-1">
-                        💡 Dự án sẽ được xem là Ongoing nếu không có ngày kết thúc
+                        💡 Bạn có thể để trống ngày kết thúc nếu chưa xác định
                       </div>
                     )}
                   </div>
@@ -719,41 +699,32 @@ export default function ProjectCreatePage() {
                 )}
               </div>
 
-              {/* Trạng thái */}
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Trạng thái <span className="text-xs text-neutral-500 font-normal ml-2">(Tự động)</span>
-                </label>
-                <select
+            {/* Trạng thái */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                Trạng thái
+              </label>
+              <select
                 name="status"
-                value={!form.endDate ? "Ongoing" : "Planned"}
-                disabled={true}
-                  className="w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-neutral-50 cursor-not-allowed border-neutral-200"
-                >
-                  <option value="Planned">Đã lên kế hoạch (Planned)</option>
-                  <option value="Ongoing">Đang thực hiện (Ongoing)</option>
-                  <option value="Completed">Đã hoàn thành (Completed)</option>
-                  <option value="OnHold">Tạm dừng (OnHold)</option>
-                </select>
-                {!form.endDate ? (
-                  <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    Trạng thái tự động là "Ongoing" khi không có ngày kết thúc
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    Trạng thái tự động là "Planned" khi có ngày kết thúc
-                  </p>
-                )}
-                {fieldErrors.status && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {fieldErrors.status}
-                  </p>
-                )}
-              </div>
+                value={form.status ?? "Planned"}
+                onChange={handleChange}
+                className="w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white border-neutral-200"
+              >
+                <option value="Planned">Đã lên kế hoạch (Planned)</option>
+                <option value="Ongoing">Đang thực hiện (Ongoing)</option>
+              </select>
+              <p className="mt-1 text-xs text-neutral-500 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                Mặc định khi tạo mới là "Đã lên kế hoạch (Planned)". Bạn có thể đổi trạng thái nếu cần.
+              </p>
+              {fieldErrors.status && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {fieldErrors.status}
+                </p>
+              )}
+            </div>
             </div>
           </div>
 

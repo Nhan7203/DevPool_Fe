@@ -36,6 +36,7 @@ import {
   FileText,
   Layers,
   Eye,
+  Hash,
 } from "lucide-react";
 
 const formatDateTime = (dateString?: string | null) => {
@@ -880,7 +881,7 @@ export default function ClientCompanyDetailPage() {
                     icon={<Briefcase className="w-4 h-4" />}
                   />
                   <InfoItem
-                    label="Người liên hệ"
+                    label="Người đại diện"
                     value={company.contactPerson}
                     icon={<User className="w-4 h-4" />}
                   />
@@ -939,7 +940,15 @@ export default function ClientCompanyDetailPage() {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">{project.name}</h3>
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+                              {project.code && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono font-medium text-neutral-600 bg-neutral-100 rounded-lg">
+                                  <Hash className="w-3 h-3" />
+                                  {project.code}
+                                </span>
+                              )}
+                            </div>
                             {project.description && (
                               <p className="text-sm text-neutral-600 mb-3 line-clamp-2">{project.description}</p>
                             )}

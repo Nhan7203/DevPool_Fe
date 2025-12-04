@@ -161,9 +161,9 @@ export default function ClientCompanyCreatePage() {
       }
     }
     
-    // Validate người liên hệ (bắt buộc)
+    // Validate người đại diện (bắt buộc)
     if (!form.contactPerson || form.contactPerson.trim() === "") {
-      errors.contactPerson = "Người liên hệ là bắt buộc";
+      errors.contactPerson = "Người đại diện là bắt buộc";
     }
     
     // Validate email (bắt buộc)
@@ -410,13 +410,13 @@ export default function ClientCompanyCreatePage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Người liên hệ <span className="text-red-500">*</span>
+                    Người đại diện <span className="text-red-500">*</span>
                   </label>
                   <input
                     name="contactPerson"
                     value={form.contactPerson}
                     onChange={handleChange}
-                    placeholder="Nhập người liên hệ..."
+                    placeholder="Nhập người đại diện..."
                     required
                     className={`w-full border rounded-xl px-4 py-3 focus:ring-primary-500 bg-white ${
                       formErrors.contactPerson

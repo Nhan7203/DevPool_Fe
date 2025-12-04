@@ -213,7 +213,7 @@ export default function ClientCompanyEditPage() {
       return;
     }
     if (!formData.contactPerson.trim()) {
-      alert("⚠️ Vui lòng nhập người liên hệ!");
+      alert("⚠️ Vui lòng nhập người đại diện!");
       return;
     }
 
@@ -416,13 +416,13 @@ export default function ClientCompanyEditPage() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Người liên hệ <span className="text-red-500">*</span>
+                    Người đại diện <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="contactPerson"
                     value={formData.contactPerson}
                     onChange={handleChange}
-                    placeholder="Nhập người liên hệ..."
+                    placeholder="Nhập người đại diện..."
                     required
                     className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
                   />

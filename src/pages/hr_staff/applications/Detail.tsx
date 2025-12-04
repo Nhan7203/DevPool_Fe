@@ -370,33 +370,25 @@ export default function TalentCVApplicationDetailPage() {
         }
       });
 
-      // Lấy thời gian hiện tại để set cho activity đầu tiên
-      const now = new Date();
-      const nowUTC = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
-
       // Tự động tạo tối đa có thể: duyệt theo thứ tự, tôn trọng ràng buộc "bước trước phải Passed"
       const createdList: ApplyActivity[] = [];
+      
       for (let i = 0; i < sortedSteps.length; i++) {
         const step = sortedSteps[i];
         if (existingByStepId.has(step.id)) continue;
         // BỎ VALID: không cần bước trước phải đạt mới được thêm activity
         try {
-          // Activity đầu tiên (i === 0 trong danh sách sẽ tạo) được set scheduledDate = thời gian hiện tại
-          const isFirstActivity = createdList.length === 0;
+          // Tạo activity tự động không cần scheduledDate (để null)
           const payload: any = {
             applyId: application.id,
             processStepId: step.id,
             activityType: ApplyActivityType.Online,
             status: ApplyActivityStatus.Scheduled,
+            scheduledDate: undefined, // ✅ Tạo tự động không cần lịch, để null
             notes: step.description
               ? `Tự động tạo từ bước "${step.stepName}": ${step.description}`
               : `Tự động tạo từ bước "${step.stepName}"`
           };
-          
-          // Chỉ activity đầu tiên mới có scheduledDate
-          if (isFirstActivity) {
-            payload.scheduledDate = nowUTC;
-          }
 
           const created = await applyActivityService.create(payload);
           createdList.push(created);
@@ -1006,7 +998,14 @@ export default function TalentCVApplicationDetailPage() {
                     {[...activities].sort((a, b) => a.id - b.id).map((activity, index) => {
                       const processStep = processSteps[activity.processStepId];
                       const formattedDate = activity.scheduledDate
-                        ? new Date(activity.scheduledDate).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        ? new Date(activity.scheduledDate).toLocaleString('vi-VN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                          })
                         : null;
 
                       return (
