@@ -2082,8 +2082,8 @@ export default function CreateTalent() {
         certificates: talentCertificates.length > 0 ? talentCertificates : undefined,
         jobRoleLevels: talentJobRoleLevels.length > 0 ? talentJobRoleLevels : undefined,
         initialCV: (() => {
-          // CV chỉ bắt buộc nếu sử dụng trích xuất CV
-          if (useExtractCV && initialCVs[0]) {
+          // CV bắt buộc - luôn gửi nếu có đầy đủ thông tin (không phụ thuộc vào useExtractCV)
+          if (initialCVs[0] && initialCVs[0].jobRoleLevelId && initialCVs[0].version && initialCVs[0].cvFileUrl) {
             const cv = initialCVs[0];
             return {
               jobRoleLevelId: cv.jobRoleLevelId!,

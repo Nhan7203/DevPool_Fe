@@ -335,10 +335,8 @@ export default function TalentEditPage() {
 
     try {
       // Format dateOfBirth to UTC ISO string if it exists
-      // Loại bỏ status khỏi payload vì đã xử lý riêng bằng changeStatus API
-      const { status, ...updatePayload } = formData;
       const payload = {
-        ...updatePayload,
+        ...formData,
         dateOfBirth: formData.dateOfBirth 
           ? new Date(formData.dateOfBirth + 'T00:00:00.000Z').toISOString()
           : undefined

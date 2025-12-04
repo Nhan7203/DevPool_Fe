@@ -15,11 +15,22 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 // Hàm refresh token (sử dụng cùng logic như axios config)
 const refreshToken = async (): Promise<string | null> => {
 	try {
-		const refreshTokenValue = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
-		if (!refreshTokenValue) return null;
-
+		// Xác định storage dựa trên rememberMe trước khi lấy token
 		const rememberMe = localStorage.getItem('remember_me') === 'true';
 		const storage = rememberMe ? localStorage : sessionStorage;
+		
+		// Lấy refresh token từ đúng storage (ưu tiên storage hiện tại, fallback sang storage kia)
+		let refreshTokenValue = storage.getItem('refreshToken');
+		if (!refreshTokenValue) {
+			// Fallback: thử storage còn lại
+			const fallbackStorage = rememberMe ? sessionStorage : localStorage;
+			refreshTokenValue = fallbackStorage.getItem('refreshToken');
+		}
+		
+		if (!refreshTokenValue) {
+			console.warn('⚠️ No refresh token found in storage (notificationHub)');
+			return null;
+		}
 
 		const response = await fetch(`${RAW_API_URL}/auth/refresh-token`, {
 			method: 'POST',
@@ -31,11 +42,22 @@ const refreshToken = async (): Promise<string | null> => {
 		});
 
 		if (!response.ok) {
+			const errorData = await response.json().catch(() => ({}));
+			const errorMessage = errorData?.message || 'Unknown error';
+			console.error('❌ Unable to refresh token (notificationHub):', errorMessage);
+			
+			// Xử lý đặc biệt cho lỗi "Refresh token is revoked or does not match"
+			if (errorMessage.includes('revoked') || errorMessage.includes('does not match')) {
+				console.warn('⚠️ Refresh token mismatch - user may have logged in elsewhere (notificationHub)');
+			}
+			
 			// Nếu refresh thất bại, xóa tokens
 			localStorage.removeItem('accessToken');
 			localStorage.removeItem('refreshToken');
+			localStorage.removeItem('remember_me');
 			sessionStorage.removeItem('accessToken');
 			sessionStorage.removeItem('refreshToken');
+			sessionStorage.removeItem('remember_me');
 			return null;
 		}
 
@@ -45,11 +67,15 @@ const refreshToken = async (): Promise<string | null> => {
 			storage.setItem('accessToken', data.accessToken);
 			if (data.refreshToken) {
 				storage.setItem('refreshToken', data.refreshToken);
+				// Xóa token cũ ở storage kia nếu có (tránh conflict)
+				const otherStorage = rememberMe ? sessionStorage : localStorage;
+				otherStorage.removeItem('refreshToken');
 			}
 			return data.accessToken;
 		}
 		return null;
 	} catch (error) {
+		console.error('❌ Error refreshing token (notificationHub):', error);
 		return null;
 	}
 };

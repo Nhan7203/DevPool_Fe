@@ -2,8 +2,8 @@ import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestCo
 import { UNAUTHORIZED_EVENT } from '../constants/events';
 
 // const API_URL = import.meta.env.VITE_API_URL;
-// const API_URL = 'https://localhost:7298/api';
-const API_URL = 'https://api-devpool.innosphere.io.vn/api';
+const API_URL = 'https://localhost:7298/api';
+// const API_URL = 'https://api-devpool.innosphere.io.vn/api';
 const axiosInstance = axios.create({
     baseURL: API_URL,
     withCredentials: true,
@@ -58,12 +58,22 @@ const notifyRefreshSubscribers = (token: string | null) => {
 };
 
 const handleRefreshToken = async (): Promise<string | null> => {
-    // Lấy refresh token từ cả localStorage và sessionStorage
-    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
-    if (!refreshToken) return null;
-
+    // Xác định storage dựa trên rememberMe trước khi lấy token
     const rememberMe = localStorage.getItem('remember_me') === 'true';
     const storage = rememberMe ? localStorage : sessionStorage;
+    
+    // Lấy refresh token từ đúng storage (ưu tiên storage hiện tại, fallback sang storage kia)
+    let refreshToken = storage.getItem('refreshToken');
+    if (!refreshToken) {
+        // Fallback: thử storage còn lại
+        const fallbackStorage = rememberMe ? sessionStorage : localStorage;
+        refreshToken = fallbackStorage.getItem('refreshToken');
+    }
+    
+    if (!refreshToken) {
+        console.warn('⚠️ No refresh token found in storage');
+        return null;
+    }
 
     try {
         const response = await refreshClient.post('/auth/refresh-token', { refreshToken });
@@ -73,20 +83,35 @@ const handleRefreshToken = async (): Promise<string | null> => {
             storage.setItem('accessToken', accessToken);
         }
 
+        // Backend có thể không trả về newRefreshToken nếu không rotate token
+        // Nếu có newRefreshToken, cập nhật; nếu không, giữ nguyên token cũ
         if (newRefreshToken) {
             storage.setItem('refreshToken', newRefreshToken);
+            // Xóa token cũ ở storage kia nếu có (tránh conflict)
+            const otherStorage = rememberMe ? sessionStorage : localStorage;
+            otherStorage.removeItem('refreshToken');
         }
 
         return accessToken ?? null;
-    } catch (refreshError) {
-        console.error('❌ Unable to refresh token:', refreshError);
-        // Xóa từ cả 2 storage
+    } catch (refreshError: any) {
+        const errorMessage = refreshError?.response?.data?.message || refreshError?.message || 'Unknown error';
+        console.error('❌ Unable to refresh token:', errorMessage);
+        
+        // Xử lý đặc biệt cho lỗi "Refresh token is revoked or does not match"
+        // Đây thường xảy ra khi user login lại ở tab/device khác
+        if (errorMessage.includes('revoked') || errorMessage.includes('does not match')) {
+            console.warn('⚠️ Refresh token mismatch - user may have logged in elsewhere');
+        }
+        
+        // Xóa từ cả 2 storage để đảm bảo clean state
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('devpool_user');
+        localStorage.removeItem('remember_me');
         sessionStorage.removeItem('accessToken');
         sessionStorage.removeItem('refreshToken');
         sessionStorage.removeItem('devpool_user');
+        sessionStorage.removeItem('remember_me');
         return null;
     }
 };
