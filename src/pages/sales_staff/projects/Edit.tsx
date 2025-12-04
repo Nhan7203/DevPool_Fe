@@ -569,7 +569,7 @@ export default function ProjectEditPage() {
                                         />
                                         {!formData.endDate && canEditEndDate && (
                                             <div className="absolute -bottom-6 left-0 text-xs text-neutral-500 mt-1">
-                                                💡 Dự án sẽ được xem là Ongoing nếu không có ngày kết thúc
+                                                💡 Bạn có thể để trống ngày kết thúc nếu chưa xác định
                                             </div>
                                         )}
                                     </div>

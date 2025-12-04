@@ -42,6 +42,7 @@ import {
 
 interface JobRequestDetail {
   id: number;
+  code: string;
   title: string;
   projectName?: string;
   clientCompanyName?: string;
@@ -453,6 +454,11 @@ export default function JobRequestDetailPage() {
           <div className="p-6">
             {activeTab === "general" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                <InfoItem 
+                  label="Mã yêu cầu" 
+                  value={jobRequest.code ?? "—"} 
+                  icon={<FileText className="w-4 h-4" />}
+                />
                 <InfoItem 
                   label="Công ty khách hàng" 
                   value={jobRequest.clientCompanyName ?? "—"} 

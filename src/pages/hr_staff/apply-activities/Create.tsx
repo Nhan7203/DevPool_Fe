@@ -103,6 +103,35 @@ export default function ApplyActivityCreatePage() {
     return found?.id ?? null;
   }, [sortedSteps, existingActivities]);
 
+  // Kiểm tra bước liền kề trước đã có scheduledDate chưa
+  const canEditSchedule = useMemo(() => {
+    if (!form.processStepId || sortedSteps.length === 0) return true;
+    const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
+    if (selectedIndex <= 0) return true; // Bước đầu tiên luôn được phép
+    
+    // Chỉ cần kiểm tra bước liền kề trước (bước ngay trước đó)
+    const previousStep = sortedSteps[selectedIndex - 1];
+    if (!activitySchedules[previousStep.id]) {
+      // Bước liền kề trước chưa có scheduledDate
+      return false;
+    }
+    return true; // Bước liền kề trước đã có scheduledDate
+  }, [form.processStepId, sortedSteps, activitySchedules]);
+
+  // Tìm bước liền kề trước chưa có scheduledDate (để hiển thị thông báo)
+  const firstMissingScheduleStep = useMemo(() => {
+    if (!form.processStepId || sortedSteps.length === 0) return null;
+    const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
+    if (selectedIndex <= 0) return null;
+    
+    // Chỉ kiểm tra bước liền kề trước
+    const previousStep = sortedSteps[selectedIndex - 1];
+    if (!activitySchedules[previousStep.id]) {
+      return previousStep; // Trả về bước liền kề trước chưa có scheduledDate
+    }
+    return null;
+  }, [form.processStepId, sortedSteps, activitySchedules]);
+
   const previousConstraint = useMemo(() => {
     if (!form.processStepId) return null;
     const orderedSteps = sortedSteps;
@@ -118,18 +147,42 @@ export default function ApplyActivityCreatePage() {
     return null;
   }, [form.processStepId, sortedSteps, activitySchedules]);
 
+  // Helper: Format Date sang format cho datetime-local input (theo local time của browser)
   const formatDateTimeInput = (date: Date) => {
-    const tzOffset = date.getTimezoneOffset() * 60000;
-    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  // Helper: Lấy thời gian hiện tại (theo local time của browser - giờ Việt Nam)
+  const getVietnamTime = (): Date => {
+    return new Date();
+  };
+
+  // Helper: Convert UTC date string (từ backend) sang Date object local time
+  const utcToVietnamDate = (utcDateString: string): Date => {
+    // UTC date string từ backend, convert sang local time
+    return new Date(utcDateString);
   };
 
   useEffect(() => {
     // Nếu người dùng đã tác động vào field, không tự động điền
     if (scheduleTouched) return;
 
-    const baseDate = previousConstraint
-      ? new Date(previousConstraint.date)
-      : new Date(); // Thời gian hiện tại cho activity đầu tiên
+    let baseDate: Date;
+    
+    if (previousConstraint) {
+      // Activity tiếp theo: activity trước + 1 phút
+      // previousConstraint.date là UTC string từ backend, convert sang local time
+      const prevDateLocal = utcToVietnamDate(previousConstraint.date);
+      baseDate = new Date(prevDateLocal.getTime() + 1 * 60 * 1000); // +1 phút
+    } else {
+      // Activity đầu tiên: thời gian hiện tại
+      baseDate = getVietnamTime();
+    }
     
     const currentValue = form.scheduledDate ? new Date(form.scheduledDate) : null;
 
@@ -245,7 +298,12 @@ export default function ApplyActivityCreatePage() {
       return;
     }
 
-    // BỎ VALID theo thứ tự: cho phép tạo bất kỳ bước, miễn applyId hợp lệ
+    // Kiểm tra bước quy trình: phải có suggestedStepId (bước tiếp theo chưa có activity)
+    if (!suggestedStepId || !form.processStepId || form.processStepId === 0) {
+      setError("⚠️ Không còn bước quy trình nào để tạo hoạt động. Tất cả các bước đã có hoạt động.");
+      setLoading(false);
+      return;
+    }
 
     if (!form.applyId) {
       setError("⚠️ Không tìm thấy thông tin hồ sơ ứng tuyển.");
@@ -253,12 +311,7 @@ export default function ApplyActivityCreatePage() {
       return;
     }
 
-    // Validation: scheduledDate (startDate) là bắt buộc
-    if (!form.scheduledDate || form.scheduledDate.trim() === "") {
-      setError("⚠️ Vui lòng nhập ngày bắt đầu (scheduledDate).");
-      setLoading(false);
-      return;
-    }
+    // scheduledDate không bắt buộc khi tạo activity (có thể để null)
 
     // Kiểm tra lỗi validation ngày
     if (dateValidationError) {
@@ -276,10 +329,14 @@ export default function ApplyActivityCreatePage() {
           const previousSteps = orderedSteps.slice(0, selectedIndex).reverse();
           const previousWithSchedule = previousSteps.find(step => activitySchedules[step.id]);
           if (previousWithSchedule) {
+            // activitySchedules chứa UTC string từ backend, convert sang local time để so sánh
             const previousDate = new Date(activitySchedules[previousWithSchedule.id]);
+            // form.scheduledDate là datetime-local string, parse theo local time
             const currentDate = new Date(form.scheduledDate);
-            if (currentDate.getTime() < previousDate.getTime()) {
-              setError(`⚠️ Thời gian cho bước "${selectedStep.stepName}" phải sau hoặc bằng bước "${previousWithSchedule.stepName}".`);
+            // So sánh: currentDate phải >= previousDate + 1 phút
+            const minDate = new Date(previousDate.getTime() + 1 * 60 * 1000);
+            if (currentDate.getTime() < minDate.getTime()) {
+              setError(`⚠️ Thời gian cho bước "${selectedStep.stepName}" phải sau bước "${previousWithSchedule.stepName}" ít nhất 1 phút.`);
               setLoading(false);
               return;
             }
@@ -289,22 +346,22 @@ export default function ApplyActivityCreatePage() {
     }
 
 
-    // Yêu cầu nhập notes khi status là Passed hoặc Failed
-    if ((form.status === ApplyActivityStatus.Passed || 
-         form.status === ApplyActivityStatus.Failed) && 
+    // Yêu cầu nhập notes khi status là Failed (Passed thì tùy chọn)
+    if (form.status === ApplyActivityStatus.Failed && 
         (!form.notes || form.notes.trim() === "")) {
-      setError("⚠️ Vui lòng nhập ghi chú kết quả khi trạng thái là Passed hoặc Failed.");
+      setError("⚠️ Vui lòng nhập ghi chú kết quả khi trạng thái là Failed.");
       setLoading(false);
       return;
     }
 
     try {
-      // Convert local datetime to UTC if scheduledDate is provided
+      // Convert local datetime to UTC
       let scheduledDateUTC: string | undefined = undefined;
       if (form.scheduledDate) {
+        // form.scheduledDate là string từ datetime-local input (hiểu là giờ local)
         const localDate = new Date(form.scheduledDate);
-        const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
-        scheduledDateUTC = utcDate.toISOString();
+        // new Date(...).toISOString() sẽ tự convert sang UTC đúng chuẩn
+        scheduledDateUTC = localDate.toISOString();
       }
 
       const payload: ApplyActivityCreate = {
@@ -401,25 +458,45 @@ export default function ApplyActivityCreatePage() {
                 </select>
               </div>
 
-              {/* Bước quy trình */}
+              {/* Bước quy trình - Tự động chọn bước tiếp theo */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Bước quy trình <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="processStepId"
-                  value={form.processStepId}
-                  onChange={handleChange}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                  required
-                >
-                  {processSteps.map(step => (
-                    <option key={step.id} value={step.id.toString()}>
-                      {step.stepOrder}. {step.stepName}
-                    </option>
-                  ))}
-                </select>            
+                {suggestedStepId ? (
+                  <div className="w-full border border-primary-200 rounded-xl px-4 py-3 bg-primary-50">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-primary-600" />
+                      <div>
+                        <p className="text-sm font-medium text-primary-900">
+                          {(() => {
+                            const selectedStep = sortedSteps.find(step => step.id === suggestedStepId);
+                            return selectedStep ? `${selectedStep.stepOrder}. ${selectedStep.stepName}` : "Đang tải...";
+                          })()}
+                        </p>
+                        <p className="text-xs text-primary-600 mt-1">
+                          Tự động chọn bước tiếp theo chưa có hoạt động
+                        </p>
+                      </div>
+                    </div>
+                    {/* Hidden input để form vẫn có giá trị */}
+                    <input
+                      type="hidden"
+                      name="processStepId"
+                      value={suggestedStepId}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full border border-amber-200 rounded-xl px-4 py-3 bg-amber-50">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-amber-600" />
+                      <p className="text-sm font-medium text-amber-900">
+                        Không còn bước quy trình nào để tạo hoạt động
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Trạng thái */}
@@ -473,11 +550,14 @@ export default function ApplyActivityCreatePage() {
                     name="scheduledDate"
                     value={form.scheduledDate}
                     onChange={handleChange}
-                    className={`flex-1 border border-neutral-200 rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 bg-white ${
-                      form.status === ApplyActivityStatus.Scheduled ? "" : ""
+                    disabled={!canEditSchedule}
+                    className={`flex-1 border rounded-xl px-4 py-3 focus:border-primary-500 focus:ring-primary-500 ${
+                      canEditSchedule 
+                        ? "border-neutral-200 bg-white" 
+                        : "border-neutral-300 bg-neutral-100 cursor-not-allowed opacity-60"
                     }`}
                   />
-                  {form.scheduledDate && (
+                  {form.scheduledDate && canEditSchedule && (
                     <button
                       type="button"
                       onClick={() => {
@@ -492,13 +572,35 @@ export default function ApplyActivityCreatePage() {
                     </button>
                   )}
                 </div>
+                {!canEditSchedule && firstMissingScheduleStep && (
+                  <div className="mt-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      ⚠️ Không thể tạo lịch: Bước {firstMissingScheduleStep.stepOrder}. {firstMissingScheduleStep.stepName} chưa có lịch.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Vui lòng tạo/chỉnh sửa lịch cho các bước trước theo thứ tự từ bước đầu tiên.
+                    </p>
+                  </div>
+                )}
+                {!canEditSchedule && firstMissingScheduleStep && (
+                  <div className="mt-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      ⚠️ Không thể tạo lịch: Bước {firstMissingScheduleStep.stepOrder}. {firstMissingScheduleStep.stepName} chưa có lịch.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Vui lòng tạo/chỉnh sửa lịch cho các bước trước theo thứ tự từ bước đầu tiên.
+                    </p>
+                  </div>
+                )}
                 {dateValidationError && (
                   <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {dateValidationError}
                   </p>
                 )}
-                {!dateValidationError && previousConstraint && (
+                {!dateValidationError && canEditSchedule && previousConstraint && (
                   <p className="text-sm text-neutral-500 mt-2">
                     * Thời gian tối thiểu: sau{" "}
                     {new Intl.DateTimeFormat("vi-VN", {

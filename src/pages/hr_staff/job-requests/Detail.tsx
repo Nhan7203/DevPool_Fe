@@ -51,6 +51,7 @@ import { decodeJWT } from "../../../services/Auth";
 
 interface JobRequestDetail {
     id: number;
+    code: string;
     jobRoleLevelId: number;
     projectId: number;
     applyProcessTemplateId?: number | null;
@@ -647,6 +648,11 @@ export default function JobRequestDetailHRPage() {
                     <div className="p-6">
                         {activeTab === "general" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                                <InfoItem 
+                                    label="Mã yêu cầu" 
+                                    value={jobRequest.code ?? "—"} 
+                                    icon={<FileText className="w-4 h-4" />}
+                                />
                                 <InfoItem 
                                     label="Công ty khách hàng" 
                                     value={jobRequest.clientCompanyName ?? "—"} 

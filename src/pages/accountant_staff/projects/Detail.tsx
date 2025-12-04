@@ -24,7 +24,8 @@ import {
   Globe2,
   Factory,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Hash
 } from "lucide-react";
 
 export default function AccountantProjectDetailPage() {
@@ -672,6 +673,11 @@ export default function AccountantProjectDetailPage() {
               <div className="animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <InfoItem 
+                    label="Mã dự án" 
+                    value={project.code || "—"}
+                    icon={<Hash className="w-4 h-4" />}
+                  />
+                  <InfoItem 
                     label="Tên dự án" 
                     value={project.name}
                     icon={<FileText className="w-4 h-4" />}
@@ -1119,7 +1125,7 @@ export default function AccountantProjectDetailPage() {
               </div>
               {company.contactPerson && (
                 <div>
-                  <p className="text-sm font-medium text-neutral-600 mb-1">Người liên hệ</p>
+                  <p className="text-sm font-medium text-neutral-600 mb-1">Người đại diện</p>
                   <p className="text-gray-900">{company.contactPerson}</p>
                 </div>
               )}

@@ -412,7 +412,7 @@ export default function ManagerClientCompanyDetailPage() {
                     icon={<Briefcase className="w-4 h-4" />}
                   />
                   <InfoItem
-                    label="Người liên hệ"
+                    label="Người đại diện"
                     value={company.contactPerson ?? "—"}
                     icon={<User className="w-4 h-4" />}
                   />
