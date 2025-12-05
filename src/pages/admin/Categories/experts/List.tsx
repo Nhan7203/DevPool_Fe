@@ -3,7 +3,6 @@ import Sidebar from "../../../../components/common/Sidebar";
 import Breadcrumb from "../../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { expertService, type Expert } from "../../../../services/Expert";
-import { type Partner, partnerService } from "../../../../services/Partner";
 import { Button } from "../../../../components/ui/button";
 import {
   Search,
@@ -26,7 +25,6 @@ export default function ExpertListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [onlyPartnerRepresentative, setOnlyPartnerRepresentative] = useState(false);
-  const [partners, setPartners] = useState<Partner[]>([]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,10 +36,6 @@ export default function ExpertListPage() {
     name: "",
     email: "",
     phone: "",
-    company: "",
-    specialization: "",
-    isPartnerRepresentative: false,
-    partnerId: null as number | null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -62,28 +56,15 @@ export default function ExpertListPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [expertsData, partnersData] = await Promise.all([
-          expertService.getAll({ excludeDeleted: true }),
-          partnerService.getAll(),
-        ]);
+        const expertsData = await expertService.getAll({ excludeDeleted: true });
 
         const expertArr = Array.isArray(expertsData) ? expertsData : [];
         setExperts(expertArr);
         setFilteredExperts(expertArr);
-
-        const partnerArr = Array.isArray(partnersData)
-          ? partnersData
-          : Array.isArray((partnersData as any)?.items)
-          ? (partnersData as any).items
-          : Array.isArray((partnersData as any)?.data)
-          ? (partnersData as any).data
-          : [];
-        setPartners(partnerArr);
       } catch (err) {
         console.error("❌ Lỗi khi tải danh sách expert:", err);
         setExperts([]);
         setFilteredExperts([]);
-        setPartners([]);
       } finally {
         setLoading(false);
       }
@@ -182,11 +163,6 @@ export default function ExpertListPage() {
       newErrors.phone = "Số điện thoại phải có đúng 10 chữ số";
     }
 
-    // Validate partner representative
-    if (newExpert.isPartnerRepresentative && !newExpert.partnerId) {
-      newErrors.partnerId = "Vui lòng chọn công ty đối tác trước khi đánh dấu là đại diện đối tác.";
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -198,10 +174,6 @@ export default function ExpertListPage() {
         name: newExpert.name.trim(),
         email: newExpert.email || undefined,
         phone: newExpert.phone || undefined,
-        company: newExpert.company || undefined,
-        partnerId: newExpert.partnerId ?? undefined,
-        specialization: newExpert.specialization || undefined,
-        isPartnerRepresentative: newExpert.isPartnerRepresentative,
       });
       setExperts((prev) => [...prev, created]);
       setShowCreateModal(false);
@@ -209,10 +181,6 @@ export default function ExpertListPage() {
         name: "",
         email: "",
         phone: "",
-        company: "",
-        specialization: "",
-        isPartnerRepresentative: false,
-        partnerId: null,
       });
       setErrors({});
     } catch (err) {
@@ -311,7 +279,7 @@ export default function ExpertListPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Tìm theo tên, email, công ty, chuyên môn..."
+                  placeholder="Tìm theo tên, email..."
                   className="w-full pl-12 pr-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 bg-neutral-50 focus:bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -400,13 +368,10 @@ export default function ExpertListPage() {
                     Tên chuyên gia
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Liên hệ
+                    Email
                   </th>
                   <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Công ty / Đối tác
-                  </th>
-                  <th className="py-4 px-6 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Chuyên môn
+                    Số điện thoại
                   </th>
                   <th className="py-4 px-6 text-center text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Thao tác
@@ -416,7 +381,7 @@ export default function ExpertListPage() {
               <tbody className="divide-y divide-neutral-200">
                 {filteredExperts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12">
+                    <td colSpan={5} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
                           <UserCog className="w-8 h-8 text-neutral-400" />
@@ -450,29 +415,24 @@ export default function ExpertListPage() {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex flex-col gap-1 text-sm text-neutral-700">
-                          {expert.email && (
-                            <span className="inline-flex items-center gap-1">
-                              <Mail className="w-3 h-3 text-neutral-400" />
-                              {expert.email}
-                            </span>
-                          )}
-                          {expert.phone && (
-                            <span className="inline-flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-neutral-400" />
-                              {expert.phone}
-                            </span>
-                          )}
-                          {!expert.email && !expert.phone && (
-                            <span className="text-neutral-400">—</span>
-                          )}
-                        </div>
+                        {expert.email ? (
+                          <span className="inline-flex items-center gap-1 text-sm text-neutral-700">
+                            <Mail className="w-3 h-3 text-neutral-400" />
+                            {expert.email}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-neutral-400">—</span>
+                        )}
                       </td>
-                      <td className="py-4 px-6 text-sm text-neutral-700">
-                        {expert.partnerName || expert.company || "—"}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-neutral-700">
-                        {expert.specialization || "—"}
+                      <td className="py-4 px-6">
+                        {expert.phone ? (
+                          <span className="inline-flex items-center gap-1 text-sm text-neutral-700">
+                            <Phone className="w-3 h-3 text-neutral-400" />
+                            {expert.phone}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-neutral-400">—</span>
+                        )}
                       </td>
                       <td className="py-4 px-6 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -605,92 +565,6 @@ export default function ExpertListPage() {
                     )}
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Công ty / Đơn vị (Đối tác)
-                  </label>
-                  <select
-                    value={newExpert.partnerId ? String(newExpert.partnerId) : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (!value) {
-                        setNewExpert((p) => ({
-                          ...p,
-                          partnerId: null,
-                          company: "",
-                          isPartnerRepresentative: false,
-                        }));
-                        return;
-                      }
-                      const partnerId = Number(value);
-                      const selectedPartner = partners.find((p) => p.id === partnerId);
-                      setNewExpert((prev) => ({
-                        ...prev,
-                        partnerId,
-                        company: selectedPartner?.companyName || "",
-                      }));
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
-                  >
-                    <option value="">Chọn công ty đối tác (nếu có)</option>
-                    {partners.map((partner) => (
-                      <option key={partner.id} value={partner.id}>
-                        {partner.companyName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Hiển thị trường nhập company khi không chọn partner */}
-                {!newExpert.partnerId && (
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
-                      Tên công ty / Đơn vị
-                    </label>
-                    <input
-                      type="text"
-                      value={newExpert.company}
-                      onChange={(e) =>
-                        setNewExpert((p) => ({ ...p, company: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                      placeholder="VD: Công ty ABC, Tổ chức XYZ, ..."
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Chuyên môn chính
-                  </label>
-                  <input
-                    type="text"
-                    value={newExpert.specialization}
-                    onChange={(e) =>
-                      setNewExpert((p) => ({ ...p, specialization: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                    placeholder="VD: .NET, Frontend, Data, ..."
-                  />
-                </div>
-
-                {newExpert.partnerId && (
-                  <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={newExpert.isPartnerRepresentative}
-                      onChange={(e) =>
-                        setNewExpert((p) => ({
-                          ...p,
-                          isPartnerRepresentative: e.target.checked,
-                        }))
-                      }
-                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                    Là đại diện đối tác (Partner Representative)
-                  </label>
-                )}
               </div>
 
               <div className="mt-6 flex justify-end gap-3">

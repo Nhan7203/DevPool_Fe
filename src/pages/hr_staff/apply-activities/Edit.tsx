@@ -165,8 +165,9 @@ export default function ApplyActivityEditPage() {
 
   // Tự động gợi ý scheduledDate khi vào trang Edit:
   // - Chỉ auto-fill khi activity hiện tại CHƯA có scheduledDate (form.scheduledDate rỗng)
+  // - Nếu là bước đầu tiên → gợi ý = thời gian hiện tại
   // - Nếu có bước liền trước đã có lịch → gợi ý = lịch bước trước + 1 phút
-  // - Nếu là bước đầu tiên hoặc bước trước chưa có lịch → gợi ý = thời gian hiện tại
+  // - Nếu bước trước chưa có lịch (và không phải bước đầu tiên) → để scheduledDate = null/empty
   useEffect(() => {
     if (!form.processStepId) return;
     if (form.scheduledDate && form.scheduledDate.trim() !== "") return;
@@ -174,35 +175,45 @@ export default function ApplyActivityEditPage() {
 
     const selectedIndex = sortedSteps.findIndex(step => step.id === form.processStepId);
     let baseDate: Date | null = null;
+    let shouldSetEmpty = false;
 
-    // Nếu không phải bước đầu tiên, thử lấy lịch của bước liền trước
-    if (selectedIndex > 0) {
+    // Nếu là bước đầu tiên → dùng thời gian hiện tại
+    if (selectedIndex <= 0) {
+      baseDate = new Date();
+    } else {
+      // Nếu không phải bước đầu tiên, thử lấy lịch của bước liền trước
       const previousStep = sortedSteps[selectedIndex - 1];
       const prevSchedule = activitySchedules[previousStep.id];
       if (prevSchedule) {
         const prevDate = new Date(prevSchedule); // UTC string từ BE -> Date (mốc thời gian tuyệt đối)
         baseDate = new Date(prevDate.getTime() + 1 * 60 * 1000); // +1 phút
+      } else {
+        // Bước trước chưa có lịch → để scheduledDate = null/empty
+        shouldSetEmpty = true;
       }
     }
 
-    // Nếu không có lịch bước trước hoặc là bước đầu tiên → dùng thời gian hiện tại (local)
-    if (!baseDate) {
-      baseDate = new Date();
+    if (shouldSetEmpty) {
+      // Để scheduledDate = null/empty khi bước trước chưa có lịch
+      setForm(prev => ({
+        ...prev,
+        scheduledDate: "",
+      }));
+    } else if (baseDate) {
+      // Format về yyyy-MM-ddTHH:mm cho input datetime-local (theo local time)
+      const year = baseDate.getFullYear();
+      const month = String(baseDate.getMonth() + 1).padStart(2, "0");
+      const day = String(baseDate.getDate()).padStart(2, "0");
+      const hours = String(baseDate.getHours()).padStart(2, "0");
+      const minutes = String(baseDate.getMinutes()).padStart(2, "0");
+
+      const suggested = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+      setForm(prev => ({
+        ...prev,
+        scheduledDate: suggested,
+      }));
     }
-
-    // Format về yyyy-MM-ddTHH:mm cho input datetime-local (theo local time)
-    const year = baseDate.getFullYear();
-    const month = String(baseDate.getMonth() + 1).padStart(2, "0");
-    const day = String(baseDate.getDate()).padStart(2, "0");
-    const hours = String(baseDate.getHours()).padStart(2, "0");
-    const minutes = String(baseDate.getMinutes()).padStart(2, "0");
-
-    const suggested = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-    setForm(prev => ({
-      ...prev,
-      scheduledDate: suggested,
-    }));
   }, [form.processStepId, form.scheduledDate, sortedSteps, activitySchedules]);
 
   const previousConstraint = useMemo(() => {

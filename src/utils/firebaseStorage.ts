@@ -1,4 +1,4 @@
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, getBlob } from 'firebase/storage';
 import { storage, auth } from '../configs/firebase';
 import { ensureFirebaseAuth } from '../services/Auth';
 
@@ -165,6 +165,58 @@ export const getFileInfo = (url: string) => {
     return { fileName };
   } catch {
     return { fileName: 'unknown' };
+  }
+};
+
+/**
+ * Extract Firebase Storage path from download URL
+ * @param url - Firebase Storage download URL
+ * @returns Storage path or null if invalid
+ */
+export const extractFirebasePath = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    const pathMatch = urlObj.pathname.match(/\/o\/(.+)/);
+    if (pathMatch && pathMatch[1]) {
+      return decodeURIComponent(pathMatch[1]);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Download file from Firebase Storage as Blob (tránh lỗi CORS)
+ * @param fileUrl - Firebase Storage download URL
+ * @returns Promise with Blob
+ */
+export const downloadFileFromFirebase = async (fileUrl: string): Promise<Blob> => {
+  // Kiểm tra Firebase authentication
+  const isAuthenticated = await ensureFirebaseAuth();
+  const currentUser = auth.currentUser;
+  
+  if (!isAuthenticated || !currentUser) {
+    console.error('Firebase auth: No current user');
+    throw new Error('Bạn chưa đăng nhập Firebase. Vui lòng đăng nhập lại để có quyền tải file.');
+  }
+
+  // Extract path from URL
+  const filePath = extractFirebasePath(fileUrl);
+  if (!filePath) {
+    throw new Error('Không thể xác định đường dẫn file từ URL');
+  }
+
+  try {
+    // Create storage reference from path
+    const storageRef = ref(storage, filePath);
+    
+    // Download file as Blob using Firebase SDK (tránh lỗi CORS)
+    const blob = await getBlob(storageRef);
+    return blob;
+  } catch (error) {
+    console.error('Error downloading file from Firebase:', error);
+    throw new Error('Không thể tải file từ Firebase Storage: ' + (error as Error).message);
   }
 };
 
