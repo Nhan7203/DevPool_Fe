@@ -13,8 +13,6 @@ import {
   UserCog,
   Mail,
   Phone,
-  Building2,
-  BadgeCheck,
   Trash2,
   Edit2,
   Search,
@@ -39,9 +37,6 @@ export default function ExpertDetailPage() {
     name: "",
     email: "",
     phone: "",
-    company: "",
-    specialization: "",
-    isPartnerRepresentative: false,
   });
 
   useEffect(() => {
@@ -60,9 +55,6 @@ export default function ExpertDetailPage() {
           name: expertData.name,
           email: expertData.email || "",
           phone: expertData.phone || "",
-          company: expertData.company || "",
-          specialization: expertData.specialization || "",
-          isPartnerRepresentative: expertData.isPartnerRepresentative,
         });
         setExpertSkillGroups(Array.isArray(groups) ? groups : []);
         const skillGroupArray = Array.isArray(allGroups)
@@ -117,14 +109,12 @@ export default function ExpertDetailPage() {
   const handleAssignSkillGroup = async () => {
     if (!expert || !selectedSkillGroupId || typeof selectedSkillGroupId !== "number") return;
 
-    // Mỗi chuyên gia chỉ được gán 1 nhóm kỹ năng
-    if (expertSkillGroups.length >= 1) {
-      alert(
-        "Mỗi chuyên gia chỉ được gán tối đa 1 nhóm kỹ năng phụ trách.\n" +
-          "Nếu muốn đổi nhóm, hãy hủy gán nhóm hiện tại trước."
-      );
+    // Kiểm tra xem nhóm kỹ năng đã được gán chưa
+    if (expertSkillGroups.some((g) => g.skillGroupId === selectedSkillGroupId)) {
+      alert("Nhóm kỹ năng này đã được gán cho chuyên gia này rồi.");
       return;
     }
+
     try {
       setAssigning(true);
       const created = await expertService.assignSkillGroup(expert.id, {
@@ -184,18 +174,12 @@ export default function ExpertDetailPage() {
         name: editForm.name.trim(),
         email: editForm.email || undefined,
         phone: editForm.phone || undefined,
-        company: editForm.company || undefined,
-        specialization: editForm.specialization || undefined,
-        isPartnerRepresentative: editForm.isPartnerRepresentative,
       });
       setExpert({
         ...expert,
         name: editForm.name.trim(),
         email: editForm.email || null,
         phone: editForm.phone || null,
-        company: editForm.company || null,
-        specialization: editForm.specialization || null,
-        isPartnerRepresentative: editForm.isPartnerRepresentative,
       });
       setEditing(false);
     } catch (err) {
@@ -269,9 +253,6 @@ export default function ExpertDetailPage() {
                       name: expert.name,
                       email: expert.email || "",
                       phone: expert.phone || "",
-                      company: expert.company || "",
-                      specialization: expert.specialization || "",
-                      isPartnerRepresentative: expert.isPartnerRepresentative,
                     });
                     setErrors({});
                   } else if (editing) {
@@ -297,31 +278,15 @@ export default function ExpertDetailPage() {
               </div>
               <div className="space-y-1">
                 {!editing ? (
-                  <>
-                    <h2 className="text-xl font-semibold text-gray-900">{expert.name}</h2>
-                    <p className="text-sm text-neutral-600">
-                      {expert.specialization || "Chưa cập nhật chuyên môn"}
-                    </p>
-                  </>
+                  <h2 className="text-xl font-semibold text-gray-900">{expert.name}</h2>
                 ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={editForm.name}
-                      onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 mb-2"
-                      placeholder="Tên chuyên gia"
-                    />
-                    <input
-                      type="text"
-                      value={editForm.specialization}
-                      onChange={(e) =>
-                        setEditForm((p) => ({ ...p, specialization: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                      placeholder="Chuyên môn chính"
-                    />
-                  </>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    placeholder="Tên chuyên gia"
+                  />
                 )}
               </div>
             </div>
@@ -391,47 +356,6 @@ export default function ExpertDetailPage() {
                   <p className="text-xs text-red-500 ml-6">{errors.phone}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-neutral-400" />
-                {!editing ? (
-                  <span>{expert.partnerName || expert.company || "Không có thông tin công ty"}</span>
-                ) : (
-                  <input
-                    type="text"
-                    value={editForm.company}
-                    onChange={(e) =>
-                      setEditForm((p) => ({ ...p, company: e.target.value }))
-                    }
-                    className="flex-1 px-2 py-1 border border-neutral-300 rounded-md text-sm focus:ring-1 focus:ring-primary-500/20 focus:border-primary-500"
-                    placeholder="Công ty / Đơn vị"
-                  />
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <BadgeCheck className="w-4 h-4 text-emerald-500" />
-                {!editing ? (
-                  <span>
-                    {expert.isPartnerRepresentative
-                      ? "Đại diện đối tác"
-                      : "Chuyên gia nội bộ / cộng tác"}
-                  </span>
-                ) : (
-                  <label className="inline-flex items-center gap-2 text-xs text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={editForm.isPartnerRepresentative}
-                      onChange={(e) =>
-                        setEditForm((p) => ({
-                          ...p,
-                          isPartnerRepresentative: e.target.checked,
-                        }))
-                      }
-                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                    Là đại diện đối tác
-                  </label>
-                )}
-              </div>
             </div>
 
             <div className="flex items-center justify-between mt-2">
@@ -448,9 +372,6 @@ export default function ExpertDetailPage() {
                           name: expert.name,
                           email: expert.email || "",
                           phone: expert.phone || "",
-                          company: expert.company || "",
-                          specialization: expert.specialization || "",
-                          isPartnerRepresentative: expert.isPartnerRepresentative,
                         });
                       }
                       setErrors({});
@@ -502,16 +423,9 @@ export default function ExpertDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (expertSkillGroups.length < 1) {
-                      setIsSkillGroupDropdownOpen((prev) => !prev);
-                    }
+                    setIsSkillGroupDropdownOpen((prev) => !prev);
                   }}
-                  disabled={expertSkillGroups.length >= 1}
-                  className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all text-sm ${
-                    expertSkillGroups.length >= 1
-                      ? "border-neutral-300 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-                      : "border-neutral-300 focus:border-primary-500"
-                  }`}
+                  className="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white text-left focus:ring-2 focus:ring-primary-500/20 transition-all text-sm border-neutral-300 focus:border-primary-500"
                 >
                   <div className="flex items-center gap-2 text-sm text-neutral-700">
                     <Search className="w-4 h-4 text-neutral-400" />
@@ -519,13 +433,11 @@ export default function ExpertDetailPage() {
                       {selectedSkillGroupId && typeof selectedSkillGroupId === "number"
                         ? allSkillGroups.find((g) => g.id === selectedSkillGroupId)?.name ||
                           "Chọn nhóm kỹ năng"
-                        : expertSkillGroups.length >= 1
-                        ? "Đã có nhóm kỹ năng. Hãy hủy gán để chọn nhóm khác."
                         : "Chọn nhóm kỹ năng..."}
                     </span>
                   </div>
                 </button>
-                {isSkillGroupDropdownOpen && expertSkillGroups.length < 1 && (
+                {isSkillGroupDropdownOpen && (
                   <div 
                     className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
                     onMouseLeave={() => {
@@ -563,24 +475,26 @@ export default function ExpertDetailPage() {
                             </p>
                           );
                         }
-                        return filtered.map((group) => (
-                          <button
-                            type="button"
-                            key={group.id}
-                            onClick={() => {
-                              setSelectedSkillGroupId(group.id);
-                              setIsSkillGroupDropdownOpen(false);
-                              setSkillGroupSearchQuery("");
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-sm ${
-                              selectedSkillGroupId === group.id
-                                ? "bg-primary-50 text-primary-700"
-                                : "hover:bg-neutral-50 text-neutral-700"
-                            }`}
-                          >
-                            {group.name}
-                          </button>
-                        ));
+                        return filtered
+                          .filter((group) => !expertSkillGroups.some((g) => g.skillGroupId === group.id))
+                          .map((group) => (
+                            <button
+                              type="button"
+                              key={group.id}
+                              onClick={() => {
+                                setSelectedSkillGroupId(group.id);
+                                setIsSkillGroupDropdownOpen(false);
+                                setSkillGroupSearchQuery("");
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                selectedSkillGroupId === group.id
+                                  ? "bg-primary-50 text-primary-700"
+                                  : "hover:bg-neutral-50 text-neutral-700"
+                              }`}
+                            >
+                              {group.name}
+                            </button>
+                          ));
                       })()}
                     </div>
                   </div>
@@ -589,19 +503,12 @@ export default function ExpertDetailPage() {
               <button
                 type="button"
                 onClick={handleAssignSkillGroup}
-                disabled={assigning || !selectedSkillGroupId || expertSkillGroups.length >= 1}
+                disabled={assigning || !selectedSkillGroupId || expertSkillGroups.some((g) => g.skillGroupId === selectedSkillGroupId)}
                 className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {assigning ? "Đang gán..." : "Gán nhóm"}
               </button>
             </div>
-            {expertSkillGroups.length >= 1 && (
-              <p className="text-[11px] text-amber-600 mt-1">
-                Mỗi chuyên gia chỉ được gán <span className="font-semibold">1 nhóm kỹ năng</span>. Hãy
-                dùng nút <span className="font-semibold">"Hủy gán"</span> ở bên dưới nếu muốn đổi sang
-                nhóm khác.
-              </p>
-            )}
           </div>
 
           <div className="border-t border-neutral-200 pt-4">

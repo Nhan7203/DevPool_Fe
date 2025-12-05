@@ -28,7 +28,7 @@ import { notificationService, NotificationPriority, NotificationType } from "../
 import { userService } from "../../../services/User";
 import { decodeJWT } from "../../../services/Auth";
 import { WorkingMode } from "../../../types/WorkingMode";
-import { uploadFile, uploadTalentCV } from "../../../utils/firebaseStorage";
+import { uploadFile, uploadTalentCV, downloadFileFromFirebase } from "../../../utils/firebaseStorage";
 import { saveFileToIndexedDB, getFileFromIndexedDB, deleteFileFromIndexedDB } from "../../../utils/indexedDBStorage";
 import { ref, deleteObject } from "firebase/storage";
 import { storage } from "../../../configs/firebase";
@@ -281,6 +281,7 @@ export default function TalentDetailPage() {
   ];
 
   // Tự động đóng form khi chuyển tab (nếu form không thuộc tab hiện tại)
+  // Lưu ý: Form CV không bị đóng khi chuyển tab để người dùng có thể xem các gợi ý phân tích ở các tab khác
   useEffect(() => {
     if (isSubmitting) return; // Không đóng form khi đang submit
     
@@ -295,9 +296,14 @@ export default function TalentDetailPage() {
     };
     
     if (showInlineForm) {
+      // Không đóng form CV khi chuyển tab
+      if (showInlineForm === "cv") {
+        return;
+      }
+      
       const formTab = formTabMap[showInlineForm];
       if (formTab && formTab !== activeTab) {
-        // Form không thuộc tab hiện tại, đóng form
+        // Form không thuộc tab hiện tại, đóng form (trừ form CV)
         setShowInlineForm(null);
       }
     }
@@ -963,13 +969,8 @@ export default function TalentDetailPage() {
     setAnalysisError(null);
 
     try {
-      const downloadUrl = normalizeFirebaseUrl(cv.cvFileUrl);
-      const response = await fetch(downloadUrl, { cache: "no-cache", mode: "cors" });
-      if (!response.ok || response.type === "opaque") {
-        throw new Error("Không thể tải CV từ đường dẫn hiện có (CORS).");
-      }
-
-      const blob = await response.blob();
+      // Sử dụng Firebase SDK để download file (tránh lỗi CORS)
+      const blob = await downloadFileFromFirebase(cv.cvFileUrl);
       const sanitizedVersionName = `v${cv.version}`.replace(/[^a-zA-Z0-9-_]/g, "_");
       const file = new File([blob], `${sanitizedVersionName || "cv"}_${cv.id}.pdf`, { type: blob.type || "application/pdf" });
 
@@ -990,11 +991,7 @@ export default function TalentDetailPage() {
       console.error("❌ Lỗi phân tích CV:", error);
       const message = (error as { message?: string }).message ?? "Không thể phân tích CV";
       setAnalysisError(message);
-      if ((error as Error).message?.includes("CORS")) {
-        alert("⚠️ Không thể tải CV tự động do giới hạn CORS. Vui lòng tải file CV xuống và sử dụng lại nút phân tích thủ công.");
-      } else {
-        alert(`❌ ${message}`);
-      }
+      alert(`❌ ${message}`);
     } finally {
       setAnalysisLoadingId(null);
     }
@@ -2137,11 +2134,83 @@ export default function TalentDetailPage() {
     confirmMessage += "• Chứng chỉ\n";
     confirmMessage += "• Dự án\n";
     confirmMessage += "• Kinh nghiệm\n\n";
+    confirmMessage += "Form tạo CV sẽ được tự động điền với dữ liệu từ phân tích.\n\n";
     confirmMessage += "Bạn có muốn tiếp tục không?";
     
     const confirmed = window.confirm(confirmMessage);
     
     if (!confirmed) return;
+    
+    // Tự động điền form CV từ dữ liệu phân tích
+    // 1. Tự động chọn jobRoleLevel từ gợi ý phân tích (nếu có)
+    let autoSelectedJobRoleLevelId: number | undefined = undefined;
+    if (inlineCVAnalysisResult.jobRoleLevels?.newFromCV && inlineCVAnalysisResult.jobRoleLevels.newFromCV.length > 0) {
+      // Tính toán jobRoleLevelComparisons từ inlineCVAnalysisResult
+      const cvKeys = new Set<string>();
+      const recognized: Array<{ suggestion: any; system: JobRoleLevel }> = [];
+      
+      inlineCVAnalysisResult.jobRoleLevels.newFromCV.forEach((suggestion) => {
+        const key = normalizeJobRoleKey(suggestion.position, suggestion.level);
+        if (key === "|") return;
+        cvKeys.add(key);
+        
+        const system = jobRoleLevelSystemMap.get(key);
+        if (system) {
+          recognized.push({ suggestion, system });
+        }
+      });
+      
+      // Lấy jobRoleLevel đầu tiên từ recognized (có trong hệ thống)
+      if (recognized.length > 0) {
+        autoSelectedJobRoleLevelId = recognized[0].system.id;
+      } else {
+        // Nếu không tìm thấy trong recognized, thử tìm theo position gần đúng
+        const firstSuggestion = inlineCVAnalysisResult.jobRoleLevels.newFromCV[0];
+        if (firstSuggestion.position) {
+          const normalizedPosition = (firstSuggestion.position ?? "").trim().toLowerCase();
+          // Tìm jobRoleLevel có tên gần giống với position
+          const matchedJobRoleLevel = lookupJobRoleLevels.find((jrl) => {
+            const normalizedName = (jrl.name ?? "").trim().toLowerCase();
+            return normalizedName.includes(normalizedPosition) || normalizedPosition.includes(normalizedName);
+          });
+          if (matchedJobRoleLevel) {
+            autoSelectedJobRoleLevelId = matchedJobRoleLevel.id;
+          }
+        }
+      }
+    }
+    
+    // 2. Tự động điền summary từ dữ liệu phân tích
+    const summaryParts: string[] = [];
+    if (inlineCVAnalysisResult.basicInfo.suggested.fullName) {
+      summaryParts.push(`Tên: ${inlineCVAnalysisResult.basicInfo.suggested.fullName}`);
+    }
+    if (inlineCVAnalysisResult.skills && inlineCVAnalysisResult.skills.newFromCV.length > 0) {
+      const skills = inlineCVAnalysisResult.skills.newFromCV.slice(0, 5).map((s: any) => s.skillName).join(', ');
+      summaryParts.push(`Kỹ năng: ${skills}`);
+    }
+    if (inlineCVAnalysisResult.jobRoleLevels && inlineCVAnalysisResult.jobRoleLevels.newFromCV.length > 0) {
+      const positions = inlineCVAnalysisResult.jobRoleLevels.newFromCV.slice(0, 3).map((jrl: any) => jrl.position).filter(Boolean).join(', ');
+      if (positions) {
+        summaryParts.push(`Vị trí: ${positions}`);
+      }
+    }
+    const autoSummary = summaryParts.length > 0 ? summaryParts.join('. ') + '.' : undefined;
+    
+    // Cập nhật form CV với dữ liệu tự động điền
+    setInlineCVForm(prev => {
+      // Ưu tiên điền jobRoleLevelId từ phân tích nếu tìm thấy
+      const newJobRoleLevelId = autoSelectedJobRoleLevelId 
+        ? autoSelectedJobRoleLevelId 
+        : (prev.jobRoleLevelId && prev.jobRoleLevelId !== 0 ? prev.jobRoleLevelId : 0);
+      
+      return {
+        ...prev,
+        jobRoleLevelId: newJobRoleLevelId,
+        // Chỉ điền summary nếu chưa có
+        summary: prev.summary || autoSummary || "",
+      };
+    });
     
     // Set analysis result để hiển thị gợi ý ở các tab khác
     setAnalysisResult(inlineCVAnalysisResult);
@@ -2160,11 +2229,12 @@ export default function TalentDetailPage() {
     }
     
     // Đóng modal và hiện form đầy đủ - KHÔNG đóng form, giữ nguyên để user có thể xem lại
+    // Giữ file đã chọn (selectedCVFile và cvPreviewUrl) - không cần upload lên Firebase ngay
     setShowInlineCVAnalysisModal(false);
     setShowCVFullForm(true);
     
     // Giữ nguyên tab CV, không tự động chuyển tab
-    alert("✅ Đã áp dụng kết quả phân tích! Vui lòng xem các gợi ý ở các tab tương ứng.");
+    alert("✅ Đã áp dụng kết quả phân tích! Form tạo CV đã được tự động điền. Vui lòng xem các gợi ý ở các tab tương ứng.");
   };
 
   // Helper function to check if values are different
@@ -3161,8 +3231,8 @@ export default function TalentDetailPage() {
       await talentCVService.create(finalForm);
       alert("✅ Đã tạo CV thành công!");
       
-      // Hủy phân tích và đóng form (không cảnh báo xóa file vì file đã được lưu vào CV)
-      await clearAnalysisResult();
+      // Giữ lại kết quả phân tích để người dùng có thể tiếp tục xử lý các gợi ý
+      // Không gọi clearAnalysisResult() ở đây
       
       // Xóa dữ liệu form CV từ storage
       if (CV_FORM_STORAGE_KEY) {
