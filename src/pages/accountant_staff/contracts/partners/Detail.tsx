@@ -34,10 +34,13 @@ import { talentAssignmentService, type TalentAssignmentModel } from "../../../..
 import { projectService } from "../../../../services/Project";
 import { partnerService } from "../../../../services/Partner";
 import { talentService } from "../../../../services/Talent";
-import { partnerDocumentService, type PartnerDocument } from "../../../../services/PartnerDocument";
+import { partnerDocumentService, type PartnerDocument, type PartnerDocumentCreate } from "../../../../services/PartnerDocument";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { uploadFile } from "../../../../utils/firebaseStorage";
 import { formatNumberInput, parseNumberInput } from "../../../../utils/helpers";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { decodeJWT } from "../../../../services/Auth";
+import { getAccessToken } from "../../../../utils/storage";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -193,6 +196,11 @@ export default function PartnerContractDetailPage() {
     actualWorkHours: 0,
     notes: null,
   });
+  
+  // File states
+  const [worksheetFile, setWorksheetFile] = useState<File | null>(null);
+  const [sowFile, setSowFile] = useState<File | null>(null);
+  
   const [markAsPaidForm, setMarkAsPaidForm] = useState<PartnerContractPaymentMarkAsPaidModel>({
     paidAmount: 0,
     paymentDate: new Date().toISOString().split('T')[0],
@@ -207,6 +215,23 @@ export default function PartnerContractDetailPage() {
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Get current user
+  const { user } = useAuth();
+
+  // Helper function to get current user ID
+  const getCurrentUserId = (): string | null => {
+    const token = getAccessToken();
+    if (!token) {
+      // Fallback to user.id from context if token not available
+      return user?.id || null;
+    }
+    const payload = decodeJWT(token);
+    // Try multiple possible fields in JWT payload
+    const userId = payload?.nameid || payload?.sub || payload?.userId || payload?.uid;
+    // Fallback to user.id from context if JWT doesn't have userId
+    return userId || user?.id || null;
+  };
 
   const fetchData = async () => {
     try {
@@ -498,8 +523,47 @@ export default function PartnerContractDetailPage() {
       }
     }
 
+    // Validate SOW file
+    if (!sowFile) {
+      alert("Vui lòng upload file SOW");
+      return;
+    }
+
+    // Find SOWExcel document type
+    const sowType = Array.from(documentTypes.values()).find(
+      (type) => type.typeName.toLowerCase() === "sowexcel"
+    );
+
+    if (!sowType) {
+      alert("Không tìm thấy loại tài liệu SOWExcel. Vui lòng liên hệ quản trị viên.");
+      return;
+    }
+
     try {
       setIsProcessing(true);
+      
+      // Upload SOW file
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+
+      const filePath = `partner-sow/${contractPayment.id}/sow_${Date.now()}.${sowFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(sowFile, filePath);
+
+      // Create PartnerDocument for SOW
+      const documentPayload: PartnerDocumentCreate = {
+        partnerContractPaymentId: Number(id),
+        documentTypeId: sowType.id,
+        fileName: sowFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: "Statement of Work (SOW)",
+        source: "Accountant",
+      };
+      await partnerDocumentService.create(documentPayload);
+
       const payload: PartnerContractPaymentVerifyModel = {
         unitPriceForeignCurrency: verifyForm.unitPriceForeignCurrency,
         currencyCode: verifyForm.currencyCode,
@@ -523,6 +587,7 @@ export default function PartnerContractDetailPage() {
         standardHours: contractPayment.standardHours || 160,
         notes: null,
       });
+      setSowFile(null);
       alert("Xác minh hợp đồng thành công!");
     } catch (err: unknown) {
       console.error("❌ Lỗi xác minh hợp đồng:", err);
@@ -540,13 +605,55 @@ export default function PartnerContractDetailPage() {
       alert("Vui lòng nhập số giờ làm việc thực tế");
       return;
     }
+    
+    // Validate worksheet file
+    if (!worksheetFile) {
+      alert("Vui lòng upload file Worksheet (bắt buộc)");
+      return;
+    }
+    
+    // Find Worksheet document type
+    const worksheetType = Array.from(documentTypes.values()).find(
+      (type) => type.typeName.toLowerCase() === "worksheet"
+    );
+    
+    if (!worksheetType) {
+      alert("Không tìm thấy loại tài liệu Worksheet. Vui lòng liên hệ quản trị viên.");
+      return;
+    }
 
     try {
       setIsProcessing(true);
+      
+      // Start billing
       await partnerContractPaymentService.startBilling(Number(id), billingForm);
+      
+      // Upload worksheet file and create document
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+      
+      const filePath = `partner-contracts/${contractPayment.id}/worksheet_${Date.now()}.${worksheetFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(worksheetFile, filePath);
+      
+      // Create worksheet document
+      const documentData: PartnerDocumentCreate = {
+        partnerContractPaymentId: Number(id),
+        documentTypeId: worksheetType.id,
+        fileName: worksheetFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: `Worksheet cho tính toán thanh toán - ${new Date().toLocaleDateString("vi-VN")}`,
+        source: "Accountant",
+      };
+      await partnerDocumentService.create(documentData);
+      
       await fetchData();
       setShowStartBillingModal(false);
       setBillingForm({ actualWorkHours: 0, notes: null });
+      setWorksheetFile(null);
       alert("Bắt đầu tính toán thành công!");
     } catch (err: unknown) {
       console.error("❌ Lỗi bắt đầu tính toán:", err);
@@ -940,16 +1047,18 @@ export default function PartnerContractDetailPage() {
 
             {/* Tab: Thanh toán */}
             {activeMainTab === "payment" && (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-primary-600" />
+              <div className="space-y-6">
+                {/* Thông tin tiền tệ và tỷ giá */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin tiền tệ và tỷ giá
+                    </h2>
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Thông tin thanh toán
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Đơn giá ngoại tệ"
@@ -962,10 +1071,8 @@ export default function PartnerContractDetailPage() {
                 />
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
-                  label="Phương thức tính toán"
-                  value={
-                    contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm (%)" : "Số tiền cố định"
-                  }
+                  label="Phương pháp tính"
+                  value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : contractPayment.calculationMethod === "Fixed" ? "Số tiền cố định" : "Số tiền cố định"}
                 />
                 {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
                   <InfoItem
@@ -976,75 +1083,92 @@ export default function PartnerContractDetailPage() {
                 )}
                 {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
                   <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
+                    icon={<FileText className="w-4 h-4" />}
                     label="Số tiền cố định"
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ chuẩn"
+                  label="Số giờ tiêu chuẩn"
                   value={`${contractPayment.standardHours} giờ`}
                 />
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ đã báo cáo"
-                  value={
-                    contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined
-                      ? `${contractPayment.reportedHours} giờ`
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<FileText className="w-4 h-4" />}
-                  label="Hệ số man-month"
-                  value={
-                    contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined
-                      ? parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền dự kiến (VND)"
-                  value={formatCurrency(contractPayment.plannedAmountVND)}
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền thực tế (VND)"
-                  value={formatCurrency(contractPayment.actualAmountVND)}
-                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
+                  </div>
+                </div>
+
+                {/* Thông tin thanh toán */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin thanh toán
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
+                  <InfoItem
+                    icon={<Clock className="w-4 h-4" />}
+                    label="Số giờ đã báo cáo"
+                    value={`${contractPayment.reportedHours} giờ`}
+                  />
+                )}
+                {contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Hệ số man-month"
+                    value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
+                  />
+                )}
+                {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền thực tế (VND)"
+                    value={formatCurrency(contractPayment.actualAmountVND)}
+                  />
+                )}
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Tổng đã thanh toán"
                   value={formatCurrency(contractPayment.totalPaidAmount)}
                 />
-                <InfoItem
-                  icon={<Calendar className="w-4 h-4" />}
-                  label="Ngày thanh toán"
-                  value={formatDate(contractPayment.paymentDate)}
-                />
-              </div>
-
-              {contractPayment.rejectionReason && (
-                <div className="mt-6 pt-6 border-t border-neutral-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
-                    <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
-                  </div>
-                  <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
-                </div>
-              )}
-
-                {contractPayment.notes && (
-                  <div className="mt-6 pt-6 border-t border-neutral-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <StickyNote className="w-4 h-4 text-neutral-400" />
-                      <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
-                    </div>
-                    <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
-                  </div>
+                {contractPayment.paymentDate && (
+                  <InfoItem
+                    icon={<Calendar className="w-4 h-4" />}
+                    label="Ngày thanh toán"
+                    value={formatDate(contractPayment.paymentDate)}
+                  />
                 )}
+                  </div>
+
+                  {contractPayment.rejectionReason && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <XCircle className="w-4 h-4 text-red-400" />
+                        <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
+                    </div>
+                  )}
+
+                  {contractPayment.notes && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1366,6 +1490,21 @@ export default function PartnerContractDetailPage() {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-medium mb-2">
+                  File Excel SOW <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setSowFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Vui lòng upload file Excel SOW (.xlsx, .xls)
+                </p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-2">Ghi chú</label>
                 <textarea
                   value={verifyForm.notes || ""}
@@ -1419,6 +1558,7 @@ export default function PartnerContractDetailPage() {
                     standardHours: contractPayment?.standardHours || 160,
                     notes: null,
                   });
+                  setSowFile(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
@@ -1428,6 +1568,7 @@ export default function PartnerContractDetailPage() {
                 onClick={handleVerifyContract}
                 disabled={
                   isProcessing || 
+                  !sowFile ||
                   !verifyForm.unitPriceForeignCurrency || 
                   !verifyForm.exchangeRate || 
                   !verifyForm.standardHours ||
@@ -1491,6 +1632,21 @@ export default function PartnerContractDetailPage() {
                   rows={3}
                   placeholder="Ví dụ: Timesheet: 160h đúng như dự kiến"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  File Worksheet <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setWorksheetFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                  accept=".xlsx,.xls,.csv"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Vui lòng upload file Worksheet (Excel/CSV) cho việc tính toán thanh toán
+                </p>
               </div>
 
               {/* Preview tính toán */}
@@ -1564,6 +1720,7 @@ export default function PartnerContractDetailPage() {
                 onClick={() => {
                   setShowStartBillingModal(false);
                   setBillingForm({ actualWorkHours: 0, notes: null });
+                  setWorksheetFile(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
@@ -1571,7 +1728,7 @@ export default function PartnerContractDetailPage() {
               </button>
               <button
                 onClick={handleStartBilling}
-                disabled={isProcessing || !billingForm.actualWorkHours || billingForm.actualWorkHours <= 0}
+                disabled={isProcessing || !billingForm.actualWorkHours || billingForm.actualWorkHours <= 0 || !worksheetFile}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tính toán"}

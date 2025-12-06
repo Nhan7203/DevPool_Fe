@@ -28,6 +28,10 @@ import {
   type RejectContractModel,
   type ApproveContractModel,
 } from "../../../../services/ClientContractPayment";
+import {
+  partnerContractPaymentService,
+  type PartnerContractPaymentModel,
+} from "../../../../services/PartnerContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
 import { projectService } from "../../../../services/Project";
@@ -37,6 +41,7 @@ import { talentService } from "../../../../services/Talent";
 import { clientDocumentService, type ClientDocument } from "../../../../services/ClientDocument";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { getErrorMessage } from "../../../../utils/helpers";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -166,6 +171,7 @@ export default function ClientContractDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [contractPayment, setContractPayment] = useState<ClientContractPaymentModel | null>(null);
+  const [partnerContractPayment, setPartnerContractPayment] = useState<PartnerContractPaymentModel | null>(null);
   const [projectPeriod, setProjectPeriod] = useState<ProjectPeriodModel | null>(null);
   const [talentAssignment, setTalentAssignment] = useState<TalentAssignmentModel | null>(null);
   const [projectName, setProjectName] = useState<string>("—");
@@ -217,6 +223,23 @@ export default function ClientContractDetailPage() {
 
         setProjectPeriod(periodData);
         setTalentAssignment(assignmentData);
+
+        // Fetch corresponding partner contract payment
+        try {
+          const partnerPayments = await partnerContractPaymentService.getAll({
+            projectPeriodId: paymentData.projectPeriodId,
+            talentAssignmentId: paymentData.talentAssignmentId,
+            excludeDeleted: true,
+          });
+          if (partnerPayments && partnerPayments.length > 0) {
+            setPartnerContractPayment(partnerPayments[0]);
+          } else {
+            setPartnerContractPayment(null);
+          }
+        } catch (err) {
+          console.error("❌ Lỗi tải hợp đồng đối tác tương ứng:", err);
+          setPartnerContractPayment(null);
+        }
 
         // Fetch project info
         if (assignmentData) {
@@ -315,10 +338,26 @@ export default function ClientContractDetailPage() {
 
   // Refresh contract payment data
   const refreshContractPayment = async () => {
-    if (!id) return;
+    if (!id || !contractPayment) return;
     try {
       const paymentData = await clientContractPaymentService.getById(Number(id));
       setContractPayment(paymentData);
+      
+      // Refresh partner contract payment
+      try {
+        const partnerPayments = await partnerContractPaymentService.getAll({
+          projectPeriodId: paymentData.projectPeriodId,
+          talentAssignmentId: paymentData.talentAssignmentId,
+          excludeDeleted: true,
+        });
+        if (partnerPayments && partnerPayments.length > 0) {
+          setPartnerContractPayment(partnerPayments[0]);
+        } else {
+          setPartnerContractPayment(null);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi refresh hợp đồng đối tác:", err);
+      }
     } catch (err) {
       console.error("❌ Lỗi refresh hợp đồng:", err);
     }
@@ -327,6 +366,7 @@ export default function ClientContractDetailPage() {
   // Handler: Approve Contract
   const handleApproveContract = async () => {
     if (!id || !contractPayment) return;
+    
     try {
       setIsProcessing(true);
       const payload: ApproveContractModel = {
@@ -338,7 +378,27 @@ export default function ClientContractDetailPage() {
       setShowApproveContractModal(false);
       setApproveForm({ notes: null });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Lỗi khi duyệt hợp đồng");
+      // Xử lý lỗi từ backend
+      let errorMessage = "Lỗi khi duyệt hợp đồng";
+      
+      // Service throw error.response?.data (object { isSuccess: false, message: "..." })
+      if (err && typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Lấy message từ object (backend trả về { isSuccess: false, message: "..." })
+        if (errorObj.message && typeof errorObj.message === 'string') {
+          errorMessage = errorObj.message;
+        } else if (errorObj.error && typeof errorObj.error === 'string') {
+          errorMessage = errorObj.error;
+        } else {
+          // Fallback: sử dụng helper function
+          errorMessage = getErrorMessage(err) || errorMessage;
+        }
+      } else {
+        // Fallback: sử dụng helper function
+        errorMessage = getErrorMessage(err) || errorMessage;
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -454,10 +514,21 @@ export default function ClientContractDetailPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end gap-3">
+              {/* Warning message if partner contract payment is not Verified or Approved */}
+              {user?.role === "Manager" && 
+               contractPayment.contractStatus === "Verified" && 
+               (!partnerContractPayment || (partnerContractPayment.contractStatus !== "Verified" && partnerContractPayment.contractStatus !== "Approved")) && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>
+                    Không thể duyệt: Hợp đồng đối tác tương ứng chưa được xác minh (Verified) hoặc đã duyệt (Approved)
+                  </span>
+                </div>
+              )}
               {/* Action Buttons for Manager */}
               {user?.role === "Manager" && contractPayment.contractStatus === "Verified" && (
-                <>
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShowApproveContractModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
@@ -472,7 +543,7 @@ export default function ClientContractDetailPage() {
                     <Ban className="w-4 h-4" />
                     Từ chối
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -694,6 +765,18 @@ export default function ClientContractDetailPage() {
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ tiêu chuẩn"
+                  value={`${contractPayment.standardHours} giờ`}
+                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
                   </div>
                 </div>
 
@@ -708,11 +791,6 @@ export default function ClientContractDetailPage() {
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ tiêu chuẩn"
-                  value={`${contractPayment.standardHours} giờ`}
-                />
                 {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
                   <InfoItem
                     icon={<Clock className="w-4 h-4" />}
@@ -732,13 +810,6 @@ export default function ClientContractDetailPage() {
                     icon={<FileText className="w-4 h-4" />}
                     label="Hệ số man-month"
                     value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
-                  />
-                )}
-                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
-                  <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền dự kiến (VND)"
-                    value={formatCurrency(contractPayment.plannedAmountVND)}
                   />
                 )}
                 {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (

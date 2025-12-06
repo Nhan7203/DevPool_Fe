@@ -494,16 +494,18 @@ export default function PartnerContractDetailPage() {
 
             {/* Tab: Thanh toán */}
             {activeMainTab === "payment" && (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-primary-600" />
+              <div className="space-y-6">
+                {/* Thông tin tiền tệ và tỷ giá */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin tiền tệ và tỷ giá
+                    </h2>
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Thông tin thanh toán
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Đơn giá ngoại tệ"
@@ -516,10 +518,8 @@ export default function PartnerContractDetailPage() {
                 />
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
-                  label="Phương thức tính toán"
-                  value={
-                    contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm (%)" : "Số tiền cố định"
-                  }
+                  label="Phương pháp tính"
+                  value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : contractPayment.calculationMethod === "Fixed" ? "Số tiền cố định" : "Số tiền cố định"}
                 />
                 {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
                   <InfoItem
@@ -530,75 +530,92 @@ export default function PartnerContractDetailPage() {
                 )}
                 {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
                   <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
+                    icon={<FileText className="w-4 h-4" />}
                     label="Số tiền cố định"
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ chuẩn"
+                  label="Số giờ tiêu chuẩn"
                   value={`${contractPayment.standardHours} giờ`}
                 />
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ đã báo cáo"
-                  value={
-                    contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined
-                      ? `${contractPayment.reportedHours} giờ`
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<FileText className="w-4 h-4" />}
-                  label="Hệ số man-month"
-                  value={
-                    contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined
-                      ? contractPayment.manMonthCoefficient.toFixed(4)
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền dự kiến (VND)"
-                  value={formatCurrency(contractPayment.plannedAmountVND)}
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền thực tế (VND)"
-                  value={formatCurrency(contractPayment.actualAmountVND)}
-                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
+                  </div>
+                </div>
+
+                {/* Thông tin thanh toán */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin thanh toán
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
+                  <InfoItem
+                    icon={<Clock className="w-4 h-4" />}
+                    label="Số giờ đã báo cáo"
+                    value={`${contractPayment.reportedHours} giờ`}
+                  />
+                )}
+                {contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Hệ số man-month"
+                    value={contractPayment.manMonthCoefficient.toFixed(4)}
+                  />
+                )}
+                {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền thực tế (VND)"
+                    value={formatCurrency(contractPayment.actualAmountVND)}
+                  />
+                )}
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Tổng đã thanh toán"
                   value={formatCurrency(contractPayment.totalPaidAmount)}
                 />
-                <InfoItem
-                  icon={<Calendar className="w-4 h-4" />}
-                  label="Ngày thanh toán"
-                  value={formatDate(contractPayment.paymentDate)}
-                />
-              </div>
-
-              {contractPayment.rejectionReason && (
-                <div className="mt-6 pt-6 border-t border-neutral-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
-                    <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
-                  </div>
-                  <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
-                </div>
-              )}
-
-                {contractPayment.notes && (
-                  <div className="mt-6 pt-6 border-t border-neutral-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <StickyNote className="w-4 h-4 text-neutral-400" />
-                      <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
-                    </div>
-                    <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
-                  </div>
+                {contractPayment.paymentDate && (
+                  <InfoItem
+                    icon={<Calendar className="w-4 h-4" />}
+                    label="Ngày thanh toán"
+                    value={formatDate(contractPayment.paymentDate)}
+                  />
                 )}
+                  </div>
+
+                  {contractPayment.rejectionReason && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <XCircle className="w-4 h-4 text-red-400" />
+                        <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
+                    </div>
+                  )}
+
+                  {contractPayment.notes && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

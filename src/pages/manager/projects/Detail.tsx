@@ -699,7 +699,7 @@ export default function ManagerProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Talent Assignment ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {clientPayments.map((payment) => (
@@ -724,8 +724,12 @@ export default function ManagerProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || 0)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
@@ -774,7 +778,7 @@ export default function ManagerProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Talent Assignment ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
@@ -811,8 +815,12 @@ export default function ManagerProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || payment.plannedAmountVND)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>

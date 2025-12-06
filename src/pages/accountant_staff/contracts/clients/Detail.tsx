@@ -250,6 +250,7 @@ export default function ClientContractDetailPage() {
   const [verifyContractFile, setVerifyContractFile] = useState<File | null>(null);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [worksheetFile, setWorksheetFile] = useState<File | null>(null);
 
   // Loading states for actions
   const [isProcessing, setIsProcessing] = useState(false);
@@ -602,13 +603,56 @@ export default function ClientContractDetailPage() {
       alert("Vui lòng nhập số giờ billable hợp lệ");
       return;
     }
+    
+    // Validate worksheet file
+    if (!worksheetFile) {
+      alert("Vui lòng upload file Worksheet (bắt buộc)");
+      return;
+    }
+    
+    // Find Worksheet document type
+    const worksheetType = Array.from(documentTypes.values()).find(
+      (type) => type.typeName.toLowerCase() === "worksheet"
+    );
+    
+    if (!worksheetType) {
+      alert("Không tìm thấy loại tài liệu Worksheet. Vui lòng liên hệ quản trị viên.");
+      return;
+    }
+    
     try {
       setIsProcessing(true);
+      
+      // Start billing
       await clientContractPaymentService.startBilling(Number(id), billingForm);
+      
+      // Upload worksheet file and create document
+      const userId = getCurrentUserId();
+      if (!userId) {
+        alert("Không thể lấy thông tin người dùng");
+        return;
+      }
+      
+      const filePath = `client-contracts/${contractPayment.id}/worksheet_${Date.now()}.${worksheetFile.name.split('.').pop()}`;
+      const fileUrl = await uploadFile(worksheetFile, filePath);
+      
+      // Create worksheet document
+      const documentData: ClientDocumentCreate = {
+        clientContractPaymentId: Number(id),
+        documentTypeId: worksheetType.id,
+        fileName: worksheetFile.name,
+        filePath: fileUrl,
+        uploadedByUserId: userId,
+        description: `Worksheet cho tính toán thanh toán - ${new Date().toLocaleDateString("vi-VN")}`,
+        source: "Accountant",
+      };
+      await clientDocumentService.create(documentData);
+      
       alert("Bắt đầu tính toán thành công!");
       await refreshContractPayment();
       setShowStartBillingModal(false);
       setBillingForm({ billableHours: 0, notes: null });
+      setWorksheetFile(null);
     } catch (err: any) {
       alert(err?.message || "Lỗi khi bắt đầu tính toán");
     } finally {
@@ -1173,6 +1217,18 @@ export default function ClientContractDetailPage() {
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ tiêu chuẩn"
+                  value={`${contractPayment.standardHours} giờ`}
+                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
                   </div>
                 </div>
 
@@ -1187,11 +1243,6 @@ export default function ClientContractDetailPage() {
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ tiêu chuẩn"
-                  value={`${contractPayment.standardHours} giờ`}
-                />
                 {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
                   <InfoItem
                     icon={<Clock className="w-4 h-4" />}
@@ -1211,13 +1262,6 @@ export default function ClientContractDetailPage() {
                     icon={<FileText className="w-4 h-4" />}
                     label="Hệ số man-month"
                     value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
-                  />
-                )}
-                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
-                  <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền dự kiến (VND)"
-                    value={formatCurrency(contractPayment.plannedAmountVND)}
                   />
                 )}
                 {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (
@@ -1605,6 +1649,21 @@ export default function ClientContractDetailPage() {
                   placeholder="Ví dụ: Timesheet: 160h đúng như dự kiến"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  File Worksheet <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setWorksheetFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2"
+                  accept=".xlsx,.xls,.csv"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Vui lòng upload file Worksheet (Excel/CSV) cho việc tính toán thanh toán
+                </p>
+              </div>
 
               {/* Preview tính toán */}
               {billingForm.billableHours > 0 && calculateBillingPreview() && (() => {
@@ -1677,6 +1736,7 @@ export default function ClientContractDetailPage() {
                 onClick={() => {
                   setShowStartBillingModal(false);
                   setBillingForm({ billableHours: 0, notes: null });
+                  setWorksheetFile(null);
                 }}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
@@ -1684,7 +1744,7 @@ export default function ClientContractDetailPage() {
               </button>
               <button
                 onClick={handleStartBilling}
-                disabled={isProcessing || billingForm.billableHours <= 0}
+                disabled={isProcessing || billingForm.billableHours <= 0 || !worksheetFile}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bắt đầu tính toán"}

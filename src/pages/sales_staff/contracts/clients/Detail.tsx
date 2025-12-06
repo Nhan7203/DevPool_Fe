@@ -800,6 +800,18 @@ export default function ClientContractDetailPage() {
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
+                <InfoItem
+                  icon={<Clock className="w-4 h-4" />}
+                  label="Số giờ tiêu chuẩn"
+                  value={`${contractPayment.standardHours} giờ`}
+                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
                   </div>
                 </div>
 
@@ -814,11 +826,6 @@ export default function ClientContractDetailPage() {
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ tiêu chuẩn"
-                  value={`${contractPayment.standardHours} giờ`}
-                />
                 {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
                   <InfoItem
                     icon={<Clock className="w-4 h-4" />}
@@ -838,13 +845,6 @@ export default function ClientContractDetailPage() {
                     icon={<FileText className="w-4 h-4" />}
                     label="Hệ số man-month"
                     value={contractPayment.manMonthCoefficient.toFixed(4)}
-                  />
-                )}
-                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
-                  <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
-                    label="Số tiền dự kiến (VND)"
-                    value={formatCurrency(contractPayment.plannedAmountVND)}
                   />
                 )}
                 {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (

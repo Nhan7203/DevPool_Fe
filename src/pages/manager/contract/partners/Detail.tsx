@@ -27,6 +27,10 @@ import {
   type PartnerContractPaymentRejectModel,
   type PartnerContractPaymentApproveModel,
 } from "../../../../services/PartnerContractPayment";
+import {
+  clientContractPaymentService,
+  type ClientContractPaymentModel,
+} from "../../../../services/ClientContractPayment";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../../services/ProjectPeriod";
 import { talentAssignmentService, type TalentAssignmentModel } from "../../../../services/TalentAssignment";
 import { projectService } from "../../../../services/Project";
@@ -35,6 +39,7 @@ import { talentService } from "../../../../services/Talent";
 import { partnerDocumentService, type PartnerDocument } from "../../../../services/PartnerDocument";
 import { documentTypeService, type DocumentType } from "../../../../services/DocumentType";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { getErrorMessage } from "../../../../utils/helpers";
 
 const formatDate = (value?: string | null): string => {
   if (!value) return "—";
@@ -136,6 +141,7 @@ export default function PartnerContractDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [contractPayment, setContractPayment] = useState<PartnerContractPaymentModel | null>(null);
+  const [clientContractPayment, setClientContractPayment] = useState<ClientContractPaymentModel | null>(null);
   const [projectPeriod, setProjectPeriod] = useState<ProjectPeriodModel | null>(null);
   const [talentAssignment, setTalentAssignment] = useState<TalentAssignmentModel | null>(null);
   const [projectName, setProjectName] = useState<string>("—");
@@ -186,6 +192,23 @@ export default function PartnerContractDetailPage() {
 
       setProjectPeriod(periodData);
       setTalentAssignment(assignmentData);
+
+      // Fetch corresponding client contract payment
+      try {
+        const clientPayments = await clientContractPaymentService.getAll({
+          projectPeriodId: paymentData.projectPeriodId,
+          talentAssignmentId: paymentData.talentAssignmentId,
+          excludeDeleted: true,
+        });
+        if (clientPayments && clientPayments.length > 0) {
+          setClientContractPayment(clientPayments[0]);
+        } else {
+          setClientContractPayment(null);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải hợp đồng khách hàng tương ứng:", err);
+        setClientContractPayment(null);
+      }
 
       // Fetch project info
       if (assignmentData) {
@@ -294,8 +317,26 @@ export default function PartnerContractDetailPage() {
       setApproveForm({ notes: null });
       alert("Duyệt hợp đồng thành công!");
     } catch (err: unknown) {
-      console.error("❌ Lỗi duyệt hợp đồng:", err);
-      const errorMessage = err instanceof Error ? err.message : "Không thể duyệt hợp đồng";
+      // Xử lý lỗi từ backend
+      let errorMessage = "Không thể duyệt hợp đồng";
+      
+      // Service throw error.response?.data (object { isSuccess: false, message: "..." })
+      if (err && typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Lấy message từ object (backend trả về { isSuccess: false, message: "..." })
+        if (errorObj.message && typeof errorObj.message === 'string') {
+          errorMessage = errorObj.message;
+        } else if (errorObj.error && typeof errorObj.error === 'string') {
+          errorMessage = errorObj.error;
+        } else {
+          // Fallback: sử dụng helper function
+          errorMessage = getErrorMessage(err) || errorMessage;
+        }
+      } else {
+        // Fallback: sử dụng helper function
+        errorMessage = getErrorMessage(err) || errorMessage;
+      }
+      
       alert(errorMessage);
     } finally {
       setIsProcessing(false);
@@ -410,10 +451,21 @@ export default function PartnerContractDetailPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end gap-3">
+              {/* Warning message if client contract payment is not Verified or Approved */}
+              {user?.role === "Manager" && 
+               contractPayment.contractStatus === "Verified" && 
+               (!clientContractPayment || (clientContractPayment.contractStatus !== "Verified" && clientContractPayment.contractStatus !== "Approved")) && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>
+                    Không thể duyệt: Hợp đồng khách hàng tương ứng chưa được xác minh (Verified) hoặc đã duyệt (Approved)
+                  </span>
+                </div>
+              )}
               {/* Action Buttons for Manager */}
               {user?.role === "Manager" && contractPayment.contractStatus === "Verified" && (
-                <>
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShowApproveContractModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
@@ -428,7 +480,7 @@ export default function PartnerContractDetailPage() {
                     <Ban className="w-4 h-4" />
                     Từ chối
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -583,16 +635,18 @@ export default function PartnerContractDetailPage() {
 
             {/* Tab: Thanh toán */}
             {activeMainTab === "payment" && (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-primary-600" />
+              <div className="space-y-6">
+                {/* Thông tin tiền tệ và tỷ giá */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin tiền tệ và tỷ giá
+                    </h2>
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Thông tin thanh toán
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Đơn giá ngoại tệ"
@@ -605,10 +659,8 @@ export default function PartnerContractDetailPage() {
                 />
                 <InfoItem
                   icon={<FileText className="w-4 h-4" />}
-                  label="Phương thức tính toán"
-                  value={
-                    contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm (%)" : "Số tiền cố định"
-                  }
+                  label="Phương pháp tính"
+                  value={contractPayment.calculationMethod === "Percentage" ? "Theo phần trăm" : contractPayment.calculationMethod === "Fixed" ? "Số tiền cố định" : "Số tiền cố định"}
                 />
                 {contractPayment.calculationMethod === "Percentage" && contractPayment.percentageValue !== null && contractPayment.percentageValue !== undefined && (
                   <InfoItem
@@ -619,75 +671,92 @@ export default function PartnerContractDetailPage() {
                 )}
                 {contractPayment.calculationMethod === "Fixed" && contractPayment.fixedAmount !== null && contractPayment.fixedAmount !== undefined && (
                   <InfoItem
-                    icon={<DollarSign className="w-4 h-4" />}
+                    icon={<FileText className="w-4 h-4" />}
                     label="Số tiền cố định"
                     value={formatCurrency(contractPayment.fixedAmount)}
                   />
                 )}
                 <InfoItem
                   icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ chuẩn"
+                  label="Số giờ tiêu chuẩn"
                   value={`${contractPayment.standardHours} giờ`}
                 />
-                <InfoItem
-                  icon={<Clock className="w-4 h-4" />}
-                  label="Số giờ đã báo cáo"
-                  value={
-                    contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined
-                      ? `${contractPayment.reportedHours} giờ`
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<FileText className="w-4 h-4" />}
-                  label="Hệ số man-month"
-                  value={
-                    contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined
-                      ? parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền dự kiến (VND)"
-                  value={formatCurrency(contractPayment.plannedAmountVND)}
-                />
-                <InfoItem
-                  icon={<DollarSign className="w-4 h-4" />}
-                  label="Số tiền thực tế (VND)"
-                  value={formatCurrency(contractPayment.actualAmountVND)}
-                />
+                {contractPayment.plannedAmountVND !== null && contractPayment.plannedAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền dự kiến (VND)"
+                    value={formatCurrency(contractPayment.plannedAmountVND)}
+                  />
+                )}
+                  </div>
+                </div>
+
+                {/* Thông tin thanh toán */}
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <DollarSign className="w-5 h-5 text-primary-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Thông tin thanh toán
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {contractPayment.reportedHours !== null && contractPayment.reportedHours !== undefined && (
+                  <InfoItem
+                    icon={<Clock className="w-4 h-4" />}
+                    label="Số giờ đã báo cáo"
+                    value={`${contractPayment.reportedHours} giờ`}
+                  />
+                )}
+                {contractPayment.manMonthCoefficient !== null && contractPayment.manMonthCoefficient !== undefined && (
+                  <InfoItem
+                    icon={<FileText className="w-4 h-4" />}
+                    label="Hệ số man-month"
+                    value={parseFloat(contractPayment.manMonthCoefficient.toFixed(4)).toString()}
+                  />
+                )}
+                {contractPayment.actualAmountVND !== null && contractPayment.actualAmountVND !== undefined && (
+                  <InfoItem
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Số tiền thực tế (VND)"
+                    value={formatCurrency(contractPayment.actualAmountVND)}
+                  />
+                )}
                 <InfoItem
                   icon={<DollarSign className="w-4 h-4" />}
                   label="Tổng đã thanh toán"
                   value={formatCurrency(contractPayment.totalPaidAmount)}
                 />
-                <InfoItem
-                  icon={<Calendar className="w-4 h-4" />}
-                  label="Ngày thanh toán"
-                  value={formatDate(contractPayment.paymentDate)}
-                />
-              </div>
-
-              {contractPayment.rejectionReason && (
-                <div className="mt-6 pt-6 border-t border-neutral-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
-                    <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
-                  </div>
-                  <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
-                </div>
-              )}
-
-                {contractPayment.notes && (
-                  <div className="mt-6 pt-6 border-t border-neutral-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <StickyNote className="w-4 h-4 text-neutral-400" />
-                      <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
-                    </div>
-                    <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
-                  </div>
+                {contractPayment.paymentDate && (
+                  <InfoItem
+                    icon={<Calendar className="w-4 h-4" />}
+                    label="Ngày thanh toán"
+                    value={formatDate(contractPayment.paymentDate)}
+                  />
                 )}
+                  </div>
+
+                  {contractPayment.rejectionReason && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <XCircle className="w-4 h-4 text-red-400" />
+                        <p className="text-sm font-medium text-red-600">Lý do từ chối</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.rejectionReason}</p>
+                    </div>
+                  )}
+
+                  {contractPayment.notes && (
+                    <div className="mt-6 pt-6 border-t border-neutral-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="w-4 h-4 text-neutral-400" />
+                        <p className="text-sm font-medium text-neutral-600">Ghi chú</p>
+                      </div>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contractPayment.notes}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

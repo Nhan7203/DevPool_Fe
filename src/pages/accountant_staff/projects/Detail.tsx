@@ -319,10 +319,322 @@ export default function AccountantProjectDetailPage() {
   };
 
   const handleCreatePeriod = async () => {
-    if (!id) return;
+    if (!id || !project) return;
 
     try {
       setCreatingPeriod(true);
+
+      // Bước 1: Kiểm tra và tạo contract payments cho các talent assignment còn thiếu trong các chu kỳ đã tồn tại
+      try {
+        // Lấy tất cả project periods đang mở
+        const allPeriods = await projectPeriodService.getAll({
+          projectId: Number(id),
+          excludeDeleted: true,
+        });
+        const openPeriods = allPeriods.filter(p => p.projectId === Number(id) && p.status === "Open");
+
+        if (openPeriods.length > 0) {
+          // Lấy tất cả talent assignments active
+          const assignments = await talentAssignmentService.getAll({
+            projectId: Number(id),
+            status: "Active",
+            excludeDeleted: true,
+          });
+          
+          // Lấy project startDate và endDate để validate contract dates
+          const projectStartDate = project.startDate ? new Date(project.startDate) : null;
+          const projectEndDate = project.endDate ? new Date(project.endDate) : null;
+
+          let createdPaymentsCount = 0;
+
+          // Với mỗi period, kiểm tra và tạo contract payments cho các talent assignments overlap
+          for (const period of openPeriods) {
+            // Tìm các talent assignments overlap với period này
+            const periodStart = new Date(period.periodYear, period.periodMonth - 1, 1);
+            const periodEnd = new Date(period.periodYear, period.periodMonth, 0, 23, 59, 59, 999);
+
+            const overlappingAssignments = assignments.filter(assignment => {
+              if (!assignment.startDate) return false;
+              const assignmentStartDate = new Date(assignment.startDate);
+              const assignmentEndDate = assignment.endDate ? new Date(assignment.endDate) : null;
+
+              if (assignmentEndDate) {
+                return assignmentStartDate <= periodEnd && assignmentEndDate >= periodStart;
+              } else {
+                return assignmentStartDate >= periodStart && assignmentStartDate <= periodEnd;
+              }
+            });
+
+            // Kiểm tra contract payments cho mỗi talent assignment
+            for (const assignment of overlappingAssignments) {
+              try {
+                // Kiểm tra xem đã có contract payments chưa
+                const [existingClientPayments, existingPartnerPayments] = await Promise.all([
+                  clientContractPaymentService.getAll({
+                    projectPeriodId: period.id,
+                    talentAssignmentId: assignment.id,
+                    excludeDeleted: true,
+                  }),
+                  partnerContractPaymentService.getAll({
+                    projectPeriodId: period.id,
+                    talentAssignmentId: assignment.id,
+                    excludeDeleted: true,
+                  }),
+                ]);
+
+                // Nếu chưa có contract payments, tạo mới với các giá trị mặc định
+                const hasClientPayment = existingClientPayments && existingClientPayments.length > 0;
+                const hasPartnerPayment = existingPartnerPayments && existingPartnerPayments.length > 0;
+
+                if (!hasClientPayment || !hasPartnerPayment) {
+                  // Tạo contract number dựa trên period và assignment
+                  const contractNumberSuffix = `${period.periodYear}${String(period.periodMonth).padStart(2, '0')}`;
+                  
+                  // Lấy thông tin từ assignment để tạo contract payments
+                  if (!assignment.startDate) {
+                    console.warn(`⚠️ Talent assignment ${assignment.id} không có startDate, bỏ qua`);
+                    continue;
+                  }
+                  
+                  const assignmentStartDate = new Date(assignment.startDate);
+                  const assignmentEndDate = assignment.endDate ? new Date(assignment.endDate) : null;
+                  
+                  // Validate dates
+                  if (isNaN(assignmentStartDate.getTime())) {
+                    console.warn(`⚠️ Talent assignment ${assignment.id} có startDate không hợp lệ, bỏ qua`);
+                    continue;
+                  }
+                  
+                  if (assignmentEndDate && isNaN(assignmentEndDate.getTime())) {
+                    console.warn(`⚠️ Talent assignment ${assignment.id} có endDate không hợp lệ, bỏ qua`);
+                    continue;
+                  }
+                  
+                  // Tính contract dates (overlap giữa period và assignment, và phải nằm trong project dates)
+                  let contractStartDate: Date;
+                  let contractEndDate: Date;
+                  
+                  // Contract start date: max của period start, assignment start, và project start
+                  const startDates = [
+                    periodStart.getTime(),
+                    assignmentStartDate.getTime()
+                  ];
+                  if (projectStartDate) {
+                    startDates.push(projectStartDate.getTime());
+                  }
+                  contractStartDate = new Date(Math.max(...startDates));
+                  
+                  // Contract end date: min của period end, assignment end (nếu có), và project end (nếu có)
+                  const endDates = [periodEnd.getTime()];
+                  if (assignmentEndDate) {
+                    endDates.push(assignmentEndDate.getTime());
+                  }
+                  if (projectEndDate) {
+                    endDates.push(projectEndDate.getTime());
+                  }
+                  contractEndDate = new Date(Math.min(...endDates));
+                  
+                  // Validate: contractStartDate phải <= contractEndDate
+                  if (contractStartDate > contractEndDate) {
+                    console.warn(`⚠️ Contract dates không hợp lệ cho talent assignment ${assignment.id} trong period ${period.periodMonth}/${period.periodYear}, bỏ qua`);
+                    continue;
+                  }
+                  
+                  // Validate: contract dates phải hợp lệ và không phải Invalid Date
+                  if (isNaN(contractStartDate.getTime()) || isNaN(contractEndDate.getTime())) {
+                    console.warn(`⚠️ Contract dates không hợp lệ cho talent assignment ${assignment.id}, bỏ qua`);
+                    continue;
+                  }
+                  
+                  // Validate: contractStartDate phải >= project startDate (nếu có)
+                  if (projectStartDate && contractStartDate < projectStartDate) {
+                    contractStartDate = new Date(projectStartDate);
+                  }
+                  
+                  // Validate: contractEndDate phải <= project endDate (nếu có)
+                  if (projectEndDate && contractEndDate > projectEndDate) {
+                    contractEndDate = new Date(projectEndDate);
+                  }
+                  
+                  // Final validate: contractStartDate phải <= contractEndDate sau khi adjust
+                  if (contractStartDate > contractEndDate) {
+                    console.warn(`⚠️ Contract dates không hợp lệ sau khi adjust cho talent assignment ${assignment.id}, bỏ qua`);
+                    continue;
+                  }
+
+                  // Tạo Client Contract Payment nếu chưa có
+                  if (!hasClientPayment) {
+                    try {
+                      const clientContractNumber = `SOW-${contractNumberSuffix}-CLIENT-${String(assignment.id).padStart(3, '0')}`;
+                      const clientPayload: any = {
+                        projectPeriodId: period.id,
+                        talentAssignmentId: assignment.id,
+                        contractNumber: clientContractNumber,
+                        unitPriceForeignCurrency: assignment.estimatedClientRate || 0,
+                        currencyCode: assignment.currencyCode || "VND",
+                        exchangeRate: 1,
+                        calculationMethod: "Percentage",
+                        percentageValue: 100, // Giá trị mặc định: 100% (full month)
+                        fixedAmount: null,
+                        standardHours: 160,
+                        contractStartDate: contractStartDate.toISOString(),
+                        contractEndDate: contractEndDate.toISOString(),
+                        contractStatus: "Draft",
+                        totalPaidAmount: 0,
+                        paymentStatus: "Pending",
+                        notes: null,
+                      };
+                      await clientContractPaymentService.create(clientPayload);
+                      createdPaymentsCount++;
+                      console.log(`✅ Đã tạo client contract payment cho talent assignment ${assignment.id} trong project period ${period.periodMonth}/${period.periodYear}`);
+                    } catch (err) {
+                      console.error(`❌ Lỗi khi tạo client contract payment cho talent assignment ${assignment.id}:`, err);
+                    }
+                  }
+
+                  // Tạo Partner Contract Payment nếu chưa có
+                  if (!hasPartnerPayment) {
+                    try {
+                      const partnerContractNumber = `SOW-${contractNumberSuffix}-PARTNER-${String(assignment.id).padStart(3, '0')}`;
+                      const partnerPayload: any = {
+                        projectPeriodId: period.id,
+                        talentAssignmentId: assignment.id,
+                        contractNumber: partnerContractNumber,
+                        unitPriceForeignCurrency: assignment.estimatedPartnerRate || 0,
+                        currencyCode: assignment.currencyCode || "VND",
+                        exchangeRate: 1,
+                        calculationMethod: "Percentage" as const,
+                        percentageValue: 100, // Giá trị mặc định: 100% (full month)
+                        fixedAmount: null,
+                        standardHours: 160,
+                        contractStartDate: contractStartDate.toISOString(),
+                        contractEndDate: contractEndDate.toISOString(),
+                        contractStatus: "Draft",
+                        totalPaidAmount: 0,
+                        paymentStatus: "Pending",
+                        notes: null,
+                      };
+                      await partnerContractPaymentService.create(partnerPayload);
+                      createdPaymentsCount++;
+                      console.log(`✅ Đã tạo partner contract payment cho talent assignment ${assignment.id} trong project period ${period.periodMonth}/${period.periodYear}`);
+                    } catch (err) {
+                      console.error(`❌ Lỗi khi tạo partner contract payment cho talent assignment ${assignment.id}:`, err);
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error(`❌ Lỗi khi kiểm tra/tạo contract payments cho talent assignment ${assignment.id} trong project period ${period.id}:`, err);
+                // Tiếp tục với các assignment khác
+              }
+            }
+          }
+
+          if (createdPaymentsCount > 0) {
+            console.log(`✅ Đã tạo ${createdPaymentsCount} contract payment(s) cho các talent assignment còn thiếu trong các chu kỳ đã tồn tại.`);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi khi kiểm tra và tạo contract payments cho các chu kỳ đã tồn tại:", err);
+        // Tiếp tục với việc tạo chu kỳ mới
+      }
+
+      // Lưu số lượng contract payments đã tạo để hiển thị thông báo
+      let totalCreatedPayments = 0;
+      try {
+        // Lấy lại danh sách periods để đếm contract payments đã tạo
+        const allPeriods = await projectPeriodService.getAll({
+          projectId: Number(id),
+          excludeDeleted: true,
+        });
+        const openPeriods = allPeriods.filter(p => p.projectId === Number(id) && p.status === "Open");
+        
+        if (openPeriods.length > 0) {
+          const assignments = await talentAssignmentService.getAll({
+            projectId: Number(id),
+            status: "Active",
+            excludeDeleted: true,
+          });
+
+          for (const period of openPeriods) {
+            const periodStart = new Date(period.periodYear, period.periodMonth - 1, 1);
+            const periodEnd = new Date(period.periodYear, period.periodMonth, 0, 23, 59, 59, 999);
+
+            const overlappingAssignments = assignments.filter(assignment => {
+              if (!assignment.startDate) return false;
+              const assignmentStartDate = new Date(assignment.startDate);
+              const assignmentEndDate = assignment.endDate ? new Date(assignment.endDate) : null;
+
+              if (assignmentEndDate) {
+                return assignmentStartDate <= periodEnd && assignmentEndDate >= periodStart;
+              } else {
+                return assignmentStartDate >= periodStart && assignmentStartDate <= periodEnd;
+              }
+            });
+
+            for (const assignment of overlappingAssignments) {
+              const [clientPayments, partnerPayments] = await Promise.all([
+                clientContractPaymentService.getAll({
+                  projectPeriodId: period.id,
+                  talentAssignmentId: assignment.id,
+                  excludeDeleted: true,
+                }),
+                partnerContractPaymentService.getAll({
+                  projectPeriodId: period.id,
+                  talentAssignmentId: assignment.id,
+                  excludeDeleted: true,
+                }),
+              ]);
+
+              if ((clientPayments && clientPayments.length > 0) || (partnerPayments && partnerPayments.length > 0)) {
+                totalCreatedPayments++;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("❌ Lỗi khi đếm contract payments:", err);
+      }
+
+      // Bước 2: Kiểm tra và tạo chu kỳ tháng hiện tại nếu chưa có
+      // Lấy tháng hiện tại theo giờ Việt Nam
+      const now = new Date();
+      const vietnamTimeString = now.toLocaleString('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const [currentMonth, , currentYear] = vietnamTimeString.split('/').map(Number);
+      const currentPeriod = { year: currentYear, month: currentMonth };
+
+      // Refresh lại danh sách periods để đảm bảo có dữ liệu mới nhất
+      const refreshedPeriods = await projectPeriodService.getAll({
+        projectId: Number(id),
+        excludeDeleted: true,
+      });
+      const filteredByProject = refreshedPeriods.filter(p => p.projectId === Number(id));
+      const sortedPeriods = [...filteredByProject].sort((a, b) => {
+        if (a.periodYear !== b.periodYear) {
+          return a.periodYear - b.periodYear;
+        }
+        return a.periodMonth - b.periodMonth;
+      });
+      setProjectPeriods(sortedPeriods);
+      setFilteredPeriods(sortedPeriods);
+
+      // Kiểm tra xem đã có chu kỳ của tháng hiện tại chưa
+      const currentPeriodKey = `${currentPeriod.year}-${currentPeriod.month}`;
+      const existingPeriod = sortedPeriods.find(
+        p => `${p.periodYear}-${p.periodMonth}` === currentPeriodKey
+      );
+
+      if (existingPeriod) {
+        // Chu kỳ đã tồn tại, chỉ cần thông báo thành công (đã tạo contract payments ở bước 1)
+        alert(`Chu kỳ thanh toán của tháng ${currentPeriod.month}/${currentPeriod.year} đã tồn tại.\n\nĐã kiểm tra và tạo contract payments cho các talent assignment còn thiếu trong chu kỳ này.`);
+        setSelectedPeriodId(existingPeriod.id);
+        setCreatingPeriod(false);
+        return;
+      }
 
       // Tính toán các chu kỳ cần tạo
       const periodsToCreate = await calculatePeriodsToCreate();
@@ -333,92 +645,68 @@ export default function AccountantProjectDetailPage() {
         return;
       }
 
-      // Lấy tháng hiện tại và tháng tiếp theo theo giờ Việt Nam
-      const now = new Date();
-      const vietnamTimeString = now.toLocaleString('en-US', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const [currentMonth, , currentYear] = vietnamTimeString.split('/').map(Number);
-      const currentPeriod = { year: currentYear, month: currentMonth };
-      
-      // Tính tháng tiếp theo
-      let nextMonth = currentMonth + 1;
-      let nextYear = currentYear;
-      if (nextMonth > 12) {
-        nextMonth = 1;
-        nextYear += 1;
-      }
-      const nextPeriod = { year: nextYear, month: nextMonth };
-
-      // Lấy danh sách các chu kỳ đã tồn tại
-      const existingPeriods = projectPeriods.map(p => `${p.periodYear}-${p.periodMonth}`);
-      
-      // Lọc ra các chu kỳ chưa tồn tại VÀ chỉ cho phép tháng hiện tại và tháng tiếp theo
+      // Lọc ra chu kỳ của tháng hiện tại (chỉ 1 chu kỳ)
       const newPeriods = periodsToCreate.filter(
-        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
-        ((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
-         (p.year === nextPeriod.year && p.month === nextPeriod.month))
+        p => p.year === currentPeriod.year && p.month === currentPeriod.month
       );
 
-      // Các chu kỳ không được phép tạo (ngoài tháng hiện tại và tháng tiếp theo)
+      // Các chu kỳ không được phép tạo (ngoài tháng hiện tại)
       const disallowedPeriods = periodsToCreate.filter(
-        p => !existingPeriods.includes(`${p.year}-${p.month}`) &&
-        !((p.year === currentPeriod.year && p.month === currentPeriod.month) ||
-          (p.year === nextPeriod.year && p.month === nextPeriod.month))
+        p => !(p.year === currentPeriod.year && p.month === currentPeriod.month)
       );
 
       if (newPeriods.length === 0) {
         if (disallowedPeriods.length > 0) {
-          alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}) và tháng tiếp theo (${nextPeriod.month}/${nextPeriod.year}).\n\nCác chu kỳ không được phép tạo:\n${disallowedPeriods.map(p => `- ${p.month}/${p.year}`).join('\n')}`);
+          alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}).\n\nCác chu kỳ không được phép tạo:\n${disallowedPeriods.map(p => `- ${p.month}/${p.year}`).join('\n')}`);
         } else {
-          alert("Tất cả các chu kỳ cần thiết đã được tạo. Không có chu kỳ thanh toán nào mới cần tạo và không có hợp đồng nào mới cần tạo trong dự án này.");
+          alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}).\n\nTháng hiện tại không nằm trong phạm vi của các TalentAssignment Active.`);
         }
         setCreatingPeriod(false);
         return;
       }
 
-      // Tạo tất cả các chu kỳ mới
+      // Tạo chu kỳ mới (chỉ 1 chu kỳ của tháng hiện tại)
       const createdPeriods: ProjectPeriodModel[] = [];
       
-      for (const period of newPeriods) {
-        const payload: ProjectPeriodCreateModel = {
-          projectId: Number(id),
-          periodMonth: period.month,
-          periodYear: period.year,
-          status: "Open", // Default status
-          autoCreatePayments: true, // Auto-create ClientContractPayment and PartnerContractPayment for active assignments
-        };
+      // Chỉ tạo chu kỳ đầu tiên (tháng hiện tại)
+      const period = newPeriods[0];
 
-        try {
-          // Kiểm tra xem chu kỳ đã tồn tại chưa (double-check)
-          const existingPeriod = projectPeriods.find(
-            p => p.projectId === Number(id) && 
-                 p.periodMonth === period.month && 
-                 p.periodYear === period.year
-          );
-          
-          if (existingPeriod) {
-            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} đã tồn tại, bỏ qua`);
-            continue;
-          }
+      const payload: ProjectPeriodCreateModel = {
+        projectId: Number(id),
+        periodMonth: period.month,
+        periodYear: period.year,
+        status: "Open", // Default status
+        autoCreatePayments: true, // Auto-create ClientContractPayment and PartnerContractPayment for active assignments
+      };
 
-          const newPeriod = await projectPeriodService.create(payload);
-          createdPeriods.push(newPeriod);
-          console.log(`✅ Tạo thành công chu kỳ ${period.month}/${period.year}`);
-        } catch (err: unknown) {
-          const error = err as { message?: string; errors?: Record<string, string[]>; innerException?: string };
-          const errorMessage = error.message || error.errors ? JSON.stringify(error, null, 2) : String(err);
-          console.error(`❌ Lỗi tạo chu kỳ ${period.month}/${period.year}:`, errorMessage);
-          console.error("Payload gửi đi:", payload);
-          
-          // Kiểm tra xem có phải lỗi duplicate không
-          if (errorMessage.includes("duplicate") || errorMessage.includes("already exists") || errorMessage.includes("unique constraint")) {
-            console.warn(`⚠️ Chu kỳ ${period.month}/${period.year} có thể đã tồn tại trong database`);
-          }
-          // Tiếp tục tạo các chu kỳ khác
+      try {
+        // Kiểm tra xem chu kỳ đã tồn tại chưa (double-check)
+        const existingPeriod = projectPeriods.find(
+          p => p.projectId === Number(id) && 
+               p.periodMonth === period.month && 
+               p.periodYear === period.year
+        );
+        
+        if (existingPeriod) {
+          alert(`Chu kỳ thanh toán của tháng ${period.month}/${period.year} đã tồn tại.\n\nBackend chỉ cho phép tạo 1 chu kỳ trong 1 tháng và chỉ có thể tạo chu kỳ của tháng hiện tại.`);
+          setCreatingPeriod(false);
+          return;
+        }
+
+        const newPeriod = await projectPeriodService.create(payload);
+        createdPeriods.push(newPeriod);
+        console.log(`✅ Tạo thành công chu kỳ ${period.month}/${period.year}`);
+      } catch (err: unknown) {
+        const error = err as { message?: string; errors?: Record<string, string[]>; innerException?: string };
+        const errorMessage = error.message || error.errors ? JSON.stringify(error, null, 2) : String(err);
+        console.error(`❌ Lỗi tạo chu kỳ ${period.month}/${period.year}:`, errorMessage);
+        console.error("Payload gửi đi:", payload);
+        
+        // Kiểm tra xem có phải lỗi duplicate không
+        if (errorMessage.includes("duplicate") || errorMessage.includes("already exists") || errorMessage.includes("unique constraint")) {
+          alert(`Chu kỳ thanh toán của tháng ${period.month}/${period.year} đã tồn tại trong database.\n\nBackend chỉ cho phép tạo 1 chu kỳ trong 1 tháng và chỉ có thể tạo chu kỳ của tháng hiện tại.`);
+        } else {
+          throw err; // Re-throw để xử lý ở catch bên ngoài
         }
       }
 
@@ -457,35 +745,18 @@ export default function AccountantProjectDetailPage() {
       }
 
       if (createdPeriods.length === 0) {
-        const errorMsg = newPeriods.length > 0
-          ? `Không thể tạo chu kỳ thanh toán. Có thể do:\n- Lỗi khi tạo các hợp đồng thanh toán tự động (ClientContractPayment/PartnerContractPayment)\n- Hoặc các chu kỳ đã tồn tại trong database\n\nVui lòng kiểm tra console để biết chi tiết lỗi hoặc liên hệ quản trị viên.`
-          : "Tất cả các chu kỳ cần thiết đã được tạo hoặc không có chu kỳ nào hợp lệ để tạo.";
-        alert(errorMsg);
+        alert(`Không thể tạo chu kỳ thanh toán. Có thể do:\n- Lỗi khi tạo các hợp đồng thanh toán tự động (ClientContractPayment/PartnerContractPayment)\n- Hoặc chu kỳ đã tồn tại trong database\n\nVui lòng kiểm tra console để biết chi tiết lỗi hoặc liên hệ quản trị viên.`);
         setCreatingPeriod(false);
         return;
       }
 
-      // Tự động chọn chu kỳ mới nhất được tạo
+      // Tự động chọn chu kỳ mới được tạo
       if (createdPeriods.length > 0) {
-        const latestPeriod = createdPeriods[createdPeriods.length - 1];
-        setSelectedPeriodId(latestPeriod.id);
+        const newPeriod = createdPeriods[0];
+        setSelectedPeriodId(newPeriod.id);
         
         // Hiển thị thông báo thành công
-        if (createdPeriods.length === newPeriods.length) {
-          alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán! Hệ thống đã tự động tạo các hợp đồng cho các TalentAssignment Active.`);
-        } else {
-          alert(`Đã tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán. ${newPeriods.length - createdPeriods.length} chu kỳ không thể tạo. Vui lòng kiểm tra console để biết chi tiết.`);
-        }
-      }
-
-      setShowCreatePeriodModal(false);
-      setPreviewPeriods([]);
-
-      if (createdPeriods.length < newPeriods.length) {
-        const failedCount = newPeriods.length - createdPeriods.length;
-        alert(`Tạo thành công ${createdPeriods.length}/${newPeriods.length} chu kỳ thanh toán!\n\n${failedCount} chu kỳ không thể tạo (có thể do giới hạn của hệ thống - chỉ cho phép tạo tháng hiện tại và tháng tiếp theo).\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ đã tạo thành công.`);
-      } else {
-        alert(`Tạo thành công ${createdPeriods.length} chu kỳ thanh toán!\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong các chu kỳ này.`);
+        alert(`Tạo thành công chu kỳ thanh toán tháng ${newPeriod.periodMonth}/${newPeriod.periodYear}!\n\nHệ thống đã tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong chu kỳ này.`);
       }
     } catch (err: unknown) {
       console.error("❌ Lỗi tạo chu kỳ thanh toán:", err);
@@ -497,8 +768,51 @@ export default function AccountantProjectDetailPage() {
   };
 
   const handlePreviewPeriods = async () => {
-    const periods = await calculatePeriodsToCreate();
-    setPreviewPeriods(periods);
+    if (!id) return;
+
+    // Lấy tháng hiện tại theo giờ Việt Nam
+    const now = new Date();
+    const vietnamTimeString = now.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const [currentMonth, , currentYear] = vietnamTimeString.split('/').map(Number);
+    const currentPeriod = { year: currentYear, month: currentMonth };
+
+    // Tính toán các chu kỳ cần tạo
+    const periodsToCreate = await calculatePeriodsToCreate();
+
+    if (periodsToCreate.length === 0) {
+      alert("Không có chu kỳ thanh toán nào cần được tạo.\n\nLý do: Không có TalentAssignment nào có Status = 'Active' hoặc các TalentAssignment không có endDate.");
+      setPreviewPeriods([]);
+      return;
+    }
+
+    // Lấy danh sách các chu kỳ đã tồn tại
+    const existingPeriods = projectPeriods.map(p => `${p.periodYear}-${p.periodMonth}`);
+    
+    // Kiểm tra xem đã có chu kỳ của tháng hiện tại chưa
+    const currentPeriodKey = `${currentPeriod.year}-${currentPeriod.month}`;
+    if (existingPeriods.includes(currentPeriodKey)) {
+      alert(`Chu kỳ thanh toán của tháng ${currentPeriod.month}/${currentPeriod.year} đã tồn tại.\n\nBackend chỉ cho phép tạo 1 chu kỳ trong 1 tháng và chỉ có thể tạo chu kỳ của tháng hiện tại.`);
+      setPreviewPeriods([]);
+      return;
+    }
+
+    // Lọc ra chu kỳ của tháng hiện tại (chỉ 1 chu kỳ)
+    const newPeriods = periodsToCreate.filter(
+      p => p.year === currentPeriod.year && p.month === currentPeriod.month
+    );
+
+    if (newPeriods.length === 0) {
+      alert(`Không thể tạo chu kỳ thanh toán. Backend chỉ cho phép tạo chu kỳ cho tháng hiện tại (${currentPeriod.month}/${currentPeriod.year}).\n\nTháng hiện tại không nằm trong phạm vi của các TalentAssignment Active.`);
+      setPreviewPeriods([]);
+      return;
+    }
+
+    setPreviewPeriods(newPeriods);
   };
 
   const formatViDateTime = (dateStr?: string | null) => {
@@ -782,7 +1096,16 @@ export default function AccountantProjectDetailPage() {
                         ))}
                     </select>
                     <button
-                      onClick={() => setShowCreatePeriodModal(true)}
+                      onClick={async () => {
+                        // Hiển thị thông báo xác nhận
+                        const confirmed = window.confirm(
+                          "Bạn có chắc chắn muốn tạo chu kỳ thanh toán cho tháng hiện tại?\n\n" +
+                          "Hệ thống sẽ tự động tạo các hợp đồng (ClientContractPayment và PartnerContractPayment) cho các TalentAssignment Active trong chu kỳ này."
+                        );
+                        if (confirmed) {
+                          await handleCreatePeriod();
+                        }
+                      }}
                       className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-all duration-300"
                     >
                       <Plus className="w-4 h-4" />
@@ -879,7 +1202,7 @@ export default function AccountantProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Talent Assignment ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {clientPayments.map((payment) => (
@@ -904,8 +1227,12 @@ export default function AccountantProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || 0)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
@@ -954,7 +1281,7 @@ export default function AccountantProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Talent Assignment ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Talent Assignment ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
@@ -991,8 +1318,12 @@ export default function AccountantProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || payment.plannedAmountVND)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>

@@ -94,5 +94,19 @@ export const projectPeriodService = {
       throw { message: "Lỗi không xác định khi tải báo cáo tổng hợp" };
     }
   },
+
+  // Tạo contract payments cho talent assignment trong project period
+  async createPaymentsForAssignment(projectPeriodId: number, talentAssignmentId: number) {
+    try {
+      const response = await axios.post(`/projectperiod/${projectPeriodId}/create-payments-for-assignment`, {
+        talentAssignmentId,
+      });
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError)
+        throw error.response?.data || { message: "Không thể tạo contract payments cho talent assignment" };
+      throw { message: "Lỗi không xác định khi tạo contract payments cho talent assignment" };
+    }
+  },
 };
 

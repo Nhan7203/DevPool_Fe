@@ -48,7 +48,12 @@ export interface TalentAssignmentModel {
   endDate?: string | null; // ISO string
   commitmentFileUrl?: string | null;
   status: string;
+  terminationDate?: string | null; // ISO string
+  terminationReason?: string | null;
   notes?: string | null;
+  estimatedClientRate?: number | null;
+  estimatedPartnerRate?: number | null;
+  currencyCode?: string | null;
   createdAt: string; // ISO string
   updatedAt?: string | null; // ISO string
   
@@ -69,7 +74,12 @@ export interface TalentAssignmentCreateModel {
   endDate?: string | null; // ISO string
   commitmentFileUrl?: string | null;
   status?: string; // Default: "Active"
+  terminationDate?: string | null; // ISO string
+  terminationReason?: string | null;
   notes?: string | null;
+  estimatedClientRate?: number | null;
+  estimatedPartnerRate?: number | null;
+  currencyCode?: string | null;
 }
 
 // Model for EXTEND
@@ -79,12 +89,23 @@ export interface TalentAssignmentExtendModel {
   notes?: string | null;
 }
 
+// Model for TERMINATE
+export interface TalentAssignmentTerminateModel {
+  terminationDate: string; // ISO string (required)
+  terminationReason: string; // (required)
+}
+
 // Model for UPDATE
 export interface TalentAssignmentUpdateModel {
   endDate?: string | null; // ISO string
   commitmentFileUrl?: string | null;
   status?: string | null;
+  terminationDate?: string | null; // ISO string
+  terminationReason?: string | null;
   notes?: string | null;
+  estimatedClientRate?: number | null;
+  estimatedPartnerRate?: number | null;
+  currencyCode?: string | null;
 }
 
 // Filter interface
@@ -199,6 +220,18 @@ export const talentAssignmentService = {
         throw error.response?.data || { message: "Không thể gia hạn phân công nhân sự" };
       }
       throw { message: "Lỗi không xác định khi gia hạn phân công nhân sự" };
+    }
+  },
+
+  async terminate(id: number, payload: TalentAssignmentTerminateModel) {
+    try {
+      const response = await axios.post(`/talentassignment/${id}/terminate`, payload);
+      return response.data as TalentAssignmentModel;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        throw error.response?.data || { message: "Không thể chấm dứt phân công nhân sự" };
+      }
+      throw { message: "Lỗi không xác định khi chấm dứt phân công nhân sự" };
     }
   },
 

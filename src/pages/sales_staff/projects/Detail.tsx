@@ -6,7 +6,7 @@ import { sidebarItems } from "../../../components/sales_staff/SidebarItems";
 import { projectService, type ProjectDetailedModel } from "../../../services/Project";
 import { clientCompanyService, type ClientCompany } from "../../../services/ClientCompany";
 import { projectPeriodService, type ProjectPeriodModel } from "../../../services/ProjectPeriod";
-import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignmentCreateModel, type TalentAssignmentUpdateModel } from "../../../services/TalentAssignment";
+import { talentAssignmentService, type TalentAssignmentModel, type TalentAssignmentCreateModel, type TalentAssignmentUpdateModel, type TalentAssignmentExtendModel, type TalentAssignmentTerminateModel } from "../../../services/TalentAssignment";
 import { clientContractPaymentService, type ClientContractPaymentModel } from "../../../services/ClientContractPayment";
 import { partnerContractPaymentService, type PartnerContractPaymentModel } from "../../../services/PartnerContractPayment";
 import { talentApplicationService, type TalentApplication } from "../../../services/TalentApplication";
@@ -19,6 +19,7 @@ import { locationService, type Location } from "../../../services/location";
 import { type JobRequest } from "../../../services/JobRequest";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { uploadFile } from "../../../utils/firebaseStorage";
+import { formatNumberInput, parseNumberInput } from "../../../utils/helpers";
 import { 
   Briefcase, 
   Edit, 
@@ -84,6 +85,8 @@ export default function ProjectDetailPage() {
   const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false);
   const [showUpdateAssignmentModal, setShowUpdateAssignmentModal] = useState(false);
   const [showDetailAssignmentModal, setShowDetailAssignmentModal] = useState(false);
+  const [showTerminateAssignmentModal, setShowTerminateAssignmentModal] = useState(false);
+  const [showExtendAssignmentModal, setShowExtendAssignmentModal] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<TalentAssignmentModel | null>(null);
   const [hiredApplications, setHiredApplications] = useState<TalentApplication[]>([]);
   const [talents, setTalents] = useState<Talent[]>([]);
@@ -109,23 +112,63 @@ export default function ProjectDetailPage() {
     endDate: null,
     commitmentFileUrl: null,
     status: "Active",
-    notes: null
+    terminationDate: null,
+    terminationReason: null,
+    notes: null,
+    estimatedClientRate: null,
+    estimatedPartnerRate: null,
+    currencyCode: null
   });
   const [commitmentFile, setCommitmentFile] = useState<File | null>(null);
   const [updateCommitmentFile, setUpdateCommitmentFile] = useState<File | null>(null);
+  const [extendCommitmentFile, setExtendCommitmentFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Form state for terminating assignment
+  const [terminateForm, setTerminateForm] = useState<{
+    terminationDate: string;
+    terminationReason: string;
+  }>({
+    terminationDate: "",
+    terminationReason: ""
+  });
+  const [terminateErrors, setTerminateErrors] = useState<{ terminationDate?: string; terminationReason?: string }>({});
+  const [submittingTerminate, setSubmittingTerminate] = useState(false);
+
+  // Form state for extending assignment
+  const [extendForm, setExtendForm] = useState<{
+    endDate: string;
+    commitmentFileUrl?: string | null;
+    notes?: string | null;
+  }>({
+    endDate: "",
+    commitmentFileUrl: null,
+    notes: null
+  });
+  const [extendErrors, setExtendErrors] = useState<{ endDate?: string }>({});
+  const [submittingExtend, setSubmittingExtend] = useState(false);
   
   // Form state for updating/extending assignment
   const [updateForm, setUpdateForm] = useState<{
     startDate: string;
     endDate: string;
     commitmentFileUrl?: string | null;
+    terminationDate?: string | null;
+    terminationReason?: string | null;
     notes?: string | null;
+    estimatedClientRate?: number | null;
+    estimatedPartnerRate?: number | null;
+    currencyCode?: string | null;
   }>({
     startDate: "",
     endDate: "",
     commitmentFileUrl: null,
-    notes: null
+    terminationDate: null,
+    terminationReason: null,
+    notes: null,
+    estimatedClientRate: null,
+    estimatedPartnerRate: null,
+    currencyCode: null
   });
 
   useEffect(() => {
@@ -472,21 +515,96 @@ export default function ProjectDetailPage() {
 
       // Create assignment
       // Convert dates to UTC ISO string for PostgreSQL
+      // Tự động set currencyCode = "VND" nếu có tỷ giá
       const payload: TalentAssignmentCreateModel = {
         ...assignmentForm,
         projectId: Number(id),
         startDate: assignmentForm.startDate ? toUTCISOString(assignmentForm.startDate) || "" : "",
         endDate: assignmentForm.endDate ? toUTCISOString(assignmentForm.endDate) : null,
-        commitmentFileUrl
+        commitmentFileUrl,
+        currencyCode: (assignmentForm.estimatedClientRate || assignmentForm.estimatedPartnerRate) ? "VND" : null
       };
 
-      await talentAssignmentService.create(payload);
+      const newAssignment = await talentAssignmentService.create(payload);
 
       // Refresh assignments list
       const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
       // Filter client-side để đảm bảo chỉ lấy assignments của dự án này
       const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
       setTalentAssignments(filteredAssignments);
+
+      // Kiểm tra và tự động tạo contract payments cho các project periods đã tồn tại
+      if (newAssignment && newAssignment.status === "Active" && newAssignment.startDate) {
+        try {
+          // Lấy danh sách project periods đang mở
+          const periods = await projectPeriodService.getAll({ 
+            projectId: Number(id), 
+            excludeDeleted: true 
+          });
+          const openPeriods = periods.filter(p => p.projectId === Number(id) && p.status === "Open");
+
+          if (openPeriods.length > 0) {
+            // Kiểm tra xem talent assignment có overlap với các project periods không
+            const assignmentStartDate = new Date(newAssignment.startDate);
+            const assignmentEndDate = newAssignment.endDate ? new Date(newAssignment.endDate) : null;
+
+            const overlappingPeriods = openPeriods.filter(period => {
+              // Tạo date range cho period (tháng/năm)
+              const periodStart = new Date(period.periodYear, period.periodMonth - 1, 1);
+              const periodEnd = new Date(period.periodYear, period.periodMonth, 0, 23, 59, 59, 999);
+
+              // Kiểm tra overlap
+              if (assignmentEndDate) {
+                return assignmentStartDate <= periodEnd && assignmentEndDate >= periodStart;
+              } else {
+                // Nếu không có endDate, chỉ cần startDate nằm trong period
+                return assignmentStartDate >= periodStart && assignmentStartDate <= periodEnd;
+              }
+            });
+
+            // Nếu có periods overlap, gọi API để tạo contract payments
+            // Backend có thể tự động tạo khi tạo project period, nhưng cần gọi lại khi có talent assignment mới
+            if (overlappingPeriods.length > 0) {
+              // Kiểm tra xem đã có contract payments cho talent assignment này chưa
+              for (const period of overlappingPeriods) {
+                try {
+                  // Kiểm tra xem đã có contract payments chưa
+                  const [existingClientPayments, existingPartnerPayments] = await Promise.all([
+                    clientContractPaymentService.getAll({
+                      projectPeriodId: period.id,
+                      talentAssignmentId: newAssignment.id,
+                      excludeDeleted: true,
+                    }),
+                    partnerContractPaymentService.getAll({
+                      projectPeriodId: period.id,
+                      talentAssignmentId: newAssignment.id,
+                      excludeDeleted: true,
+                    }),
+                  ]);
+
+                  // Nếu chưa có contract payments, gọi API để tạo
+                  if ((!existingClientPayments || existingClientPayments.length === 0) &&
+                      (!existingPartnerPayments || existingPartnerPayments.length === 0)) {
+                    try {
+                      // Gọi API để tạo contract payments cho talent assignment trong project period
+                      await projectPeriodService.createPaymentsForAssignment(period.id, newAssignment.id);
+                      console.log(`✅ Đã tạo contract payments cho talent assignment ${newAssignment.id} trong project period ${period.periodMonth}/${period.periodYear}`);
+                    } catch (err: any) {
+                      console.error(`❌ Lỗi khi tạo contract payments cho talent assignment ${newAssignment.id} trong project period ${period.id}:`, err);
+                      // Không block việc tạo assignment nếu có lỗi tạo contract payments
+                    }
+                  }
+                } catch (err) {
+                  console.error(`❌ Lỗi khi kiểm tra contract payments cho period ${period.id}:`, err);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("❌ Lỗi khi kiểm tra project periods:", err);
+          // Không block việc tạo assignment nếu có lỗi
+        }
+      }
 
       // Reset form and close modal
       setAssignmentForm({
@@ -498,7 +616,12 @@ export default function ProjectDetailPage() {
         endDate: null,
         commitmentFileUrl: null,
         status: "Active",
-        notes: null
+        terminationDate: null,
+        terminationReason: null,
+        notes: null,
+        estimatedClientRate: null,
+        estimatedPartnerRate: null,
+        currencyCode: null
       });
       setCommitmentFile(null);
       setUploadProgress(0);
@@ -619,26 +742,39 @@ export default function ProjectDetailPage() {
         // Use update API for Draft status
         // Note: We need to include startDate even though it's not in the standard interface
         // Convert dates to UTC ISO string for PostgreSQL
+        // Khi status là Draft, chỉ cho phép cập nhật: startDate, endDate, commitmentFileUrl, estimatedClientRate, estimatedPartnerRate, currencyCode, notes
+        // KHÔNG cho phép cập nhật terminationDate và terminationReason
         const payload: TalentAssignmentUpdateModel & { startDate?: string | null; status?: string } = {
           startDate: updateForm.startDate ? toUTCISOString(updateForm.startDate) : (selectedAssignment.startDate ? toUTCISOString(selectedAssignment.startDate) : null),
           endDate: updateForm.endDate ? toUTCISOString(updateForm.endDate) : null,
           commitmentFileUrl,
           status: "Active", // Change status to Active
-          notes: updateForm.notes || null
+          // Không gửi terminationDate và terminationReason khi status là Draft
+          notes: updateForm.notes || null,
+          estimatedClientRate: updateForm.estimatedClientRate || null,
+          estimatedPartnerRate: updateForm.estimatedPartnerRate || null,
+          currencyCode: (updateForm.estimatedClientRate || updateForm.estimatedPartnerRate) ? "VND" : null
         };
 
         await talentAssignmentService.update(selectedAssignment.id, payload);
       } else if (isActiveWithStartDate) {
         // Use extend API for Active status with startDate
-        // Convert endDate to UTC ISO string for PostgreSQL
-        const endDateUTC = updateForm.endDate ? toUTCISOString(updateForm.endDate) : null;
-        const payload = {
-          endDate: endDateUTC || "",
-          commitmentFileUrl,
+        // For extend, we use the extend model
+        if (!updateForm.endDate) {
+          alert("Vui lòng nhập ngày kết thúc");
+          return;
+        }
+        const endDateUTC = toUTCISOString(updateForm.endDate);
+        if (!endDateUTC) {
+          alert("Ngày kết thúc không hợp lệ");
+          return;
+        }
+        const extendPayload: TalentAssignmentExtendModel = {
+          endDate: endDateUTC,
+          commitmentFileUrl: commitmentFileUrl || null,
           notes: updateForm.notes || null
         };
-
-        await talentAssignmentService.extend(selectedAssignment.id, payload);
+        await talentAssignmentService.extend(selectedAssignment.id, extendPayload);
       } else {
         throw new Error("Không thể cập nhật phân công này");
       }
@@ -668,6 +804,231 @@ export default function ProjectDetailPage() {
       alert(error.message || "Không thể cập nhật phân công nhân sự");
     } finally {
       setSubmittingUpdate(false);
+    }
+  };
+
+  const handleTerminateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !selectedAssignment) return;
+
+    // Validation
+    setTerminateErrors({});
+    
+    if (!terminateForm.terminationDate) {
+      setTerminateErrors({ terminationDate: "Ngày chấm dứt là bắt buộc" });
+      return;
+    }
+
+    if (!terminateForm.terminationReason || terminateForm.terminationReason.trim() === "") {
+      setTerminateErrors({ terminationReason: "Lý do chấm dứt là bắt buộc" });
+      return;
+    }
+
+    // Validation: terminationDate phải >= startDate
+    if (selectedAssignment.startDate) {
+      const terminationDate = new Date(terminateForm.terminationDate);
+      const startDate = new Date(selectedAssignment.startDate);
+      terminationDate.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      
+      if (terminationDate < startDate) {
+        setTerminateErrors({ 
+          terminationDate: `Ngày chấm dứt không được nhỏ hơn ngày bắt đầu (${formatViDate(selectedAssignment.startDate)})` 
+        });
+        return;
+      }
+    }
+
+    // Validation: terminationDate phải <= endDate (nếu có)
+    if (selectedAssignment.endDate) {
+      const terminationDate = new Date(terminateForm.terminationDate);
+      const endDate = new Date(selectedAssignment.endDate);
+      terminationDate.setHours(23, 59, 59, 999);
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (terminationDate > endDate) {
+        setTerminateErrors({ 
+          terminationDate: `Ngày chấm dứt không được lớn hơn ngày kết thúc (${formatViDate(selectedAssignment.endDate)})` 
+        });
+        return;
+      }
+    }
+
+    // Confirmation dialog với cảnh báo
+    const talentName = talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Nhân sự #${selectedAssignment.talentId}`;
+    const terminationDateStr = formatViDate(terminateForm.terminationDate);
+    
+    const confirmMessage = `⚠️ CẢNH BÁO: Hành động này không thể hoàn tác!\n\n` +
+      `Bạn có chắc chắn muốn CHẤM DỨT phân công nhân sự?\n\n` +
+      `📋 Thông tin:\n` +
+      `• Nhân sự: ${talentName}\n` +
+      `• Ngày chấm dứt: ${terminationDateStr}\n` +
+      `• Lý do: ${terminateForm.terminationReason}\n\n` +
+      `⚠️ Lưu ý: Sau khi chấm dứt, phân công này sẽ không thể tiếp tục hoạt động.`;
+    
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSubmittingTerminate(true);
+
+      const payload: TalentAssignmentTerminateModel = {
+        terminationDate: toUTCISOString(terminateForm.terminationDate) || "",
+        terminationReason: terminateForm.terminationReason.trim()
+      };
+
+      await talentAssignmentService.terminate(selectedAssignment.id, payload);
+
+      // Refresh assignments list
+      const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
+      const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
+      setTalentAssignments(filteredAssignments);
+
+      // Reset form and close modal
+      setTerminateForm({
+        terminationDate: "",
+        terminationReason: ""
+      });
+      setTerminateErrors({});
+      setShowTerminateAssignmentModal(false);
+      setShowDetailAssignmentModal(false);
+      setSelectedAssignment(null);
+
+      alert("✅ Chấm dứt phân công nhân sự thành công!");
+    } catch (error: any) {
+      console.error("❌ Lỗi khi chấm dứt phân công:", error);
+      alert(error.message || "Không thể chấm dứt phân công nhân sự");
+    } finally {
+      setSubmittingTerminate(false);
+    }
+  };
+
+  const handleExtendAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !selectedAssignment) return;
+
+    // Validation
+    setExtendErrors({});
+    
+    if (!extendForm.endDate) {
+      setExtendErrors({ endDate: "Ngày kết thúc là bắt buộc" });
+      return;
+    }
+
+    // Validation: endDate phải >= startDate
+    if (selectedAssignment.startDate) {
+      const endDate = new Date(extendForm.endDate);
+      const startDate = new Date(selectedAssignment.startDate);
+      endDate.setHours(23, 59, 59, 999);
+      startDate.setHours(0, 0, 0, 0);
+      
+      if (endDate < startDate) {
+        setExtendErrors({ 
+          endDate: `Ngày kết thúc không được nhỏ hơn ngày bắt đầu (${formatViDate(selectedAssignment.startDate)})` 
+        });
+        return;
+      }
+    }
+
+    // Validation: endDate phải >= current endDate (nếu có)
+    if (selectedAssignment.endDate) {
+      const newEndDate = new Date(extendForm.endDate);
+      const currentEndDate = new Date(selectedAssignment.endDate);
+      newEndDate.setHours(23, 59, 59, 999);
+      currentEndDate.setHours(23, 59, 59, 999);
+      
+      if (newEndDate < currentEndDate) {
+        setExtendErrors({ 
+          endDate: `Ngày kết thúc mới không được nhỏ hơn ngày kết thúc hiện tại (${formatViDate(selectedAssignment.endDate)})` 
+        });
+        return;
+      }
+    }
+
+    // Validation: endDate phải <= project endDate (nếu dự án có ngày kết thúc)
+    if (project?.endDate) {
+      const newEndDate = new Date(extendForm.endDate);
+      const projectEndDate = new Date(project.endDate);
+      newEndDate.setHours(23, 59, 59, 999);
+      projectEndDate.setHours(23, 59, 59, 999);
+      
+      if (newEndDate > projectEndDate) {
+        setExtendErrors({ 
+          endDate: `Ngày kết thúc không được lớn hơn ngày kết thúc dự án (${formatViDate(project.endDate)})` 
+        });
+        return;
+      }
+    }
+
+    // Confirmation dialog với cảnh báo
+    const talentName = talents.find(t => t.id === selectedAssignment.talentId)?.fullName || `Nhân sự #${selectedAssignment.talentId}`;
+    const currentEndDateStr = selectedAssignment.endDate ? formatViDate(selectedAssignment.endDate) : "—";
+    const newEndDateStr = formatViDate(extendForm.endDate);
+    
+    // Tính số ngày gia hạn
+    let daysExtended = 0;
+    if (selectedAssignment.endDate && extendForm.endDate) {
+      const currentEnd = new Date(selectedAssignment.endDate);
+      const newEnd = new Date(extendForm.endDate);
+      daysExtended = Math.ceil((newEnd.getTime() - currentEnd.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    
+    const confirmMessage = `⚠️ XÁC NHẬN GIA HẠN PHÂN CÔNG NHÂN SỰ\n\n` +
+      `📋 Thông tin:\n` +
+      `• Nhân sự: ${talentName}\n` +
+      `• Ngày kết thúc hiện tại: ${currentEndDateStr}\n` +
+      `• Ngày kết thúc mới: ${newEndDateStr}\n` +
+      (daysExtended > 0 ? `• Thời gian gia hạn: ${daysExtended} ngày\n` : ``) +
+      `\n⚠️ Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.`;
+    
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSubmittingExtend(true);
+
+      // Upload commitment file if exists
+      let commitmentFileUrl = selectedAssignment.commitmentFileUrl || null;
+      if (extendCommitmentFile) {
+        const path = `talent-assignments/${id}/${Date.now()}_${extendCommitmentFile.name}`;
+        commitmentFileUrl = await uploadFile(extendCommitmentFile, path, setUploadProgress);
+      }
+
+      const payload = {
+        endDate: toUTCISOString(extendForm.endDate) || "",
+        commitmentFileUrl,
+        notes: extendForm.notes || null
+      };
+
+      await talentAssignmentService.extend(selectedAssignment.id, payload);
+
+      // Refresh assignments list
+      const assignments = await talentAssignmentService.getAll({ projectId: Number(id) });
+      const filteredAssignments = assignments.filter(a => a.projectId === Number(id));
+      setTalentAssignments(filteredAssignments);
+
+      // Reset form and close modal
+      setExtendForm({
+        endDate: "",
+        commitmentFileUrl: null,
+        notes: null
+      });
+      setExtendCommitmentFile(null);
+      setExtendErrors({});
+      setShowExtendAssignmentModal(false);
+      setShowDetailAssignmentModal(false);
+      setSelectedAssignment(null);
+
+      alert("✅ Gia hạn phân công nhân sự thành công!");
+    } catch (error: any) {
+      console.error("❌ Lỗi khi gia hạn phân công:", error);
+      alert(error.message || "Không thể gia hạn phân công nhân sự");
+    } finally {
+      setSubmittingExtend(false);
     }
   };
 
@@ -1503,7 +1864,7 @@ export default function ProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Phân công nhân sự ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Phân công nhân sự ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {clientPayments.map((payment) => (
@@ -1528,8 +1889,12 @@ export default function ProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || 0)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
@@ -1578,7 +1943,7 @@ export default function ProjectDetailPage() {
                                       <div key={talentAssignmentId} className="border border-neutral-200 rounded-lg p-4">
                                         <div className="mb-3 pb-3 border-b border-neutral-200">
                                           <p className="text-sm font-medium text-neutral-600">
-                                            Phân công nhân sự ID: {talentAssignmentId}
+                                            {talentNamesMap[talentAssignmentId] || `Phân công nhân sự ID: ${talentAssignmentId}`}
                                           </p>
                                         </div>
                                         {partnerPaymentsForTalent.map((payment: PartnerContractPaymentModel) => (
@@ -1615,8 +1980,12 @@ export default function ProjectDetailPage() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-neutral-100">
                                               <div>
-                                                <p className="text-xs text-neutral-600 mb-1">Số tiền</p>
-                                                <p className="font-semibold text-gray-900">{formatCurrency(payment.actualAmountVND || payment.plannedAmountVND)}</p>
+                                                <p className="text-xs text-neutral-600 mb-1">
+                                                  {payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? "Số tiền thực tế" : "Số tiền dự kiến"}
+                                                </p>
+                                                <p className="font-semibold text-gray-900">
+                                                  {formatCurrency(payment.actualAmountVND !== null && payment.actualAmountVND !== undefined ? payment.actualAmountVND : (payment.plannedAmountVND || 0))}
+                                                </p>
                                               </div>
                                               <div>
                                                 <p className="text-xs text-neutral-600 mb-1">Đã thanh toán</p>
@@ -2089,6 +2458,48 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
 
+                {/* Estimated Client Rate */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tỷ giá ước tính khách hàng (Tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={formatNumberInput(assignmentForm.estimatedClientRate)}
+                    onChange={(e) => {
+                      const parsed = parseNumberInput(e.target.value);
+                      setAssignmentForm({ 
+                        ...assignmentForm, 
+                        estimatedClientRate: parsed > 0 ? parsed : null,
+                        currencyCode: parsed > 0 ? "VND" : null
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                    placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
+                  />
+                </div>
+
+                {/* Estimated Partner Rate */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tỷ giá ước tính đối tác (Tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={formatNumberInput(assignmentForm.estimatedPartnerRate)}
+                    onChange={(e) => {
+                      const parsed = parseNumberInput(e.target.value);
+                      setAssignmentForm({ 
+                        ...assignmentForm, 
+                        estimatedPartnerRate: parsed > 0 ? parsed : null,
+                        currencyCode: parsed > 0 ? "VND" : null
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                    placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
+                  />
+                </div>
+
                 {/* Notes */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2268,6 +2679,86 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
+              {/* Termination Date - Optional - Only show when status is Terminated (not Draft) */}
+              {selectedAssignment.status === "Terminated" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ngày chấm dứt (Tùy chọn)
+                  </label>
+                  <input
+                    type="date"
+                    value={toVietnamDateInputValue(updateForm.terminationDate || selectedAssignment.terminationDate)}
+                    onChange={(e) => {
+                      setUpdateForm({ 
+                        ...updateForm, 
+                        terminationDate: e.target.value ? `${e.target.value}T00:00:00` : null 
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                  />
+                </div>
+              )}
+
+              {/* Termination Reason - Optional - Only show when status is Terminated (not Draft) */}
+              {selectedAssignment.status === "Terminated" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lý do chấm dứt (Tùy chọn)
+                  </label>
+                  <textarea
+                    value={updateForm.terminationReason || selectedAssignment.terminationReason || ""}
+                    onChange={(e) => {
+                      setUpdateForm({ ...updateForm, terminationReason: e.target.value || null });
+                    }}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                    placeholder="Nhập lý do chấm dứt..."
+                  />
+                </div>
+              )}
+
+              {/* Estimated Client Rate - Optional */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tỷ giá ước tính khách hàng (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={formatNumberInput(updateForm.estimatedClientRate !== undefined ? updateForm.estimatedClientRate : selectedAssignment.estimatedClientRate)}
+                  onChange={(e) => {
+                    const parsed = parseNumberInput(e.target.value);
+                    setUpdateForm({ 
+                      ...updateForm, 
+                      estimatedClientRate: parsed > 0 ? parsed : null,
+                      currencyCode: parsed > 0 ? "VND" : null
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                  placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
+                />
+              </div>
+
+              {/* Estimated Partner Rate - Optional */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tỷ giá ước tính đối tác (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={formatNumberInput(updateForm.estimatedPartnerRate !== undefined ? updateForm.estimatedPartnerRate : selectedAssignment.estimatedPartnerRate)}
+                  onChange={(e) => {
+                    const parsed = parseNumberInput(e.target.value);
+                    setUpdateForm({ 
+                      ...updateForm, 
+                      estimatedPartnerRate: parsed > 0 ? parsed : null,
+                      currencyCode: parsed > 0 ? "VND" : null
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                  placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
+                />
+              </div>
+
               {/* Notes - Optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2289,7 +2780,17 @@ export default function ProjectDetailPage() {
                   onClick={() => {
                     setShowUpdateAssignmentModal(false);
                               setSelectedAssignment(null);
-                    setUpdateForm({ startDate: "", endDate: "", commitmentFileUrl: null, notes: null });
+                    setUpdateForm({ 
+                      startDate: "", 
+                      endDate: "", 
+                      commitmentFileUrl: null, 
+                      terminationDate: null,
+                      terminationReason: null,
+                      notes: null,
+                      estimatedClientRate: null,
+                      estimatedPartnerRate: null,
+                      currencyCode: null
+                    });
                     setUpdateCommitmentFile(null);
                   }}
                   className="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-700 hover:bg-neutral-50 transition-colors"
@@ -2360,6 +2861,14 @@ export default function ProjectDetailPage() {
                     {selectedAssignment.endDate ? formatViDate(selectedAssignment.endDate) : "—"}
                   </p>
                 </div>
+                {selectedAssignment.terminationDate && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Ngày chấm dứt</label>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatViDate(selectedAssignment.terminationDate)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Status */}
@@ -2422,6 +2931,41 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
+              {/* Termination Reason */}
+              {selectedAssignment.terminationReason && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Lý do chấm dứt</label>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                    {selectedAssignment.terminationReason}
+                  </p>
+                </div>
+              )}
+
+              {/* Estimated Rates */}
+              {(selectedAssignment.estimatedClientRate || selectedAssignment.estimatedPartnerRate) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Tỷ giá ước tính</label>
+                  <div className="space-y-2">
+                    {selectedAssignment.estimatedClientRate && (
+                      <div>
+                        <span className="text-xs text-neutral-500">Tỷ giá khách hàng: </span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {formatNumberInput(selectedAssignment.estimatedClientRate)} VND
+                        </span>
+                      </div>
+                    )}
+                    {selectedAssignment.estimatedPartnerRate && (
+                      <div>
+                        <span className="text-xs text-neutral-500">Tỷ giá đối tác: </span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {formatNumberInput(selectedAssignment.estimatedPartnerRate)} VND
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">Ghi chú</label>
@@ -2459,56 +3003,56 @@ export default function ProjectDetailPage() {
                 >
                   Đóng
                 </button>
-                {(selectedAssignment.status === "Draft" || (selectedAssignment.status === "Active" && selectedAssignment.startDate)) && (
+                {selectedAssignment.status === "Draft" && (
                   <button
-                  onClick={async () => {
-                    // Lấy ngày lên lịch của activity cuối cùng cho application gắn với assignment (nếu có)
-                    let lastActivityDate: string | null = null;
-                    if (selectedAssignment.talentApplicationId) {
-                      try {
-                        const activities = await applyActivityService.getAll({
-                          applyId: selectedAssignment.talentApplicationId,
-                          excludeDeleted: true,
-                        });
-                        const activitiesWithDate = activities.filter(a => a.scheduledDate);
-                        if (activitiesWithDate.length > 0) {
-                          const lastActivity = activitiesWithDate.reduce((latest, current) => {
-                            if (!latest.scheduledDate) return current;
-                            if (!current.scheduledDate) return latest;
-                            return new Date(current.scheduledDate) > new Date(latest.scheduledDate) ? current : latest;
+                    onClick={async () => {
+                      // Lấy ngày lên lịch của activity cuối cùng cho application gắn với assignment (nếu có)
+                      let lastActivityDate: string | null = null;
+                      if (selectedAssignment.talentApplicationId) {
+                        try {
+                          const activities = await applyActivityService.getAll({
+                            applyId: selectedAssignment.talentApplicationId,
+                            excludeDeleted: true,
                           });
-                          lastActivityDate = lastActivity.scheduledDate || null;
-                          setEditLastActivityScheduledDate(lastActivityDate);
-                        } else {
+                          const activitiesWithDate = activities.filter(a => a.scheduledDate);
+                          if (activitiesWithDate.length > 0) {
+                            const lastActivity = activitiesWithDate.reduce((latest, current) => {
+                              if (!latest.scheduledDate) return current;
+                              if (!current.scheduledDate) return latest;
+                              return new Date(current.scheduledDate) > new Date(latest.scheduledDate) ? current : latest;
+                            });
+                            lastActivityDate = lastActivity.scheduledDate || null;
+                            setEditLastActivityScheduledDate(lastActivityDate);
+                          } else {
+                            setEditLastActivityScheduledDate(null);
+                          }
+                        } catch (error) {
+                          console.error("❌ Lỗi tải activity của đơn ứng tuyển:", error);
                           setEditLastActivityScheduledDate(null);
                         }
-                      } catch (error) {
-                        console.error("❌ Lỗi tải activity của đơn ứng tuyển:", error);
+                      } else {
                         setEditLastActivityScheduledDate(null);
                       }
-                    } else {
-                      setEditLastActivityScheduledDate(null);
-                    }
 
-                    // Xác định initialStartDate: ưu tiên startDate hiện tại (nếu hợp lệ), nếu không thì dùng activity date (nếu có)
-                    let initialStartDate = "";
-                    if (selectedAssignment.status === "Draft") {
+                      // Xác định initialStartDate: ưu tiên startDate hiện tại (nếu hợp lệ), nếu không thì dùng activity date (nếu có)
+                      let initialStartDate = "";
                       if (isValidDate(selectedAssignment.startDate)) {
                         initialStartDate = selectedAssignment.startDate;
                       } else if (lastActivityDate) {
                         // Nếu không có startDate hợp lệ, dùng activity date
                         initialStartDate = lastActivityDate;
                       }
-                      // Nếu không có cả hai, để trống (user sẽ phải nhập)
-                    } else {
-                      initialStartDate = isValidDate(selectedAssignment.startDate) ? selectedAssignment.startDate : "";
-                    }
                       
                       setUpdateForm({
                         startDate: initialStartDate,
                         endDate: selectedAssignment.endDate || "",
                         commitmentFileUrl: selectedAssignment.commitmentFileUrl || null,
-                        notes: selectedAssignment.notes || null
+                        terminationDate: selectedAssignment.terminationDate || null,
+                        terminationReason: selectedAssignment.terminationReason || null,
+                        notes: selectedAssignment.notes || null,
+                        estimatedClientRate: selectedAssignment.estimatedClientRate || null,
+                        estimatedPartnerRate: selectedAssignment.estimatedPartnerRate || null,
+                        currencyCode: selectedAssignment.currencyCode || null
                       });
                       setUpdateCommitmentFile(null);
                       setShowDetailAssignmentModal(false);
@@ -2520,8 +3064,309 @@ export default function ProjectDetailPage() {
                     Chỉnh sửa
                   </button>
                 )}
+                {selectedAssignment.status === "Active" && selectedAssignment.startDate && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setTerminateForm({
+                          terminationDate: "",
+                          terminationReason: ""
+                        });
+                        setTerminateErrors({});
+                        setShowDetailAssignmentModal(false);
+                        setShowTerminateAssignmentModal(true);
+                      }}
+                      className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      Chấm dứt
+                    </button>
+                    <button
+                      onClick={() => {
+                        setExtendForm({
+                          endDate: selectedAssignment.endDate || "",
+                          commitmentFileUrl: selectedAssignment.commitmentFileUrl || null,
+                          notes: selectedAssignment.notes || null
+                        });
+                        setExtendCommitmentFile(null);
+                        setExtendErrors({});
+                        setShowDetailAssignmentModal(false);
+                        setShowExtendAssignmentModal(true);
+                      }}
+                      className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      Gia hạn
+                    </button>
+                  </>
+                )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminate Talent Assignment Modal */}
+      {showTerminateAssignmentModal && selectedAssignment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowTerminateAssignmentModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <X className="w-5 h-5 text-red-600" />
+                Chấm dứt phân công nhân sự
+              </h3>
+              <button
+                onClick={() => setShowTerminateAssignmentModal(false)}
+                className="text-neutral-400 hover:text-neutral-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleTerminateAssignment} className="space-y-4">
+              {/* Warning Alert */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-red-900 mb-1">⚠️ Cảnh báo quan trọng</h4>
+                    <p className="text-sm text-red-700">
+                      Hành động chấm dứt phân công nhân sự là <strong>không thể hoàn tác</strong>. 
+                      Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Termination Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ngày chấm dứt <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={toVietnamDateInputValue(terminateForm.terminationDate)}
+                  min={selectedAssignment.startDate ? toVietnamDateInputValue(selectedAssignment.startDate) : undefined}
+                  max={selectedAssignment.endDate ? toVietnamDateInputValue(selectedAssignment.endDate) : undefined}
+                  onChange={(e) => {
+                    setTerminateForm({ 
+                      ...terminateForm, 
+                      terminationDate: e.target.value ? `${e.target.value}T00:00:00` : "" 
+                    });
+                    if (terminateErrors.terminationDate) {
+                      setTerminateErrors({ ...terminateErrors, terminationDate: undefined });
+                    }
+                  }}
+                  required
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
+                    terminateErrors.terminationDate 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-neutral-200 focus:border-primary-500'
+                  }`}
+                />
+                {terminateErrors.terminationDate && (
+                  <p className="mt-1 text-sm text-red-500">{terminateErrors.terminationDate}</p>
+                )}
+              </div>
+
+              {/* Termination Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lý do chấm dứt <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={terminateForm.terminationReason}
+                  onChange={(e) => {
+                    setTerminateForm({ ...terminateForm, terminationReason: e.target.value });
+                    if (terminateErrors.terminationReason) {
+                      setTerminateErrors({ ...terminateErrors, terminationReason: undefined });
+                    }
+                  }}
+                  rows={4}
+                  required
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
+                    terminateErrors.terminationReason 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-neutral-200 focus:border-primary-500'
+                  }`}
+                  placeholder="Nhập lý do chấm dứt..."
+                />
+                {terminateErrors.terminationReason && (
+                  <p className="mt-1 text-sm text-red-500">{terminateErrors.terminationReason}</p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTerminateAssignmentModal(false);
+                    setTerminateForm({ terminationDate: "", terminationReason: "" });
+                    setTerminateErrors({});
+                  }}
+                  className="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-700 hover:bg-neutral-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingTerminate}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submittingTerminate ? "Đang xử lý..." : "Chấm dứt"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Extend Talent Assignment Modal */}
+      {showExtendAssignmentModal && selectedAssignment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowExtendAssignmentModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-primary-600" />
+                Gia hạn phân công nhân sự
+              </h3>
+              <button
+                onClick={() => setShowExtendAssignmentModal(false)}
+                className="text-neutral-400 hover:text-neutral-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExtendAssignment} className="space-y-4">
+              {/* Warning Alert */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-900 mb-1">⚠️ Lưu ý quan trọng</h4>
+                    <p className="text-sm text-amber-700">
+                      Gia hạn phân công nhân sự sẽ ảnh hưởng đến thời gian làm việc và các hợp đồng thanh toán liên quan. 
+                      Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* End Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ngày kết thúc mới <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={toVietnamDateInputValue(extendForm.endDate)}
+                  min={(() => {
+                    const startDate = toVietnamDateInputValue(selectedAssignment.startDate);
+                    const currentEndDate = toVietnamDateInputValue(selectedAssignment.endDate);
+                    if (startDate && currentEndDate) {
+                      return new Date(startDate) > new Date(currentEndDate) ? startDate : currentEndDate;
+                    }
+                    return startDate || currentEndDate;
+                  })()}
+                  max={toVietnamDateInputValue(project?.endDate)}
+                  onChange={(e) => {
+                    setExtendForm({ 
+                      ...extendForm, 
+                      endDate: e.target.value ? `${e.target.value}T00:00:00` : "" 
+                    });
+                    if (extendErrors.endDate) {
+                      setExtendErrors({ ...extendErrors, endDate: undefined });
+                    }
+                  }}
+                  required
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-primary-500 ${
+                    extendErrors.endDate 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-neutral-200 focus:border-primary-500'
+                  }`}
+                />
+                {extendErrors.endDate && (
+                  <p className="mt-1 text-sm text-red-500">{extendErrors.endDate}</p>
+                )}
+              </div>
+
+              {/* Commitment File */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  File cam kết (Tùy chọn)
+                </label>
+                {selectedAssignment.commitmentFileUrl && !extendCommitmentFile && (
+                  <div className="mb-2">
+                    <a
+                      href={selectedAssignment.commitmentFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 text-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>File hiện tại</span>
+                    </a>
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 border border-neutral-200 rounded-lg cursor-pointer hover:bg-neutral-50 transition-colors">
+                    <Upload className="w-4 h-4" />
+                    <span className="text-sm">{extendCommitmentFile ? "Thay đổi file" : "Chọn file mới"}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setExtendCommitmentFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                  {extendCommitmentFile && (
+                    <span className="text-sm text-neutral-600">{extendCommitmentFile.name}</span>
+                  )}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <span className="text-sm text-primary-600">Đang upload: {uploadProgress}%</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ghi chú (Tùy chọn)
+                </label>
+                <textarea
+                  value={extendForm.notes || ""}
+                  onChange={(e) => setExtendForm({ ...extendForm, notes: e.target.value || null })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                  placeholder="Nhập ghi chú..."
+                />
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExtendAssignmentModal(false);
+                    setExtendForm({ endDate: "", commitmentFileUrl: null, notes: null });
+                    setExtendCommitmentFile(null);
+                    setExtendErrors({});
+                  }}
+                  className="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-700 hover:bg-neutral-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingExtend}
+                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submittingExtend ? "Đang xử lý..." : "Gia hạn"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
