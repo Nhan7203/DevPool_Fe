@@ -250,6 +250,9 @@ const ManagerProjectDetailPage = React.lazy(() => import('../pages/manager/proje
 const ManagerClientContractDetail = React.lazy(() => import('../pages/manager/contract/clients/Detail'));
 const ManagerPartnerContractDetail = React.lazy(() => import('../pages/manager/contract/partners/Detail'));
 
+// Handover Assignment
+const ManagerHandoverAssignmentPage = React.lazy(() => import('../pages/manager/handover-assignment/HandoverAssignment'));
+
 
 const AppRouter: React.FC = () => {
   const { user } = useAuth();
@@ -441,6 +444,9 @@ const AppRouter: React.FC = () => {
               {/* Contracts */}
               <Route path={ROUTES.MANAGER.CONTRACTS.CLIENT_DETAIL} element={<ManagerClientContractDetail />} />
               <Route path={ROUTES.MANAGER.CONTRACTS.PARTNER_DETAIL} element={<ManagerPartnerContractDetail />} />
+              
+              {/* Handover Assignment */}
+              <Route path={ROUTES.MANAGER.HANDOVER_ASSIGNMENT} element={<ManagerHandoverAssignmentPage />} />
                             
             </Route>
           </Route>

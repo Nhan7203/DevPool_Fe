@@ -1671,7 +1671,6 @@ export default function ProjectDetailPage() {
                           <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Tiêu đề</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Vị trí tuyển dụng</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Số lượng</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Ngân sách/tháng (VND)</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Khu vực làm việc</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">Chế độ làm việc</th>
                           <th className="text-center py-3 px-4 text-sm font-semibold text-neutral-700">Trạng thái</th>
@@ -1690,9 +1689,6 @@ export default function ProjectDetailPage() {
                               <td className="py-3 px-4 text-sm text-neutral-900 font-medium">{jr.title || "—"}</td>
                               <td className="py-3 px-4 text-sm text-neutral-700">{jobRoleLevel?.name || (jr as any).jobPositionName || "—"}</td>
                               <td className="py-3 px-4 text-sm text-neutral-700">{jr.quantity || 0}</td>
-                              <td className="py-3 px-4 text-sm text-neutral-700">
-                                {jr.budgetPerMonth ? `${jr.budgetPerMonth.toLocaleString('vi-VN')} VNĐ` : "—"}
-                              </td>
                               <td className="py-3 px-4 text-sm text-neutral-700">{location?.name || "—"}</td>
                               <td className="py-3 px-4 text-sm text-neutral-700">{formatWorkingMode(jr.workingMode)}</td>
                               <td className="py-3 px-4 text-center">

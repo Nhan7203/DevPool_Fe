@@ -3,16 +3,28 @@ import { getAccessToken as getTokenFromStorage } from '../utils/storage';
 import { API_URL } from '../configs/api';
 
 // Suy ra HUB_URL từ API_URL
-// Thử /notificationHub (không có /api) vì endpoint có thể ở root level
+// SignalR hub có thể nằm ở:
+// 1. Root level: https://host:port/notificationHub (không có /api) - phổ biến hơn
+// 2. API path: https://host:port/api/notificationHub
+// Nếu backend cấu hình khác, có thể override bằng biến môi trường VITE_HUB_URL
 const getHubUrl = (): string => {
+	// Ưu tiên biến môi trường nếu có
+	if (import.meta.env.VITE_HUB_URL) {
+		const hubUrl = String(import.meta.env.VITE_HUB_URL).trim();
+		console.log('🔗 Notification Hub URL (from env):', hubUrl);
+		return hubUrl;
+	}
+	
+	// Mặc định: thử root level trước (loại bỏ /api)
+	// Vì SignalR hub thường được map ở root level, không trong /api
 	const apiUrl = String(API_URL).trim();
-	// Loại bỏ /api ở cuối nếu có
-	// Nếu API là https://host:port/api thì Hub sẽ là https://host:port/notificationHub
 	const hubBase = apiUrl.replace(/\/api\/?$/, '');
 	const hubUrl = `${hubBase}/notificationHub`;
 	
-	// Log để debug
-	console.log('🔗 Notification Hub URL:', hubUrl);
+	// Log để debug (chỉ trong dev mode)
+	if (import.meta.env.DEV) {
+		console.log('🔗 Notification Hub URL:', hubUrl);
+	}
 	
 	return hubUrl;
 };
@@ -141,7 +153,7 @@ export const createNotificationConnection = (): HubConnection => {
 				return 30000;
 			},
 		})
-		.configureLogging(import.meta.env.DEV ? LogLevel.Information : LogLevel.Warning)
+		.configureLogging(LogLevel.Error) // Chỉ log lỗi thực sự, bỏ qua warning về transport fallback
 		.build();
 
 	// Optional: lắng nghe sự kiện hệ thống để debug
@@ -204,7 +216,27 @@ export const startNotificationConnection = async (forceRestart: boolean = false)
 		const errorMessage = err?.message || '';
 		const statusCode = err?.statusCode || err?.status;
 		
-		// Log lỗi để debug
+		// Bỏ qua lỗi WebSocket transport - SignalR sẽ tự động fallback sang SSE/LongPolling
+		// Chỉ log lỗi khi thực sự không kết nối được (không phải lỗi WebSocket transport)
+		const isWebSocketTransportError = errorMessage.includes('WebSocket failed to connect') ||
+			errorMessage.includes('WebSockets transport') ||
+			errorMessage.includes('connection could not be found on the server') ||
+			errorMessage.includes('sticky sessions');
+		
+		// Nếu chỉ là lỗi WebSocket transport, không log (SignalR sẽ tự fallback)
+		if (isWebSocketTransportError) {
+			// Đợi một chút để xem connection có thành công qua transport khác không
+			await new Promise(resolve => setTimeout(resolve, 500));
+			// Kiểm tra lại state sau khi đợi
+			const currentState = newConn.state;
+			if (String(currentState) === 'Connected') {
+				// Connection đã thành công qua transport khác (SSE/LongPolling), không cần log lỗi
+				reconnectAttempts = 0;
+				return;
+			}
+		}
+		
+		// Chỉ log lỗi khi thực sự không kết nối được
 		console.error('❌ Failed to start notification connection:', {
 			url: HUB_URL,
 			error: errorMessage,

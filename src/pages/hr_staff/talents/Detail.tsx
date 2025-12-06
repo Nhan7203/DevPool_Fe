@@ -19,7 +19,8 @@ import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { talentWorkExperienceService, type TalentWorkExperience } from "../../../services/TalentWorkExperience";
 import { talentJobRoleLevelService, type TalentJobRoleLevel } from "../../../services/TalentJobRoleLevel";
-import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum } from "../../../services/JobRoleLevel";
+import { jobRoleLevelService, type JobRoleLevel, TalentLevel as TalentLevelEnum, TalentLevel } from "../../../services/JobRoleLevel";
+import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { talentCertificateService, type TalentCertificate } from "../../../services/TalentCertificate";
 import { certificateTypeService, type CertificateType } from "../../../services/CertificateType";
 import { talentAvailableTimeService, type TalentAvailableTime } from "../../../services/TalentAvailableTime";
@@ -128,7 +129,8 @@ export default function TalentDetailPage() {
     loading: boolean;
   }>({ isOpen: false, items: [], loading: false });
   const [showOnlyUnverifiedSkills, setShowOnlyUnverifiedSkills] = useState<boolean>(false);
-  const [lookupJobRoleLevels, setLookupJobRoleLevels] = useState<JobRoleLevel[]>([]);
+  const [lookupJobRoleLevels, setLookupJobRoleLevels] = useState<JobRoleLevel[]>([]); // Cho CV
+  const [lookupJobRoleLevelsForTalent, setLookupJobRoleLevelsForTalent] = useState<JobRoleLevel[]>([]); // Cho vị trí của talent
   const [lookupCertificateTypes, setLookupCertificateTypes] = useState<CertificateType[]>([]);
   const [analysisResult, setAnalysisResult] = useState<CVAnalysisComparisonResponse | null>(null);
   const [analysisResultCVId, setAnalysisResultCVId] = useState<number | null>(null);
@@ -259,6 +261,10 @@ export default function TalentDetailPage() {
   const [isCertificateTypeDropdownOpen, setIsCertificateTypeDropdownOpen] = useState(false);
   const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<string>("");
   const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [selectedJobRoleFilterId, setSelectedJobRoleFilterId] = useState<number | undefined>(undefined);
+  const [jobRoleFilterSearch, setJobRoleFilterSearch] = useState<string>("");
+  const [isJobRoleFilterDropdownOpen, setIsJobRoleFilterDropdownOpen] = useState(false);
   const [workExperiencePositionSearch, setWorkExperiencePositionSearch] = useState<string>("");
   const [isWorkExperiencePositionDropdownOpen, setIsWorkExperiencePositionDropdownOpen] = useState(false);
   
@@ -482,7 +488,9 @@ export default function TalentDetailPage() {
         // Fetch talent data và các lookup services song song (không phụ thuộc lẫn nhau)
         const [
           talentData,
-          allJobRoleLevels,
+          allJobRoleLevelsForCV,
+          allJobRoleLevelsForTalent,
+          allJobRoles,
           allSkills,
           skillGroupsData,
           allCertificateTypes,
@@ -490,13 +498,24 @@ export default function TalentDetailPage() {
           blacklistData
         ] = await Promise.all([
           talentService.getById(Number(id)),
-          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true }),
+          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true }), // Cho CV
+          jobRoleLevelService.getAll({ excludeDeleted: true }), // Cho vị trí của talent
+          jobRoleService.getAll(),
           skillService.getAll(),
           skillGroupService.getAll({ excludeDeleted: true }).catch(() => null),
           certificateTypeService.getAll(),
           partnerService.getAll().catch(() => []),
           clientTalentBlacklistService.getByTalentId(Number(id), true).catch(() => null)
         ]);
+        
+        // Set jobRoles
+        setJobRoles(allJobRoles);
+        
+        // Set lookupJobRoleLevels cho CV (giữ distinctByName)
+        setLookupJobRoleLevels(allJobRoleLevelsForCV);
+        
+        // Set lookupJobRoleLevels cho vị trí của talent (không distinctByName)
+        setLookupJobRoleLevelsForTalent(allJobRoleLevelsForTalent);
 
         // Set talent data ngay để UI có thể hiển thị
         setTalent(talentData);
@@ -537,7 +556,7 @@ export default function TalentDetailPage() {
         }
 
         // Set lookup data
-        const jobRoleLevelsArray = Array.isArray(allJobRoleLevels) ? allJobRoleLevels : [];
+        const jobRoleLevelsArray = Array.isArray(allJobRoleLevelsForCV) ? allJobRoleLevelsForCV : [];
         setLookupJobRoleLevels(jobRoleLevelsArray);
         setLookupSkills(allSkills);
         
@@ -636,10 +655,18 @@ export default function TalentDetailPage() {
           }
         }
 
-        // Map job role levels with names (reuse allJobRoleLevels)
+        // Map job role levels with names (use allJobRoleLevelsForTalent for talent positions)
         const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
-          const jobRoleLevelInfo = jobRoleLevelsArray.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
-          return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
+          const jobRoleLevelInfo = allJobRoleLevelsForTalent.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
+          if (!jobRoleLevelInfo) {
+            return { ...jrl, jobRoleLevelName: "Unknown Level" };
+          }
+          // Sử dụng allJobRoles trực tiếp thay vì jobRoles từ state
+          const jobRole = allJobRoles.find(r => r.id === jobRoleLevelInfo.jobRoleId);
+          const roleName = jobRole?.name || "—";
+          const levelText = getLevelText(jobRoleLevelInfo.level);
+          const displayName = `${roleName} - ${levelText}`;
+          return { ...jrl, jobRoleLevelName: displayName };
         });
         setJobRoleLevels(jobRoleLevelsWithNames);
 
@@ -1656,11 +1683,21 @@ export default function TalentDetailPage() {
       setSelectedJobRoleLevels([]);
       // Refresh data
       const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
-      setLookupJobRoleLevels(allJobRoleLevels);
+      const [allJobRoleLevels, allJobRolesData] = await Promise.all([
+        jobRoleLevelService.getAll({ excludeDeleted: true }),
+        jobRoleService.getAll()
+      ]);
+      setLookupJobRoleLevelsForTalent(allJobRoleLevels);
       const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
         const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
-        return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
+        if (!jobRoleLevelInfo) {
+          return { ...jrl, jobRoleLevelName: "Unknown Level" };
+        }
+        const jobRole = allJobRolesData.find(r => r.id === jobRoleLevelInfo.jobRoleId);
+        const roleName = jobRole?.name || "—";
+        const levelText = getLevelText(jobRoleLevelInfo.level);
+        const displayName = `${roleName} - ${levelText}`;
+        return { ...jrl, jobRoleLevelName: displayName };
       });
       setJobRoleLevels(jobRoleLevelsWithNames);
     } catch (err) {
@@ -1820,9 +1857,15 @@ export default function TalentDetailPage() {
   const handleConfirmVerifySkillGroup = async () => {
     if (!id || !skillGroupVerifyModal.skillGroupId) return;
 
-    // Validation: Tên chuyên gia là bắt buộc
-    if (!verifyExpertName.trim()) {
-      alert("⚠️ Vui lòng nhập tên chuyên gia chịu trách nhiệm verify.");
+    // Validation: Bắt buộc phải có chuyên gia để verify
+    if (expertsForSkillGroup.length === 0) {
+      alert("⚠️ Không có chuyên gia nào được gán cho nhóm kỹ năng này. Vui lòng liên hệ Admin để gán chuyên gia trước khi verify.");
+      return;
+    }
+
+    // Validation: Phải chọn một chuyên gia từ danh sách
+    if (!selectedExpertId) {
+      alert("⚠️ Vui lòng chọn chuyên gia từ danh sách.");
       return;
     }
 
@@ -2130,7 +2173,7 @@ export default function TalentDetailPage() {
     confirmMessage += "Bạn có chắc chắn muốn xem các gợi ý phân tích ở các tab khác không?\n\n";
     confirmMessage += "Hệ thống sẽ hiển thị các gợi ý ở các tab:\n";
     confirmMessage += "• Kỹ năng\n";
-    confirmMessage += "• Vị trí & Lương\n";
+    confirmMessage += "• Vị trí\n";
     confirmMessage += "• Chứng chỉ\n";
     confirmMessage += "• Dự án\n";
     confirmMessage += "• Kinh nghiệm\n\n";
@@ -2506,11 +2549,21 @@ export default function TalentDetailPage() {
       handleCloseInlineForm();
       // Refresh data
       const jobRoleLevelsData = await talentJobRoleLevelService.getAll({ talentId: Number(id), excludeDeleted: true });
-      const allJobRoleLevels = await jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true });
-      setLookupJobRoleLevels(allJobRoleLevels);
+      const [allJobRoleLevels, allJobRolesData] = await Promise.all([
+        jobRoleLevelService.getAll({ excludeDeleted: true }),
+        jobRoleService.getAll()
+      ]);
+      setLookupJobRoleLevelsForTalent(allJobRoleLevels);
       const jobRoleLevelsWithNames = jobRoleLevelsData.map((jrl: TalentJobRoleLevel) => {
         const jobRoleLevelInfo = allJobRoleLevels.find((j: JobRoleLevel) => j.id === jrl.jobRoleLevelId);
-        return { ...jrl, jobRoleLevelName: jobRoleLevelInfo?.name ?? "Unknown Level" };
+        if (!jobRoleLevelInfo) {
+          return { ...jrl, jobRoleLevelName: "Unknown Level" };
+        }
+        const jobRole = allJobRolesData.find(r => r.id === jobRoleLevelInfo.jobRoleId);
+        const roleName = jobRole?.name || "—";
+        const levelText = getLevelText(jobRoleLevelInfo.level);
+        const displayName = `${roleName} - ${levelText}`;
+        return { ...jrl, jobRoleLevelName: displayName };
       });
       setJobRoleLevels(jobRoleLevelsWithNames);
     } catch (err) {
@@ -2644,29 +2697,25 @@ export default function TalentDetailPage() {
     return levelMap[level || "Beginner"] || "Mới bắt đầu";
   };
 
-  // Helper function để format số tiền
-  const formatCurrency = (value: string | number | undefined): string => {
-    if (!value && value !== 0) return "";
-    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
-    if (isNaN(numValue)) return "";
-    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  // Helper function để format level
+  const getLevelText = (level: number): string => {
+    const levelMap: Record<number, string> = {
+      [TalentLevel.Junior]: "Junior",
+      [TalentLevel.Middle]: "Middle",
+      [TalentLevel.Senior]: "Senior",
+      [TalentLevel.Lead]: "Lead"
+    };
+    return levelMap[level] || "Unknown";
   };
 
-  // Handle rate per month change cho inline form
-  const handleInlineRatePerMonthChange = (value: string) => {
-    // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
-    const cleaned = value.replace(/\D/g, "");
-    // Nếu rỗng, set về undefined
-    if (cleaned === "") {
-      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: undefined });
-      return;
-    }
-    // Parse và lưu số vào state
-    const numValue = parseInt(cleaned, 10);
-    if (!isNaN(numValue)) {
-      setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, ratePerMonth: numValue });
-    }
+  // Helper function để format jobRoleLevel display text
+  const getJobRoleLevelDisplayText = (jrl: JobRoleLevel): string => {
+    const jobRole = jobRoles.find(r => r.id === jrl.jobRoleId);
+    const roleName = jobRole?.name || "—";
+    const levelText = getLevelText(jrl.level);
+    return `${roleName} - ${levelText}`;
   };
+
 
   // Handle certificate image file change
   const handleCertificateImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3161,7 +3210,7 @@ export default function TalentDetailPage() {
           pendingItems.push(`• ${analysisResult.skills.newFromCV.length} kỹ năng mới`);
         }
         if (hasNewJobRoleLevels) {
-          pendingItems.push(`• ${analysisResult.jobRoleLevels.newFromCV.length} vị trí & mức lương mới`);
+          pendingItems.push(`• ${analysisResult.jobRoleLevels.newFromCV.length} vị trí mới`);
         }
         if (hasNewProjects) {
           pendingItems.push(`• ${analysisResult.projects.newEntries.length} dự án mới`);
@@ -3653,7 +3702,7 @@ export default function TalentDetailPage() {
                 }`}
               >
                 <Target className="w-4 h-4" />
-                Vị trí & Lương
+                Vị trí
               </button>
               <button
                 type="button"
@@ -4015,7 +4064,7 @@ export default function TalentDetailPage() {
                           onClick={() => setExpandedAnalysisDetail(expandedAnalysisDetail === "jobRoleLevels" ? null : "jobRoleLevels")}
                         >
                           <div className="flex items-center justify-between">
-                            <p className="text-xs uppercase tracking-wide text-green-600 font-semibold">Vị trí & mức lương</p>
+                            <p className="text-xs uppercase tracking-wide text-green-600 font-semibold">Vị trí</p>
                             <ChevronDown className={`w-4 h-4 text-green-600 transition-transform ${expandedAnalysisDetail === "jobRoleLevels" ? "rotate-180" : ""}`} />
                           </div>
                           <p className="mt-1 text-lg font-bold text-green-900">
@@ -4150,7 +4199,7 @@ export default function TalentDetailPage() {
                       {expandedAnalysisDetail === "jobRoleLevels" && (
                         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-base font-semibold text-green-900">Vị trí & Mức lương</h3>
+                            <h3 className="text-base font-semibold text-green-900">Vị trí</h3>
                             <button
                               onClick={() => setExpandedAnalysisDetail(null)}
                               className="text-green-600 hover:text-green-800 transition-colors"
@@ -5273,7 +5322,7 @@ export default function TalentDetailPage() {
               </div>
             )}
 
-            {/* Tab: Vị trí và mức lương */}
+            {/* Tab: Vị trí */}
             {activeTab === "jobRoleLevels" && (
               <div className="space-y-4">
                 {/* Inline JobRoleLevel Form */}
@@ -5293,6 +5342,87 @@ export default function TalentDetailPage() {
                         <label className="block text-sm font-semibold text-neutral-700 mb-2">
                           Vị trí <span className="text-red-500">*</span>
                         </label>
+                        
+                        {/* Filter theo loại vị trí */}
+                        <div className="mb-2">
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsJobRoleFilterDropdownOpen(!isJobRoleFilterDropdownOpen)}
+                              className="w-full flex items-center justify-between px-3 py-2 border border-neutral-200 rounded-lg bg-white text-left focus:border-warning-500 focus:ring-warning-500"
+                            >
+                              <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                <Filter className="w-4 h-4 text-neutral-400" />
+                                <span>
+                                  {selectedJobRoleFilterId
+                                    ? jobRoles.find(r => r.id === selectedJobRoleFilterId)?.name || "Loại vị trí"
+                                    : "Tất cả loại vị trí"}
+                                </span>
+                              </div>
+                            </button>
+                            {isJobRoleFilterDropdownOpen && (
+                              <div 
+                                className="absolute z-30 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                onMouseLeave={() => {
+                                  setIsJobRoleFilterDropdownOpen(false);
+                                  setJobRoleFilterSearch("");
+                                }}
+                              >
+                                <div className="p-3 border-b border-neutral-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                    <input
+                                      type="text"
+                                      value={jobRoleFilterSearch}
+                                      onChange={(e) => setJobRoleFilterSearch(e.target.value)}
+                                      placeholder="Tìm loại vị trí..."
+                                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-warning-500 focus:ring-warning-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedJobRoleFilterId(undefined);
+                                      setJobRoleFilterSearch("");
+                                      setIsJobRoleFilterDropdownOpen(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm ${
+                                      !selectedJobRoleFilterId
+                                        ? "bg-warning-50 text-warning-700"
+                                        : "hover:bg-neutral-50 text-neutral-700"
+                                    }`}
+                                  >
+                                    Tất cả loại vị trí
+                                  </button>
+                                  {jobRoles
+                                    .filter(role => !jobRoleFilterSearch || role.name.toLowerCase().includes(jobRoleFilterSearch.toLowerCase()))
+                                    .map(role => (
+                                      <button
+                                        type="button"
+                                        key={role.id}
+                                        onClick={() => {
+                                          setSelectedJobRoleFilterId(role.id);
+                                          setJobRoleFilterSearch("");
+                                          setIsJobRoleFilterDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 text-sm ${
+                                          selectedJobRoleFilterId === role.id
+                                            ? "bg-warning-50 text-warning-700"
+                                            : "hover:bg-neutral-50 text-neutral-700"
+                                        }`}
+                                      >
+                                        {role.name}
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
                         <div className="relative">
                           <button
                             type="button"
@@ -5303,7 +5433,10 @@ export default function TalentDetailPage() {
                               <Target className="w-4 h-4 text-neutral-400" />
                               <span>
                                 {inlineJobRoleLevelForm.jobRoleLevelId && inlineJobRoleLevelForm.jobRoleLevelId > 0
-                                  ? lookupJobRoleLevels.find(j => j.id === inlineJobRoleLevelForm.jobRoleLevelId)?.name || "Chọn vị trí"
+                                  ? (() => {
+                                      const level = lookupJobRoleLevelsForTalent.find(j => j.id === inlineJobRoleLevelForm.jobRoleLevelId);
+                                      return level ? getJobRoleLevelDisplayText(level) : "Chọn vị trí";
+                                    })()
                                   : "Chọn vị trí"}
                               </span>
                             </div>
@@ -5330,9 +5463,15 @@ export default function TalentDetailPage() {
                               </div>
                               <div className="max-h-56 overflow-y-auto">
                                 {(() => {
+                                  const filteredByJobRole = selectedJobRoleFilterId
+                                    ? lookupJobRoleLevelsForTalent.filter(j => j.jobRoleId === selectedJobRoleFilterId)
+                                    : lookupJobRoleLevelsForTalent;
                                   const filtered = jobRoleLevelSearch
-                                    ? lookupJobRoleLevels.filter(j => j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase()))
-                                    : lookupJobRoleLevels;
+                                    ? filteredByJobRole.filter(j => {
+                                        const displayText = getJobRoleLevelDisplayText(j);
+                                        return displayText.toLowerCase().includes(jobRoleLevelSearch.toLowerCase());
+                                      })
+                                    : filteredByJobRole;
                                   if (filtered.length === 0) {
                                     return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
                                   }
@@ -5353,6 +5492,8 @@ export default function TalentDetailPage() {
                                             setInlineJobRoleLevelForm({ ...inlineJobRoleLevelForm, jobRoleLevelId: jobRoleLevel.id });
                                             setIsJobRoleLevelDropdownOpen(false);
                                             setJobRoleLevelSearch("");
+                                            // Tự động điền vào ô lọc loại vị trí
+                                            setSelectedJobRoleFilterId(jobRoleLevel.jobRoleId);
                                           }
                                         }}
                                         disabled={isDisabled}
@@ -5364,7 +5505,7 @@ export default function TalentDetailPage() {
                                               : "hover:bg-neutral-50 text-neutral-700"
                                         }`}
                                       >
-                                        {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
+                                        {getJobRoleLevelDisplayText(jobRoleLevel)}{isDisabled ? ' (đã chọn)' : ''}
                                       </button>
                                     );
                                   });
@@ -5384,21 +5525,6 @@ export default function TalentDetailPage() {
                             min="0"
                             className="w-full px-4 py-2 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-neutral-700 mb-2">Mức lương mong muốn</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={formatCurrency(inlineJobRoleLevelForm.ratePerMonth)}
-                              onChange={(e) => handleInlineRatePerMonthChange(e.target.value)}
-                              placeholder="VD: 5.000.000"
-                              className="w-full py-2 px-3 pr-12 border rounded-lg bg-white border-neutral-300 focus:ring-2 focus:ring-warning-500/20 focus:border-warning-500"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
-                              VNĐ
-                            </span>
-                          </div>
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
@@ -5430,7 +5556,7 @@ export default function TalentDetailPage() {
                   </div>
                 )}
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Vị trí và mức lương</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Vị trí</h3>
                     <div className="flex gap-2">
                       {showInlineForm !== "jobRoleLevel" && (
                         <Button
@@ -5456,7 +5582,7 @@ export default function TalentDetailPage() {
                   {analysisResult && (matchedJobRoleLevelsNotInProfile.length > 0 || jobRoleLevelsMatched.length > 0 || jobRoleLevelsOnlyInTalent.length > 0 || jobRoleLevelsUnmatched.length > 0) && (
                     <div className="mb-4 rounded-xl border border-green-200 bg-green-50/80 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí & mức lương</h3>
+                        <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">Đề xuất vị trí</h3>
                         <span className="text-xs text-green-700">
                           {matchedJobRoleLevelsNotInProfile.length} cần tạo mới · {jobRoleLevelsMatched.length} trùng CV · {jobRoleLevelsUnmatched.length} chưa có trong hệ thống
                         </span>
@@ -5520,7 +5646,6 @@ export default function TalentDetailPage() {
                               </th>
                               <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vị trí</th>
                               <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Kinh nghiệm</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Mức lương</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-neutral-200">
@@ -5552,9 +5677,6 @@ export default function TalentDetailPage() {
                                   </td>
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="text-sm text-warning-700">{jrl.yearsOfExp === 0 ? 'không có' : `${jrl.yearsOfExp} năm`}</div>
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="text-sm text-warning-600">{jrl.ratePerMonth ? `${jrl.ratePerMonth.toLocaleString('vi-VN')} VNĐ/tháng` : 'Chưa xác định'}</div>
                                   </td>
                                 </tr>
                               ))}
@@ -6459,8 +6581,9 @@ export default function TalentDetailPage() {
                                     }
                                   }}
                                   className="w-full px-3 py-2 border rounded-lg text-sm border-neutral-300 focus:ring-2 focus:ring-secondary-500/20 focus:border-secondary-500 bg-white"
+                                  required
                                 >
-                                      <option value="">
+                                  <option value="">
                                     Chọn chuyên gia đã được gán cho nhóm kỹ năng này
                                   </option>
                                   {expertsForSkillGroup.map((ex) => (
@@ -6470,22 +6593,14 @@ export default function TalentDetailPage() {
                                     </option>
                                   ))}
                                 </select>
-                              ) : null}
-                              <input
-                                type="text"
-                                value={verifyExpertName}
-                                onChange={(e) => setVerifyExpertName(e.target.value)}
-                                placeholder="Nhập tên chuyên gia chịu trách nhiệm (bắt buộc)"
-                                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-secondary-500/20 ${
-                                  !verifyExpertName.trim()
-                                    ? "border-amber-300 focus:border-amber-500"
-                                    : "border-neutral-300 focus:border-secondary-500"
-                                }`}
-                              />
-                              <p className="text-[11px] text-neutral-500">
-                                Nếu chọn ở trên, hệ thống sẽ tự điền tên chuyên gia vào ô này. Bạn
-                                vẫn có thể chỉnh sửa thủ công nếu cần.
-                              </p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                                    ⚠️ Không có chuyên gia nào được gán cho nhóm kỹ năng này. 
+                                    Vui lòng liên hệ Admin để gán chuyên gia trước khi verify.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -6588,9 +6703,9 @@ export default function TalentDetailPage() {
                           <button
                             type="button"
                             onClick={handleConfirmVerifySkillGroup}
-                            disabled={isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()}
+                            disabled={isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || expertsForSkillGroup.length === 0 || !selectedExpertId}
                             className={`px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm flex items-center justify-center gap-2 ${
-                              isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || !verifyExpertName.trim()
+                              isVerifyingSkillGroup || (verifyResult === false && !verifyNote.trim()) || expertsForSkillGroup.length === 0 || !selectedExpertId
                                 ? "bg-neutral-300 cursor-not-allowed"
                                 : verifyResult === false
                                 ? "bg-red-600 hover:bg-red-700"

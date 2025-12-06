@@ -241,6 +241,7 @@ export const ROUTES = {
       CLIENT_DETAIL: '/manager/contracts/clients/:id',
       PARTNER_DETAIL: '/manager/contracts/partners/:id',
     },
+    HANDOVER_ASSIGNMENT: '/manager/handover-assignment',
 
     // BUSINESS: {
     //   OVERVIEW: '/manager/business/overview',

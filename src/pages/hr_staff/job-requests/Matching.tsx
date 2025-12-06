@@ -331,8 +331,8 @@ export default function CVMatchingPage() {
                             }
                             
                             // ✅ Kiểm tra verification status: Chỉ loại bỏ nếu JobRequest yêu cầu skill thuộc group chưa verify
-                            // Logic: Nếu group đã verify (isVerified = true) nhưng cần verify lại (needsReverification = true)
-                            // thì vẫn cho phép matching vì các skill cũ đã được verify, chỉ skill mới cần verify lại
+                            // Logic: Chỉ kiểm tra verification cho các skill groups mà talent THỰC SỰ CÓ skill
+                            // Nếu talent không có skill trong group, không cần kiểm tra verification cho group đó
                             try {
                                 // Lấy danh sách skill IDs mà JobRequest yêu cầu
                                 const requiredSkillIds = jobReq.jobSkills?.map((js: any) => {
@@ -346,6 +346,12 @@ export default function CVMatchingPage() {
                                 if (requiredSkillIds.length === 0) {
                                     // Không có skill yêu cầu, không cần kiểm tra verification
                                 } else {
+                                    // Lấy skills của talent
+                                    const talentSkills = await talentSkillService.getAll({
+                                        talentId: talent.id,
+                                        excludeDeleted: true,
+                                    }) as TalentSkill[];
+                                    
                                     // Lấy tất cả skills để map skillId -> skillGroupId
                                     const allSkills = await skillService.getAll({ excludeDeleted: true }) as Skill[];
                                     const skillGroupMap = new Map<number, number | undefined>();
@@ -353,23 +359,29 @@ export default function CVMatchingPage() {
                                         skillGroupMap.set(skill.id, skill.skillGroupId);
                                     });
                                     
-                                    // Lấy danh sách skill group IDs mà JobRequest yêu cầu
-                                    const requiredSkillGroupIds: number[] = Array.from(
+                                    // Lấy danh sách skill IDs mà talent có
+                                    const talentSkillIds = talentSkills.map(ts => ts.skillId);
+                                    
+                                    // Tìm các skill IDs mà cả JobRequest yêu cầu VÀ talent có
+                                    const commonSkillIds = requiredSkillIds.filter((skillId: number) => talentSkillIds.includes(skillId));
+                                    
+                                    // Lấy danh sách skill group IDs từ các skill chung (talent có VÀ job request yêu cầu)
+                                    const talentSkillGroupIds: number[] = Array.from(
                                         new Set(
-                                            requiredSkillIds
+                                            commonSkillIds
                                                 .map((skillId: number) => skillGroupMap.get(skillId))
                                                 .filter((gid: number | undefined): gid is number => typeof gid === "number")
                                         )
                                     );
                                     
-                                    // Chỉ kiểm tra verification cho các skill groups mà JobRequest yêu cầu
-                                    if (requiredSkillGroupIds.length > 0) {
+                                    // Chỉ kiểm tra verification cho các skill groups mà talent có skill
+                                    if (talentSkillGroupIds.length > 0) {
                                         const statuses = await talentSkillGroupAssessmentService.getVerificationStatuses(
                                             talent.id,
-                                            requiredSkillGroupIds
+                                            talentSkillGroupIds
                                         );
                                         
-                                        // Logic mới: Chỉ block nếu group chưa được verify VÀ chưa từng được verify
+                                        // Logic: Chỉ block nếu group chưa được verify VÀ chưa từng được verify
                                         // Nếu group đã từng được verify (có lastVerifiedDate) nhưng hiện tại isVerified = false
                                         // thì có thể do verify fail hoặc cần verify lại, nhưng vẫn cho phép matching
                                         // vì JobRequest chỉ yêu cầu skill cụ thể, không phải toàn bộ group

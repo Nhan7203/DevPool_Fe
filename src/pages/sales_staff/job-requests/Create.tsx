@@ -6,7 +6,7 @@ import { jobRequestService, JobRequestStatus } from "../../../services/JobReques
 import { skillService, type Skill } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { projectService, type Project } from "../../../services/Project";
-import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { jobRoleLevelService, type JobRoleLevel, TalentLevel } from "../../../services/JobRoleLevel";
 import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { type ClientCompanyTemplate, clientCompanyCVTemplateService } from "../../../services/ClientCompanyTemplate";
 import { locationService, type Location } from "../../../services/location";
@@ -54,7 +54,6 @@ export default function JobRequestCreatePage() {
     description: "",
     requirements: "",
     quantity: 1,
-    budgetPerMonth: "",
     status: JobRequestStatus.Pending as number,
     workingMode: WorkingMode.None as number,
     locationId: "",
@@ -66,11 +65,9 @@ export default function JobRequestCreatePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
-  const [selectedJobRoleId, setSelectedJobRoleId] = useState<number>(0);
   const [clientTemplates, setClientTemplates] = useState<ClientCompanyTemplate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number>(0);
   const [clientJobRoleLevels, setClientJobRoleLevels] = useState<ClientJobRoleLevel[]>([]);
-  const [budgetCurrency, setBudgetCurrency] = useState<string>("VND");
   const [locations, setLocations] = useState<Location[]>([]);
   const [applyTemplates, setApplyTemplates] = useState<ApplyProcessTemplate[]>([]);
   const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
@@ -102,6 +99,9 @@ export default function JobRequestCreatePage() {
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
   const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState(false);
   const [isApplyTemplateDropdownOpen, setIsApplyTemplateDropdownOpen] = useState(false);
+  const [selectedJobRoleFilterId, setSelectedJobRoleFilterId] = useState<number | undefined>(undefined);
+  const [jobRoleFilterSearch, setJobRoleFilterSearch] = useState<string>("");
+  const [isJobRoleFilterDropdownOpen, setIsJobRoleFilterDropdownOpen] = useState(false);
 
   const filteredSkillGroups = skillGroups.filter(group =>
     group.name.toLowerCase().includes(skillGroupQuery.toLowerCase())
@@ -123,31 +123,19 @@ export default function JobRequestCreatePage() {
     }));
   };
 
-  // Helper functions để format số tiền
-  const formatCurrency = (value: string | number | undefined): string => {
-    if (!value && value !== 0) return "";
-    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
-    if (isNaN(numValue)) return "";
-    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  };
-
-  const parseCurrency = (value: string): number => {
-    if (!value) return 0;
-    const cleaned = value.replace(/\./g, "");
-    return parseFloat(cleaned) || 0;
-  };
 
   // Gửi thông báo đến TA (HR) - FE hiển thị "TA" nhưng backend vẫn dùng role "HR"
   const sendNotificationToHR = useCallback(async (jobRequestId: number | null, jobTitle: string) => {
     try {
-      // Backend vẫn dùng role "HR", chưa đổi thành "TA"
-      const hrUsersResponse = await userService.getAll({ role: "HR", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
-      const hrUserIds = (hrUsersResponse.items || [])
-        .filter((u) => (u.roles || []).some((role) => role === "HR")) // Filter theo role "HR" (backend)
+      // Backend đã đổi role từ "HR" sang "TA"
+      const taUsersResponse = await userService.getAll({ role: "TA", excludeDeleted: true, pageNumber: 1, pageSize: 100 });
+      const taUserIds = (taUsersResponse.items || [])
+        .filter((u) => (u.roles || []).some((role) => role === "TA")) // Filter theo role "TA" (backend đã đổi)
         .map((u) => String(u.id)) // Đảm bảo là string
         .filter(Boolean);
 
-      if (!hrUserIds.length) {
+      if (!taUserIds.length) {
+        console.warn("⚠️ Không tìm thấy TA staff để gửi thông báo");
         return;
       }
 
@@ -160,7 +148,7 @@ export default function JobRequestCreatePage() {
         message: `${creatorName} vừa tạo yêu cầu tuyển dụng "${jobTitle}". Vui lòng kiểm tra và duyệt yêu cầu này.`,
         type: NotificationType.JobStatusChanged,
         priority: NotificationPriority.Medium,
-        userIds: hrUserIds,
+        userIds: taUserIds,
         entityType: "JobRequest",
         entityId: jobRequestId ?? undefined,
         actionUrl: jobRequestId ? `/ta/job-requests/${jobRequestId}` : undefined,
@@ -169,9 +157,9 @@ export default function JobRequestCreatePage() {
           createdBy: creatorName?.toString() ?? "Sales",
         },
       });
-      console.log("✅ Notification created:", notification);
+      console.log("✅ Notification created for TA staff:", notification);
     } catch (notifyError) {
-      console.error("Không thể gửi thông báo tới TA:", notifyError);
+      console.error("❌ Không thể gửi thông báo tới TA:", notifyError);
     }
   }, [user]);
 
@@ -212,7 +200,7 @@ export default function JobRequestCreatePage() {
         const [skills, projectsData, jobRoleLevelsData, jobRolesData, locs, apts, skillGroupsData] = await Promise.all([
           skillService.getAll(),
           projectService.getAll(),
-          jobRoleLevelService.getAll({ distinctByName: true }),
+          jobRoleLevelService.getAll(),
           jobRoleService.getAll(),
           locationService.getAll(),
           applyProcessTemplateService.getAll(),
@@ -298,58 +286,28 @@ export default function JobRequestCreatePage() {
     fetchClientJobRoleLevels();
   }, [selectedClientId]);
 
+  // Reset jobRoleLevelId khi filter jobRole thay đổi và jobRoleLevelId hiện tại không thuộc jobRole đã filter
+  useEffect(() => {
+    if (form.jobRoleLevelId && selectedJobRoleFilterId) {
+      const selectedLevel = jobRoleLevels.find(j => j.id.toString() === form.jobRoleLevelId);
+      if (selectedLevel && selectedLevel.jobRoleId !== selectedJobRoleFilterId) {
+        setForm(prev => ({ ...prev, jobRoleLevelId: "" }));
+        setSelectedJobRoleFilterId(undefined);
+      }
+    }
+  }, [selectedJobRoleFilterId, form.jobRoleLevelId, jobRoleLevels]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    // Xử lý đặc biệt cho budgetPerMonth - format số tiền
-    if (name === "budgetPerMonth") {
-      // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
-      const cleaned = value.replace(/\D/g, "");
-      // Nếu rỗng, set về rỗng
-      if (cleaned === "") {
-        setForm(prev => ({ ...prev, [name]: "" }));
-        return;
-      }
-      // Format lại với dấu chấm ngăn cách hàng nghìn
-      const numValue = parseInt(cleaned, 10);
-      if (!isNaN(numValue)) {
-        const formattedValue = formatCurrency(numValue);
-        setForm(prev => ({ ...prev, [name]: formattedValue }));
-      }
-      return;
-    }
     
     setForm(prev => ({ ...prev, [name]: value }));
     if (name === "jobRoleLevelId") {
       const lvl = jobRoleLevels.find(j => j.id.toString() === value);
       if (lvl) {
-        setSelectedJobRoleId(lvl.jobRoleId);
-        
-        // Tự động điền thông tin từ ClientJobRoleLevel nếu có
-        if (selectedClientId) {
-          const clientJobRoleLevel = clientJobRoleLevels.find(
-            cjrl => cjrl.jobRoleLevelId === Number(value) && cjrl.clientCompanyId === selectedClientId
-          );
-          
-          if (clientJobRoleLevel) {
-            // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
-            if (clientJobRoleLevel.expectedMaxRate) {
-              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate ?? undefined) }));
-            } else if (clientJobRoleLevel.expectedMinRate) {
-              setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate ?? undefined) }));
-            }
-            
-            // Điền currency
-            if (clientJobRoleLevel.currency) {
-              setBudgetCurrency(clientJobRoleLevel.currency);
-            } else {
-              setBudgetCurrency("VND");
-            }
-          } else {
-            // Reset về mặc định nếu không tìm thấy
-            setBudgetCurrency("VND");
-          }
-        }
+        // Tự động điền vào ô lọc loại vị trí
+        setSelectedJobRoleFilterId(lvl.jobRoleId);
+      } else {
+        setSelectedJobRoleFilterId(undefined);
       }
     }
   };
@@ -422,7 +380,6 @@ export default function JobRequestCreatePage() {
         description: form.description,
         requirements: form.requirements,
         quantity: Number(form.quantity),
-        budgetPerMonth: form.budgetPerMonth ? parseCurrency(form.budgetPerMonth) : undefined,
         locationId: form.locationId ? Number(form.locationId) : undefined,
         workingMode: Number(form.workingMode) as WorkingMode,
         status: Number(form.status) as JobRequestStatus,
@@ -455,9 +412,45 @@ export default function JobRequestCreatePage() {
   const locationsFiltered = locations.filter(l =>
     !locationSearch || l.name.toLowerCase().includes(locationSearch.toLowerCase())
   );
-  const jobRoleLevelsFiltered = jobRoleLevels.filter(j =>
-    !jobRoleLevelSearch || j.name.toLowerCase().includes(jobRoleLevelSearch.toLowerCase())
+  // Helper function để format level
+  const getLevelText = (level: number): string => {
+    const levelMap: Record<number, string> = {
+      [TalentLevel.Junior]: "Junior",
+      [TalentLevel.Middle]: "Middle",
+      [TalentLevel.Senior]: "Senior",
+      [TalentLevel.Lead]: "Lead"
+    };
+    return levelMap[level] || "Unknown";
+  };
+  
+  // Helper function để format jobRoleLevel display text
+  const getJobRoleLevelDisplayText = (jrl: JobRoleLevel): string => {
+    const jobRole = jobRoles.find(r => r.id === jrl.jobRoleId);
+    const roleName = jobRole?.name || "—";
+    const levelText = getLevelText(jrl.level);
+    return `${roleName} - ${levelText}`;
+  };
+  
+  const filteredJobRoles = jobRoles.filter(role =>
+    !jobRoleFilterSearch || role.name.toLowerCase().includes(jobRoleFilterSearch.toLowerCase())
   );
+  
+  const jobRoleLevelsFiltered = jobRoleLevels.filter(j => {
+    // Filter theo jobRole
+    const matchesJobRole = !selectedJobRoleFilterId || j.jobRoleId === selectedJobRoleFilterId;
+    
+    // Filter theo search
+    if (!jobRoleLevelSearch && matchesJobRole) return true;
+    const searchLower = jobRoleLevelSearch.toLowerCase();
+    const jobRole = jobRoles.find(r => r.id === j.jobRoleId);
+    const roleName = jobRole?.name?.toLowerCase() || "";
+    const levelText = getLevelText(j.level).toLowerCase();
+    const matchesSearch = j.name.toLowerCase().includes(searchLower) || 
+           roleName.includes(searchLower) || 
+           levelText.includes(searchLower);
+    
+    return matchesJobRole && matchesSearch;
+  });
   const applyTemplatesFiltered = applyTemplates.filter(t =>
     !applyTemplateSearch || t.name.toLowerCase().includes(applyTemplateSearch.toLowerCase())
   );
@@ -586,8 +579,7 @@ export default function JobRequestCreatePage() {
                               setCompanySearch("");
                               setClientTemplates([]);
                               setClientJobRoleLevels([]);
-                              setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "", budgetPerMonth: "" }));
-                              setBudgetCurrency("VND");
+                              setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "" }));
                               setIsCompanyDropdownOpen(false);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -607,8 +599,7 @@ export default function JobRequestCreatePage() {
                                 key={c.id}
                                 onClick={() => {
                                   setSelectedClientId(c.id);
-                                  setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "", budgetPerMonth: "" }));
-                                  setBudgetCurrency("VND");
+                                  setForm(prev => ({ ...prev, projectId: "", clientCompanyCVTemplateId: 0, jobRoleLevelId: "" }));
                                   setIsCompanyDropdownOpen(false);
                                 }}
                                 className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -733,9 +724,8 @@ export default function JobRequestCreatePage() {
                                     if (!isDisabled) {
                                       setForm(prev => ({ ...prev, projectId: p.id.toString(), clientCompanyCVTemplateId: 0 }));
                                       setSelectedClientId(p.clientCompanyId);
-                                      // Reset job role level và budget khi chọn project mới
-                                      setForm(prev => ({ ...prev, jobRoleLevelId: "", budgetPerMonth: "" }));
-                                      setBudgetCurrency("VND");
+                                      // Reset job role level khi chọn project mới
+                                      setForm(prev => ({ ...prev, jobRoleLevelId: "" }));
                                       setIsProjectDropdownOpen(false);
                                     }
                                   }}
@@ -944,6 +934,89 @@ export default function JobRequestCreatePage() {
                     <Users className="w-4 h-4" />
                     Vị trí tuyển dụng <span className="text-red-500">*</span>
                   </label>
+                  
+                  {/* Filter theo loại vị trí */}
+                  <div className="mb-3">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsJobRoleFilterDropdownOpen(prev => !prev)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 border border-neutral-200 rounded-lg bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                      >
+                        <div className="flex items-center gap-2 text-sm text-neutral-700">
+                          <Filter className="w-4 h-4 text-neutral-400" />
+                          <span>
+                            {selectedJobRoleFilterId
+                              ? jobRoles.find(r => r.id === selectedJobRoleFilterId)?.name || "Loại vị trí"
+                              : "Tất cả loại vị trí"}
+                          </span>
+                        </div>
+                      </button>
+                      {isJobRoleFilterDropdownOpen && (
+                        <div 
+                          className="absolute z-30 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                          onMouseLeave={() => {
+                            setIsJobRoleFilterDropdownOpen(false);
+                            setJobRoleFilterSearch("");
+                          }}
+                        >
+                          <div className="p-3 border-b border-neutral-100">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                              <input
+                                type="text"
+                                value={jobRoleFilterSearch}
+                                onChange={(e) => setJobRoleFilterSearch(e.target.value)}
+                                placeholder="Tìm loại vị trí..."
+                                className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedJobRoleFilterId(undefined);
+                                setJobRoleFilterSearch("");
+                                setIsJobRoleFilterDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm ${
+                                !selectedJobRoleFilterId
+                                  ? "bg-primary-50 text-primary-700"
+                                  : "hover:bg-neutral-50 text-neutral-700"
+                              }`}
+                            >
+                              Tất cả loại vị trí
+                            </button>
+                            {filteredJobRoles.length === 0 ? (
+                              <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại vị trí phù hợp</p>
+                            ) : (
+                              filteredJobRoles.map(role => (
+                                <button
+                                  type="button"
+                                  key={role.id}
+                                  onClick={() => {
+                                    setSelectedJobRoleFilterId(role.id);
+                                    setJobRoleFilterSearch("");
+                                    setIsJobRoleFilterDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm ${
+                                    selectedJobRoleFilterId === role.id
+                                      ? "bg-primary-50 text-primary-700"
+                                      : "hover:bg-neutral-50 text-neutral-700"
+                                  }`}
+                                >
+                                  {role.name}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   <div className="relative">
                     <button
                       type="button"
@@ -954,7 +1027,10 @@ export default function JobRequestCreatePage() {
                         <Users className="w-4 h-4 text-neutral-400" />
                         <span>
                           {form.jobRoleLevelId
-                            ? jobRoleLevels.find(j => j.id.toString() === form.jobRoleLevelId)?.name || "Chọn vị trí"
+                            ? (() => {
+                                const selected = jobRoleLevels.find(j => j.id.toString() === form.jobRoleLevelId);
+                                return selected ? getJobRoleLevelDisplayText(selected) : "Chọn vị trí";
+                              })()
                             : "Chọn vị trí"}
                         </span>
                       </div>
@@ -966,6 +1042,7 @@ export default function JobRequestCreatePage() {
                           setIsJobRoleLevelDropdownOpen(false);
                           setJobRoleLevelSearch("");
                         }}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <div className="p-3 border-b border-neutral-100">
                           <div className="relative">
@@ -984,7 +1061,7 @@ export default function JobRequestCreatePage() {
                             type="button"
                             onClick={() => {
                               setForm(prev => ({ ...prev, jobRoleLevelId: "" }));
-                              setSelectedJobRoleId(0);
+                              setSelectedJobRoleFilterId(undefined);
                               setIsJobRoleLevelDropdownOpen(false);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-sm ${
@@ -1004,32 +1081,15 @@ export default function JobRequestCreatePage() {
                                 key={j.id}
                                 onClick={() => {
                                   setForm(prev => ({ ...prev, jobRoleLevelId: j.id.toString() }));
-                                  setSelectedJobRoleId(j.jobRoleId);
+                                  // Tự động điền vào ô lọc loại vị trí
+                                  setSelectedJobRoleFilterId(j.jobRoleId);
                                   
                                   // Tự động điền thông tin từ ClientJobRoleLevel nếu có
                                   if (selectedClientId) {
-                                    const clientJobRoleLevel = clientJobRoleLevels.find(
+                                    clientJobRoleLevels.find(
                                       cjrl => cjrl.jobRoleLevelId === j.id && cjrl.clientCompanyId === selectedClientId
                                     );
                                     
-                                    if (clientJobRoleLevel) {
-                                      // Điền mức lương (gợi ý từ expectedMaxRate hoặc expectedMinRate)
-                                      if (clientJobRoleLevel.expectedMaxRate) {
-                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMaxRate ?? undefined) }));
-                                      } else if (clientJobRoleLevel.expectedMinRate) {
-                                        setForm(prev => ({ ...prev, budgetPerMonth: formatCurrency(clientJobRoleLevel.expectedMinRate ?? undefined) }));
-                                      }
-                                      
-                                      // Điền currency
-                                      if (clientJobRoleLevel.currency) {
-                                        setBudgetCurrency(clientJobRoleLevel.currency);
-                                      } else {
-                                        setBudgetCurrency("VND");
-                                      }
-                                    } else {
-                                      // Reset về mặc định nếu không tìm thấy
-                                      setBudgetCurrency("VND");
-                                    }
                                   }
                                   
                                   setIsJobRoleLevelDropdownOpen(false);
@@ -1040,7 +1100,7 @@ export default function JobRequestCreatePage() {
                                     : "hover:bg-neutral-50 text-neutral-700"
                                 }`}
                               >
-                                {j.name}
+                                {getJobRoleLevelDisplayText(j)}
                               </button>
                             ))
                           )}
@@ -1048,14 +1108,6 @@ export default function JobRequestCreatePage() {
                       </div>
                     )}
                   </div>
-                  {form.jobRoleLevelId && selectedJobRoleId !== 0 && (
-                    <div className="mt-2 text-xs text-neutral-600">
-                      Loại vị trí:{" "}
-                      <span className="font-medium text-neutral-800">
-                        {jobRoles.find(r => r.id === selectedJobRoleId)?.name || "Không xác định"}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Mẫu quy trình ứng tuyển - popover */}
@@ -1135,31 +1187,6 @@ export default function JobRequestCreatePage() {
                   </div>
                 </div>
 
-                {/* Ngân sách */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Ngân sách/tháng
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      name="budgetPerMonth"
-                      value={form.budgetPerMonth}
-                      onChange={handleChange}
-                      placeholder="VD: 5.000.000"
-                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 pr-12 focus:border-primary-500 focus:ring-primary-500 bg-white"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
-                      {budgetCurrency}
-                    </span>
-                  </div>
-                  {form.budgetPerMonth && (
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Số tiền: {formatCurrency(parseCurrency(form.budgetPerMonth))} {budgetCurrency}
-                    </p>
-                  )}
-                </div>
               </div>
             </div>
           </div>
@@ -1312,6 +1339,43 @@ export default function JobRequestCreatePage() {
                   )}
                 </div>
               </div>
+
+              {/* Hiển thị các kỹ năng đã chọn */}
+              {form.skillIds.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckSquare className="w-4 h-4 text-primary-600" />
+                    <h4 className="text-sm font-semibold text-gray-700">Kỹ năng đã chọn ({form.skillIds.length})</h4>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {form.skillIds.map(skillId => {
+                      const skill = allSkills.find(s => s.id === skillId);
+                      if (!skill) return null;
+                      return (
+                        <div
+                          key={skillId}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-300 rounded-lg text-primary-800"
+                        >
+                          <span className="text-sm font-medium">{skill.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({
+                                ...prev,
+                                skillIds: prev.skillIds.filter(id => id !== skillId),
+                              }));
+                            }}
+                            className="text-primary-600 hover:text-primary-800 transition-colors"
+                            aria-label={`Xóa kỹ năng ${skill.name}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Filtered Skills Grid với phân trang */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">

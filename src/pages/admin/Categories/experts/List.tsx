@@ -3,6 +3,7 @@ import Sidebar from "../../../../components/common/Sidebar";
 import Breadcrumb from "../../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../../components/admin/SidebarItems";
 import { expertService, type Expert } from "../../../../services/Expert";
+import { skillGroupService, type SkillGroup } from "../../../../services/SkillGroup";
 import { Button } from "../../../../components/ui/button";
 import {
   Search,
@@ -15,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -38,6 +41,13 @@ export default function ExpertListPage() {
     phone: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Skill groups for assignment
+  const [skillGroups, setSkillGroups] = useState<SkillGroup[]>([]);
+  const [filteredSkillGroups, setFilteredSkillGroups] = useState<SkillGroup[]>([]);
+  const [skillGroupSearchTerm, setSkillGroupSearchTerm] = useState("");
+  const [selectedSkillGroupIds, setSelectedSkillGroupIds] = useState<number[]>([]);
+  const [loadingSkillGroups, setLoadingSkillGroups] = useState(false);
 
   // Validation functions
   const validateEmail = (email: string): boolean => {
@@ -145,6 +155,52 @@ export default function ExpertListPage() {
     }
   };
 
+  // Fetch skill groups when modal opens
+  useEffect(() => {
+    if (showCreateModal) {
+      const fetchSkillGroups = async () => {
+        try {
+          setLoadingSkillGroups(true);
+          const data = await skillGroupService.getAll({ excludeDeleted: true });
+          const groups = Array.isArray(data) ? data : [];
+          setSkillGroups(groups);
+          setFilteredSkillGroups(groups);
+        } catch (err) {
+          console.error("❌ Lỗi khi tải danh sách nhóm kỹ năng:", err);
+          setSkillGroups([]);
+          setFilteredSkillGroups([]);
+        } finally {
+          setLoadingSkillGroups(false);
+        }
+      };
+      fetchSkillGroups();
+    } else {
+      // Reset when modal closes
+      setSelectedSkillGroupIds([]);
+      setSkillGroupSearchTerm("");
+    }
+  }, [showCreateModal]);
+
+  // Filter skill groups by search term
+  useEffect(() => {
+    if (!skillGroupSearchTerm.trim()) {
+      setFilteredSkillGroups(skillGroups);
+      return;
+    }
+    const filtered = skillGroups.filter((sg) =>
+      sg.name.toLowerCase().includes(skillGroupSearchTerm.toLowerCase())
+    );
+    setFilteredSkillGroups(filtered);
+  }, [skillGroupSearchTerm, skillGroups]);
+
+  const handleToggleSkillGroup = (skillGroupId: number) => {
+    setSelectedSkillGroupIds((prev) =>
+      prev.includes(skillGroupId)
+        ? prev.filter((id) => id !== skillGroupId)
+        : [...prev, skillGroupId]
+    );
+  };
+
   const handleCreate = async () => {
     const newErrors: Record<string, string> = {};
 
@@ -170,11 +226,33 @@ export default function ExpertListPage() {
 
     try {
       setCreating(true);
+      // Create expert first
       const created = await expertService.create({
         name: newExpert.name.trim(),
         email: newExpert.email || undefined,
         phone: newExpert.phone || undefined,
       });
+
+      // Assign skill groups if any selected
+      if (selectedSkillGroupIds.length > 0) {
+        try {
+          await Promise.all(
+            selectedSkillGroupIds.map((skillGroupId) =>
+              expertService.assignSkillGroup(created.id, {
+                expertId: created.id,
+                skillGroupId,
+              })
+            )
+          );
+        } catch (assignErr) {
+          console.error("❌ Lỗi khi gán nhóm kỹ năng:", assignErr);
+          // Still show success but warn about skill groups
+          alert(
+            `✅ Đã tạo chuyên gia thành công, nhưng có lỗi khi gán một số nhóm kỹ năng. Vui lòng kiểm tra lại.`
+          );
+        }
+      }
+
       setExperts((prev) => [...prev, created]);
       setShowCreateModal(false);
       setNewExpert({
@@ -183,6 +261,8 @@ export default function ExpertListPage() {
         phone: "",
       });
       setErrors({});
+      setSelectedSkillGroupIds([]);
+      setSkillGroupSearchTerm("");
     } catch (err) {
       console.error("❌ Lỗi khi tạo expert:", err);
       alert("Không thể tạo chuyên gia, vui lòng thử lại.");
@@ -562,6 +642,65 @@ export default function ExpertListPage() {
                     />
                     {errors.phone && (
                       <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skill Groups Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Gán nhóm kỹ năng (tùy chọn)
+                  </label>
+                  <div className="border border-neutral-200 rounded-lg p-4 bg-neutral-50">
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm nhóm kỹ năng..."
+                        value={skillGroupSearchTerm}
+                        onChange={(e) => setSkillGroupSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
+                      />
+                    </div>
+                    {loadingSkillGroups ? (
+                      <p className="text-xs text-neutral-500 text-center py-4">
+                        Đang tải danh sách nhóm kỹ năng...
+                      </p>
+                    ) : filteredSkillGroups.length === 0 ? (
+                      <p className="text-xs text-neutral-500 text-center py-4">
+                        {skillGroupSearchTerm
+                          ? "Không tìm thấy nhóm kỹ năng nào"
+                          : "Không có nhóm kỹ năng nào"}
+                      </p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {filteredSkillGroups.map((sg) => (
+                          <label
+                            key={sg.id}
+                            className="flex items-center gap-2 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedSkillGroupIds.includes(sg.id)}
+                              onChange={() => handleToggleSkillGroup(sg.id)}
+                              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-neutral-700 flex-1">
+                              {sg.name}
+                            </span>
+                            {selectedSkillGroupIds.includes(sg.id) ? (
+                              <CheckSquare className="w-4 h-4 text-primary-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-neutral-400" />
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {selectedSkillGroupIds.length > 0 && (
+                      <p className="text-xs text-primary-600 mt-2 font-medium">
+                        Đã chọn {selectedSkillGroupIds.length} nhóm kỹ năng
+                      </p>
                     )}
                   </div>
                 </div>
