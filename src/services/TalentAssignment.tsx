@@ -201,7 +201,7 @@ export const talentAssignmentService = {
 
   async update(id: number, payload: TalentAssignmentUpdateModel) {
     try {
-      const response = await axios.put(`/talentassignment/${id}`, payload);
+      const response = await axios.put(`/talentassignment/${id}/update-estimates`, payload);
       return response.data as TalentAssignmentModel;
     } catch (error: unknown) {
       if (error instanceof AxiosError) {

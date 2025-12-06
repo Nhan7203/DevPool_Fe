@@ -117,7 +117,7 @@ export default function ProjectDetailPage() {
     notes: null,
     estimatedClientRate: null,
     estimatedPartnerRate: null,
-    currencyCode: null
+    currencyCode: "VND"
   });
   const [commitmentFile, setCommitmentFile] = useState<File | null>(null);
   const [updateCommitmentFile, setUpdateCommitmentFile] = useState<File | null>(null);
@@ -168,7 +168,7 @@ export default function ProjectDetailPage() {
     notes: null,
     estimatedClientRate: null,
     estimatedPartnerRate: null,
-    currencyCode: null
+    currencyCode: "VND"
   });
 
   useEffect(() => {
@@ -515,14 +515,13 @@ export default function ProjectDetailPage() {
 
       // Create assignment
       // Convert dates to UTC ISO string for PostgreSQL
-      // Tự động set currencyCode = "VND" nếu có tỷ giá
       const payload: TalentAssignmentCreateModel = {
         ...assignmentForm,
         projectId: Number(id),
         startDate: assignmentForm.startDate ? toUTCISOString(assignmentForm.startDate) || "" : "",
         endDate: assignmentForm.endDate ? toUTCISOString(assignmentForm.endDate) : null,
         commitmentFileUrl,
-        currencyCode: (assignmentForm.estimatedClientRate || assignmentForm.estimatedPartnerRate) ? "VND" : null
+        currencyCode: (assignmentForm.estimatedClientRate || assignmentForm.estimatedPartnerRate) ? (assignmentForm.currencyCode || "VND") : null
       };
 
       const newAssignment = await talentAssignmentService.create(payload);
@@ -621,7 +620,7 @@ export default function ProjectDetailPage() {
         notes: null,
         estimatedClientRate: null,
         estimatedPartnerRate: null,
-        currencyCode: null
+        currencyCode: "VND"
       });
       setCommitmentFile(null);
       setUploadProgress(0);
@@ -751,9 +750,12 @@ export default function ProjectDetailPage() {
           status: "Active", // Change status to Active
           // Không gửi terminationDate và terminationReason khi status là Draft
           notes: updateForm.notes || null,
-          estimatedClientRate: updateForm.estimatedClientRate || null,
-          estimatedPartnerRate: updateForm.estimatedPartnerRate || null,
-          currencyCode: (updateForm.estimatedClientRate || updateForm.estimatedPartnerRate) ? "VND" : null
+          estimatedClientRate: updateForm.estimatedClientRate !== undefined ? updateForm.estimatedClientRate : selectedAssignment.estimatedClientRate,
+          estimatedPartnerRate: updateForm.estimatedPartnerRate !== undefined ? updateForm.estimatedPartnerRate : selectedAssignment.estimatedPartnerRate,
+          currencyCode: ((updateForm.estimatedClientRate !== undefined ? updateForm.estimatedClientRate : selectedAssignment.estimatedClientRate) || 
+                        (updateForm.estimatedPartnerRate !== undefined ? updateForm.estimatedPartnerRate : selectedAssignment.estimatedPartnerRate)) 
+                        ? (updateForm.currencyCode !== undefined ? (updateForm.currencyCode || "VND") : (selectedAssignment.currencyCode || "VND")) 
+                        : null
         };
 
         await talentAssignmentService.update(selectedAssignment.id, payload);
@@ -2466,8 +2468,7 @@ export default function ProjectDetailPage() {
                       const parsed = parseNumberInput(e.target.value);
                       setAssignmentForm({ 
                         ...assignmentForm, 
-                        estimatedClientRate: parsed > 0 ? parsed : null,
-                        currencyCode: parsed > 0 ? "VND" : null
+                        estimatedClientRate: parsed > 0 ? parsed : null
                       });
                     }}
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
@@ -2487,13 +2488,33 @@ export default function ProjectDetailPage() {
                       const parsed = parseNumberInput(e.target.value);
                       setAssignmentForm({ 
                         ...assignmentForm, 
-                        estimatedPartnerRate: parsed > 0 ? parsed : null,
-                        currencyCode: parsed > 0 ? "VND" : null
+                        estimatedPartnerRate: parsed > 0 ? parsed : null
                       });
                     }}
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
                     placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
                   />
+                </div>
+
+                {/* Currency Code */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Loại tiền tệ
+                  </label>
+                  <select
+                    value={assignmentForm.currencyCode || "VND"}
+                    onChange={(e) => {
+                      setAssignmentForm({ 
+                        ...assignmentForm, 
+                        currencyCode: e.target.value || "VND"
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <option value="VND">VND</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
                 </div>
 
                 {/* Notes */}
@@ -2725,8 +2746,7 @@ export default function ProjectDetailPage() {
                     const parsed = parseNumberInput(e.target.value);
                     setUpdateForm({ 
                       ...updateForm, 
-                      estimatedClientRate: parsed > 0 ? parsed : null,
-                      currencyCode: parsed > 0 ? "VND" : null
+                      estimatedClientRate: parsed > 0 ? parsed : null
                     });
                   }}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
@@ -2746,13 +2766,33 @@ export default function ProjectDetailPage() {
                     const parsed = parseNumberInput(e.target.value);
                     setUpdateForm({ 
                       ...updateForm, 
-                      estimatedPartnerRate: parsed > 0 ? parsed : null,
-                      currencyCode: parsed > 0 ? "VND" : null
+                      estimatedPartnerRate: parsed > 0 ? parsed : null
                     });
                   }}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
                   placeholder="Nhập tỷ giá (ví dụ: 20.000.000)"
                 />
+              </div>
+
+              {/* Currency Code */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Loại tiền tệ
+                </label>
+                <select
+                  value={updateForm.currencyCode !== undefined ? (updateForm.currencyCode || "VND") : (selectedAssignment.currencyCode || "VND")}
+                  onChange={(e) => {
+                    setUpdateForm({ 
+                      ...updateForm, 
+                      currencyCode: e.target.value || "VND"
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                >
+                  <option value="VND">VND</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
               </div>
 
               {/* Notes - Optional */}
@@ -2785,7 +2825,7 @@ export default function ProjectDetailPage() {
                       notes: null,
                       estimatedClientRate: null,
                       estimatedPartnerRate: null,
-                      currencyCode: null
+                      currencyCode: "VND"
                     });
                     setUpdateCommitmentFile(null);
                   }}
@@ -2946,7 +2986,7 @@ export default function ProjectDetailPage() {
                       <div>
                         <span className="text-xs text-neutral-500">Tỷ giá khách hàng: </span>
                         <span className="text-sm font-semibold text-gray-900">
-                          {formatNumberInput(selectedAssignment.estimatedClientRate)} VND
+                          {formatNumberInput(selectedAssignment.estimatedClientRate)} {selectedAssignment.currencyCode || "VND"}
                         </span>
                       </div>
                     )}
@@ -2954,7 +2994,7 @@ export default function ProjectDetailPage() {
                       <div>
                         <span className="text-xs text-neutral-500">Tỷ giá đối tác: </span>
                         <span className="text-sm font-semibold text-gray-900">
-                          {formatNumberInput(selectedAssignment.estimatedPartnerRate)} VND
+                          {formatNumberInput(selectedAssignment.estimatedPartnerRate)} {selectedAssignment.currencyCode || "VND"}
                         </span>
                       </div>
                     )}
@@ -3048,7 +3088,7 @@ export default function ProjectDetailPage() {
                         notes: selectedAssignment.notes || null,
                         estimatedClientRate: selectedAssignment.estimatedClientRate || null,
                         estimatedPartnerRate: selectedAssignment.estimatedPartnerRate || null,
-                        currencyCode: selectedAssignment.currencyCode || null
+                        currencyCode: selectedAssignment.currencyCode || "VND"
                       });
                       setUpdateCommitmentFile(null);
                       setShowDetailAssignmentModal(false);
