@@ -159,6 +159,16 @@ export interface CreateDeveloperAccountResult {
   };
 }
 
+export interface HandoverTalentRequest {
+  toUserId: string;
+  note?: string | null;
+}
+
+export interface HandoverTalentResponse {
+  success: boolean;
+  message: string;
+}
+
 // Interface cho TalentDetailedModel (từ API /talent/detailed)
 export interface TalentDetailedModel {
   id: number;
@@ -377,6 +387,30 @@ export const talentService = {
           throw errorData;
         }
         throw { message: "Failed to fetch detailed talents" };
+      }
+      throw { message: "Unexpected error occurred" };
+    }
+  },
+
+  /**
+   * Chuyển giao quyền quản lý Talent từ TA hiện tại (JWT) sang TA khác
+   * Endpoint: POST /talent/{id}/handover-assignment
+   * Lưu ý: Backend đã đổi role từ HR sang TA, đảm bảo backend xử lý notification đúng role "TA"
+   * @param id - ID của Talent
+   * @param payload - HandoverTalentRequest (toUserId, note?)
+   * @returns HandoverTalentResponse
+   */
+  async handoverAssignment(id: number, payload: HandoverTalentRequest): Promise<HandoverTalentResponse> {
+    try {
+      const response = await axios.post<HandoverTalentResponse>(`/talent/${id}/handover-assignment`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const errorData = error.response?.data;
+        if (errorData?.message) {
+          throw errorData;
+        }
+        throw { message: "Failed to handover talent assignment" };
       }
       throw { message: "Unexpected error occurred" };
     }

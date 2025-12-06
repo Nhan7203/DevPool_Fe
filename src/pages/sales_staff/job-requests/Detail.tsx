@@ -21,7 +21,6 @@ import {
   Building2, 
   Briefcase, 
   Users, 
-  DollarSign, 
   FileText, 
   Target,
   CheckCircle,
@@ -483,11 +482,6 @@ export default function JobRequestDetailPage() {
                   label="Số lượng tuyển dụng" 
                   value={jobRequest.quantity?.toString() || "—"} 
                   icon={<Users className="w-4 h-4" />}
-                />
-                <InfoItem 
-                  label="Ngân sách/tháng (VND)" 
-                  value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
-                  icon={<DollarSign className="w-4 h-4" />}
                 />
                 <InfoItem 
                   label="Khu vực làm việc" 

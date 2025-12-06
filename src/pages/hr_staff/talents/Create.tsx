@@ -19,7 +19,7 @@ import { type Skill, skillService } from "../../../services/Skill";
 import { skillGroupService, type SkillGroup } from "../../../services/SkillGroup";
 import { type JobRole, jobRoleService } from "../../../services/JobRole";
 import { type CertificateType, certificateTypeService } from "../../../services/CertificateType";
-import { type JobRoleLevel, jobRoleLevelService } from "../../../services/JobRoleLevel";
+import { type JobRoleLevel, jobRoleLevelService, TalentLevel } from "../../../services/JobRoleLevel";
 import { type Location, locationService } from "../../../services/location";
 import { WorkingMode } from "../../../types/WorkingMode";
 import { uploadFile } from "../../../utils/firebaseStorage";
@@ -51,6 +51,9 @@ export default function CreateTalent() {
   const [jobRoleLevels, setJobRoleLevels] = useState<JobRoleLevel[]>([]);
   const [jobRoleLevelSearch, setJobRoleLevelSearch] = useState<Record<number, string>>({});
   const [isJobRoleLevelDropdownOpen, setIsJobRoleLevelDropdownOpen] = useState<Record<number, boolean>>({});
+  const [selectedJobRoleFilterId, setSelectedJobRoleFilterId] = useState<Record<number, number | undefined>>({});
+  const [jobRoleFilterSearch, setJobRoleFilterSearch] = useState<Record<number, string>>({});
+  const [isJobRoleFilterDropdownOpen, setIsJobRoleFilterDropdownOpen] = useState<Record<number, boolean>>({});
   const [workExperiencePositionSearch, setWorkExperiencePositionSearch] = useState<Record<number, string>>({});
   const [isWorkExperiencePositionDropdownOpen, setIsWorkExperiencePositionDropdownOpen] = useState<Record<number, boolean>>({});
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -216,7 +219,7 @@ export default function CreateTalent() {
           skillService.getAll({ excludeDeleted: true }),
           jobRoleService.getAll({ excludeDeleted: true }),
           certificateTypeService.getAll({ excludeDeleted: true }),
-          jobRoleLevelService.getAll({ excludeDeleted: true, distinctByName: true })
+          jobRoleLevelService.getAll({ excludeDeleted: true })
         ]);
         // Xử lý dữ liệu - đảm bảo là array
         const partnersArray = Array.isArray(partnersData) ? partnersData : (Array.isArray((partnersData as any)?.items) ? (partnersData as any).items : (Array.isArray((partnersData as any)?.data) ? (partnersData as any).data : []));
@@ -1995,7 +1998,7 @@ export default function CreateTalent() {
 
     // Validation Job Role Levels bắt buộc
     if (talentJobRoleLevels.length === 0) {
-      alert("⚠️ Vui lòng thêm ít nhất 1 vị trí & mức lương!");
+      alert("⚠️ Vui lòng thêm ít nhất 1 vị trí!");
       return;
     }
 
@@ -2241,18 +2244,29 @@ export default function CreateTalent() {
   const removeJobRoleLevel = (index: number) => {
     // Không cho phép xóa nếu chỉ còn 1 item (bắt buộc)
     if (talentJobRoleLevels.length <= 1) {
-      alert("⚠️ Vị trí & mức lương là bắt buộc. Phải có ít nhất 1 vị trí.");
+      alert("⚠️ Vị trí là bắt buộc. Phải có ít nhất 1 vị trí.");
       return;
     }
     setTalentJobRoleLevels(talentJobRoleLevels.filter((_, i) => i !== index));
   };
 
-  // Helper function để format số tiền
-  const formatCurrency = (value: string | number | undefined): string => {
-    if (!value && value !== 0) return "";
-    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
-    if (isNaN(numValue)) return "";
-    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  // Helper function để format level
+  const getLevelText = (level: number): string => {
+    const levelMap: Record<number, string> = {
+      [TalentLevel.Junior]: "Junior",
+      [TalentLevel.Middle]: "Middle",
+      [TalentLevel.Senior]: "Senior",
+      [TalentLevel.Lead]: "Lead"
+    };
+    return levelMap[level] || "Unknown";
+  };
+
+  // Helper function để format jobRoleLevel display text
+  const getJobRoleLevelDisplayText = (jrl: JobRoleLevel): string => {
+    const jobRole = jobRoles.find(r => r.id === jrl.jobRoleId);
+    const roleName = jobRole?.name || "—";
+    const levelText = getLevelText(jrl.level);
+    return `${roleName} - ${levelText}`;
   };
 
   const updateJobRoleLevel = (index: number, field: keyof TalentJobRoleLevelCreateModel, value: string | number | undefined) => {
@@ -2269,20 +2283,6 @@ export default function CreateTalent() {
     setTalentJobRoleLevels(updated);
   };
 
-  const handleRatePerMonthChange = (index: number, value: string) => {
-    // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
-    const cleaned = value.replace(/\D/g, "");
-    // Nếu rỗng, set về undefined
-    if (cleaned === "") {
-      updateJobRoleLevel(index, 'ratePerMonth', undefined);
-      return;
-    }
-    // Parse và lưu số vào state
-    const numValue = parseInt(cleaned, 10);
-    if (!isNaN(numValue)) {
-      updateJobRoleLevel(index, 'ratePerMonth', numValue);
-    }
-  };
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -2850,7 +2850,7 @@ export default function CreateTalent() {
                 {/* Tab Content */}
                 <div className="p-8">
                   <div className="space-y-6">
-                    {/* Tab: Thông tin bắt buộc (gồm: Thông tin cơ bản, CV, Vị trí & Mức lương) */}
+                    {/* Tab: Thông tin bắt buộc (gồm: Thông tin cơ bản, CV, Vị trí) */}
                     {activeTab === "required" && (
                       <>
                         {/* Họ tên */}
@@ -3135,13 +3135,13 @@ export default function CreateTalent() {
                 </div>
 
 
-                    {/* Phần Vị trí & Mức lương trong tab bắt buộc */}
+                    {/* Phần Vị trí trong tab bắt buộc */}
                     <div className="pt-6 border-t border-neutral-200 mt-6">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <Target className="w-5 h-5 text-primary-600" />
                           <h3 className="text-lg font-semibold text-neutral-800">
-                            Vị Trí & Mức Lương <span className="text-red-500">*</span>
+                            Vị trí <span className="text-red-500">*</span>
                           </h3>
                         </div>
                         <button
@@ -3164,16 +3164,97 @@ export default function CreateTalent() {
                           onClick={() => removeJobRoleLevel(index)}
                           disabled={talentJobRoleLevels.length <= 1}
                           className={`text-red-600 hover:text-red-700 transition-colors ${talentJobRoleLevels.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={talentJobRoleLevels.length <= 1 ? 'Vị trí & mức lương là bắt buộc. Phải có ít nhất 1 vị trí.' : 'Xóa vị trí'}
+                          title={talentJobRoleLevels.length <= 1 ? 'Vị trí là bắt buộc. Phải có ít nhất 1 vị trí.' : 'Xóa vị trí'}
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm text-neutral-600 mb-1">
                             Vị trí & cấp độ <span className="text-red-500">*</span>
                           </label>
+                          
+                          {/* Filter theo loại vị trí */}
+                          <div className="mb-2">
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsJobRoleFilterDropdownOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                                className="w-full flex items-center justify-between px-3 py-2 border border-neutral-200 rounded-lg bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                              >
+                                <div className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <Filter className="w-4 h-4 text-neutral-400" />
+                                  <span>
+                                    {selectedJobRoleFilterId[index]
+                                      ? jobRoles.find(r => r.id === selectedJobRoleFilterId[index])?.name || "Loại vị trí"
+                                      : "Tất cả loại vị trí"}
+                                  </span>
+                                </div>
+                              </button>
+                              {isJobRoleFilterDropdownOpen[index] && (
+                                <div 
+                                  className="absolute z-30 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                                  onMouseLeave={() => {
+                                    setIsJobRoleFilterDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                    setJobRoleFilterSearch(prev => ({ ...prev, [index]: "" }));
+                                  }}
+                                >
+                                  <div className="p-3 border-b border-neutral-100">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                                      <input
+                                        type="text"
+                                        value={jobRoleFilterSearch[index] || ""}
+                                        onChange={(e) => setJobRoleFilterSearch(prev => ({ ...prev, [index]: e.target.value }))}
+                                        placeholder="Tìm loại vị trí..."
+                                        className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedJobRoleFilterId(prev => ({ ...prev, [index]: undefined }));
+                                        setJobRoleFilterSearch(prev => ({ ...prev, [index]: "" }));
+                                        setIsJobRoleFilterDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                      }}
+                                      className={`w-full text-left px-4 py-2.5 text-sm ${
+                                        !selectedJobRoleFilterId[index]
+                                          ? "bg-primary-50 text-primary-700"
+                                          : "hover:bg-neutral-50 text-neutral-700"
+                                      }`}
+                                    >
+                                      Tất cả loại vị trí
+                                    </button>
+                                    {jobRoles
+                                      .filter(role => !jobRoleFilterSearch[index] || role.name.toLowerCase().includes((jobRoleFilterSearch[index] || "").toLowerCase()))
+                                      .map(role => (
+                                        <button
+                                          type="button"
+                                          key={role.id}
+                                          onClick={() => {
+                                            setSelectedJobRoleFilterId(prev => ({ ...prev, [index]: role.id }));
+                                            setJobRoleFilterSearch(prev => ({ ...prev, [index]: "" }));
+                                            setIsJobRoleFilterDropdownOpen(prev => ({ ...prev, [index]: false }));
+                                          }}
+                                          className={`w-full text-left px-4 py-2.5 text-sm ${
+                                            selectedJobRoleFilterId[index] === role.id
+                                              ? "bg-primary-50 text-primary-700"
+                                              : "hover:bg-neutral-50 text-neutral-700"
+                                          }`}
+                                        >
+                                          {role.name}
+                                        </button>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
                           <div className="relative">
                             <button
                               type="button"
@@ -3185,7 +3266,10 @@ export default function CreateTalent() {
                                 <Target className="w-4 h-4 text-neutral-400" />
                                 <span>
                                   {jrl.jobRoleLevelId
-                                    ? jobRoleLevels.find(l => l.id === jrl.jobRoleLevelId)?.name || "Chọn vị trí & cấp độ"
+                                    ? (() => {
+                                        const level = jobRoleLevels.find(l => l.id === jrl.jobRoleLevelId);
+                                        return level ? getJobRoleLevelDisplayText(level) : "Chọn vị trí & cấp độ";
+                                      })()
                                     : "Chọn vị trí & cấp độ"}
                                 </span>
                               </div>
@@ -3216,9 +3300,15 @@ export default function CreateTalent() {
                                       .filter((_, i) => i !== index)
                                       .map(jrl => jrl.jobRoleLevelId)
                                       .filter(id => id > 0);
-                                    const filtered = (jobRoleLevelSearch[index] || "")
-                                      ? jobRoleLevels.filter(l => l.name.toLowerCase().includes((jobRoleLevelSearch[index] || "").toLowerCase()))
+                                    const filteredByJobRole = selectedJobRoleFilterId[index]
+                                      ? jobRoleLevels.filter(l => l.jobRoleId === selectedJobRoleFilterId[index])
                                       : jobRoleLevels;
+                                    const filtered = (jobRoleLevelSearch[index] || "")
+                                      ? filteredByJobRole.filter(l => {
+                                          const displayText = getJobRoleLevelDisplayText(l);
+                                          return displayText.toLowerCase().includes((jobRoleLevelSearch[index] || "").toLowerCase());
+                                        })
+                                      : filteredByJobRole;
                                     if (filtered.length === 0) {
                                       return <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy vị trí nào</p>;
                                     }
@@ -3236,6 +3326,8 @@ export default function CreateTalent() {
                                               const newErrors = { ...errors };
                                               delete newErrors[`jobrolelevel_${index}`];
                                               setErrors(newErrors);
+                                              // Tự động điền vào ô lọc loại vị trí
+                                              setSelectedJobRoleFilterId(prev => ({ ...prev, [index]: level.jobRoleId }));
                                             }
                                           }}
                                           disabled={isDisabled}
@@ -3247,7 +3339,7 @@ export default function CreateTalent() {
                                                 : "hover:bg-neutral-50 text-neutral-700"
                                           }`}
                                         >
-                                          {level.name}{isDisabled ? ' (đã chọn)' : ''}
+                                          {getJobRoleLevelDisplayText(level)}{isDisabled ? ' (đã chọn)' : ''}
                                         </button>
                                       );
                                     });
@@ -3269,21 +3361,6 @@ export default function CreateTalent() {
                             min="0"
                             className="w-full py-2 px-3 border rounded-lg bg-white border-neutral-300"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-neutral-600 mb-1">Mức lương mong muốn</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={formatCurrency(jrl.ratePerMonth)}
-                              onChange={(e) => handleRatePerMonthChange(index, e.target.value)}
-                              placeholder="VD: 5.000.000"
-                              className="w-full py-2 px-3 pr-12 border rounded-lg bg-white border-neutral-300"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
-                              VNĐ
-                            </span>
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -4776,9 +4853,6 @@ export default function CreateTalent() {
                                     )}
                                     {jrl.yearsOfExp !== null && jrl.yearsOfExp !== undefined && (
                                       <p className="text-xs text-neutral-600">Kinh nghiệm: {jrl.yearsOfExp} năm</p>
-                                    )}
-                                    {jrl.ratePerMonth !== null && jrl.ratePerMonth !== undefined && (
-                                      <p className="text-xs text-primary-600 font-medium mt-1">Mức lương: {jrl.ratePerMonth.toLocaleString('vi-VN')} VND/tháng</p>
                                     )}
                                   </div>
                                 </div>

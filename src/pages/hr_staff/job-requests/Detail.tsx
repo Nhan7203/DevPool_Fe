@@ -23,7 +23,6 @@ import {
   Building2, 
   Briefcase, 
   Users, 
-  DollarSign, 
   FileText, 
   Target,
   Clock,
@@ -359,7 +358,7 @@ export default function JobRequestDetailHRPage() {
         "Mô tả công việc chưa đầy đủ thông tin.",
         "Yêu cầu kỹ năng chưa rõ ràng, cần bổ sung.",
         "Thiếu danh sách kỹ năng bắt buộc cho vị trí này.",
-        "Chưa có thông tin ngân sách hoặc quyền lợi cụ thể.",
+        "Chưa có thông tin quyền lợi cụ thể.",
     ];
 
     const sendRejectionNotification = useCallback(async (note: string) => {
@@ -677,11 +676,6 @@ export default function JobRequestDetailHRPage() {
                                     label="Số lượng tuyển dụng" 
                                     value={jobRequest.quantity?.toString() || "—"} 
                                     icon={<UserPlus className="w-4 h-4" />}
-                                />
-                                <InfoItem 
-                                    label="Ngân sách/tháng" 
-                                    value={jobRequest.budgetPerMonth ? `${jobRequest.budgetPerMonth.toLocaleString("vi-VN")} VNĐ` : "—"} 
-                                    icon={<DollarSign className="w-4 h-4" />}
                                 />
                                 <InfoItem 
                                     label="Khu vực làm việc" 

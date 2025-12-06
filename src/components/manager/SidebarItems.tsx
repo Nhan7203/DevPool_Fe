@@ -2,6 +2,7 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  UserCog,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -19,6 +20,11 @@ export const sidebarItems = [
     label: "Công ty KH",
     href: "/manager/client-companies",
     icon: Building2,
+  },
+  {
+    label: "Chuyển nhượng quản lý",
+    href: "/manager/handover-assignment",
+    icon: UserCog,
   },
   // {
   //   label: "Kỳ Thanh Toán",

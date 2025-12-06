@@ -4,7 +4,8 @@ import Sidebar from "../../../components/common/Sidebar";
 import Breadcrumb from "../../../components/common/Breadcrumb";
 import { sidebarItems } from "../../../components/hr_staff/SidebarItems";
 import { talentJobRoleLevelService, type TalentJobRoleLevelCreate } from "../../../services/TalentJobRoleLevel";
-import { jobRoleLevelService, type JobRoleLevel } from "../../../services/JobRoleLevel";
+import { jobRoleLevelService, type JobRoleLevel, TalentLevel } from "../../../services/JobRoleLevel";
+import { jobRoleService, type JobRole } from "../../../services/JobRole";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { 
@@ -12,22 +13,26 @@ import {
   X, 
   Target, 
   Calendar,
-  DollarSign,
-  AlertCircle
+  AlertCircle,
+  Search,
+  Filter
 } from "lucide-react";
 
 export default function TalentJobRoleLevelEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [allJobRoleLevels, setAllJobRoleLevels] = useState<JobRoleLevel[]>([]);
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
   const [talentId, setTalentId] = useState<number>(0);
   const [existingJobRoleLevelIds, setExistingJobRoleLevelIds] = useState<number[]>([]);
   const [currentJobRoleLevelId, setCurrentJobRoleLevelId] = useState<number>(0);
+  const [selectedJobRoleFilterId, setSelectedJobRoleFilterId] = useState<number | undefined>(undefined);
+  const [jobRoleFilterSearch, setJobRoleFilterSearch] = useState<string>("");
+  const [isJobRoleFilterDropdownOpen, setIsJobRoleFilterDropdownOpen] = useState(false);
   const [formData, setFormData] = useState<TalentJobRoleLevelCreate>({
     talentId: 0,
     jobRoleLevelId: 0,
     yearsOfExp: 0,
-    ratePerMonth: undefined,
   });
 
   const [loading, setLoading] = useState(true);
@@ -43,7 +48,6 @@ export default function TalentJobRoleLevelEditPage() {
           talentId: data.talentId,
           jobRoleLevelId: data.jobRoleLevelId,
           yearsOfExp: data.yearsOfExp,
-          ratePerMonth: data.ratePerMonth,
         });
         setTalentId(data.talentId);
         setCurrentJobRoleLevelId(data.jobRoleLevelId);
@@ -61,11 +65,12 @@ export default function TalentJobRoleLevelEditPage() {
   useEffect(() => {
     const fetchJobRoleLevels = async () => {
       try {
-        const jobRoleLevels = await jobRoleLevelService.getAll({ 
-          excludeDeleted: true,
-          distinctByName: true 
-        });
+        const [jobRoleLevels, jobRolesData] = await Promise.all([
+          jobRoleLevelService.getAll({ excludeDeleted: true }),
+          jobRoleService.getAll()
+        ]);
         setAllJobRoleLevels(jobRoleLevels);
+        setJobRoles(jobRolesData);
       } catch (err) {
         console.error("❌ Lỗi tải danh sách vị trí công việc:", err);
       }
@@ -91,13 +96,53 @@ export default function TalentJobRoleLevelEditPage() {
     fetchExistingJobRoleLevels();
   }, [talentId, currentJobRoleLevelId]);
 
-  // Helper function để format số tiền
-  const formatCurrency = (value: string | number | undefined): string => {
-    if (!value && value !== 0) return "";
-    const numValue = typeof value === "string" ? parseFloat(value.replace(/\./g, "")) : value;
-    if (isNaN(numValue)) return "";
-    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  // Helper function để format level
+  const getLevelText = (level: number): string => {
+    const levelMap: Record<number, string> = {
+      [TalentLevel.Junior]: "Junior",
+      [TalentLevel.Middle]: "Middle",
+      [TalentLevel.Senior]: "Senior",
+      [TalentLevel.Lead]: "Lead"
+    };
+    return levelMap[level] || "Unknown";
   };
+
+  // Helper function để format jobRoleLevel display text
+  const getJobRoleLevelDisplayText = (jrl: JobRoleLevel): string => {
+    const jobRole = jobRoles.find(r => r.id === jrl.jobRoleId);
+    const roleName = jobRole?.name || "—";
+    const levelText = getLevelText(jrl.level);
+    return `${roleName} - ${levelText}`;
+  };
+
+  const filteredJobRoles = jobRoles.filter(role =>
+    !jobRoleFilterSearch || role.name.toLowerCase().includes(jobRoleFilterSearch.toLowerCase())
+  );
+
+  const filteredJobRoleLevels = allJobRoleLevels.filter(jrl => {
+    const matchesJobRole = !selectedJobRoleFilterId || jrl.jobRoleId === selectedJobRoleFilterId;
+    return matchesJobRole;
+  });
+
+  // Reset jobRoleLevelId khi filter jobRole thay đổi
+  useEffect(() => {
+    if (formData.jobRoleLevelId && selectedJobRoleFilterId) {
+      const selectedLevel = allJobRoleLevels.find(j => j.id === formData.jobRoleLevelId);
+      if (selectedLevel && selectedLevel.jobRoleId !== selectedJobRoleFilterId) {
+        setFormData(prev => ({ ...prev, jobRoleLevelId: 0 }));
+      }
+    }
+  }, [selectedJobRoleFilterId, formData.jobRoleLevelId, allJobRoleLevels]);
+
+  // Tự động điền vào ô lọc loại vị trí khi chọn vị trí hoặc load dữ liệu
+  useEffect(() => {
+    if (formData.jobRoleLevelId && allJobRoleLevels.length > 0) {
+      const selectedLevel = allJobRoleLevels.find(j => j.id === formData.jobRoleLevelId);
+      if (selectedLevel && selectedJobRoleFilterId !== selectedLevel.jobRoleId) {
+        setSelectedJobRoleFilterId(selectedLevel.jobRoleId);
+      }
+    }
+  }, [formData.jobRoleLevelId, allJobRoleLevels]);
 
   // ✍️ Cập nhật dữ liệu form
   const handleChange = (
@@ -105,28 +150,19 @@ export default function TalentJobRoleLevelEditPage() {
   ) => {
     const { name, value } = e.target;
 
-    // Xử lý đặc biệt cho ratePerMonth - format số tiền
-    if (name === "ratePerMonth") {
-      // Chỉ cho phép nhập số (loại bỏ tất cả ký tự không phải số)
-      const cleaned = value.replace(/\D/g, "");
-      // Nếu rỗng, set về undefined
-      if (cleaned === "") {
-        setFormData((prev) => ({ ...prev, [name]: undefined }));
-        return;
-      }
-      // Parse và lưu số vào state
-      const numValue = parseInt(cleaned, 10);
-      if (!isNaN(numValue)) {
-        setFormData((prev) => ({ ...prev, [name]: numValue }));
-      }
-      return;
-    }
-
     setFormData((prev) => ({
       ...prev,
       [name]: name === "jobRoleLevelId" || name === "yearsOfExp" ? 
               (value === "" ? undefined : Number(value)) : value,
     }));
+    
+    // Tự động điền vào ô lọc loại vị trí khi chọn vị trí
+    if (name === "jobRoleLevelId" && value) {
+      const selectedLevel = allJobRoleLevels.find(j => j.id === Number(value));
+      if (selectedLevel) {
+        setSelectedJobRoleFilterId(selectedLevel.jobRoleId);
+      }
+    }
   };
 
   // 💾 Gửi form
@@ -147,11 +183,6 @@ export default function TalentJobRoleLevelEditPage() {
 
     if (formData.yearsOfExp < 0) {
       alert("⚠️ Số năm kinh nghiệm không được âm!");
-      return;
-    }
-
-    if (formData.ratePerMonth && formData.ratePerMonth < 0) {
-      alert("⚠️ Mức lương không được âm!");
       return;
     }
 
@@ -232,6 +263,89 @@ export default function TalentJobRoleLevelEditPage() {
                   <Target className="w-4 h-4" />
                   Vị trí công việc <span className="text-red-500">*</span>
                 </label>
+                
+                {/* Filter theo loại vị trí */}
+                <div className="mb-3">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsJobRoleFilterDropdownOpen(prev => !prev)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 border border-neutral-200 rounded-lg bg-white text-left focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Filter className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          {selectedJobRoleFilterId
+                            ? jobRoles.find(r => r.id === selectedJobRoleFilterId)?.name || "Loại vị trí"
+                            : "Tất cả loại vị trí"}
+                        </span>
+                      </div>
+                    </button>
+                    {isJobRoleFilterDropdownOpen && (
+                      <div 
+                        className="absolute z-30 mt-2 w-full rounded-xl border border-neutral-200 bg-white shadow-2xl"
+                        onMouseLeave={() => {
+                          setIsJobRoleFilterDropdownOpen(false);
+                          setJobRoleFilterSearch("");
+                        }}
+                      >
+                        <div className="p-3 border-b border-neutral-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-4 h-4" />
+                            <input
+                              type="text"
+                              value={jobRoleFilterSearch}
+                              onChange={(e) => setJobRoleFilterSearch(e.target.value)}
+                              placeholder="Tìm loại vị trí..."
+                              className="w-full pl-9 pr-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedJobRoleFilterId(undefined);
+                              setJobRoleFilterSearch("");
+                              setIsJobRoleFilterDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${
+                              !selectedJobRoleFilterId
+                                ? "bg-primary-50 text-primary-700"
+                                : "hover:bg-neutral-50 text-neutral-700"
+                            }`}
+                          >
+                            Tất cả loại vị trí
+                          </button>
+                          {filteredJobRoles.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-neutral-500">Không tìm thấy loại vị trí phù hợp</p>
+                          ) : (
+                            filteredJobRoles.map(role => (
+                              <button
+                                type="button"
+                                key={role.id}
+                                onClick={() => {
+                                  setSelectedJobRoleFilterId(role.id);
+                                  setJobRoleFilterSearch("");
+                                  setIsJobRoleFilterDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm ${
+                                  selectedJobRoleFilterId === role.id
+                                    ? "bg-primary-50 text-primary-700"
+                                    : "hover:bg-neutral-50 text-neutral-700"
+                                }`}
+                              >
+                                {role.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
                 <div className="relative">
                   <select
                     name="jobRoleLevelId"
@@ -241,7 +355,7 @@ export default function TalentJobRoleLevelEditPage() {
                     required
                   >
                     <option value="0">-- Chọn vị trí công việc --</option>
-                    {allJobRoleLevels.map(jobRoleLevel => {
+                    {filteredJobRoleLevels.map(jobRoleLevel => {
                       const isDisabled = existingJobRoleLevelIds.includes(jobRoleLevel.id);
                       return (
                         <option 
@@ -250,7 +364,7 @@ export default function TalentJobRoleLevelEditPage() {
                           disabled={isDisabled}
                           style={isDisabled ? { color: '#999', fontStyle: 'italic' } : {}}
                         >
-                          {jobRoleLevel.name}{isDisabled ? ' (đã chọn)' : ''}
+                          {getJobRoleLevelDisplayText(jobRoleLevel)}{isDisabled ? ' (đã chọn)' : ''}
                         </option>
                       );
                     })}
@@ -265,54 +379,23 @@ export default function TalentJobRoleLevelEditPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Số năm kinh nghiệm */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Số năm kinh nghiệm
-                  </label>
-                  <Input
-                    type="number"
-                    name="yearsOfExp"
-                    value={formData.yearsOfExp}
-                    onChange={handleChange}
-                    min={0}
-                    max={50}
-                    placeholder="Nhập số năm kinh nghiệm..."
-                    className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
-                    required
-                  />
-                </div>
-
-                {/* Mức lương */}
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Mức lương/tháng
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      name="ratePerMonth"
-                      value={formData.ratePerMonth ? formatCurrency(formData.ratePerMonth) : ""}
-                      onChange={handleChange}
-                      placeholder="VD: 5.000.000"
-                      className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl pr-12"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-medium">
-                      VNĐ
-                    </span>
-                  </div>
-                  {formData.ratePerMonth && (
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Số tiền: {formatCurrency(formData.ratePerMonth)} VNĐ
-                    </p>
-                  )}
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Để trống nếu chưa xác định mức lương
-                  </p>
-                </div>
+              {/* Số năm kinh nghiệm */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Số năm kinh nghiệm
+                </label>
+                <Input
+                  type="number"
+                  name="yearsOfExp"
+                  value={formData.yearsOfExp}
+                  onChange={handleChange}
+                  min={0}
+                  max={50}
+                  placeholder="Nhập số năm kinh nghiệm..."
+                  className="w-full border-neutral-200 focus:border-primary-500 focus:ring-primary-500 rounded-xl"
+                  required
+                />
               </div>
             </div>
           </div>

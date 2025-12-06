@@ -96,6 +96,12 @@ export default function Sidebar({ items, title }: SidebarProps) {
   }, [location.pathname, items]);
 
   const handleLogout = () => {
+    // Xác nhận trước khi đăng xuất
+    const confirmed = window.confirm("Bạn có chắc muốn đăng xuất?");
+    if (!confirmed) {
+      return;
+    }
+    
     logout();
     navigate(ROUTES.GUEST.LOGIN);
   };

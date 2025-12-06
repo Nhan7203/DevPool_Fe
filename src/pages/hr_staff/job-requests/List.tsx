@@ -33,7 +33,6 @@ interface HRJobRequest {
     projectName: string;
     positionName: string;
     quantity: number;
-    budget?: number | null;
     workingMode: string;
     status: string;
     skills: string[];
@@ -191,7 +190,6 @@ const stats = [
                         projectName: project?.name ?? "—",
                         positionName: position?.name ?? "—",
                         quantity: r.quantity,
-                        budget: r.budgetPerMonth,
                         workingMode: workingModeLabels[r.workingMode] ?? "—",
                         status: statusLabels[r.status] ?? "—",
                         skills: groupedJobSkills[r.id] ?? [],

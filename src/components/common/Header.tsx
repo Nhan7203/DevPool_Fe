@@ -558,8 +558,16 @@ export default function Header({ showPublicBranding = true }: HeaderProps) {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    // Xác nhận trước khi đăng xuất
+    const confirmed = window.confirm("Bạn có chắc muốn đăng xuất?");
+    if (!confirmed) {
+      return;
+    }
+    
+    await logout();
+    // Đợi một chút để đảm bảo storage đã được clear
+    await new Promise(resolve => setTimeout(resolve, 100));
     // Reload trang để reset tất cả state và đảm bảo Header được remount
     window.location.href = ROUTES.GUEST.LOGIN;
   };

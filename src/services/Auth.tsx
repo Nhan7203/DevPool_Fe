@@ -328,6 +328,25 @@ export const authService = {
     }
   },
 
+  /**
+   * Logout - Gọi API backend để xóa refresh token
+   * @returns Promise<void>
+   */
+  async logout(): Promise<void> {
+    try {
+      const response = await axios.post("/auth/logout");
+      console.log('Backend logout successful:', response.data);
+      return response.data;
+    } catch (error: unknown) {
+      // Không throw error để đảm bảo logout vẫn tiếp tục dù API fail
+      if (error instanceof AxiosError) {
+        console.warn('Backend logout error:', error.response?.data || error.message);
+      } else {
+        console.warn('Backend logout error:', error);
+      }
+    }
+  },
+
   async logoutFirebase(): Promise<void> {
     try {
       await firebaseSignOut(auth);
